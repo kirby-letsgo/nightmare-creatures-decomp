@@ -17,5 +17,7 @@ void gpu_display_info(GpuDisplay *out);
 /* Converts the display area to RGBA8888 (dst holds width*height pixels). */
 void gpu_display_rgba(u32 *dst, const GpuDisplay *d);
 const u16 *gpu_vram(void);
+/* Number of display-start changes so far (one per game frame when double buffering). */
+u32 gpu_flip_count(void);
 
 #endif

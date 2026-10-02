@@ -25,6 +25,77 @@ enum { COP0_SR = 12, COP0_CAUSE = 13, COP0_EPC = 14 };
 
 static u64 next_vblank = PSX_CYCLES_PER_FRAME;
 
+/* Debugging aid: NC_PROFILE=1 samples the innermost guest function at every VBlank and prints
+ * the most frequent ones every 10 seconds. */
+static void profile_sample(void) {
+#ifdef NC_HAVE_BACKTRACE
+    enum { SLOTS = 64 };
+    static int enabled = -1;
+    static char names[SLOTS][64];
+    static unsigned counts[SLOTS], samples;
+    if (enabled < 0) {
+        enabled = getenv("NC_PROFILE") != NULL;
+    }
+    if (!enabled) {
+        return;
+    }
+    void *addrs[16];
+    int n = backtrace(addrs, 16);
+    char **syms = backtrace_symbols(addrs, n);
+    for (int i = 0; i < n && syms != NULL; i++) {
+        const char *hit = strstr(syms[i], "_exe_");
+        hit = hit ? hit : strstr(syms[i], "slus_");
+        if (hit == NULL) {
+            continue;
+        }
+        const char *start = hit;
+        while (start > syms[i] && start[-1] != ' ') {
+            start--;
+        }
+        char name[64];
+        size_t len = strcspn(start, " ");
+        len = len < sizeof name - 1 ? len : sizeof name - 1;
+        memcpy(name, start, len);
+        name[len] = '\0';
+        int slot = -1;
+        for (int k = 0; k < SLOTS; k++) {
+            if (counts[k] && strcmp(names[k], name) == 0) {
+                slot = k;
+                break;
+            }
+            if (!counts[k] && slot < 0) {
+                slot = k;
+            }
+        }
+        if (slot >= 0) {
+            if (!counts[slot]) {
+                strcpy(names[slot], name);
+            }
+            counts[slot]++;
+        }
+        break;
+    }
+    free(syms);
+    if (++samples % 600 == 0) {
+        NC_LOG("--- profile (%u samples) ---", samples);
+        for (int shown = 0; shown < 8; shown++) {
+            int best = -1;
+            for (int k = 0; k < SLOTS; k++) {
+                if (counts[k] && (best < 0 || counts[k] > counts[best])) {
+                    best = k;
+                }
+            }
+            if (best < 0) {
+                break;
+            }
+            NC_LOG("  %5u %s", counts[best], names[best]);
+            counts[best] = 0;
+        }
+        memset(counts, 0, sizeof counts);
+    }
+#endif
+}
+
 /* Debugging aid: NC_TRACE_STACK=1 prints the guest call stack once per second. Recompiled
  * functions are named <module>_<address>, so the native backtrace reads as the MIPS one. */
 static void trace_stack(void) {
@@ -59,6 +130,7 @@ void nc_poll(CPUState *c) {
         gpu_vblank();
         irq_raise(IRQ_VBLANK);
         trace_stack();
+        profile_sample();
         if (nc_frame_hook != NULL) {
             nc_frame_hook();
         }

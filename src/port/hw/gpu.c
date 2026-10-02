@@ -44,6 +44,7 @@ typedef struct GpuState {
     u32 dma_dir;
     bool odd_line;
     u32 frame;
+    u32 flips; /* display start changes = game frames presented */
 } GpuState;
 
 static GpuState g = {.disp_off = true};
@@ -599,6 +600,7 @@ void gpu_gp1(u32 word) {
         g.dma_dir = word & 3;
         break;
     case 0x05:
+        g.flips++;
         g.disp_x = word & 0x3FE;
         g.disp_y = (word >> 10) & 0x1FF;
         break;
@@ -656,6 +658,10 @@ u32 gpu_status(void) {
 void gpu_vblank(void) {
     g.frame++;
     g.odd_line = !g.odd_line;
+}
+
+u32 gpu_flip_count(void) {
+    return g.flips;
 }
 
 /* --- display ------------------------------------------------------------------------------ */

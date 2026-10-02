@@ -24,7 +24,7 @@ recomp:
 	$(PYTHON) tools/recomp/recomp.py
 
 build:
-	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Debug
+	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
 	cmake --build build/cmake
 
 lint:

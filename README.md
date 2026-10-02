@@ -79,5 +79,12 @@ Each run writes `nightmare.log` in the current directory. If the game crashes, t
 with a backtrace in which recompiled functions appear as `<module>_<address>` (for example
 `psx2_exe_8001A304`): please include it when reporting a crash.
 
-Debugging aids: `NC_SHOT_EVERY=N` saves a screenshot every N frames to `build/shots/`, and
-`NC_TRACE_STACK=1` prints the guest (MIPS) call stack once per second.
+### Debugging aids (environment variables)
+
+| Variable | Effect |
+|---|---|
+| `NC_SHOT_EVERY=N` | Save a screenshot every N frames to `build/shots/` |
+| `NC_TRACE_STACK=1` | Print the guest (MIPS) call stack once per second |
+| `NC_PROFILE=1` | Sample the running guest function at each VBlank; print the top ones every 10 s |
+| `NC_FPS=1` | Log the game's frame rate and the VBlank rate once per second |
+| `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |

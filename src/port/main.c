@@ -121,6 +121,41 @@ static void present(void) {
     SDL_RenderPresent(renderer);
 }
 
+/* Testing aid: NC_PRESS_START=N taps Start for a few frames every N frames (skips movies,
+ * advances menus) so later parts of the game can be reached unattended. */
+static u16 scripted_input(void) {
+    static int every = -1;
+    static unsigned frame;
+    if (every < 0) {
+        const char *env = SDL_getenv("NC_PRESS_START");
+        every = env ? SDL_atoi(env) : 0;
+    }
+    if (every <= 0) {
+        return 0;
+    }
+    return (++frame % (unsigned)every) < 4 ? PAD_START : 0;
+}
+
+/* Debugging aid: NC_FPS=1 logs the game's own frame rate (buffer flips) once per second. */
+static void report_fps(void) {
+    static int enabled = -1;
+    static unsigned vblanks;
+    static u32 last_flips;
+    static Uint64 last_ns;
+    if (enabled < 0) {
+        enabled = SDL_getenv("NC_FPS") != NULL;
+        last_ns = SDL_GetTicksNS();
+    }
+    if (!enabled || ++vblanks % 60 != 0) {
+        return;
+    }
+    Uint64 now = SDL_GetTicksNS();
+    u32 flips = gpu_flip_count();
+    NC_LOG("fps: game %u, vblank %.1f", flips - last_flips, 60.0e9 / (double)(now - last_ns));
+    last_flips = flips;
+    last_ns = now;
+}
+
 /* Called once per emulated VBlank: input, window events, video, and 60 Hz pacing. */
 static void on_frame(void) {
     SDL_Event event;
@@ -129,15 +164,20 @@ static void on_frame(void) {
             exit(0);
         }
     }
-    bios_set_pad(read_keyboard());
+    bios_set_pad(read_keyboard() | scripted_input());
     present();
+    report_fps();
 
+    /* Pace against absolute deadlines so sleep overshoot does not accumulate; if we fall
+     * more than a few frames behind, resynchronise instead of fast-forwarding. */
     const Uint64 frame_ns = 1000000000ull / 60;
+    last_frame_ns += frame_ns;
     Uint64 now = SDL_GetTicksNS();
-    if (now - last_frame_ns < frame_ns) {
-        SDL_DelayNS(frame_ns - (now - last_frame_ns));
+    if (now < last_frame_ns) {
+        SDL_DelayPrecise(last_frame_ns - now);
+    } else if (now - last_frame_ns > 4 * frame_ns) {
+        last_frame_ns = now;
     }
-    last_frame_ns = SDL_GetTicksNS();
 }
 
 int main(int argc, char **argv) {
