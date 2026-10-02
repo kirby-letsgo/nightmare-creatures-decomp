@@ -1,0 +1,12 @@
+# Game data: users supply their own disc
+roms/*
+!roms/.gitkeep
+
+# Build output, extracted disc files, generated code
+build/
+gen/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.ruff_cache/
