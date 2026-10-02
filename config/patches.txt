@@ -1,0 +1,9 @@
+# Runtime patches: instructions the recompiled code skips (treats as nop) while a flag is set.
+# Flags are toggled live by settings (see src/port/patches.c).
+#
+# Format: <module> <address> <flag>   [# comment]
+
+# Adrenaline meter off. Addresses from the Nightmare Creatures adrenaline patch by SCD
+# (romhacking.net) as packaged by lightbulb-sun/nightmare-adrenaline (MIT License).
+psx2_exe 0x80055DCC no_adrenaline   # jal func_8005520C: draws the adrenaline bar
+psx2_exe 0x80055E94 no_adrenaline   # addiu v0,-1: adrenaline countdown (at 0, health drains)

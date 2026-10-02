@@ -130,6 +130,26 @@ static u16 scripted_input(void) {
     return (++frame % (unsigned)every) < 4 ? PAD_START : 0;
 }
 
+/* Debugging aid: NC_RAMDUMP=N writes main RAM to build/ram/frame_XXXXX.bin every N frames
+ * (for locating game variables by comparing snapshots). */
+static void dump_ram(void) {
+    static int every = -1;
+    static unsigned frame;
+    if (every < 0) {
+        const char *env = SDL_getenv("NC_RAMDUMP");
+        every = env ? SDL_atoi(env) : 0;
+        if (every > 0) {
+            SDL_CreateDirectory("build/ram");
+        }
+    }
+    if (every <= 0 || ++frame % (unsigned)every != 0) {
+        return;
+    }
+    char path[64];
+    SDL_snprintf(path, sizeof path, "build/ram/frame_%05u.bin", frame);
+    SDL_SaveFile(path, nc_ram, RAM_SIZE);
+}
+
 /* --- video -------------------------------------------------------------------------------- */
 
 /* Debugging aid: NC_SHOT_EVERY=N saves the display area to build/shots/ every N frames. */
@@ -368,6 +388,7 @@ static void on_frame(void) {
         }
     }
     bios_set_pad(read_keyboard() | read_gamepads() | scripted_input());
+    dump_ram();
     update_screen();
     draw_game();
     SDL_RenderPresent(renderer);

@@ -55,6 +55,7 @@ add_library(nc_runtime STATIC
     src/port/log.c
     src/port/memcard.c
     src/port/memory.c
+    src/port/patches.c
     src/port/settings.c
     src/port/ui/menu.cpp
 )

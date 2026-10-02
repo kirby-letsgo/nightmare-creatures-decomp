@@ -2,6 +2,7 @@
 #ifndef NC_PORT_RECOMP_H
 #define NC_PORT_RECOMP_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 

@@ -254,10 +254,31 @@ def symbol_addr(module: str, symbol: str) -> int | None:
     return None
 
 
+def load_patches(module: str) -> dict[int, str]:
+    """config/patches.txt: instructions to skip while a runtime flag (nc_flag_<name>) is set."""
+    patches: dict[int, str] = {}
+    path = ROOT / "config" / "patches.txt"
+    if not path.exists():
+        return patches
+    for line in path.read_text().splitlines():
+        fields = line.split("#", 1)[0].split()
+        if len(fields) == 3 and fields[0] == module:
+            patches[int(fields[1], 16)] = fields[2]
+    return patches
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
         self.launcher = launcher
+        self.patches = load_patches(mod.name)
+
+    def guarded(self, addr: int, stmt: str) -> str:
+        """Wraps a translated instruction so it is skipped while its patch flag is set."""
+        flag = self.patches.get(addr)
+        if flag is None or not stmt:
+            return stmt
+        return f"if (!nc_flag_{flag}) {{ {stmt} }}"
 
     # --- call targets -------------------------------------------------------------------
     def direct(self, addr: int) -> str | None:
@@ -476,14 +497,22 @@ class Emitter:
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
             if not i.has_delay():
-                stmt = self.simple(i)
+                stmt = self.guarded(i.addr, self.simple(i))
                 if stmt:
                     out.append(f"    {stmt}")
                 k += 1
                 continue
 
-            delay = self.simple(insns[k + 1]) if k + 1 < n else ""
-            out.extend(self.control(f, i, delay, table_cases))
+            delay = self.guarded(insns[k + 1].addr, self.simple(insns[k + 1])) if k + 1 < n else ""
+            control = self.control(f, i, delay, table_cases)
+            flag = self.patches.get(i.addr)
+            if flag is not None:
+                # A patched branch/jump becomes a nop: only its delay slot runs.
+                out.append(f"    if (nc_flag_{flag}) {{ {delay} }} else {{")
+                out.extend(control)
+                out.append("    }")
+            else:
+                out.extend(control)
             if k + 1 < n and insns[k + 1].addr in slot_targets:
                 slot = insns[k + 1].addr
                 out.append(f"    goto L_{slot + 4:08X};")
@@ -563,6 +592,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)
+        lines.extend(f"extern bool nc_flag_{flag};" for flag in sorted(set(em.patches.values())))
         if launcher:
             lines.insert(2, f'#include "../{LAUNCHER}/{LAUNCHER}.h"')
         for f in chunk:

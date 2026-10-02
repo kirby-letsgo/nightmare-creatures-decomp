@@ -46,7 +46,8 @@ renders 3D gameplay at full speed on the reference software renderer.
 | MDEC (FMV) | done |
 | SPU audio, XA, CD music, reverb | done |
 | Memory card saves | done (slot 1, standard `.mcd` image) |
-| Settings: adrenaline, modern controls, volume, upscaling | not started |
+| Settings: adrenaline off, volumes, fullscreen, filtering | done |
+| Modern controls, upscaling | in progress |
 | Save states | not started |
 | Windows / Linux builds | not yet tested |
 
@@ -110,3 +111,10 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_WAV=path` | Record the audio output to a WAV file |
 | `NC_SKIP_MENU=1` | Boot straight into the game (scripted runs) |
 | `NC_MENU_SHOT=1` / `settings` | Save a screenshot of the start screen / settings page |
+
+## Credits
+
+- Adrenaline-off patch addresses: SCD (romhacking.net), packaged by
+  [lightbulb-sun/nightmare-adrenaline](https://github.com/lightbulb-sun/nightmare-adrenaline) (MIT).
+- Hardware documentation: psx-spx (Martin Korth / no$psx); Psy-Q signatures:
+  [lab313ru/psx_psyq_signatures](https://github.com/lab313ru/psx_psyq_signatures).

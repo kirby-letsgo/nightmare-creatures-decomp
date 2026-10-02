@@ -9,6 +9,7 @@
 extern "C" {
 #include "port/disc.h"
 #include "port/hw/spu.h"
+#include "port/patches.h"
 #include "port/settings.h"
 }
 
@@ -159,8 +160,10 @@ void settings_page(bool *back) {
 
     ImGui::SeparatorText("Gameplay");
     changed |= ImGui::Checkbox("Adrenaline system", &settings.adrenaline);
-    ImGui::SameLine();
-    ImGui::TextDisabled("(coming soon)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Off: the adrenaline meter never fills or drains your health,\n"
+                          "and its gauge is hidden.");
+    }
     int controls = settings.controls;
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Controls");
@@ -235,6 +238,7 @@ extern "C" void menu_shutdown(void) {
 }
 
 extern "C" void menu_apply_settings(void) {
+    patches_apply();
     spu_set_gains(settings.volume_master * 256 / 100, settings.volume_music * 256 / 100,
                   settings.volume_sfx * 256 / 100);
     SDL_SetWindowFullscreen(g_window, settings.fullscreen);
