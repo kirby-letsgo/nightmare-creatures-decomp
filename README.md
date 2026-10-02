@@ -47,7 +47,8 @@ renders 3D gameplay at full speed on the reference software renderer.
 | SPU audio, XA, CD music, reverb | done |
 | Memory card saves | done (slot 1, standard `.mcd` image) |
 | Settings: adrenaline off, volumes, fullscreen, filtering | done |
-| Modern controls, upscaling | in progress |
+| Upscaling (software, full speed up to ~3x) | done |
+| Modern controls, save states | in progress |
 | Save states | not started |
 | Windows / Linux builds | not yet tested |
 

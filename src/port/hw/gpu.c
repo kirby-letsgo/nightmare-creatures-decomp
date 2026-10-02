@@ -1,20 +1,26 @@
-/* Software GPU: GP0/GP1 command processing into a 1024x512 15-bit VRAM, with a reference
- * rasterizer for polygons, lines and rectangles (flat/gouraud, textured 4/8/15-bit,
- * semi-transparency, dithering, mask bit). This is the accurate 1x path; the upscaling
- * SDL_GPU renderer consumes the same command stream later.
+/* Software GPU: GP0/GP1 command processing and a reference rasterizer for polygons, lines and
+ * rectangles (flat/gouraud, textured 4/8/15-bit, semi-transparency, dithering, mask bit).
+ *
+ * Upscaling: VRAM is stored at `scale` x the native 1024x512. Polygons and lines are rasterized
+ * at the internal resolution (smooth edges); textures, palettes, sprites and fills address VRAM
+ * at native 1x positions, so artwork stays pixel-exact. CPU uploads replicate each pixel into a
+ * scale x scale block, and readbacks / 24-bit (movie) display sample the block's top-left pixel.
  * Reference: psx-spx "GPU". */
 #include "port/hw/gpu.h"
 
 #include "port/hw/hw.h"
 #include "port/runtime.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #define VRAM_W 1024
 #define VRAM_H 512
+#define MAX_SCALE 8
 
 typedef struct GpuState {
-    u16 vram[VRAM_W * VRAM_H];
+    u16 *vram; /* (VRAM_W * scale) x (VRAM_H * scale) */
+    int scale;
 
     /* GP0 command assembly */
     u32 fifo[16];
@@ -27,7 +33,7 @@ typedef struct GpuState {
     bool uploading, downloading;
     u32 xfer_x, xfer_y, xfer_w, xfer_h, xfer_i;
 
-    /* drawing environment */
+    /* drawing environment (native coordinates) */
     u32 texpage;          /* E1 bits 0-13 */
     u32 tex_window;       /* E2 */
     int clip_x1, clip_y1; /* E3 */
@@ -49,14 +55,74 @@ typedef struct GpuState {
 
 static GpuState g = {.disp_off = true};
 
-/* --- helpers ------------------------------------------------------------------------------ */
+/* --- VRAM access -------------------------------------------------------------------------- */
 
 static int sext11(u32 v) {
     return (int)((v & 0x7FFu) ^ 0x400u) - 0x400;
 }
 
+static void ensure_vram(void) {
+    if (g.vram == NULL) {
+        g.scale = 1;
+        g.vram = calloc((size_t)VRAM_W * VRAM_H, sizeof(u16));
+    }
+}
+
+/* Pixel at internal (scaled) coordinates. */
+static u16 *hpx(int x, int y) {
+    int w = VRAM_W * g.scale, h = VRAM_H * g.scale;
+    x %= w;
+    y %= h;
+    x += x < 0 ? w : 0;
+    y += y < 0 ? h : 0;
+    return &g.vram[(size_t)y * (size_t)w + (size_t)x];
+}
+
+/* Pixel at native coordinates (top-left of its scale x scale block). */
 static u16 *px(int x, int y) {
-    return &g.vram[(y & (VRAM_H - 1)) * VRAM_W + (x & (VRAM_W - 1))];
+    return hpx((x & (VRAM_W - 1)) * g.scale, (y & (VRAM_H - 1)) * g.scale);
+}
+
+/* Writes a native pixel: fills its whole block. */
+static void put_native(int x, int y, u16 v) {
+    int s = g.scale;
+    int bx = (x & (VRAM_W - 1)) * s, by = (y & (VRAM_H - 1)) * s;
+    for (int j = 0; j < s; j++) {
+        u16 *row = hpx(bx, by + j);
+        for (int i = 0; i < s; i++) {
+            row[i] = v;
+        }
+    }
+}
+
+void gpu_set_scale(int scale) {
+    scale = scale < 1 ? 1 : (scale > MAX_SCALE ? MAX_SCALE : scale);
+    ensure_vram();
+    if (scale == g.scale) {
+        return;
+    }
+    /* Resample the current contents: take each native pixel and replicate it. */
+    u16 *native = malloc((size_t)VRAM_W * VRAM_H * sizeof(u16));
+    for (int y = 0; y < VRAM_H; y++) {
+        for (int x = 0; x < VRAM_W; x++) {
+            native[y * VRAM_W + x] = *px(x, y);
+        }
+    }
+    free(g.vram);
+    g.scale = scale;
+    g.vram = malloc((size_t)VRAM_W * VRAM_H * (size_t)(scale * scale) * sizeof(u16));
+    for (int y = 0; y < VRAM_H; y++) {
+        for (int x = 0; x < VRAM_W; x++) {
+            put_native(x, y, native[y * VRAM_W + x]);
+        }
+    }
+    free(native);
+    NC_LOG("gpu: internal resolution %dx", scale);
+}
+
+int gpu_scale(void) {
+    ensure_vram();
+    return g.scale;
 }
 
 static int clamp(int v, int lo, int hi) {
@@ -71,7 +137,7 @@ static const int dither[4][4] = {
 };
 
 typedef struct Vertex {
-    int x, y;
+    int x, y; /* native screen coordinates (offset applied) */
     int r, g, b;
     int u, v;
 } Vertex;
@@ -113,12 +179,20 @@ static u16 sample(const DrawState *ds, int u, int v) {
     }
 }
 
-static void plot(const DrawState *ds, int x, int y, int r, int gg, int b, bool textured_px,
+/* Clip rectangle in internal coordinates. */
+static bool in_clip(int hx, int hy) {
+    int s = g.scale;
+    return hx >= g.clip_x1 * s && hx < (g.clip_x2 + 1) * s && hy >= g.clip_y1 * s &&
+           hy < (g.clip_y2 + 1) * s;
+}
+
+/* Shades and writes one internal-resolution pixel. Dithering follows native pixel positions. */
+static void plot(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool textured_px,
                  u16 texel) {
-    if (x < g.clip_x1 || x > g.clip_x2 || y < g.clip_y1 || y > g.clip_y2) {
+    if (!in_clip(hx, hy)) {
         return;
     }
-    u16 *dst = px(x, y);
+    u16 *dst = hpx(hx, hy);
     if (g.mask_check && (*dst & 0x8000)) {
         return;
     }
@@ -140,7 +214,7 @@ static void plot(const DrawState *ds, int x, int y, int r, int gg, int b, bool t
         semi = semi && (texel & 0x8000);
     }
     if (ds->dither) {
-        int d = dither[y & 3][x & 3];
+        int d = dither[(hy / g.scale) & 3][(hx / g.scale) & 3];
         r += d;
         gg += d;
         b += d;
@@ -181,27 +255,30 @@ static void plot(const DrawState *ds, int x, int y, int r, int gg, int b, bool t
 
 /* --- triangles ------------------------------------------------------------------------ */
 
-static s64 edge(const Vertex *a, const Vertex *b, int x, int y) {
-    return (s64)(b->x - a->x) * (y - a->y) - (s64)(b->y - a->y) * (x - a->x);
+/* Attribute plane: value = a*x + b*y + c over internal pixel centres. */
+typedef struct Plane {
+    double a, b, c;
+} Plane;
+
+static Plane plane(const double x[3], const double y[3], const double v[3], double det) {
+    Plane p;
+    p.a = ((v[1] - v[0]) * (y[2] - y[0]) - (v[2] - v[0]) * (y[1] - y[0])) / det;
+    p.b = ((v[2] - v[0]) * (x[1] - x[0]) - (v[1] - v[0]) * (x[2] - x[0])) / det;
+    p.c = v[0] - p.a * x[0] - p.b * y[0];
+    return p;
+}
+
+static s64 edge(s64 ax, s64 ay, s64 bx, s64 by, s64 x, s64 y) {
+    return (bx - ax) * (y - ay) - (by - ay) * (x - ax);
 }
 
 /* Top-left fill rule: pixels exactly on an edge belong to it only for top/left edges. */
-static bool is_top_left(const Vertex *a, const Vertex *b) {
-    return (a->y == b->y && b->x < a->x) || (b->y < a->y);
+static bool is_top_left(s64 ax, s64 ay, s64 bx, s64 by) {
+    return (ay == by && bx < ax) || (by < ay);
 }
 
 static void draw_triangle(const DrawState *ds, Vertex v0, Vertex v1, Vertex v2) {
-    s64 area = edge(&v0, &v1, v2.x, v2.y);
-    if (area == 0) {
-        return;
-    }
-    if (area < 0) {
-        Vertex t = v1;
-        v1 = v2;
-        v2 = t;
-        area = -area;
-    }
-    /* Hardware rejects polygons larger than 1023x511. */
+    /* Hardware rejects polygons larger than 1023x511 (native). */
     int minx = v0.x, maxx = v0.x, miny = v0.y, maxy = v0.y;
     const Vertex *vs[3] = {&v0, &v1, &v2};
     for (int i = 1; i < 3; i++) {
@@ -213,30 +290,71 @@ static void draw_triangle(const DrawState *ds, Vertex v0, Vertex v1, Vertex v2) 
     if (maxx - minx >= 1024 || maxy - miny >= 512) {
         return;
     }
-    minx = minx < g.clip_x1 ? g.clip_x1 : minx;
-    miny = miny < g.clip_y1 ? g.clip_y1 : miny;
-    maxx = maxx > g.clip_x2 ? g.clip_x2 : maxx;
-    maxy = maxy > g.clip_y2 ? g.clip_y2 : maxy;
 
-    int bias0 = is_top_left(&v1, &v2) ? 0 : -1;
-    int bias1 = is_top_left(&v2, &v0) ? 0 : -1;
-    int bias2 = is_top_left(&v0, &v1) ? 0 : -1;
+    /* Work in internal coordinates; vertices sit on native pixel corners. */
+    const s64 s = g.scale;
+    s64 x0 = v0.x * s, y0 = v0.y * s, x1 = v1.x * s, y1 = v1.y * s, x2 = v2.x * s, y2 = v2.y * s;
+    s64 area = edge(x0, y0, x1, y1, x2, y2);
+    if (area == 0) {
+        return;
+    }
+    if (area < 0) {
+        s64 tx = x1, ty = y1;
+        x1 = x2;
+        y1 = y2;
+        x2 = tx;
+        y2 = ty;
+        Vertex t = v1;
+        v1 = v2;
+        v2 = t;
+        area = -area;
+    }
 
-    for (int y = miny; y <= maxy; y++) {
-        for (int x = minx; x <= maxx; x++) {
-            s64 w0 = edge(&v1, &v2, x, y), w1 = edge(&v2, &v0, x, y), w2 = edge(&v0, &v1, x, y);
+    int hminx = (int)(minx * s), hmaxx = (int)((maxx + 1) * s - 1);
+    int hminy = (int)(miny * s), hmaxy = (int)((maxy + 1) * s - 1);
+    hminx = hminx < g.clip_x1 * (int)s ? g.clip_x1 * (int)s : hminx;
+    hminy = hminy < g.clip_y1 * (int)s ? g.clip_y1 * (int)s : hminy;
+    hmaxx = hmaxx > (g.clip_x2 + 1) * (int)s - 1 ? (g.clip_x2 + 1) * (int)s - 1 : hmaxx;
+    hmaxy = hmaxy > (g.clip_y2 + 1) * (int)s - 1 ? (g.clip_y2 + 1) * (int)s - 1 : hmaxy;
+    if (hminx > hmaxx || hminy > hmaxy) {
+        return;
+    }
+
+    int bias0 = is_top_left(x1, y1, x2, y2) ? 0 : -1;
+    int bias1 = is_top_left(x2, y2, x0, y0) ? 0 : -1;
+    int bias2 = is_top_left(x0, y0, x1, y1) ? 0 : -1;
+
+    /* Attribute planes (sampled at pixel positions, like the hardware at 1x). */
+    double px_[3] = {(double)x0, (double)x1, (double)x2},
+           py_[3] = {(double)y0, (double)y1, (double)y2};
+    double det = (double)area;
+    double vr[3] = {v0.r, v1.r, v2.r}, vg[3] = {v0.g, v1.g, v2.g}, vb[3] = {v0.b, v1.b, v2.b};
+    double vu[3] = {v0.u, v1.u, v2.u}, vv[3] = {v0.v, v1.v, v2.v};
+    Plane pr = plane(px_, py_, vr, det), pg = plane(px_, py_, vg, det);
+    Plane pb = plane(px_, py_, vb, det);
+    Plane pu = plane(px_, py_, vu, det), pv = plane(px_, py_, vv, det);
+    /* At higher scales, sample attributes at the pixel centre in native units. */
+    double centre = s > 1 ? 0.5 : 0.0;
+
+    for (int y = hminy; y <= hmaxy; y++) {
+        s64 w0 = edge(x1, y1, x2, y2, hminx, y), w1 = edge(x2, y2, x0, y0, hminx, y);
+        s64 w2 = edge(x0, y0, x1, y1, hminx, y);
+        s64 d0 = -(y2 - y1), d1 = -(y0 - y2), d2 = -(y1 - y0);
+        double fy = (double)y + centre;
+        for (int x = hminx; x <= hmaxx; x++, w0 += d0, w1 += d1, w2 += d2) {
             if (w0 + bias0 < 0 || w1 + bias1 < 0 || w2 + bias2 < 0) {
                 continue;
             }
+            double fx = (double)x + centre;
             int r = v0.r, gg = v0.g, b = v0.b;
             if (ds->gouraud) {
-                r = (int)((w0 * v0.r + w1 * v1.r + w2 * v2.r) / area);
-                gg = (int)((w0 * v0.g + w1 * v1.g + w2 * v2.g) / area);
-                b = (int)((w0 * v0.b + w1 * v1.b + w2 * v2.b) / area);
+                r = (int)(pr.a * fx + pr.b * fy + pr.c);
+                gg = (int)(pg.a * fx + pg.b * fy + pg.c);
+                b = (int)(pb.a * fx + pb.b * fy + pb.c);
             }
             if (ds->textured) {
-                int u = (int)((w0 * v0.u + w1 * v1.u + w2 * v2.u) / area);
-                int v = (int)((w0 * v0.v + w1 * v1.v + w2 * v2.v) / area);
+                int u = (int)(pu.a * fx + pu.b * fy + pu.c);
+                int v = (int)(pv.a * fx + pv.b * fy + pv.c);
                 plot(ds, x, y, r, gg, b, true, sample(ds, u, v));
             } else {
                 plot(ds, x, y, r, gg, b, false, 0);
@@ -297,15 +415,18 @@ static int iabs(int v) {
     return v < 0 ? -v : v;
 }
 
+/* Lines are stepped at the internal resolution so they stay thin when upscaled. */
 static void draw_line(const DrawState *ds, Vertex a, Vertex b) {
     int dx = b.x - a.x, dy = b.y - a.y;
     if (iabs(dx) >= 1024 || iabs(dy) >= 512) {
         return;
     }
-    int steps = iabs(dx) > iabs(dy) ? iabs(dx) : iabs(dy);
+    int s = g.scale, half = s / 2;
+    int hdx = dx * s, hdy = dy * s;
+    int steps = iabs(hdx) > iabs(hdy) ? iabs(hdx) : iabs(hdy);
     for (int i = 0; i <= steps; i++) {
-        int x = steps ? a.x + dx * i / steps : a.x;
-        int y = steps ? a.y + dy * i / steps : a.y;
+        int x = a.x * s + half + (steps ? hdx * i / steps : 0);
+        int y = a.y * s + half + (steps ? hdy * i / steps : 0);
         int r = steps ? a.r + (b.r - a.r) * i / steps : a.r;
         int gg = steps ? a.g + (b.g - a.g) * i / steps : a.g;
         int bb = steps ? a.b + (b.b - a.b) * i / steps : a.b;
@@ -340,6 +461,7 @@ static void gp0_line(void) {
     draw_line(&ds, a, b);
 }
 
+/* Rectangles (sprites) are drawn per native pixel, filling each internal block. */
 static void gp0_rect(void) {
     u32 op = g.fifo[0] >> 24;
     bool textured = op & 0x04;
@@ -376,14 +498,19 @@ static void gp0_rect(void) {
     }
     int r = (int)(g.fifo[0] & 0xFF), gg = (int)((g.fifo[0] >> 8) & 0xFF),
         b = (int)((g.fifo[0] >> 16) & 0xFF);
+    int s = g.scale;
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
+            u16 texel = 0;
             if (textured) {
                 int u = g.tex_flip_x ? u0 - x : u0 + x;
                 int v = g.tex_flip_y ? v0 - y : v0 + y;
-                plot(&ds, x0 + x, y0 + y, r, gg, b, true, sample(&ds, u, v));
-            } else {
-                plot(&ds, x0 + x, y0 + y, r, gg, b, false, 0);
+                texel = sample(&ds, u, v);
+            }
+            for (int j = 0; j < s; j++) {
+                for (int k = 0; k < s; k++) {
+                    plot(&ds, (x0 + x) * s + k, (y0 + y) * s + j, r, gg, b, textured, texel);
+                }
             }
         }
     }
@@ -393,28 +520,31 @@ static void gp0_fill(void) {
     u32 c = g.fifo[0];
     u16 color =
         (u16)(((c & 0xFF) >> 3) | (((c >> 8) & 0xFF) >> 3) << 5 | (((c >> 16) & 0xFF) >> 3) << 10);
-    u32 x0 = g.fifo[1] & 0x3F0, y0 = (g.fifo[1] >> 16) & 0x1FF;
-    u32 w = ((g.fifo[2] & 0x3FF) + 0xF) & ~0xFu, h = (g.fifo[2] >> 16) & 0x1FF;
-    for (u32 y = 0; y < h; y++) {
-        for (u32 x = 0; x < w; x++) {
-            *px((int)(x0 + x), (int)(y0 + y)) = color;
+    int s = g.scale;
+    int x0 = (int)(g.fifo[1] & 0x3F0) * s, y0 = (int)((g.fifo[1] >> 16) & 0x1FF) * s;
+    int w = (int)(((g.fifo[2] & 0x3FF) + 0xF) & ~0xFu) * s,
+        h = (int)((g.fifo[2] >> 16) & 0x1FF) * s;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            *hpx(x0 + x, y0 + y) = color;
         }
     }
 }
 
 static void gp0_copy(void) {
-    u32 sx = g.fifo[1] & 0x3FF, sy = (g.fifo[1] >> 16) & 0x1FF;
-    u32 dx = g.fifo[2] & 0x3FF, dy = (g.fifo[2] >> 16) & 0x1FF;
-    u32 w = g.fifo[3] & 0x3FF, h = (g.fifo[3] >> 16) & 0x1FF;
-    w = w ? w : 1024;
-    h = h ? h : 512;
-    for (u32 y = 0; y < h; y++) {
-        for (u32 x = 0; x < w; x++) {
-            u16 *d = px((int)(dx + x), (int)(dy + y));
+    int s = g.scale;
+    int sx = (int)(g.fifo[1] & 0x3FF) * s, sy = (int)((g.fifo[1] >> 16) & 0x1FF) * s;
+    int dx = (int)(g.fifo[2] & 0x3FF) * s, dy = (int)((g.fifo[2] >> 16) & 0x1FF) * s;
+    int w = (int)(g.fifo[3] & 0x3FF), h = (int)((g.fifo[3] >> 16) & 0x1FF);
+    w = (w ? w : 1024) * s;
+    h = (h ? h : 512) * s;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            u16 *d = hpx(dx + x, dy + y);
             if (g.mask_check && (*d & 0x8000)) {
                 continue;
             }
-            *d = (u16)(*px((int)(sx + x), (int)(sy + y)) | (g.mask_set ? 0x8000 : 0));
+            *d = (u16)(*hpx(sx + x, sy + y) | (g.mask_set ? 0x8000 : 0));
         }
     }
 }
@@ -432,10 +562,9 @@ static void begin_transfer(bool upload) {
 }
 
 static void xfer_pixel(u16 value) {
-    u32 x = g.xfer_x + g.xfer_i % g.xfer_w, y = g.xfer_y + g.xfer_i / g.xfer_w;
-    u16 *d = px((int)x, (int)y);
-    if (!(g.mask_check && (*d & 0x8000))) {
-        *d = (u16)(value | (g.mask_set ? 0x8000 : 0));
+    int x = (int)(g.xfer_x + g.xfer_i % g.xfer_w), y = (int)(g.xfer_y + g.xfer_i / g.xfer_w);
+    if (!(g.mask_check && (*px(x, y) & 0x8000))) {
+        put_native(x, y, (u16)(value | (g.mask_set ? 0x8000 : 0)));
     }
     if (++g.xfer_i >= g.xfer_w * g.xfer_h) {
         g.uploading = false;
@@ -559,6 +688,7 @@ static void polyline_word(u32 word) {
 }
 
 void gpu_gp0(u32 word) {
+    ensure_vram();
     if (g.uploading) {
         xfer_pixel((u16)word);
         if (g.uploading) {
@@ -621,6 +751,7 @@ void gpu_gp1(u32 word) {
 }
 
 u32 gpu_read(void) {
+    ensure_vram();
     if (!g.downloading) {
         return 0;
     }
@@ -667,6 +798,7 @@ u32 gpu_flip_count(void) {
 /* --- display ------------------------------------------------------------------------------ */
 
 void gpu_display_info(GpuDisplay *out) {
+    ensure_vram();
     static const u32 widths[4] = {256, 320, 512, 640};
     u32 w = (g.disp_mode & 0x40) ? 368 : widths[g.disp_mode & 3];
     u32 h = (g.disp_mode & 0x04) && (g.disp_mode & 0x20) ? 480 : 240;
@@ -680,29 +812,34 @@ void gpu_display_info(GpuDisplay *out) {
     out->height = lines < h ? lines : h;
     out->rgb24 = (g.disp_mode & 0x10) != 0;
     out->enabled = !g.disp_off;
+    /* 24-bit (movie) output is packed bytes, so it is shown at native resolution. */
+    out->scale = out->rgb24 ? 1u : (u32)g.scale;
 }
 
 void gpu_display_rgba(u32 *dst, const GpuDisplay *d) {
-    for (u32 y = 0; y < d->height; y++) {
-        for (u32 x = 0; x < d->width; x++) {
+    u32 s = d->scale, ow = d->width * s, oh = d->height * s;
+    for (u32 y = 0; y < oh; y++) {
+        for (u32 x = 0; x < ow; x++) {
             u32 r, gg, b;
             if (d->rgb24) {
-                const u8 *row = (const u8 *)px(0, (int)(d->y + y));
+                /* Bytes packed across native pixels: gather from block top-lefts. */
                 u32 byte = d->x * 2 + x * 3;
-                r = row[byte % (VRAM_W * 2)];
-                gg = row[(byte + 1) % (VRAM_W * 2)];
-                b = row[(byte + 2) % (VRAM_W * 2)];
+                u8 bytes[3];
+                for (int k = 0; k < 3; k++) {
+                    u32 bi = byte + (u32)k;
+                    u16 pix = *px((int)((bi / 2) % VRAM_W), (int)(d->y + y));
+                    bytes[k] = (u8)(bi & 1 ? pix >> 8 : pix);
+                }
+                r = bytes[0];
+                gg = bytes[1];
+                b = bytes[2];
             } else {
-                u16 p = *px((int)(d->x + x), (int)(d->y + y));
+                u16 p = *hpx((int)(d->x * s + x), (int)(d->y * s + y));
                 r = (u32)(p & 0x1F) << 3 | (p & 0x1F) >> 2;
                 gg = (u32)((p >> 5) & 0x1F) << 3 | ((p >> 5) & 0x1F) >> 2;
                 b = (u32)((p >> 10) & 0x1F) << 3 | ((p >> 10) & 0x1F) >> 2;
             }
-            dst[y * d->width + x] = 0xFF000000u | b << 16 | gg << 8 | r;
+            dst[y * ow + x] = 0xFF000000u | b << 16 | gg << 8 | r;
         }
     }
-}
-
-const u16 *gpu_vram(void) {
-    return g.vram;
 }

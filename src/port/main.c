@@ -166,9 +166,8 @@ static void save_debug_shot(const GpuDisplay *d) {
     if (every <= 0 || ++frame % (unsigned)every != 0) {
         return;
     }
-    SDL_Surface *surf =
-        SDL_CreateSurfaceFrom((int)d->width, (int)d->height, SDL_PIXELFORMAT_ABGR8888,
-                              screen_pixels, (int)(d->width * 4));
+    int w = (int)(d->width * d->scale), h = (int)(d->height * d->scale);
+    SDL_Surface *surf = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_ABGR8888, screen_pixels, w * 4);
     if (surf != NULL) {
         char path[64];
         SDL_snprintf(path, sizeof path, "build/shots/frame_%05u.bmp", frame);
@@ -185,17 +184,18 @@ static void update_screen(void) {
         screen_w = screen_h = 0;
         return;
     }
-    if (screen == NULL || d.width != screen_w || d.height != screen_h) {
+    u32 w = d.width * d.scale, h = d.height * d.scale;
+    if (screen == NULL || w != screen_w || h != screen_h) {
         SDL_DestroyTexture(screen);
         free(screen_pixels);
         screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING,
-                                   (int)d.width, (int)d.height);
-        screen_pixels = malloc((size_t)d.width * d.height * 4);
-        screen_w = d.width;
-        screen_h = d.height;
+                                   (int)w, (int)h);
+        screen_pixels = malloc((size_t)w * h * 4);
+        screen_w = w;
+        screen_h = h;
     }
     gpu_display_rgba(screen_pixels, &d);
-    SDL_UpdateTexture(screen, NULL, screen_pixels, (int)(d.width * 4));
+    SDL_UpdateTexture(screen, NULL, screen_pixels, (int)(w * 4));
     save_debug_shot(&d);
 }
 
