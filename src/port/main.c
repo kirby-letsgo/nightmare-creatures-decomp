@@ -2,6 +2,7 @@
 #include "port/exe.h"
 #include "port/hw/gpu.h"
 #include "port/hw/hw.h"
+#include "port/hw/spu.h"
 #include "port/memcard.h"
 #include "port/runtime.h"
 
@@ -24,6 +25,7 @@ static SDL_Texture *screen;
 static u32 screen_w, screen_h;
 static u32 *screen_pixels;
 static Uint64 last_frame_ns;
+static SDL_AudioStream *audio;
 
 /* PS1 digital pad bits (1 = pressed). */
 enum {
@@ -157,6 +159,59 @@ static void report_fps(void) {
     last_ns = now;
 }
 
+/* Debugging aid: NC_WAV=path records the audio output to a 16-bit stereo WAV file. */
+static void record_wav(const s16 *samples, int bytes) {
+    static SDL_IOStream *wav;
+    static int state = -1;
+    static Uint32 data_bytes;
+    if (state < 0) {
+        const char *path = SDL_getenv("NC_WAV");
+        wav = path ? SDL_IOFromFile(path, "wb") : NULL;
+        state = wav != NULL;
+        if (wav != NULL) {
+            Uint8 header[44] = {0};
+            SDL_WriteIO(wav, header, sizeof header); /* filled in as data arrives */
+        }
+    }
+    if (!state) {
+        return;
+    }
+    SDL_WriteIO(wav, samples, (size_t)bytes);
+    data_bytes += (Uint32)bytes;
+    /* Rewrite the header each time so the file is valid even if the game is killed. */
+    Sint64 end = SDL_TellIO(wav);
+    SDL_SeekIO(wav, 0, SDL_IO_SEEK_SET);
+    SDL_WriteIO(wav, "RIFF", 4);
+    SDL_WriteU32LE(wav, 36 + data_bytes);
+    SDL_WriteIO(wav, "WAVEfmt ", 8);
+    SDL_WriteU32LE(wav, 16);
+    SDL_WriteU16LE(wav, 1);
+    SDL_WriteU16LE(wav, 2);
+    SDL_WriteU32LE(wav, SPU_RATE);
+    SDL_WriteU32LE(wav, SPU_RATE * 4);
+    SDL_WriteU16LE(wav, 4);
+    SDL_WriteU16LE(wav, 16);
+    SDL_WriteIO(wav, "data", 4);
+    SDL_WriteU32LE(wav, data_bytes);
+    SDL_SeekIO(wav, end, SDL_IO_SEEK_SET);
+}
+
+/* Renders one frame of audio (44100 / 60 samples). The queue is kept short so audio stays in
+ * sync with video; if it grows (e.g. after a stall), the excess is dropped. */
+static void output_audio(void) {
+    enum { FRAME_SAMPLES = SPU_RATE / 60, MAX_QUEUED_BYTES = SPU_RATE / 10 * 4 };
+    static s16 buf[FRAME_SAMPLES * 2];
+    spu_render(buf, FRAME_SAMPLES);
+    record_wav(buf, (int)sizeof buf);
+    if (audio == NULL) {
+        return;
+    }
+    if (SDL_GetAudioStreamQueued(audio) > MAX_QUEUED_BYTES) {
+        SDL_ClearAudioStream(audio);
+    }
+    SDL_PutAudioStreamData(audio, buf, (int)sizeof buf);
+}
+
 /* Called once per emulated VBlank: input, window events, video, and 60 Hz pacing. */
 static void on_frame(void) {
     SDL_Event event;
@@ -167,6 +222,7 @@ static void on_frame(void) {
     }
     bios_set_pad(read_keyboard() | scripted_input());
     present();
+    output_audio();
     report_fps();
 
     /* Pace against absolute deadlines so sleep overshoot does not accumulate; if we fall
@@ -209,6 +265,14 @@ int main(int argc, char **argv) {
         return 1;
     }
     SDL_SetRenderVSync(renderer, 0); /* pacing is done by on_frame */
+
+    SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, SPU_RATE};
+    audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    if (audio != NULL) {
+        SDL_ResumeAudioStreamDevice(audio);
+    } else {
+        SDL_Log("No audio output: %s", SDL_GetError());
+    }
 
     if (!disc_open(disc_path)) {
         SDL_Log("Could not open the disc image at '%s'. Pass --disc <path to .chd>.", disc_path);

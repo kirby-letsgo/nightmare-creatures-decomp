@@ -44,7 +44,7 @@ renders 3D gameplay at full speed on the reference software renderer.
 | GTE | done |
 | GPU (software, 1x) | done |
 | MDEC (FMV) | done |
-| SPU audio, XA, CD music | not started |
+| SPU audio, XA, CD music | done (reverb not yet) |
 | Memory card saves | done (slot 1, standard `.mcd` image) |
 | Settings: adrenaline, modern controls, volume, upscaling | not started |
 | Save states | not started |
@@ -99,3 +99,4 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_PROFILE=1` | Sample the running guest function at each VBlank; print the top ones every 10 s |
 | `NC_FPS=1` | Log the game's frame rate and the VBlank rate once per second |
 | `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |
+| `NC_WAV=path` | Record the audio output to a WAV file |
