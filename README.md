@@ -44,7 +44,7 @@ renders 3D gameplay at full speed on the reference software renderer.
 | GTE | done |
 | GPU (software, 1x) | done |
 | MDEC (FMV) | done |
-| SPU audio, XA, CD music | done (reverb not yet) |
+| SPU audio, XA, CD music, reverb | done |
 | Memory card saves | done (slot 1, standard `.mcd` image) |
 | Settings: adrenaline, modern controls, volume, upscaling | not started |
 | Save states | not started |

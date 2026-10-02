@@ -1,8 +1,8 @@
 /* SPU: 24 ADPCM voices with ADSR envelopes, pitch (and pitch modulation), noise, plus CD audio
  * (CD-DA and XA-ADPCM from the CD-ROM controller), mixed at 44.1 kHz.
  * Reference: psx-spx "Sound Processing Unit (SPU)" and "CDROM XA Audio ADPCM Compression".
- * Interpolation uses a cubic filter instead of the hardware's Gaussian table. Reverb is not
- * implemented yet (dry mix only). */
+ * Interpolation uses a cubic filter instead of the hardware's Gaussian table, and reverb
+ * resamples to 22.05 kHz by averaging/holding instead of the hardware's FIR filters. */
 #include "port/hw/spu.h"
 
 #include "port/hw/hw.h"
@@ -39,6 +39,10 @@ typedef struct SpuState {
     u32 transfer_addr;
     Voice voices[VOICES];
     u32 endx;
+    u32 reverb_addr;   /* current reverb buffer position (bytes) */
+    s32 reverb_in[2];  /* input accumulated over the two 44.1 kHz samples */
+    s32 reverb_out[2]; /* last 22.05 kHz output, held for two samples */
+    bool reverb_odd;
     u32 noise_lfsr;
     s32 noise_wait;
     s16 noise_level;
@@ -330,7 +334,147 @@ static void noise_tick(void) {
     }
 }
 
-static void mix_voice(int v, s32 *l, s32 *r) {
+/* --- reverb ------------------------------------------------------------------------------- */
+
+enum {
+    R_REV_OUT_L = 0x184,
+    R_REV_OUT_R = 0x186,
+    R_EON = 0x198,
+    R_REV_BASE = 0x1A2,
+    R_DAPF1 = 0x1C0,
+    R_DAPF2 = 0x1C2,
+    R_VIIR = 0x1C4,
+    R_VCOMB1 = 0x1C6,
+    R_VCOMB2 = 0x1C8,
+    R_VCOMB3 = 0x1CA,
+    R_VCOMB4 = 0x1CC,
+    R_VWALL = 0x1CE,
+    R_VAPF1 = 0x1D0,
+    R_VAPF2 = 0x1D2,
+    R_MLSAME = 0x1D4,
+    R_MRSAME = 0x1D6,
+    R_MLCOMB1 = 0x1D8,
+    R_MRCOMB1 = 0x1DA,
+    R_MLCOMB2 = 0x1DC,
+    R_MRCOMB2 = 0x1DE,
+    R_DLSAME = 0x1E0,
+    R_DRSAME = 0x1E2,
+    R_MLDIFF = 0x1E4,
+    R_MRDIFF = 0x1E6,
+    R_MLCOMB3 = 0x1E8,
+    R_MRCOMB3 = 0x1EA,
+    R_MLCOMB4 = 0x1EC,
+    R_MRCOMB4 = 0x1EE,
+    R_DLDIFF = 0x1F0,
+    R_DRDIFF = 0x1F2,
+    R_MLAPF1 = 0x1F4,
+    R_MRAPF1 = 0x1F6,
+    R_MLAPF2 = 0x1F8,
+    R_MRAPF2 = 0x1FA,
+    R_VLIN = 0x1FC,
+    R_VRIN = 0x1FE,
+};
+
+/* Reverb buffer addresses: register value * 8 bytes, relative to the current position, wrapping
+ * within [mBASE, end of SPU RAM). `adjust` is in bytes (e.g. -2 for "[m-2]"). */
+static u32 rv_addr(u32 reg, s32 adjust) {
+    u32 base = (u32)REG(R_REV_BASE) * 8u;
+    u32 size = SPU_RAM_SIZE - base;
+    if (size == 0) {
+        return 0;
+    }
+    u32 rel = (spu.reverb_addr - base + (u32)REG(reg) * 8u + (u32)adjust) % size;
+    return base + (rel & ~1u);
+}
+
+static u32 rv_addr_minus(u32 reg, u32 dreg) {
+    u32 base = (u32)REG(R_REV_BASE) * 8u;
+    u32 size = SPU_RAM_SIZE - base;
+    if (size == 0) {
+        return 0;
+    }
+    u32 off = ((u32)REG(reg) * 8u - (u32)REG(dreg) * 8u) % size;
+    u32 rel = (spu.reverb_addr - base + off) % size;
+    return base + (rel & ~1u);
+}
+
+static s32 rv_read(u32 addr) {
+    return (s16)(spu.ram[addr & (SPU_RAM_SIZE - 1)] | spu.ram[(addr + 1) & (SPU_RAM_SIZE - 1)]
+                                                          << 8);
+}
+
+static void rv_write(u32 addr, s32 v) {
+    s16 x = clamp16(v);
+    spu.ram[addr & (SPU_RAM_SIZE - 1)] = (u8)x;
+    spu.ram[(addr + 1) & (SPU_RAM_SIZE - 1)] = (u8)((u16)x >> 8);
+}
+
+static s32 mul(s32 a, u16 vol) {
+    return a * (s16)vol / 0x8000;
+}
+
+/* One 22.05 kHz step of the reverb network (psx-spx "SPU Reverb Formula"). */
+static void reverb_step(s32 in_l, s32 in_r) {
+    bool write = (REG(R_SPUCNT) & 0x80) != 0;
+    s32 lin = mul(in_l, REG(R_VLIN)), rin = mul(in_r, REG(R_VRIN));
+    u16 iir = REG(R_VIIR), wall = REG(R_VWALL);
+
+    if (write) {
+        s32 lsame_prev = rv_read(rv_addr(R_MLSAME, -2));
+        s32 rsame_prev = rv_read(rv_addr(R_MRSAME, -2));
+        s32 ldiff_prev = rv_read(rv_addr(R_MLDIFF, -2));
+        s32 rdiff_prev = rv_read(rv_addr(R_MRDIFF, -2));
+        rv_write(rv_addr(R_MLSAME, 0),
+                 mul(lin + mul(rv_read(rv_addr(R_DLSAME, 0)), wall) - lsame_prev, iir) +
+                     lsame_prev);
+        rv_write(rv_addr(R_MRSAME, 0),
+                 mul(rin + mul(rv_read(rv_addr(R_DRSAME, 0)), wall) - rsame_prev, iir) +
+                     rsame_prev);
+        rv_write(rv_addr(R_MLDIFF, 0),
+                 mul(lin + mul(rv_read(rv_addr(R_DRDIFF, 0)), wall) - ldiff_prev, iir) +
+                     ldiff_prev);
+        rv_write(rv_addr(R_MRDIFF, 0),
+                 mul(rin + mul(rv_read(rv_addr(R_DLDIFF, 0)), wall) - rdiff_prev, iir) +
+                     rdiff_prev);
+    }
+
+    s32 lout = mul(rv_read(rv_addr(R_MLCOMB1, 0)), REG(R_VCOMB1)) +
+               mul(rv_read(rv_addr(R_MLCOMB2, 0)), REG(R_VCOMB2)) +
+               mul(rv_read(rv_addr(R_MLCOMB3, 0)), REG(R_VCOMB3)) +
+               mul(rv_read(rv_addr(R_MLCOMB4, 0)), REG(R_VCOMB4));
+    s32 rout = mul(rv_read(rv_addr(R_MRCOMB1, 0)), REG(R_VCOMB1)) +
+               mul(rv_read(rv_addr(R_MRCOMB2, 0)), REG(R_VCOMB2)) +
+               mul(rv_read(rv_addr(R_MRCOMB3, 0)), REG(R_VCOMB3)) +
+               mul(rv_read(rv_addr(R_MRCOMB4, 0)), REG(R_VCOMB4));
+
+    /* Two all-pass stages. */
+    static const u32 apf[2][4] = {{R_MLAPF1, R_MRAPF1, R_DAPF1, R_VAPF1},
+                                  {R_MLAPF2, R_MRAPF2, R_DAPF2, R_VAPF2}};
+    for (int k = 0; k < 2; k++) {
+        u16 v = REG(apf[k][3]);
+        s32 dl = rv_read(rv_addr_minus(apf[k][0], apf[k][2]));
+        s32 dr = rv_read(rv_addr_minus(apf[k][1], apf[k][2]));
+        lout = clamp16(lout - mul(dl, v));
+        rout = clamp16(rout - mul(dr, v));
+        if (write) {
+            rv_write(rv_addr(apf[k][0], 0), lout);
+            rv_write(rv_addr(apf[k][1], 0), rout);
+        }
+        lout = mul(lout, v) + dl;
+        rout = mul(rout, v) + dr;
+    }
+
+    spu.reverb_out[0] = clamp16(mul(clamp16(lout), REG(R_REV_OUT_L)));
+    spu.reverb_out[1] = clamp16(mul(clamp16(rout), REG(R_REV_OUT_R)));
+
+    u32 base = (u32)REG(R_REV_BASE) * 8u;
+    spu.reverb_addr = (spu.reverb_addr + 2) & (SPU_RAM_SIZE - 2);
+    if (spu.reverb_addr < base) {
+        spu.reverb_addr = base;
+    }
+}
+
+static void mix_voice(int v, s32 *l, s32 *r, s32 *rl, s32 *rr) {
     Voice *vc = &spu.voices[v];
     if (vc->phase == ENV_OFF) {
         vc->last_out = 0;
@@ -342,8 +486,13 @@ static void mix_voice(int v, s32 *l, s32 *r) {
     s32 out = sample * vc->level / 0x8000;
     vc->last_out = out;
 
-    *l += out * volume(VREG(v, 0x0)) / 0x8000;
-    *r += out * volume(VREG(v, 0x2)) / 0x8000;
+    s32 vl = out * volume(VREG(v, 0x0)) / 0x8000, vr = out * volume(VREG(v, 0x2)) / 0x8000;
+    *l += vl;
+    *r += vr;
+    if ((regs_pair(R_EON) >> v) & 1) {
+        *rl += vl;
+        *rr += vr;
+    }
 
     u32 step = VREG(v, 0x4);
     if (v > 0 && ((regs_pair(R_PMON) >> v) & 1)) {
@@ -463,10 +612,21 @@ void spu_xa_feed(const u8 *sector) {
 void spu_render(s16 *out, int frames) {
     for (int f = 0; f < frames; f++) {
         noise_tick();
-        s32 l = 0, r = 0;
+        s32 l = 0, r = 0, rl = 0, rr = 0;
         for (int v = 0; v < VOICES; v++) {
-            mix_voice(v, &l, &r);
+            mix_voice(v, &l, &r, &rl, &rr);
         }
+        /* Reverb runs at half rate: average two input samples, hold the output for two. */
+        spu.reverb_in[0] += clamp16(rl);
+        spu.reverb_in[1] += clamp16(rr);
+        if (spu.reverb_odd) {
+            reverb_step(spu.reverb_in[0] / 2, spu.reverb_in[1] / 2);
+            spu.reverb_in[0] = spu.reverb_in[1] = 0;
+        }
+        spu.reverb_odd = !spu.reverb_odd;
+        l += spu.reverb_out[0];
+        r += spu.reverb_out[1];
+
         l = l * volume(REG(R_MAIN_VOL_L)) / 0x8000 * gain_sfx / 256;
         r = r * volume(REG(R_MAIN_VOL_R)) / 0x8000 * gain_sfx / 256;
 
