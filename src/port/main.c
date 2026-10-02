@@ -1,5 +1,6 @@
 #include "port/disc.h"
 #include "port/exe.h"
+#include "port/hw/gpu.h"
 #include "port/hw/hw.h"
 #include "port/runtime.h"
 
@@ -17,6 +18,10 @@
 #define BOOT_STACK 0x801FFF00u /* SYSTEM.CNF STACK */
 
 static SDL_Window *window;
+static SDL_Renderer *renderer;
+static SDL_Texture *screen;
+static u32 screen_w, screen_h;
+static u32 *screen_pixels;
 static Uint64 last_frame_ns;
 
 /* PS1 digital pad bits (1 = pressed). */
@@ -60,7 +65,63 @@ static u16 read_keyboard(void) {
     return buttons;
 }
 
-/* Called once per emulated VBlank: input, window events, and 60 Hz pacing. */
+/* Debugging aid: NC_SHOT_EVERY=N saves the display area to build/shots/ every N frames. */
+static void save_debug_shot(const GpuDisplay *d) {
+    static int every = -1;
+    static unsigned frame;
+    if (every < 0) {
+        const char *env = SDL_getenv("NC_SHOT_EVERY");
+        every = env ? SDL_atoi(env) : 0;
+        if (every > 0) {
+            SDL_CreateDirectory("build/shots");
+        }
+    }
+    if (every <= 0 || ++frame % (unsigned)every != 0) {
+        return;
+    }
+    SDL_Surface *surf =
+        SDL_CreateSurfaceFrom((int)d->width, (int)d->height, SDL_PIXELFORMAT_ABGR8888,
+                              screen_pixels, (int)(d->width * 4));
+    if (surf != NULL) {
+        char path[64];
+        SDL_snprintf(path, sizeof path, "build/shots/frame_%05u.bmp", frame);
+        SDL_SaveBMP(surf, path);
+        SDL_DestroySurface(surf);
+    }
+}
+
+/* Shows the PS1 display area, letterboxed to 4:3. */
+static void present(void) {
+    GpuDisplay d;
+    gpu_display_info(&d);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    if (d.enabled && d.width > 0 && d.height > 0) {
+        if (screen == NULL || d.width != screen_w || d.height != screen_h) {
+            SDL_DestroyTexture(screen);
+            free(screen_pixels);
+            screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                                       SDL_TEXTUREACCESS_STREAMING, (int)d.width, (int)d.height);
+            SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
+            screen_pixels = malloc((size_t)d.width * d.height * 4);
+            screen_w = d.width;
+            screen_h = d.height;
+        }
+        gpu_display_rgba(screen_pixels, &d);
+        SDL_UpdateTexture(screen, NULL, screen_pixels, (int)(d.width * 4));
+        save_debug_shot(&d);
+
+        int ww, wh;
+        SDL_GetRenderOutputSize(renderer, &ww, &wh);
+        float scale = (float)wh / 3.0f < (float)ww / 4.0f ? (float)wh / 3.0f : (float)ww / 4.0f;
+        SDL_FRect dst = {((float)ww - scale * 4.0f) / 2.0f, ((float)wh - scale * 3.0f) / 2.0f,
+                         scale * 4.0f, scale * 3.0f};
+        SDL_RenderTexture(renderer, screen, NULL, &dst);
+    }
+    SDL_RenderPresent(renderer);
+}
+
+/* Called once per emulated VBlank: input, window events, video, and 60 Hz pacing. */
 static void on_frame(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -69,6 +130,7 @@ static void on_frame(void) {
         }
     }
     bios_set_pad(read_keyboard());
+    present();
 
     const Uint64 frame_ns = 1000000000ull / 60;
     Uint64 now = SDL_GetTicksNS();
@@ -97,6 +159,14 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
+
+    renderer = SDL_CreateRenderer(window, NULL);
+    if (renderer == NULL) {
+        SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+    SDL_SetRenderVSync(renderer, 0); /* pacing is done by on_frame */
 
     if (!disc_open(disc_path)) {
         SDL_Log("Could not open the disc image at '%s'. Pass --disc <path to .chd>.", disc_path);

@@ -359,9 +359,6 @@ static void read_sector(void) {
         }
         return;
     }
-    if ((cd.mode & MODE_XA_FILTER) && (submode & 0x40) && !xa_matches(cd.sector)) {
-        return;
-    }
 
     cd.data_ready = true;
     push(INT_DATA, 0, &cd.stat, 1);

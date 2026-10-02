@@ -4,8 +4,51 @@
 /* Total emulated cycles; advanced by nc_poll (cpu.c). */
 extern u64 nc_cycles;
 
-/* Hardware register space (physical 0x1F801000..) and anything else outside RAM/scratchpad. */
+/* IRQ controller, DMA and root counters are 32-bit registers that the libraries also access
+ * with byte/halfword loads and stores (e.g. LIBCD's dma_execute read-modify-writes DICR's
+ * enable byte). Sub-word accesses select or merge the right lanes of the aligned word. */
+static bool is_word_register(u32 phys) {
+    return phys >= 0x1F801070u && phys < 0x1F801130u;
+}
+
+static u32 dev_read(u32 phys, int size);
+static void dev_write(u32 phys, u32 value, int size);
+
+/* Bits that must read as "no change" when merging a partial write: DICR flags acknowledge on 1,
+ * I_STAT bits acknowledge on 0. */
+static u32 neutral_bits(u32 aligned, u32 current) {
+    if (aligned == 0x1F8010F4u) {
+        return current & 0x00FFFFFFu;
+    }
+    if (aligned == 0x1F801070u) {
+        return 0xFFFFFFFFu;
+    }
+    return current;
+}
+
 u32 io_read(u32 phys, int size) {
+    if (size < 4 && is_word_register(phys)) {
+        u32 word = dev_read(phys & ~3u, 4);
+        u32 v = word >> ((phys & 3) * 8);
+        return size == 1 ? (v & 0xFFu) : (v & 0xFFFFu);
+    }
+    return dev_read(phys, size);
+}
+
+void io_write(u32 phys, u32 value, int size) {
+    if (size < 4 && is_word_register(phys)) {
+        u32 aligned = phys & ~3u, shift = (phys & 3) * 8;
+        u32 mask = (size == 1 ? 0xFFu : 0xFFFFu) << shift;
+        u32 merged =
+            (neutral_bits(aligned, dev_read(aligned, 4)) & ~mask) | ((value << shift) & mask);
+        dev_write(aligned, merged, 4);
+        return;
+    }
+    dev_write(phys, value, size);
+}
+
+/* Hardware register space (physical 0x1F801000..) and anything else outside RAM/scratchpad. */
+static u32 dev_read(u32 phys, int size) {
     if (phys >= 0x1F801070u && phys < 0x1F801078u) {
         return irq_read((phys >> 2) & 1);
     }
@@ -17,6 +60,9 @@ u32 io_read(u32 phys, int size) {
     }
     if (phys >= 0x1F801800u && phys < 0x1F801804u) {
         return cdrom_read(phys - 0x1F801800u);
+    }
+    if (phys == 0x1F801820u || phys == 0x1F801824u) {
+        return mdec_read((phys >> 2) & 1);
     }
     if (phys == 0x1F801810u) {
         return gpu_read();
@@ -38,7 +84,7 @@ u32 io_read(u32 phys, int size) {
     return 0;
 }
 
-void io_write(u32 phys, u32 value, int size) {
+static void dev_write(u32 phys, u32 value, int size) {
     if (phys >= 0x1F801070u && phys < 0x1F801078u) {
         irq_write((phys >> 2) & 1, value);
     } else if (phys >= 0x1F801080u && phys < 0x1F801100u) {
@@ -47,6 +93,8 @@ void io_write(u32 phys, u32 value, int size) {
         timers_write(phys - 0x1F801100u, value, nc_cycles);
     } else if (phys >= 0x1F801800u && phys < 0x1F801804u) {
         cdrom_write(phys - 0x1F801800u, (u8)value);
+    } else if (phys == 0x1F801820u || phys == 0x1F801824u) {
+        mdec_write((phys >> 2) & 1, value);
     } else if (phys == 0x1F801810u) {
         gpu_gp0(value);
     } else if (phys == 0x1F801814u) {

@@ -1,6 +1,13 @@
 #include "port/hw/hw.h"
 #include "port/runtime.h"
 
+#include <stdlib.h>
+#include <string.h>
+#if defined(__APPLE__) || defined(__linux__)
+#include <execinfo.h>
+#define NC_HAVE_BACKTRACE 1
+#endif
+
 CPUState nc_cpu;
 u8 nc_ram[RAM_SIZE];
 u8 nc_scratch[SCRATCH_SIZE];
@@ -17,6 +24,31 @@ enum { COP0_SR = 12, COP0_CAUSE = 13, COP0_EPC = 14 };
 #define POLL_BUDGET 4096
 
 static u64 next_vblank = PSX_CYCLES_PER_FRAME;
+
+/* Debugging aid: NC_TRACE_STACK=1 prints the guest call stack once per second. Recompiled
+ * functions are named <module>_<address>, so the native backtrace reads as the MIPS one. */
+static void trace_stack(void) {
+#ifdef NC_HAVE_BACKTRACE
+    static int enabled = -1;
+    static unsigned frames;
+    if (enabled < 0) {
+        enabled = getenv("NC_TRACE_STACK") != NULL;
+    }
+    if (!enabled || ++frames % 60 != 0) {
+        return;
+    }
+    void *addrs[48];
+    int n = backtrace(addrs, 48);
+    char **names = backtrace_symbols(addrs, n);
+    NC_LOG("--- guest stack (frame %u) ---", frames);
+    for (int i = 2; i < n && names != NULL; i++) {
+        if (strstr(names[i], "_exe_") || strstr(names[i], "slus_") || strstr(names[i], "bios")) {
+            NC_LOG("  %s", names[i]);
+        }
+    }
+    free(names);
+#endif
+}
 static s32 budget_start = POLL_BUDGET;
 
 void nc_poll(CPUState *c) {
@@ -26,6 +58,7 @@ void nc_poll(CPUState *c) {
         next_vblank += PSX_CYCLES_PER_FRAME;
         gpu_vblank();
         irq_raise(IRQ_VBLANK);
+        trace_stack();
         if (nc_frame_hook != NULL) {
             nc_frame_hook();
         }

@@ -114,8 +114,9 @@ class Module:
     funcs: list[Func]
     func_starts: set[int]
     words: set[int]  # every aligned word value in the image (jump table candidates)
-    # Mid-function entry points (address -> containing function). These are the return sites
-    # of setjmp calls: Psy-Q's interrupt handler is entered by "longjmp"-ing to one of them.
+    # Mid-function entry points (address -> containing function): return sites of setjmp
+    # calls (Psy-Q's interrupt handler is entered by "longjmp"-ing to one), and code addresses
+    # taken as pointers that splat did not split into their own function (callbacks).
     resumes: dict[int, Func] = field(default_factory=dict)
 
     def cname(self, addr: int) -> str:
@@ -176,7 +177,57 @@ def load_module(name: str, exe: str) -> Module:
             for i in f.insns:
                 if i.op == 3 and i.jump_target() == setjmp and i.addr + 8 < f.end:
                     mod.resumes[i.addr + 8] = f
+    for addr in pointer_targets(mod):
+        owner = containing(funcs, addr)
+        if owner is not None and addr != owner.addr:
+            mod.resumes[addr] = owner
     return mod
+
+
+def containing(funcs: list[Func], addr: int) -> Func | None:
+    for f in funcs:
+        if f.addr <= addr < f.end:
+            return f
+    return None
+
+
+def word_at(mod: Module, addr: int) -> int | None:
+    off = addr - mod.vram + HEADER_SIZE
+    if HEADER_SIZE <= off <= len(mod.data) - 4:
+        return struct.unpack_from("<I", mod.data, off)[0]
+    return None
+
+
+def plausible_entry(mod: Module, addr: int) -> bool:
+    """A code address that looks like a function start: a stack-frame prologue, or the word
+    after a `jr $ra` + delay slot."""
+    w = word_at(mod, addr)
+    if w is None:
+        return False
+    if (w & 0xFFFF8000) == 0x27BD8000:  # addiu $sp, $sp, -N
+        return True
+    return word_at(mod, addr - 8) == 0x03E00008
+
+
+def pointer_targets(mod: Module) -> set[int]:
+    """Code addresses used as values: lui/addiu (or ori) pairs in code, and words in data."""
+    lo = min(f.addr for f in mod.funcs)
+    hi = max(f.end for f in mod.funcs)
+    found: set[int] = set()
+    for f in mod.funcs:
+        upper: dict[int, int] = {}
+        for i in f.insns:
+            if i.op == 0x0F:  # lui
+                upper[i.rt] = i.imm << 16
+            elif i.op in (0x09, 0x0D) and i.rs in upper:  # addiu / ori
+                base = upper[i.rs]
+                addr = (base + i.simm if i.op == 0x09 else base | i.imm) & 0xFFFFFFFF
+                if lo <= addr < hi and addr % 4 == 0:
+                    found.add(addr)
+    for w in mod.words:
+        if lo <= w < hi and w % 4 == 0 and plausible_entry(mod, w):
+            found.add(w)
+    return found
 
 
 def symbol_addr(module: str, symbol: str) -> int | None:
@@ -540,7 +591,7 @@ def main() -> int:
     for name in names:
         mod = launcher if name == LAUNCHER else load_module(name, exes[name])
         write_module(mod, None if name == LAUNCHER else launcher, args.out / name)
-        print(f"{name}: {len(mod.funcs)} functions, {len(mod.resumes)} resume entries")
+        print(f"{name}: {len(mod.funcs)} functions, {len(mod.resumes)} extra entry points")
     return 0
 
 

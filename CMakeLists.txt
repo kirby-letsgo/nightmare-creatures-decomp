@@ -29,6 +29,7 @@ add_library(nc_runtime STATIC
     src/port/hw/dma.c
     src/port/hw/gpu.c
     src/port/hw/irq.c
+    src/port/hw/mdec.c
     src/port/hw/spu.c
     src/port/hw/timers.c
     src/port/log.c
@@ -60,6 +61,12 @@ if(NC_GEN_SOURCES)
 
     add_executable(nightmare src/port/main.c)
     target_link_libraries(nightmare PRIVATE nc_runtime nc_gen)
+    # Export symbols so NC_TRACE_STACK backtraces show recompiled function names.
+    if(APPLE)
+        target_link_options(nightmare PRIVATE -Wl,-export_dynamic)
+    elseif(UNIX)
+        target_link_options(nightmare PRIVATE -rdynamic)
+    endif()
 else()
     message(WARNING "gen/ is empty: run `make recomp` to build the game executable")
 endif()

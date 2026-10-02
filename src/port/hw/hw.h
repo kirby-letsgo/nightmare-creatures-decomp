@@ -51,6 +51,12 @@ void cdrom_write(u32 reg, u8 value);
 u32 cdrom_dma_read(u8 *dst, u32 bytes);
 void cdrom_tick(u64 cycles);
 
+/* mdec.c */
+u32 mdec_read(u32 reg);
+void mdec_write(u32 reg, u32 value);
+void mdec_dma_write(const u8 *src, u32 bytes);
+void mdec_dma_read(u8 *dst, u32 bytes);
+
 /* spu.c */
 u16 spu_read(u32 reg);
 void spu_write(u32 reg, u16 value);

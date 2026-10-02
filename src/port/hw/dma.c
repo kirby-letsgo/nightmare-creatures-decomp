@@ -74,6 +74,14 @@ static void start(int n) {
     Channel *c = &ch[n];
     u32 addr, bytes;
     switch (n) {
+    case 0:
+        block_bytes(c, &addr, &bytes);
+        mdec_dma_write(nc_ram + addr, bytes);
+        break;
+    case 1:
+        block_bytes(c, &addr, &bytes);
+        mdec_dma_read(nc_ram + addr, bytes);
+        break;
     case 2:
         gpu_dma(c);
         break;
