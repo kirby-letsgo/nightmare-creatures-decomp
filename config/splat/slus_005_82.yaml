@@ -15,6 +15,7 @@ options:
   symbol_addrs_path:
     - config/symbols/slus_005_82.txt
     - config/symbols/slus_005_82.bios.txt
+    - config/symbols/slus_005_82.psyq.txt
   undefined_funcs_auto_path: build/splat/slus_005_82/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/slus_005_82/undefined_syms_auto.txt
   find_file_boundaries: True

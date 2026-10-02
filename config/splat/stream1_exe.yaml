@@ -15,6 +15,7 @@ options:
   symbol_addrs_path:
     - config/symbols/stream1_exe.txt
     - config/symbols/stream1_exe.bios.txt
+    - config/symbols/stream1_exe.psyq.txt
   undefined_funcs_auto_path: build/splat/stream1_exe/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/stream1_exe/undefined_syms_auto.txt
   find_file_boundaries: True

@@ -1,6 +1,6 @@
 PYTHON := .venv/bin/python
 
-.PHONY: setup extract configs split build lint format clean
+.PHONY: setup extract sigs configs split build lint format clean
 
 setup:
 	python3 -m venv .venv
@@ -9,9 +9,13 @@ setup:
 extract:
 	$(PYTHON) tools/extract.py
 
+sigs:
+	$(PYTHON) tools/fetch_sigs.py
+
 configs:
 	$(PYTHON) tools/gen_splat.py
 	$(PYTHON) tools/name_bios.py
+	$(PYTHON) tools/match_psyq.py
 
 split:
 	for y in config/splat/*.yaml; do $(PYTHON) -m splat split $$y || exit 1; done

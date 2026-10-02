@@ -90,6 +90,7 @@ options:
   symbol_addrs_path:
     - config/symbols/{base}.txt
     - config/symbols/{base}.bios.txt
+    - config/symbols/{base}.psyq.txt
   undefined_funcs_auto_path: build/splat/{base}/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/{base}/undefined_syms_auto.txt
   find_file_boundaries: True
