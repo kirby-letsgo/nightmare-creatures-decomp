@@ -214,8 +214,15 @@ static void pace(void) {
     const Uint64 frame_ns = 1000000000ull / 60;
     if (audio != NULL) {
         enum { TARGET_BYTES = (SPU_RATE / 60) * 4 * 3 }; /* ~50 ms */
-        while (SDL_GetAudioStreamQueued(audio) > TARGET_BYTES) {
+        /* Bounded wait: if the device stops consuming (output switched, Bluetooth asleep),
+         * fall back to wall-clock pacing instead of freezing. */
+        Uint64 start = SDL_GetTicksNS();
+        while (SDL_GetAudioStreamQueued(audio) > TARGET_BYTES &&
+               SDL_GetTicksNS() - start < 3 * frame_ns) {
             SDL_DelayPrecise(1000000);
+        }
+        if (SDL_GetAudioStreamQueued(audio) > TARGET_BYTES * 4) {
+            SDL_ClearAudioStream(audio); /* device stalled: drop the backlog */
         }
         last_frame_ns = SDL_GetTicksNS();
         return;
