@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(nightmare C)
+project(nightmare C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -17,6 +17,25 @@ FetchContent_Declare(libchdr
     GIT_TAG 607694ca0812edfc9cc2030c64634fc2393668de
 )
 FetchContent_MakeAvailable(libchdr)
+
+# Dear ImGui for the start screen and in-game menu (built from source with its SDL3 backends).
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG 01380c579715e62fb9a8d6ec0502c4ea83bfde6e # v1.92.9
+)
+FetchContent_MakeAvailable(imgui)
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(imgui PUBLIC SDL3::SDL3)
+target_compile_features(imgui PUBLIC cxx_std_17)
 
 # Native runtime: everything except the recompiled game code.
 add_library(nc_runtime STATIC
@@ -36,14 +55,17 @@ add_library(nc_runtime STATIC
     src/port/log.c
     src/port/memcard.c
     src/port/memory.c
+    src/port/settings.c
+    src/port/ui/menu.cpp
 )
 target_include_directories(nc_runtime PUBLIC src)
-target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static)
+target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static imgui)
 
 if(MSVC)
     target_compile_options(nc_runtime PRIVATE /W4)
 else()
-    target_compile_options(nc_runtime PRIVATE -Wall -Wextra)
+    target_compile_options(nc_runtime PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra>
+                                              $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 endif()
 
 # Recompiled code is generated from the user's disc by `make recomp` into gen/.

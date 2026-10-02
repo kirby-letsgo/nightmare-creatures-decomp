@@ -30,11 +30,11 @@ build:
 lint:
 	$(PYTHON) -m ruff check tools
 	$(PYTHON) -m ruff format --check tools
-	clang-format --dry-run --Werror $$(find src -name '*.c' -o -name '*.h')
+	clang-format --dry-run --Werror $$(find src -name '*.c' -o -name '*.h' -o -name '*.cpp')
 
 format:
 	$(PYTHON) -m ruff format tools
-	clang-format -i $$(find src -name '*.c' -o -name '*.h')
+	clang-format -i $$(find src -name '*.c' -o -name '*.h' -o -name '*.cpp')
 
 clean:
 	rm -rf build/cmake

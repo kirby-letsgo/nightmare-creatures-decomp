@@ -23,6 +23,15 @@ typedef struct DiscTrack {
     u32 frames; /* including pregap */
 } DiscTrack;
 
+typedef enum DiscCheck {
+    DISC_OK,
+    DISC_MISSING,     /* no file / not a CHD */
+    DISC_WRONG_IMAGE, /* a CHD, but not NTSC-U Nightmare Creatures (SLUS-00582) */
+} DiscCheck;
+
+/* Checks a disc image against the known dump (CHD header SHA1) without opening it for play. */
+DiscCheck disc_check(const char *chd_path);
+
 bool disc_open(const char *chd_path);
 int disc_track_count(void);
 /* 1-based track number; NULL if out of range. */

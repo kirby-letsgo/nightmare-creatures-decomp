@@ -57,6 +57,21 @@ static bool load_toc(void) {
     return track_count > 0;
 }
 
+/* SHA1 of the supported dump as recorded in its CHD header (see tools/extract.py). */
+static const u8 known_sha1[20] = {0x85, 0x92, 0xa0, 0x7f, 0x87, 0xdf, 0x44, 0x66, 0x01, 0x90,
+                                  0x2a, 0x13, 0x7d, 0x69, 0x07, 0x5d, 0xde, 0x4c, 0xf2, 0x06};
+
+DiscCheck disc_check(const char *chd_path) {
+    chd_file *file = NULL;
+    if (chd_path == NULL || chd_path[0] == '\0' ||
+        chd_open(chd_path, CHD_OPEN_READ, NULL, &file) != CHDERR_NONE) {
+        return DISC_MISSING;
+    }
+    bool match = memcmp(chd_get_header(file)->sha1, known_sha1, sizeof known_sha1) == 0;
+    chd_close(file);
+    return match ? DISC_OK : DISC_WRONG_IMAGE;
+}
+
 bool disc_open(const char *chd_path) {
     if (chd_open(chd_path, CHD_OPEN_READ, NULL, &chd) != CHDERR_NONE) {
         NC_LOG("cannot open disc image %s", chd_path);

@@ -54,8 +54,14 @@ renders 3D gameplay at full speed on the reference software renderer.
 
 ```sh
 make recomp && make build
-./build/cmake/nightmare --disc "roms/Nightmare Creatures.chd"
+./build/cmake/nightmare
 ```
+
+The start screen asks for your disc image the first time (it is verified against the NTSC-U
+dump and remembered). `--disc <path>` overrides it. **Esc** (or the gamepad's Guide button)
+opens the menu in game; **F11** toggles fullscreen.
+
+Settings are stored in `settings.ini` next to the memory card (see Saves below).
 
 ### Keyboard controls
 
@@ -71,7 +77,9 @@ make recomp && make build
 | Start | Enter |
 | Select | Backspace |
 
-Gamepad support and rebinding are planned.
+Gamepads work out of the box (Xbox/PlayStation/Switch layouts via SDL): face buttons map by
+position (south = Cross, east = Circle, west = Square, north = Triangle), the left stick acts as
+the d-pad. Rebinding is planned.
 
 ### Saves
 
@@ -100,3 +108,5 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_FPS=1` | Log the game's frame rate and the VBlank rate once per second |
 | `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |
 | `NC_WAV=path` | Record the audio output to a WAV file |
+| `NC_SKIP_MENU=1` | Boot straight into the game (scripted runs) |
+| `NC_MENU_SHOT=1` / `settings` | Save a screenshot of the start screen / settings page |

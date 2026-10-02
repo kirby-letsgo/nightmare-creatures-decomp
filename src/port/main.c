@@ -5,6 +5,8 @@
 #include "port/hw/spu.h"
 #include "port/memcard.h"
 #include "port/runtime.h"
+#include "port/settings.h"
+#include "port/ui/menu.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -26,6 +28,9 @@ static u32 screen_w, screen_h;
 static u32 *screen_pixels;
 static Uint64 last_frame_ns;
 static SDL_AudioStream *audio;
+static bool menu_requested;
+
+/* --- input -------------------------------------------------------------------------------- */
 
 /* PS1 digital pad bits (1 = pressed). */
 enum {
@@ -68,6 +73,65 @@ static u16 read_keyboard(void) {
     return buttons;
 }
 
+/* All connected gamepads drive pad 1. The left stick acts as the d-pad. */
+static u16 read_gamepads(void) {
+    static const struct {
+        SDL_GamepadButton button;
+        u16 bit;
+    } map[] = {
+        {SDL_GAMEPAD_BUTTON_SOUTH, PAD_CROSS},      {SDL_GAMEPAD_BUTTON_EAST, PAD_CIRCLE},
+        {SDL_GAMEPAD_BUTTON_WEST, PAD_SQUARE},      {SDL_GAMEPAD_BUTTON_NORTH, PAD_TRIANGLE},
+        {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, PAD_L1}, {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, PAD_R1},
+        {SDL_GAMEPAD_BUTTON_START, PAD_START},      {SDL_GAMEPAD_BUTTON_BACK, PAD_SELECT},
+        {SDL_GAMEPAD_BUTTON_DPAD_UP, PAD_UP},       {SDL_GAMEPAD_BUTTON_DPAD_DOWN, PAD_DOWN},
+        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, PAD_LEFT},   {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, PAD_RIGHT},
+    };
+    enum { STICK_DEADZONE = 12000, TRIGGER_THRESHOLD = 8000 };
+    u16 buttons = 0;
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&count);
+    for (int g = 0; g < count; g++) {
+        SDL_Gamepad *pad = SDL_GetGamepadFromID(ids[g]);
+        if (pad == NULL) {
+            continue;
+        }
+        for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
+            if (SDL_GetGamepadButton(pad, map[i].button)) {
+                buttons |= map[i].bit;
+            }
+        }
+        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > TRIGGER_THRESHOLD) {
+            buttons |= PAD_L2;
+        }
+        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > TRIGGER_THRESHOLD) {
+            buttons |= PAD_R2;
+        }
+        Sint16 x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
+        Sint16 y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
+        buttons |= x < -STICK_DEADZONE ? PAD_LEFT : (x > STICK_DEADZONE ? PAD_RIGHT : 0);
+        buttons |= y < -STICK_DEADZONE ? PAD_UP : (y > STICK_DEADZONE ? PAD_DOWN : 0);
+    }
+    SDL_free(ids);
+    return buttons;
+}
+
+/* Testing aid: NC_PRESS_START=N taps Start for a few frames every N frames (skips movies,
+ * advances menus) so later parts of the game can be reached unattended. */
+static u16 scripted_input(void) {
+    static int every = -1;
+    static unsigned frame;
+    if (every < 0) {
+        const char *env = SDL_getenv("NC_PRESS_START");
+        every = env ? SDL_atoi(env) : 0;
+    }
+    if (every <= 0) {
+        return 0;
+    }
+    return (++frame % (unsigned)every) < 4 ? PAD_START : 0;
+}
+
+/* --- video -------------------------------------------------------------------------------- */
+
 /* Debugging aid: NC_SHOT_EVERY=N saves the display area to build/shots/ every N frames. */
 static void save_debug_shot(const GpuDisplay *d) {
     static int every = -1;
@@ -93,27 +157,37 @@ static void save_debug_shot(const GpuDisplay *d) {
     }
 }
 
-/* Shows the PS1 display area, letterboxed to 4:3. */
-static void present(void) {
+/* Converts the PS1 display area into the screen texture. */
+static void update_screen(void) {
     GpuDisplay d;
     gpu_display_info(&d);
+    if (!d.enabled || d.width == 0 || d.height == 0) {
+        screen_w = screen_h = 0;
+        return;
+    }
+    if (screen == NULL || d.width != screen_w || d.height != screen_h) {
+        SDL_DestroyTexture(screen);
+        free(screen_pixels);
+        screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING,
+                                   (int)d.width, (int)d.height);
+        screen_pixels = malloc((size_t)d.width * d.height * 4);
+        screen_w = d.width;
+        screen_h = d.height;
+    }
+    gpu_display_rgba(screen_pixels, &d);
+    SDL_UpdateTexture(screen, NULL, screen_pixels, (int)(d.width * 4));
+    save_debug_shot(&d);
+}
+
+static unsigned fps_shown;
+
+/* Draws the last game frame, letterboxed to 4:3 (also used behind the pause menu). */
+static void draw_game(void) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    if (d.enabled && d.width > 0 && d.height > 0) {
-        if (screen == NULL || d.width != screen_w || d.height != screen_h) {
-            SDL_DestroyTexture(screen);
-            free(screen_pixels);
-            screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
-                                       SDL_TEXTUREACCESS_STREAMING, (int)d.width, (int)d.height);
-            SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
-            screen_pixels = malloc((size_t)d.width * d.height * 4);
-            screen_w = d.width;
-            screen_h = d.height;
-        }
-        gpu_display_rgba(screen_pixels, &d);
-        SDL_UpdateTexture(screen, NULL, screen_pixels, (int)(d.width * 4));
-        save_debug_shot(&d);
-
+    if (screen != NULL && screen_w > 0) {
+        SDL_SetTextureScaleMode(screen, settings.filter == FILTER_BILINEAR ? SDL_SCALEMODE_LINEAR
+                                                                           : SDL_SCALEMODE_NEAREST);
         int ww, wh;
         SDL_GetRenderOutputSize(renderer, &ww, &wh);
         float scale = (float)wh / 3.0f < (float)ww / 4.0f ? (float)wh / 3.0f : (float)ww / 4.0f;
@@ -121,43 +195,38 @@ static void present(void) {
                          scale * 4.0f, scale * 3.0f};
         SDL_RenderTexture(renderer, screen, NULL, &dst);
     }
-    SDL_RenderPresent(renderer);
+    if (settings.show_fps) {
+        char text[32];
+        SDL_snprintf(text, sizeof text, "%u fps", fps_shown);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(renderer, 8, 8, text);
+    }
 }
 
-/* Testing aid: NC_PRESS_START=N taps Start for a few frames every N frames (skips movies,
- * advances menus) so later parts of the game can be reached unattended. */
-static u16 scripted_input(void) {
-    static int every = -1;
-    static unsigned frame;
-    if (every < 0) {
-        const char *env = SDL_getenv("NC_PRESS_START");
-        every = env ? SDL_atoi(env) : 0;
-    }
-    if (every <= 0) {
-        return 0;
-    }
-    return (++frame % (unsigned)every) < 4 ? PAD_START : 0;
-}
-
-/* Debugging aid: NC_FPS=1 logs the game's own frame rate (buffer flips) once per second. */
-static void report_fps(void) {
-    static int enabled = -1;
+/* Counts the game's own frames (display buffer flips) per second. NC_FPS=1 also logs them. */
+static void update_fps(void) {
+    static int log_enabled = -1;
     static unsigned vblanks;
     static u32 last_flips;
     static Uint64 last_ns;
-    if (enabled < 0) {
-        enabled = SDL_getenv("NC_FPS") != NULL;
+    if (log_enabled < 0) {
+        log_enabled = SDL_getenv("NC_FPS") != NULL;
         last_ns = SDL_GetTicksNS();
     }
-    if (!enabled || ++vblanks % 60 != 0) {
+    if (++vblanks % 60 != 0) {
         return;
     }
     Uint64 now = SDL_GetTicksNS();
     u32 flips = gpu_flip_count();
-    NC_LOG("fps: game %u, vblank %.1f", flips - last_flips, 60.0e9 / (double)(now - last_ns));
+    fps_shown = flips - last_flips;
+    if (log_enabled) {
+        NC_LOG("fps: game %u, vblank %.1f", fps_shown, 60.0e9 / (double)(now - last_ns));
+    }
     last_flips = flips;
     last_ns = now;
 }
+
+/* --- audio -------------------------------------------------------------------------------- */
 
 /* Debugging aid: NC_WAV=path records the audio output to a 16-bit stereo WAV file. */
 static void record_wav(const s16 *samples, int bytes) {
@@ -236,26 +305,77 @@ static void pace(void) {
     }
 }
 
-/* Called once per emulated VBlank: input, window events, video, and 60 Hz pacing. */
+/* --- frame loop --------------------------------------------------------------------------- */
+
+static void quit_game(void) {
+    settings_save();
+    exit(0);
+}
+
+/* Shows the pause menu over the frozen game until the player resumes. */
+static void pause_menu(void) {
+    if (audio != NULL) {
+        SDL_PauseAudioStreamDevice(audio);
+    }
+    if (menu_run_pause(draw_game) == MENU_QUIT) {
+        quit_game();
+    }
+    if (audio != NULL) {
+        SDL_ClearAudioStream(audio);
+        SDL_ResumeAudioStreamDevice(audio);
+    }
+    last_frame_ns = SDL_GetTicksNS();
+}
+
+/* Called once per emulated VBlank: input, window events, video, audio and pacing. */
 static void on_frame(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
-            exit(0);
+        switch (event.type) {
+        case SDL_EVENT_QUIT:
+            quit_game();
+            break;
+        case SDL_EVENT_KEY_DOWN:
+            if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
+                menu_requested = true;
+            } else if (event.key.scancode == SDL_SCANCODE_F11 && !event.key.repeat) {
+                settings.fullscreen = !settings.fullscreen;
+                menu_apply_settings();
+            }
+            break;
+        case SDL_EVENT_GAMEPAD_ADDED:
+            SDL_OpenGamepad(event.gdevice.which);
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            if (event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) {
+                menu_requested = true;
+            }
+            break;
+        default:
+            break;
         }
     }
-    bios_set_pad(read_keyboard() | scripted_input());
-    present();
+    bios_set_pad(read_keyboard() | read_gamepads() | scripted_input());
+    update_screen();
+    draw_game();
+    SDL_RenderPresent(renderer);
     output_audio();
-    report_fps();
+    update_fps();
     pace();
+
+    if (menu_requested) {
+        menu_requested = false;
+        pause_menu();
+    }
 }
 
+/* --- startup ------------------------------------------------------------------------------ */
+
 int main(int argc, char **argv) {
-    const char *disc_path = DEFAULT_DISC;
+    const char *disc_arg = NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--disc") == 0 && i + 1 < argc) {
-            disc_path = argv[++i];
+            disc_arg = argv[++i];
         }
     }
 
@@ -264,17 +384,26 @@ int main(int argc, char **argv) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
-    window = SDL_CreateWindow("Nightmare Creatures", PSX_WIDTH * 3, PSX_HEIGHT * 3,
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    if (window == NULL) {
-        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-        SDL_Quit();
-        return 1;
+
+    char *data_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
+    const char *dir = data_dir != NULL ? data_dir : "./";
+    settings_load(dir);
+    memcard_init(dir);
+    SDL_free(data_dir);
+
+    /* A disc given on the command line wins; otherwise use the remembered one, falling back
+     * to the repo's roms/ folder for development builds. */
+    if (disc_arg != NULL) {
+        SDL_snprintf(settings.disc_path, sizeof settings.disc_path, "%s", disc_arg);
+    } else if (settings.disc_path[0] == '\0' && disc_check(DEFAULT_DISC) == DISC_OK) {
+        SDL_snprintf(settings.disc_path, sizeof settings.disc_path, "%s", DEFAULT_DISC);
     }
 
-    renderer = SDL_CreateRenderer(window, NULL);
+    window = SDL_CreateWindow("Nightmare Creatures", PSX_WIDTH * 3, PSX_HEIGHT * 3,
+                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    renderer = window != NULL ? SDL_CreateRenderer(window, NULL) : NULL;
     if (renderer == NULL) {
-        SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
+        SDL_Log("Could not create the window: %s", SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -282,22 +411,31 @@ int main(int argc, char **argv) {
 
     SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, SPU_RATE};
     audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
-    if (audio != NULL) {
-        SDL_ResumeAudioStreamDevice(audio);
-    } else {
+    if (audio == NULL) {
         SDL_Log("No audio output: %s", SDL_GetError());
     }
 
-    if (!disc_open(disc_path)) {
-        SDL_Log("Could not open the disc image at '%s'. Pass --disc <path to .chd>.", disc_path);
+    menu_init(window, renderer);
+    menu_apply_settings();
+
+    /* NC_SKIP_MENU=1 boots straight into the game (for scripted test runs). */
+    bool skip_menu =
+        SDL_getenv("NC_SKIP_MENU") != NULL && disc_check(settings.disc_path) == DISC_OK;
+    if (!skip_menu && menu_run_start() == MENU_QUIT) {
+        quit_game();
+    }
+    settings_save();
+
+    if (!disc_open(settings.disc_path)) {
+        SDL_Log("Could not open the disc image at '%s'.", settings.disc_path);
         SDL_Quit();
         return 1;
     }
+    if (audio != NULL) {
+        SDL_ResumeAudioStreamDevice(audio);
+    }
 
     bios_init();
-    char *data_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
-    memcard_init(data_dir != NULL ? data_dir : "./");
-    SDL_free(data_dir);
     nc_frame_hook = on_frame;
     last_frame_ns = SDL_GetTicksNS();
 
@@ -315,6 +453,7 @@ int main(int argc, char **argv) {
 
     NC_LOG("boot executable returned");
     disc_close();
+    menu_shutdown();
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
