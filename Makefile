@@ -1,6 +1,6 @@
 PYTHON := .venv/bin/python
 
-.PHONY: setup extract sigs configs split build lint format clean
+.PHONY: setup extract sigs configs split recomp build lint format clean
 
 setup:
 	python3 -m venv .venv
@@ -19,6 +19,9 @@ configs:
 
 split:
 	for y in config/splat/*.yaml; do $(PYTHON) -m splat split $$y || exit 1; done
+
+recomp:
+	$(PYTHON) tools/recomp/recomp.py
 
 build:
 	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Debug
