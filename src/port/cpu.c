@@ -1,14 +1,45 @@
+#include "port/hw/hw.h"
 #include "port/runtime.h"
 
 CPUState nc_cpu;
 u8 nc_ram[RAM_SIZE];
 u8 nc_scratch[SCRATCH_SIZE];
+u64 nc_cycles;
+void (*nc_frame_hook)(void);
 
 enum { COP0_SR = 12, COP0_CAUSE = 13, COP0_EPC = 14 };
 
+/* Interrupts are taken when IEc (bit 0) and the hardware interrupt mask IM2 (bit 10) are set. */
+#define SR_INT_ENABLE 0x401u
+
+/* Recompiled code charges POLL_COST cycles (tools/recomp) at every function entry and backward
+ * branch and calls nc_poll when its budget runs out; this is the budget handed out each time. */
+#define POLL_BUDGET 4096
+
+static u64 next_vblank = PSX_CYCLES_PER_FRAME;
+static s32 budget_start = POLL_BUDGET;
+
 void nc_poll(CPUState *c) {
-    /* TODO(phase 2 step 5): advance timers, raise VBlank, deliver pending interrupts. */
-    c->budget += 1 << 16;
+    nc_cycles += (u64)(budget_start - c->budget);
+
+    if (nc_cycles >= next_vblank) {
+        next_vblank += PSX_CYCLES_PER_FRAME;
+        gpu_vblank();
+        irq_raise(IRQ_VBLANK);
+        if (nc_frame_hook != NULL) {
+            nc_frame_hook();
+        }
+    }
+    cdrom_tick(nc_cycles);
+
+    if (irq_pending() && (c->cop0[COP0_SR] & SR_INT_ENABLE) == SR_INT_ENABLE &&
+        !bios_in_exception()) {
+        bios_exception(c);
+    }
+
+    u64 until_vblank = next_vblank - nc_cycles;
+    c->budget = until_vblank < POLL_BUDGET ? (s32)until_vblank : POLL_BUDGET;
+    budget_start = c->budget;
 }
 
 void nc_syscall(CPUState *c) {
@@ -16,11 +47,11 @@ void nc_syscall(CPUState *c) {
     u32 sr = c->cop0[COP0_SR];
     switch (c->r[4]) {
     case 1: /* EnterCriticalSection: returns whether interrupts were enabled */
-        c->r[2] = (sr & 0x404u) == 0x404u;
-        c->cop0[COP0_SR] = sr & ~0x404u;
+        c->r[2] = (sr & SR_INT_ENABLE) == SR_INT_ENABLE;
+        c->cop0[COP0_SR] = sr & ~SR_INT_ENABLE;
         break;
     case 2: /* ExitCriticalSection */
-        c->cop0[COP0_SR] = sr | 0x404u;
+        c->cop0[COP0_SR] = sr | SR_INT_ENABLE;
         break;
     default:
         NC_LOG("syscall a0=%u ignored", c->r[4]);

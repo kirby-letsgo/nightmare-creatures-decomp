@@ -7,17 +7,35 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(SDL3 REQUIRED CONFIG)
 
+# libchdr reads the user's CHD disc image at runtime.
+include(FetchContent)
+set(INSTALL_STATIC_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libchdr
+    GIT_REPOSITORY https://github.com/rtissera/libchdr.git
+    GIT_TAG 607694ca0812edfc9cc2030c64634fc2393668de
+)
+FetchContent_MakeAvailable(libchdr)
+
 # Native runtime: everything except the recompiled game code.
 add_library(nc_runtime STATIC
     src/port/bios.c
     src/port/cpu.c
+    src/port/disc.c
     src/port/dispatch.c
+    src/port/exe.c
     src/port/gte.c
+    src/port/hw/cdrom.c
+    src/port/hw/dma.c
+    src/port/hw/gpu.c
+    src/port/hw/irq.c
+    src/port/hw/spu.c
+    src/port/hw/timers.c
     src/port/log.c
     src/port/memory.c
 )
 target_include_directories(nc_runtime PUBLIC src)
-target_link_libraries(nc_runtime PUBLIC SDL3::SDL3)
+target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static)
 
 if(MSVC)
     target_compile_options(nc_runtime PRIVATE /W4)

@@ -2,6 +2,7 @@
 #ifndef NC_PORT_RUNTIME_H
 #define NC_PORT_RUNTIME_H
 
+#include "port/bios.h"
 #include "port/recomp.h"
 
 #include <stdbool.h>
@@ -35,8 +36,8 @@ void nc_set_module(NcModule mod);
 NcModule nc_module_from_name(const char *exe_name);
 NcFunc nc_lookup(u32 addr);
 
-/* bios.c */
-void bios_call(CPUState *c, u32 table);
-void bios_init(void);
+/* cpu.c: total emulated cycles, and a hook run once per emulated frame (VBlank). */
+extern u64 nc_cycles;
+extern void (*nc_frame_hook)(void);
 
 #endif

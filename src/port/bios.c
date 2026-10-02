@@ -1,7 +1,463 @@
+/* High-level emulation of the PS1 BIOS functions the game uses (A0/B0/C0 tables). */
+#include "port/bios.h"
+
+#include "port/disc.h"
+#include "port/exe.h"
+#include "port/hw/hw.h"
 #include "port/runtime.h"
 
-void bios_init(void) {}
+#include <setjmp.h>
+#include <string.h>
+
+enum { COP0_SR = 12 };
+
+/* --- events --------------------------------------------------------------------------- */
+
+#define EV_MAX 32
+#define EV_DESC_BASE 0xF1000000u
+
+enum {
+    EV_ST_UNUSED = 0x0000,
+    EV_ST_WAIT = 0x1000,
+    EV_ST_ACTIVE = 0x2000,
+    EV_ST_ALREADY = 0x4000,
+};
+enum { EV_MD_INTR = 0x1000, EV_MD_NOINTR = 0x2000 };
+
+typedef struct Event {
+    u32 cls, spec, mode, func, status;
+} Event;
+
+/* --- files (BIOS open/read/lseek/close over the disc) --------------------------------- */
+
+#define FD_FIRST 2 /* 0 and 1 are the TTY */
+#define FD_MAX 8
+
+typedef struct OpenFile {
+    bool used;
+    DiscFile file;
+    u32 pos;
+} OpenFile;
+
+/* --- state ---------------------------------------------------------------------------- */
+
+typedef struct BiosState {
+    Event events[EV_MAX];
+    u32 hook; /* HookEntryInt buffer address, 0 = none */
+    u32 pad_buf[2], pad_size[2];
+    bool pad_started;
+    u16 pad_buttons; /* active-high PS1 button bits, port 1 */
+    OpenFile files[FD_MAX];
+} BiosState;
+
+static BiosState bios;
+
+static jmp_buf exc_env;
+static CPUState exc_saved;
+static bool in_exception;
+
+void bios_init(void) {
+    memset(&bios, 0, sizeof bios);
+}
+
+void bios_set_pad(u16 buttons) {
+    bios.pad_buttons = buttons;
+}
+
+static u32 open_event(u32 cls, u32 spec, u32 mode, u32 func) {
+    for (u32 i = 0; i < EV_MAX; i++) {
+        if (bios.events[i].status == EV_ST_UNUSED) {
+            bios.events[i] = (Event){cls, spec, mode, func, EV_ST_WAIT};
+            return EV_DESC_BASE | i;
+        }
+    }
+    NC_LOG("bios: out of event slots");
+    return 0xFFFFFFFFu;
+}
+
+static Event *event_at(u32 desc) {
+    u32 i = desc & 0xFFFF;
+    return ((desc & 0xFFFF0000u) == EV_DESC_BASE && i < EV_MAX) ? &bios.events[i] : NULL;
+}
+
+void bios_deliver_event(CPUState *c, u32 cls, u32 spec) {
+    for (u32 i = 0; i < EV_MAX; i++) {
+        Event *e = &bios.events[i];
+        if (e->status != EV_ST_ACTIVE || e->cls != cls || e->spec != spec) {
+            continue;
+        }
+        if (e->mode == EV_MD_INTR && e->func != 0) {
+            u32 saved[32];
+            memcpy(saved, c->r, sizeof saved);
+            nc_call(c, e->func);
+            memcpy(c->r, saved, sizeof saved);
+        } else {
+            e->status = EV_ST_ALREADY;
+        }
+    }
+}
+
+/* --- string helpers --------------------------------------------------------------------- */
+
+static void read_cstr(u32 addr, char *out, size_t cap) {
+    size_t i = 0;
+    for (; i + 1 < cap; i++) {
+        char ch = (char)MEM_R8(addr + (u32)i);
+        if (ch == '\0') {
+            break;
+        }
+        out[i] = ch;
+    }
+    out[i] = '\0';
+}
+
+/* Minimal printf over guest memory: enough for the libraries' diagnostic messages. */
+static void guest_printf(CPUState *c) {
+    char fmt[256], out[512];
+    read_cstr(c->r[4], fmt, sizeof fmt);
+    u32 arg_regs[3] = {c->r[5], c->r[6], c->r[7]};
+    unsigned argi = 0;
+    size_t o = 0;
+    for (const char *p = fmt; *p != '\0' && o + 32 < sizeof out; p++) {
+        if (*p != '%') {
+            out[o++] = *p;
+            continue;
+        }
+        p++;
+        while (*p == '-' || *p == '0' || (*p >= '1' && *p <= '9') || *p == 'l' || *p == 'h') {
+            p++;
+        }
+        u32 arg = argi < 3 ? arg_regs[argi] : MEM_R32(c->r[29] + 0x10 + (argi - 3) * 4);
+        argi++;
+        switch (*p) {
+        case 'd':
+        case 'i':
+            o += (size_t)snprintf(out + o, sizeof out - o, "%d", (int)arg);
+            break;
+        case 'u':
+            o += (size_t)snprintf(out + o, sizeof out - o, "%u", arg);
+            break;
+        case 'x':
+        case 'X':
+        case 'p':
+            o += (size_t)snprintf(out + o, sizeof out - o, "%x", arg);
+            break;
+        case 'c':
+            out[o++] = (char)arg;
+            break;
+        case 's': {
+            char str[128];
+            read_cstr(arg, str, sizeof str);
+            o += (size_t)snprintf(out + o, sizeof out - o, "%s", str);
+            break;
+        }
+        case '%':
+            out[o++] = '%';
+            argi--;
+            break;
+        default:
+            break;
+        }
+    }
+    out[o] = '\0';
+    NC_LOG("[guest] %s", out);
+}
+
+static u32 file_open(u32 name_addr) {
+    char name[64];
+    read_cstr(name_addr, name, sizeof name);
+    for (u32 fd = FD_FIRST; fd < FD_MAX; fd++) {
+        if (!bios.files[fd].used) {
+            if (!disc_find(name, &bios.files[fd].file)) {
+                NC_LOG("bios: open(%s) failed", name);
+                return 0xFFFFFFFFu;
+            }
+            bios.files[fd].used = true;
+            bios.files[fd].pos = 0;
+            return fd;
+        }
+    }
+    return 0xFFFFFFFFu;
+}
+
+static u32 file_read(u32 fd, u32 dst, u32 len) {
+    if (fd >= FD_MAX || !bios.files[fd].used) {
+        return 0xFFFFFFFFu;
+    }
+    OpenFile *f = &bios.files[fd];
+    u8 sector[DISC_DATA_SECTOR];
+    u32 done = 0;
+    while (done < len && f->pos < f->file.size) {
+        if (!disc_read_data(f->file.lba + f->pos / DISC_DATA_SECTOR, sector)) {
+            break;
+        }
+        u32 off = f->pos % DISC_DATA_SECTOR;
+        u32 n = DISC_DATA_SECTOR - off;
+        if (n > len - done) {
+            n = len - done;
+        }
+        if (n > f->file.size - f->pos) {
+            n = f->file.size - f->pos;
+        }
+        for (u32 i = 0; i < n; i++) {
+            MEM_W8(dst + done + i, sector[off + i]);
+        }
+        done += n;
+        f->pos += n;
+    }
+    return done;
+}
+
+/* Psy-Q's printf writes one character at a time; collect output into lines. */
+static u32 tty_write(u32 src, u32 len) {
+    static char line[256];
+    static size_t used;
+    for (u32 i = 0; i < len; i++) {
+        char ch = (char)MEM_R8(src + i);
+        if (ch == '\n' || used == sizeof line - 1) {
+            line[used] = '\0';
+            NC_LOG("[tty] %s", line);
+            used = 0;
+        } else if (ch != '\r') {
+            line[used++] = ch;
+        }
+    }
+    return len;
+}
+
+/* --- exceptions / interrupts ------------------------------------------------------------- */
+
+/* Interrupt-time BIOS work done before the game's hook: the pad driver. */
+static void bios_irq_chain(CPUState *c) {
+    (void)c;
+    if ((irq_read(0) & 1u) && bios.pad_started) {
+        for (int port = 0; port < 2; port++) {
+            u32 buf = bios.pad_buf[port];
+            if (buf == 0 || bios.pad_size[port] < 4) {
+                continue;
+            }
+            if (port == 0) {
+                u16 raw = (u16)~bios.pad_buttons;
+                MEM_W8(buf + 0, 0x00);    /* status: ok */
+                MEM_W8(buf + 1, 0x41);    /* digital pad, 1 halfword of data */
+                MEM_W8(buf + 2, (u8)raw); /* buttons, active low */
+                MEM_W8(buf + 3, (u8)(raw >> 8));
+            } else {
+                MEM_W8(buf + 0, 0xFF); /* no controller */
+            }
+        }
+    }
+}
+
+void bios_exception(CPUState *c) {
+    if (in_exception) {
+        return;
+    }
+    in_exception = true;
+    exc_saved = *c;
+
+    bios_irq_chain(c);
+
+    if (bios.hook != 0 && setjmp(exc_env) == 0) {
+        /* Resume the hook's setjmp() as if it returned 1 (Psy-Q: "if (setjmp(b)) trapIntr();").
+         * Interrupts stay disabled while the handler runs. */
+        u32 h = bios.hook;
+        c->r[31] = MEM_R32(h + 0x00);
+        c->r[29] = MEM_R32(h + 0x04);
+        c->r[30] = MEM_R32(h + 0x08);
+        for (int i = 0; i < 8; i++) {
+            c->r[16 + i] = MEM_R32(h + 0x0C + (u32)i * 4);
+        }
+        c->r[28] = MEM_R32(h + 0x2C);
+        c->r[2] = 1;
+        c->cop0[COP0_SR] &= ~0x401u;
+        nc_call(c, c->r[31]);
+        NC_LOG("bios: interrupt hook returned without ReturnFromException");
+    }
+
+    s32 budget = c->budget;
+    *c = exc_saved;
+    c->budget = budget;
+    in_exception = false;
+}
+
+static _Noreturn void return_from_exception(void) {
+    longjmp(exc_env, 1);
+}
+
+bool bios_in_exception(void) {
+    return in_exception;
+}
+
+/* --- dispatch --------------------------------------------------------------------------- */
+
+static void bios_a0(CPUState *c, u32 fn) {
+    u32 a0 = c->r[4], a1 = c->r[5];
+    switch (fn) {
+    case 0x39: /* InitHeap(addr, size): malloc is not used by the game */
+    case 0x44: /* FlushCache */
+    case 0x70: /* _bu_init */
+    case 0x71: /* _96_init */
+    case 0x72: /* _96_remove */
+        break;
+    case 0x3F:
+        guest_printf(c);
+        break;
+    case 0x42: { /* Load(filename, headerbuf) */
+        char name[64];
+        ExecInfo info;
+        read_cstr(a0, name, sizeof name);
+        if (exe_load(name, &info)) {
+            exe_write_info(&info, a1);
+            c->r[2] = 1;
+        } else {
+            c->r[2] = 0;
+        }
+        return;
+    }
+    case 0x43: { /* Exec(headerbuf, argc, argv) */
+        ExecInfo info;
+        exe_read_info(a0, &info);
+        c->r[2] = exe_exec(c, &info, a1, c->r[6]);
+        return;
+    }
+    case 0x49: /* GPU_cw(word) */
+        gpu_gp0(a0);
+        break;
+    case 0xAB: /* _card_info(port) */
+    case 0xAC: /* _card_load(port) */
+        /* No memory card yet: report a timeout, which the game treats as "no card". */
+        bios_deliver_event(c, 0xF4000001u, 0x0100u);
+        c->r[2] = 1;
+        return;
+    default:
+        NC_FATAL("BIOS A0:%02X not implemented (ra=0x%08X)", fn, c->r[31]);
+    }
+    c->r[2] = 0;
+}
+
+static void bios_b0(CPUState *c, u32 fn) {
+    u32 a0 = c->r[4], a1 = c->r[5], a2 = c->r[6], a3 = c->r[7];
+    Event *e;
+    switch (fn) {
+    case 0x07: /* DeliverEvent(class, spec) */
+        bios_deliver_event(c, a0, a1);
+        break;
+    case 0x08: /* OpenEvent(class, spec, mode, func) */
+        c->r[2] = open_event(a0, a1, a2, a3);
+        return;
+    case 0x09: /* CloseEvent(desc) */
+        if ((e = event_at(a0)) != NULL) {
+            e->status = EV_ST_UNUSED;
+        }
+        c->r[2] = 1;
+        return;
+    case 0x0A: /* WaitEvent(desc) */
+    case 0x0B: /* TestEvent(desc) */
+        if ((e = event_at(a0)) != NULL && e->status == EV_ST_ALREADY) {
+            e->status = EV_ST_ACTIVE;
+            c->r[2] = 1;
+        } else {
+            c->r[2] = 0;
+        }
+        return;
+    case 0x0C: /* EnableEvent(desc) */
+        if ((e = event_at(a0)) != NULL && e->status != EV_ST_UNUSED) {
+            e->status = EV_ST_ACTIVE;
+        }
+        c->r[2] = 1;
+        return;
+    case 0x0D: /* DisableEvent(desc) */
+        if ((e = event_at(a0)) != NULL && e->status != EV_ST_UNUSED) {
+            e->status = EV_ST_WAIT;
+        }
+        c->r[2] = 1;
+        return;
+    case 0x12: /* InitPAD(buf1, size1, buf2, size2) */
+        bios.pad_buf[0] = a0;
+        bios.pad_size[0] = a1;
+        bios.pad_buf[1] = a2;
+        bios.pad_size[1] = a3;
+        c->r[2] = 1;
+        return;
+    case 0x13: /* StartPAD */
+    case 0x15: /* OutdatedPadInitAndStart */
+        bios.pad_started = true;
+        c->r[2] = 1;
+        return;
+    case 0x14: /* StopPAD */
+        bios.pad_started = false;
+        break;
+    case 0x17: /* ReturnFromException */
+        if (in_exception) {
+            return_from_exception();
+        }
+        NC_LOG("bios: ReturnFromException outside an exception");
+        break;
+    case 0x18: /* ResetEntryInt */
+        bios.hook = 0;
+        break;
+    case 0x19: /* HookEntryInt(buf) */
+        bios.hook = a0;
+        break;
+    case 0x32: /* open(name, mode) */
+        c->r[2] = file_open(a0);
+        return;
+    case 0x33: /* lseek(fd, offset, whence) */
+        if (a0 < FD_MAX && bios.files[a0].used) {
+            OpenFile *f = &bios.files[a0];
+            f->pos = a2 == 0 ? a1 : (a2 == 1 ? f->pos + a1 : f->file.size + a1);
+            c->r[2] = f->pos;
+        } else {
+            c->r[2] = 0xFFFFFFFFu;
+        }
+        return;
+    case 0x34: /* read(fd, dst, len) */
+        c->r[2] = file_read(a0, a1, a2);
+        return;
+    case 0x35: /* write(fd, src, len): only the TTY is writable */
+        c->r[2] = a0 <= 1 ? tty_write(a1, a2) : 0xFFFFFFFFu;
+        return;
+    case 0x36: /* close(fd) */
+        if (a0 < FD_MAX) {
+            bios.files[a0].used = false;
+        }
+        c->r[2] = a0;
+        return;
+    case 0x4A: /* InitCARD */
+    case 0x4B: /* StartCARD */
+    case 0x4C: /* StopCARD */
+        c->r[2] = 1;
+        return;
+    case 0x5B: /* ChangeClearPad(int) */
+        break;
+    default:
+        NC_FATAL("BIOS B0:%02X not implemented (ra=0x%08X)", fn, c->r[31]);
+    }
+    c->r[2] = 0;
+}
+
+static void bios_c0(CPUState *c, u32 fn) {
+    switch (fn) {
+    case 0x0A: /* ChangeClearRCnt(timer, flag): returns the old flag */
+        c->r[2] = 1;
+        return;
+    default:
+        NC_FATAL("BIOS C0:%02X not implemented (ra=0x%08X)", fn, c->r[31]);
+    }
+}
 
 void bios_call(CPUState *c, u32 table) {
-    NC_FATAL("BIOS %02X:%02X not implemented (ra=0x%08X)", table, c->r[9], c->r[31]);
+    u32 fn = c->r[9];
+    switch (table) {
+    case 0xA0:
+        bios_a0(c, fn);
+        break;
+    case 0xB0:
+        bios_b0(c, fn);
+        break;
+    default:
+        bios_c0(c, fn);
+        break;
+    }
 }

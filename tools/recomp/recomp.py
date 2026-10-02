@@ -114,9 +114,15 @@ class Module:
     funcs: list[Func]
     func_starts: set[int]
     words: set[int]  # every aligned word value in the image (jump table candidates)
+    # Mid-function entry points (address -> containing function). These are the return sites
+    # of setjmp calls: Psy-Q's interrupt handler is entered by "longjmp"-ing to one of them.
+    resumes: dict[int, Func] = field(default_factory=dict)
 
     def cname(self, addr: int) -> str:
         return f"{self.name}_{addr:08X}"
+
+    def resume_name(self, entry: int) -> str:
+        return f"{self.cname(self.resumes[entry].addr)}_r{entry:08X}"
 
 
 def load_module(name: str, exe: str) -> Module:
@@ -162,7 +168,24 @@ def load_module(name: str, exe: str) -> Module:
 
     body = data[HEADER_SIZE:]
     words = set(struct.unpack(f"<{len(body) // 4}I", body[: len(body) // 4 * 4]))
-    return Module(name, data, vram, funcs, starts, words)
+    mod = Module(name, data, vram, funcs, starts, words)
+
+    setjmp = symbol_addr(name, "setjmp")
+    if setjmp is not None:
+        for f in funcs:
+            for i in f.insns:
+                if i.op == 3 and i.jump_target() == setjmp and i.addr + 8 < f.end:
+                    mod.resumes[i.addr + 8] = f
+    return mod
+
+
+def symbol_addr(module: str, symbol: str) -> int | None:
+    pattern = re.compile(rf"^{re.escape(symbol)} = 0x([0-9A-F]+);", re.M)
+    for path in (ROOT / "config" / "symbols").glob(f"{module}*.txt"):
+        m = pattern.search(path.read_text())
+        if m:
+            return int(m.group(1), 16)
+    return None
 
 
 class Emitter:
@@ -337,8 +360,9 @@ class Emitter:
         raise AssertionError
 
     # --- functions --------------------------------------------------------------------------
-    def function(self, f: Func) -> list[str]:
-        targets: set[int] = set()
+    def function(self, f: Func, entry: int | None = None) -> list[str]:
+        """Emit f as a C function; with `entry`, emit a copy that starts mid-function there."""
+        targets: set[int] = set() if entry is None else {entry}
         jump_tables = False
         for i in f.insns:
             if i.is_branch():
@@ -364,7 +388,10 @@ class Emitter:
         }
         targets.update(a + 4 for a in slot_targets)
 
-        out = [f"void {self.mod.cname(f.addr)}(CPUState *c) {{", f"    NC_POLL(c, {POLL_COST});"]
+        name = self.mod.cname(f.addr) if entry is None else self.mod.resume_name(entry)
+        out = [f"void {name}(CPUState *c) {{", f"    NC_POLL(c, {POLL_COST});"]
+        if entry is not None:
+            out.append(f"    goto L_{entry:08X};")
         k = 0
         while k < n:
             i = insns[k]
@@ -463,9 +490,16 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         for f in chunk:
             lines.extend(em.function(f))
             lines.append("")
+            for entry in sorted(e for e, rf in mod.resumes.items() if rf is f):
+                lines.extend(em.function(f, entry))
+                lines.append("")
         (out / f"code_{idx // FUNCS_PER_FILE}.c").write_text("\n".join(lines))
 
-    decls = [f"void {mod.cname(f.addr)}(CPUState *c);" for f in mod.funcs]
+    entries = sorted(
+        [(f.addr, mod.cname(f.addr)) for f in mod.funcs]
+        + [(e, mod.resume_name(e)) for e in mod.resumes]
+    )
+    decls = [f"void {name}(CPUState *c);" for _, name in entries]
     guard = f"NC_GEN_{mod.name.upper()}_H"
     (out / f"{mod.name}.h").write_text(
         "\n".join(
@@ -484,9 +518,9 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         f'#include "{mod.name}.h"',
         "",
         f"const NcFuncEntry {mod.name}_table[] = {{",
-        *(f"    {{0x{f.addr:08X}u, {mod.cname(f.addr)}}}," for f in mod.funcs),
+        *(f"    {{0x{addr:08X}u, {name}}}," for addr, name in entries),
         "};",
-        f"const unsigned {mod.name}_table_len = {len(mod.funcs)};",
+        f"const unsigned {mod.name}_table_len = {len(entries)};",
         "",
     ]
     (out / "table.c").write_text("\n".join(table))
@@ -506,7 +540,7 @@ def main() -> int:
     for name in names:
         mod = launcher if name == LAUNCHER else load_module(name, exes[name])
         write_module(mod, None if name == LAUNCHER else launcher, args.out / name)
-        print(f"{name}: {len(mod.funcs)} functions")
+        print(f"{name}: {len(mod.funcs)} functions, {len(mod.resumes)} resume entries")
     return 0
 
 
