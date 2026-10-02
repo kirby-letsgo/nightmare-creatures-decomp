@@ -11,6 +11,7 @@ find_package(SDL3 REQUIRED CONFIG)
 include(FetchContent)
 set(INSTALL_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(CHDR_WANT_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(libchdr
     GIT_REPOSITORY https://github.com/rtissera/libchdr.git
     GIT_TAG 607694ca0812edfc9cc2030c64634fc2393668de

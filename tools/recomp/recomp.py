@@ -25,7 +25,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 
 FUNCS_PER_FILE = 120
-POLL_COST = 16  # cycles charged per backward branch / function entry (coarse timing model)
+POLL_COST = 16  # cycles charged per function entry (coarse timing model)
+LOAD_PENALTY = 4  # extra cycles per load from main RAM
 
 LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
@@ -395,6 +396,17 @@ class Emitter:
                 return f"gte_write_ctrl(c, {i.rd}, {r(i.rt)});"
         return f"nc_unimplemented(c, 0x{i.addr:08X}, 0x{i.word:08X});"
 
+    @staticmethod
+    def loop_cost(f: Func, target: int, branch: int) -> int:
+        """Approximate R3000A cycles for one iteration of the loop [target, branch + delay]:
+        one per instruction plus a RAM access penalty per load. Busy-wait loops with iteration
+        timeouts (e.g. Psy-Q's v_wait) depend on this being close to hardware."""
+        cycles = 0
+        for i in f.insns:
+            if target <= i.addr <= branch + 4:
+                cycles += 1 + (LOAD_PENALTY if 0x20 <= i.op <= 0x26 or i.op == 0x32 else 0)
+        return max(cycles, 1)
+
     def cond(self, i: Insn) -> str:
         rs, rt = r(i.rs), r(i.rt)
         match i.op:
@@ -484,7 +496,7 @@ class Emitter:
                 lines.append(f"    R(31) = 0x{i.addr + 8:08X}u;")
             lines.extend(emit(d))
             if f.addr <= tgt < f.end and not link:
-                poll = f" NC_POLL(c, {POLL_COST});" if tgt <= i.addr else ""
+                poll = f" NC_POLL(c, {self.loop_cost(f, tgt, i.addr)});" if tgt <= i.addr else ""
                 lines.append(f"    if (bc) {{{poll} goto L_{tgt:08X}; }} }}")
             elif link:
                 lines.append(f"    if (bc) {{ {self.call(tgt)} }} }}")
@@ -496,7 +508,7 @@ class Emitter:
             tgt = i.jump_target()
             lines.extend(emit(d))
             if f.addr <= tgt < f.end:
-                poll = f"NC_POLL(c, {POLL_COST}); " if tgt <= i.addr else ""
+                poll = f"NC_POLL(c, {self.loop_cost(f, tgt, i.addr)}); " if tgt <= i.addr else ""
                 lines.append(f"    {poll}goto L_{tgt:08X};")
             else:
                 lines.append(f"    {self.call(tgt)} return;")
