@@ -1,0 +1,12 @@
+InitHeap = 0x800109D0; // type:func size:0xC
+Load = 0x800109E0; // type:func size:0xC
+Exec = 0x800109F0; // type:func size:0xC
+_96_init = 0x80010A00; // type:func size:0xC
+_96_remove = 0x80010A18; // type:func size:0xC
+ReturnFromException = 0x80011A3C; // type:func size:0xC
+ResetEntryInt = 0x80011A4C; // type:func size:0xC
+HookEntryInt = 0x80011A5C; // type:func size:0xC
+write = 0x80011A7C; // type:func size:0xC
+ChangeClearPad = 0x80011A8C; // type:func size:0xC
+ChangeClearRCnt = 0x80011A9C; // type:func size:0xC
+DeliverEvent = 0x80011F84; // type:func size:0xC

@@ -1,0 +1,15 @@
+StopPAD = 0x8001AECC; // type:func size:0xC
+write = 0x8001AEDC; // type:func size:0xC
+ChangeClearPad = 0x8001AEEC; // type:func size:0xC
+InitPAD = 0x8001AFF4; // type:func size:0xC
+StartPAD = 0x8001B004; // type:func size:0xC
+OutdatedPadInitAndStart = 0x8001B014; // type:func size:0xC
+FlushCache = 0x8001B074; // type:func size:0xC
+ChangeClearRCnt = 0x8001B2C8; // type:func size:0xC
+_96_remove = 0x8001BA70; // type:func size:0xC
+ReturnFromException = 0x8001BA88; // type:func size:0xC
+ResetEntryInt = 0x8001BA98; // type:func size:0xC
+HookEntryInt = 0x8001BAA8; // type:func size:0xC
+GPU_cw = 0x8001F8E4; // type:func size:0xC
+DeliverEvent = 0x800230F4; // type:func size:0xC
+InitHeap = 0x80027154; // type:func size:0xC
