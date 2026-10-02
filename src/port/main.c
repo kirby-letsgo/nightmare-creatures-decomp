@@ -196,20 +196,37 @@ static void record_wav(const s16 *samples, int bytes) {
     SDL_SeekIO(wav, end, SDL_IO_SEEK_SET);
 }
 
-/* Renders one frame of audio (44100 / 60 samples). The queue is kept short so audio stays in
- * sync with video; if it grows (e.g. after a stall), the excess is dropped. */
+/* Renders one frame of audio (44100 / 60 samples) and queues it for the device. */
 static void output_audio(void) {
-    enum { FRAME_SAMPLES = SPU_RATE / 60, MAX_QUEUED_BYTES = SPU_RATE / 10 * 4 };
+    enum { FRAME_SAMPLES = SPU_RATE / 60 };
     static s16 buf[FRAME_SAMPLES * 2];
     spu_render(buf, FRAME_SAMPLES);
     record_wav(buf, (int)sizeof buf);
-    if (audio == NULL) {
+    if (audio != NULL) {
+        SDL_PutAudioStreamData(audio, buf, (int)sizeof buf);
+    }
+}
+
+/* Paces emulation to real time. With audio, the sound card's clock is the master: we wait
+ * while more than a few frames of audio are queued, so the queue never overflows (no dropped
+ * audio) and never drifts against video. Without audio, absolute 60 Hz deadlines are used. */
+static void pace(void) {
+    const Uint64 frame_ns = 1000000000ull / 60;
+    if (audio != NULL) {
+        enum { TARGET_BYTES = (SPU_RATE / 60) * 4 * 3 }; /* ~50 ms */
+        while (SDL_GetAudioStreamQueued(audio) > TARGET_BYTES) {
+            SDL_DelayPrecise(1000000);
+        }
+        last_frame_ns = SDL_GetTicksNS();
         return;
     }
-    if (SDL_GetAudioStreamQueued(audio) > MAX_QUEUED_BYTES) {
-        SDL_ClearAudioStream(audio);
+    last_frame_ns += frame_ns;
+    Uint64 now = SDL_GetTicksNS();
+    if (now < last_frame_ns) {
+        SDL_DelayPrecise(last_frame_ns - now);
+    } else if (now - last_frame_ns > 4 * frame_ns) {
+        last_frame_ns = now;
     }
-    SDL_PutAudioStreamData(audio, buf, (int)sizeof buf);
 }
 
 /* Called once per emulated VBlank: input, window events, video, and 60 Hz pacing. */
@@ -224,17 +241,7 @@ static void on_frame(void) {
     present();
     output_audio();
     report_fps();
-
-    /* Pace against absolute deadlines so sleep overshoot does not accumulate; if we fall
-     * more than a few frames behind, resynchronise instead of fast-forwarding. */
-    const Uint64 frame_ns = 1000000000ull / 60;
-    last_frame_ns += frame_ns;
-    Uint64 now = SDL_GetTicksNS();
-    if (now < last_frame_ns) {
-        SDL_DelayPrecise(last_frame_ns - now);
-    } else if (now - last_frame_ns > 4 * frame_ns) {
-        last_frame_ns = now;
-    }
+    pace();
 }
 
 int main(int argc, char **argv) {

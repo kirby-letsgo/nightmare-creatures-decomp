@@ -185,7 +185,8 @@ static void decode_block(Voice *vc) {
     for (int i = 0; i < 28; i++) {
         int nib = (blk[2 + i / 2] >> ((i & 1) * 4)) & 0xF;
         s32 s = (s32)((s16)(nib << 12)) >> shift;
-        s += (vc->prev1 * adpcm_pos[filter] + vc->prev2 * adpcm_neg[filter] + 32) / 64;
+        s += (vc->prev1 * adpcm_pos[filter] + vc->prev2 * adpcm_neg[filter] + 32) >>
+             6; /* arithmetic shift, as the hardware */
         s16 out = clamp16(s);
         vc->prev2 = vc->prev1;
         vc->prev1 = out;
@@ -382,7 +383,8 @@ void spu_cdda_feed(const u8 *sector) {
 static s16 xa_sample(int nibble_or_byte, int bits, int shift, int filter, s32 *prev) {
     s32 s = bits == 4 ? (s32)((s16)(nibble_or_byte << 12)) >> shift
                       : (s32)((s16)(nibble_or_byte << 8)) >> shift;
-    s += (prev[0] * adpcm_pos[filter] + prev[1] * adpcm_neg[filter] + 32) / 64;
+    s += (prev[0] * adpcm_pos[filter] + prev[1] * adpcm_neg[filter] + 32) >>
+         6; /* arithmetic shift, as the hardware */
     s16 out = clamp16(s);
     prev[1] = prev[0];
     prev[0] = out;
