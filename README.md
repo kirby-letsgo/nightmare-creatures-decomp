@@ -57,8 +57,27 @@ make recomp && make build
 ./build/cmake/nightmare --disc "roms/Nightmare Creatures.chd"
 ```
 
-Keyboard: arrows = d-pad, Enter = Start, Backspace = Select, X / C / Z / S = Cross / Circle /
-Square / Triangle, Q / W = L1 / R1, 1 / 2 = L2 / R2.
+### Keyboard controls
+
+| PS1 button | Key |
+|---|---|
+| D-pad | Arrow keys |
+| Cross | X |
+| Circle | C |
+| Square | Z |
+| Triangle | S |
+| L1 / R1 | Q / W |
+| L2 / R2 | 1 / 2 |
+| Start | Enter |
+| Select | Backspace |
+
+Gamepad support and rebinding are planned.
+
+### Crashes
+
+Each run writes `nightmare.log` in the current directory. If the game crashes, that file ends
+with a backtrace in which recompiled functions appear as `<module>_<address>` (for example
+`psx2_exe_8001A304`): please include it when reporting a crash.
 
 Debugging aids: `NC_SHOT_EVERY=N` saves a screenshot every N frames to `build/shots/`, and
 `NC_TRACE_STACK=1` prints the guest (MIPS) call stack once per second.

@@ -148,6 +148,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    nc_log_init();
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
