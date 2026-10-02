@@ -383,8 +383,8 @@ void spu_cdda_feed(const u8 *sector) {
 static s16 xa_sample(int nibble_or_byte, int bits, int shift, int filter, s32 *prev) {
     s32 s = bits == 4 ? (s32)((s16)(nibble_or_byte << 12)) >> shift
                       : (s32)((s16)(nibble_or_byte << 8)) >> shift;
-    s += (prev[0] * adpcm_pos[filter] + prev[1] * adpcm_neg[filter] + 32) >>
-         6; /* arithmetic shift, as the hardware */
+    /* XA applies each prediction term with its own shift (no rounding term). */
+    s += ((prev[0] * adpcm_pos[filter]) >> 6) + ((prev[1] * adpcm_neg[filter]) >> 6);
     s16 out = clamp16(s);
     prev[1] = prev[0];
     prev[0] = out;
@@ -424,8 +424,9 @@ void spu_xa_feed(const u8 *sector) {
         int units = bits == 4 ? 8 : 4;
         for (int u = 0; u < units; u++) {
             u8 hdr = grp[4 + u];
-            int shift = (bits == 4 ? 12 : 8) - (hdr & 0xF);
-            shift = shift < 0 ? 0 : shift;
+            /* The header holds the right-shift directly; reserved values 13-15 act as 9. */
+            int shift = hdr & 0xF;
+            shift = shift > 12 ? 9 : shift;
             int filter = (hdr >> 4) & 3;
             int ch = stereo ? (u & 1) : 0;
             for (int j = 0; j < 28; j++) {
