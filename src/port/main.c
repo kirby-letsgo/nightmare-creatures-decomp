@@ -196,10 +196,22 @@ static void draw_game(void) {
         SDL_RenderTexture(renderer, screen, NULL, &dst);
     }
     if (settings.show_fps) {
+        /* SDL's debug font is 8x8 pixels: scale it with the output so it stays readable
+         * (about 1/40 of the screen height), with a dark backing for contrast. */
         char text[32];
         SDL_snprintf(text, sizeof text, "%u fps", fps_shown);
+        int ww, wh;
+        SDL_GetRenderOutputSize(renderer, &ww, &wh);
+        float scale = (float)wh / 320.0f;
+        scale = scale < 1.0f ? 1.0f : scale;
+        SDL_SetRenderScale(renderer, scale, scale);
+        SDL_FRect bg = {4, 4, 8.0f * (float)SDL_strlen(text) + 8, 16};
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+        SDL_RenderFillRect(renderer, &bg);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDebugText(renderer, 8, 8, text);
+        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     }
 }
 
