@@ -38,3 +38,12 @@ void spu_dma_read(u8 *dst, u32 bytes) {
     }
     transfer_addr = (transfer_addr + bytes) & (SPU_RAM_SIZE - 1);
 }
+
+/* CD audio and XA-ADPCM sectors from the CD-ROM controller; mixed in Phase 3. */
+void spu_cdda_feed(const u8 *sector) {
+    (void)sector;
+}
+
+void spu_xa_feed(const u8 *sector) {
+    (void)sector;
+}

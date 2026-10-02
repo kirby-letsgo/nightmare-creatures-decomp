@@ -56,5 +56,7 @@ u16 spu_read(u32 reg);
 void spu_write(u32 reg, u16 value);
 void spu_dma_write(const u8 *src, u32 bytes);
 void spu_dma_read(u8 *dst, u32 bytes);
+void spu_cdda_feed(const u8 *sector);
+void spu_xa_feed(const u8 *sector);
 
 #endif

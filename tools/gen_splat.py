@@ -90,6 +90,7 @@ options:
   symbol_addrs_path:
     - config/symbols/{base}.txt
     - config/symbols/{base}.bios.txt
+    - config/symbols/{base}.entry.txt
     - config/symbols/{base}.psyq.txt
   undefined_funcs_auto_path: build/splat/{base}/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/{base}/undefined_syms_auto.txt
@@ -128,6 +129,11 @@ def main() -> int:
         sym = ROOT / "config" / "symbols" / f"{base}.txt"
         if not sym.exists():
             sym.write_text("")
+        # The entry point (crt0) is never called, so splat would merge it into the
+        # preceding function unless it is declared.
+        pc = struct.unpack_from("<I", (DISC / name).read_bytes(), 0x10)[0]
+        entry = ROOT / "config" / "symbols" / f"{base}.entry.txt"
+        entry.write_text(f"__start = 0x{pc:08X}; // type:func\n")
         print(f"wrote config/splat/{base}.yaml")
     return 0
 

@@ -2,7 +2,9 @@
 
 #include "port/runtime.h"
 
+#include <libchdr/cdrom.h>
 #include <libchdr/chd.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,6 +15,48 @@ static chd_file *chd;
 static u8 *hunk_buf;
 static u32 hunk_bytes, frames_per_hunk, cached_hunk = 0xFFFFFFFFu;
 
+/* Disc layout from the CHD's CHT2 metadata. Each track's stored frames are padded to a
+ * multiple of 4 in the file. A pregap is stored with the track for PGTYPE:V*, otherwise it is
+ * silence that exists only on the disc's timeline. */
+static DiscTrack tracks[DISC_MAX_TRACKS];
+static u32 chd_offset[DISC_MAX_TRACKS]; /* first stored frame of each track */
+static bool pregap_stored[DISC_MAX_TRACKS];
+static int track_count;
+
+static bool load_toc(void) {
+    char meta[256];
+    u32 lba = 0, offset = 0;
+    track_count = 0;
+    for (int i = 0; i < DISC_MAX_TRACKS; i++) {
+        u32 len = 0, tag = 0;
+        u8 flags = 0;
+        if (chd_get_metadata(chd, CDROM_TRACK_METADATA2_TAG, (u32)i, meta, sizeof meta - 1, &len,
+                             &tag, &flags) != CHDERR_NONE) {
+            break;
+        }
+        meta[len < sizeof meta ? len : sizeof meta - 1] = '\0';
+        int number = 0, frames = 0, pregap = 0, postgap = 0;
+        char type[32] = "", subtype[32] = "", pgtype[32] = "", pgsub[32] = "";
+        if (sscanf(meta, CDROM_TRACK_METADATA2_FORMAT, &number, type, subtype, &frames, &pregap,
+                   pgtype, pgsub, &postgap) != 8) {
+            NC_LOG("disc: unparsable track metadata: %s", meta);
+            return false;
+        }
+        bool stored = pgtype[0] == 'V';
+        DiscTrack *t = &tracks[track_count];
+        t->audio = strcmp(type, "AUDIO") == 0;
+        t->start = lba;
+        t->index1 = lba + (u32)pregap;
+        t->frames = (u32)frames + (stored ? 0u : (u32)pregap);
+        chd_offset[track_count] = offset;
+        pregap_stored[track_count] = stored;
+        lba += t->frames;
+        offset += ((u32)frames + 3u) & ~3u;
+        track_count++;
+    }
+    return track_count > 0;
+}
+
 bool disc_open(const char *chd_path) {
     if (chd_open(chd_path, CHD_OPEN_READ, NULL, &chd) != CHDERR_NONE) {
         NC_LOG("cannot open disc image %s", chd_path);
@@ -22,7 +66,12 @@ bool disc_open(const char *chd_path) {
     hunk_bytes = hdr->hunkbytes;
     frames_per_hunk = hunk_bytes / CHD_FRAME_SIZE;
     hunk_buf = malloc(hunk_bytes);
-    return hunk_buf != NULL;
+    if (hunk_buf == NULL || !load_toc()) {
+        disc_close();
+        return false;
+    }
+    NC_LOG("disc: %d tracks, lead-out at LBA %u", track_count, disc_leadout());
+    return true;
 }
 
 void disc_close(void) {
@@ -35,16 +84,51 @@ void disc_close(void) {
     cached_hunk = 0xFFFFFFFFu;
 }
 
-/* Track 1 (data) starts at frame 0 of the CHD, so data-track LBAs map directly to frames. */
+int disc_track_count(void) {
+    return track_count;
+}
+
+const DiscTrack *disc_track(int number) {
+    return (number >= 1 && number <= track_count) ? &tracks[number - 1] : NULL;
+}
+
+u32 disc_leadout(void) {
+    if (track_count == 0) {
+        return 0;
+    }
+    const DiscTrack *last = &tracks[track_count - 1];
+    return last->start + last->frames;
+}
+
 bool disc_read_raw(u32 lba, u8 out[DISC_RAW_SECTOR]) {
-    u32 hunk = lba / frames_per_hunk;
+    int t = track_count - 1;
+    while (t > 0 && lba < tracks[t].start) {
+        t--;
+    }
+    if (track_count == 0 || lba >= disc_leadout()) {
+        return false;
+    }
+    if (!pregap_stored[t] && lba < tracks[t].index1) {
+        memset(out, 0, DISC_RAW_SECTOR);
+        return true;
+    }
+    u32 first = pregap_stored[t] ? tracks[t].start : tracks[t].index1;
+    u32 frame = chd_offset[t] + (lba - first);
+    u32 hunk = frame / frames_per_hunk;
     if (hunk != cached_hunk) {
         if (chd_read(chd, hunk, hunk_buf) != CHDERR_NONE) {
             return false;
         }
         cached_hunk = hunk;
     }
-    memcpy(out, hunk_buf + (lba % frames_per_hunk) * CHD_FRAME_SIZE, DISC_RAW_SECTOR);
+    memcpy(out, hunk_buf + (frame % frames_per_hunk) * CHD_FRAME_SIZE, DISC_RAW_SECTOR);
+    if (tracks[t].audio) { /* CHD stores CD audio big-endian */
+        for (u32 i = 0; i < DISC_RAW_SECTOR; i += 2) {
+            u8 tmp = out[i];
+            out[i] = out[i + 1];
+            out[i + 1] = tmp;
+        }
+    }
     return true;
 }
 

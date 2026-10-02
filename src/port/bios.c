@@ -56,8 +56,21 @@ static jmp_buf exc_env;
 static CPUState exc_saved;
 static bool in_exception;
 
+/* Psy-Q patches BIOS routines through the B0/C0 function tables (e.g. _patch_gte, _patch_pad).
+ * Under HLE those patches have no effect, so the tables live in otherwise-unused kernel RAM and
+ * each entry points at a scratch area that the patch code can freely overwrite. */
+#define FAKE_B0_TABLE 0x00000874u
+#define FAKE_C0_TABLE 0x00000674u
+#define FAKE_PATCH_AREA 0x00002000u
+
 void bios_init(void) {
     memset(&bios, 0, sizeof bios);
+    for (u32 i = 0; i < 0x60; i++) {
+        MEM_W32(FAKE_B0_TABLE + i * 4, FAKE_PATCH_AREA + 0x4000u + i * 0x80u);
+    }
+    for (u32 i = 0; i < 0x20; i++) {
+        MEM_W32(FAKE_C0_TABLE + i * 4, FAKE_PATCH_AREA + i * 0x200u);
+    }
 }
 
 void bios_set_pad(u16 buttons) {
@@ -382,7 +395,10 @@ static void bios_b0(CPUState *c, u32 fn) {
         return;
     case 0x13: /* StartPAD */
     case 0x15: /* OutdatedPadInitAndStart */
+        /* Like the real BIOS, this also leaves the critical section that Psy-Q's _patch_pad
+         * entered, re-enabling interrupts. */
         bios.pad_started = true;
+        c->cop0[COP0_SR] |= 0x401u;
         c->r[2] = 1;
         return;
     case 0x14: /* StopPAD */
@@ -424,10 +440,19 @@ static void bios_b0(CPUState *c, u32 fn) {
         }
         c->r[2] = a0;
         return;
+    case 0x4B: /* StartCARD: also re-enables interrupts, like StartPAD */
+        c->cop0[COP0_SR] |= 0x401u;
+        c->r[2] = 1;
+        return;
     case 0x4A: /* InitCARD */
-    case 0x4B: /* StartCARD */
     case 0x4C: /* StopCARD */
         c->r[2] = 1;
+        return;
+    case 0x56: /* GetC0Table */
+        c->r[2] = FAKE_C0_TABLE;
+        return;
+    case 0x57: /* GetB0Table */
+        c->r[2] = FAKE_B0_TABLE;
         return;
     case 0x5B: /* ChangeClearPad(int) */
         break;

@@ -15,6 +15,7 @@ options:
   symbol_addrs_path:
     - config/symbols/psx2_exe.txt
     - config/symbols/psx2_exe.bios.txt
+    - config/symbols/psx2_exe.entry.txt
     - config/symbols/psx2_exe.psyq.txt
   undefined_funcs_auto_path: build/splat/psx2_exe/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/psx2_exe/undefined_syms_auto.txt

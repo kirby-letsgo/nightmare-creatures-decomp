@@ -15,6 +15,7 @@ options:
   symbol_addrs_path:
     - config/symbols/credits_exe.txt
     - config/symbols/credits_exe.bios.txt
+    - config/symbols/credits_exe.entry.txt
     - config/symbols/credits_exe.psyq.txt
   undefined_funcs_auto_path: build/splat/credits_exe/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/credits_exe/undefined_syms_auto.txt

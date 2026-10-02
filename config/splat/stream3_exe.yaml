@@ -15,6 +15,7 @@ options:
   symbol_addrs_path:
     - config/symbols/stream3_exe.txt
     - config/symbols/stream3_exe.bios.txt
+    - config/symbols/stream3_exe.entry.txt
     - config/symbols/stream3_exe.psyq.txt
   undefined_funcs_auto_path: build/splat/stream3_exe/undefined_funcs_auto.txt
   undefined_syms_auto_path: build/splat/stream3_exe/undefined_syms_auto.txt
