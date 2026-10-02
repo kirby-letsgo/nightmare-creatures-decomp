@@ -4,6 +4,7 @@
 #include "port/disc.h"
 #include "port/exe.h"
 #include "port/hw/hw.h"
+#include "port/memcard.h"
 #include "port/runtime.h"
 
 #include <setjmp.h>
@@ -37,7 +38,24 @@ typedef struct OpenFile {
     bool used;
     DiscFile file;
     u32 pos;
+    int card_port; /* -1 for disc files, else memory card slot (0/1) */
+    char card_name[21];
+    bool async;
 } OpenFile;
+
+/* Memory card event classes and specs (Psy-Q libapi). */
+#define EV_HW_CARD 0xF0000011u
+#define EV_SW_CARD 0xF4000001u
+#define EV_SP_IOE 0x0004u
+#define EV_SP_ERROR 0x8000u
+#define EV_SP_TIMEOUT 0x0100u
+
+/* firstfile/nextfile search state */
+typedef struct CardSearch {
+    int port;
+    int block;
+    char pattern[21];
+} CardSearch;
 
 /* --- state ---------------------------------------------------------------------------- */
 
@@ -48,6 +66,7 @@ typedef struct BiosState {
     bool pad_started;
     u16 pad_buttons; /* active-high PS1 button bits, port 1 */
     OpenFile files[FD_MAX];
+    CardSearch search;
 } BiosState;
 
 static BiosState bios;
@@ -176,21 +195,102 @@ static void guest_printf(CPUState *c) {
     NC_LOG("[guest] %s", out);
 }
 
-static u32 file_open(u32 name_addr) {
+/* "bu00:NAME" -> slot 0, "bu10:NAME" -> slot 1; returns the slot or -1 if not a card path. */
+static int card_path(const char *path, const char **name) {
+    if (strncmp(path, "bu", 2) != 0 || path[2] < '0' || path[2] > '1' || path[4] != ':') {
+        return -1;
+    }
+    *name = path + 5;
+    return path[2] - '0';
+}
+
+static void card_event(CPUState *c, u32 spec) {
+    bios_deliver_event(c, EV_SW_CARD, spec);
+    bios_deliver_event(c, EV_HW_CARD, spec);
+}
+
+static u32 file_open(u32 name_addr, u32 mode) {
     char name[64];
     read_cstr(name_addr, name, sizeof name);
+    const char *card_name;
+    int port = card_path(name, &card_name);
     for (u32 fd = FD_FIRST; fd < FD_MAX; fd++) {
-        if (!bios.files[fd].used) {
-            if (!disc_find(name, &bios.files[fd].file)) {
-                NC_LOG("bios: open(%s) failed", name);
+        if (bios.files[fd].used) {
+            continue;
+        }
+        OpenFile *f = &bios.files[fd];
+        if (port >= 0) {
+            if (mode & 0x200) { /* FCREAT: size in blocks in the upper half */
+                if (!memcard_create(port, card_name, mode >> 16)) {
+                    NC_LOG("bios: cannot create %s", name);
+                    return 0xFFFFFFFFu;
+                }
+            } else if (memcard_file_size(port, card_name) < 0) {
                 return 0xFFFFFFFFu;
             }
-            bios.files[fd].used = true;
-            bios.files[fd].pos = 0;
+            memset(f, 0, sizeof *f);
+            f->used = true;
+            f->card_port = port;
+            strncpy(f->card_name, card_name, 20);
+            f->async = (mode & 0x8000) != 0; /* FASYNC: completion is signalled by event */
             return fd;
         }
+        if (!disc_find(name, &f->file)) {
+            NC_LOG("bios: open(%s) failed", name);
+            return 0xFFFFFFFFu;
+        }
+        f->used = true;
+        f->pos = 0;
+        f->card_port = -1;
+        return fd;
     }
     return 0xFFFFFFFFu;
+}
+
+/* Reads/writes a memory card file through a host buffer. */
+static u32 card_rw(CPUState *c, OpenFile *f, u32 addr, u32 len, bool write) {
+    static u8 buf[0x20000];
+    len = len < sizeof buf ? len : (u32)sizeof buf;
+    if (write) {
+        for (u32 i = 0; i < len; i++) {
+            buf[i] = (u8)MEM_R8(addr + i);
+        }
+    }
+    int n = memcard_rw(f->card_port, f->card_name, f->pos, buf, len, write);
+    if (n < 0) {
+        card_event(c, EV_SP_ERROR);
+        return 0xFFFFFFFFu;
+    }
+    if (!write) {
+        for (int i = 0; i < n; i++) {
+            MEM_W8(addr + (u32)i, buf[i]);
+        }
+    }
+    f->pos += (u32)n;
+    if (f->async) {
+        card_event(c, EV_SP_IOE);
+    }
+    return (u32)n;
+}
+
+/* Fills a BIOS DIRENTRY (name[20], attr, size, next, head, system[4]) for a card file. */
+static u32 card_next(u32 dirent) {
+    char name[21];
+    u32 size;
+    int block = memcard_find(bios.search.port, bios.search.pattern, bios.search.block, name, &size);
+    if (block < 0) {
+        return 0;
+    }
+    bios.search.block = block;
+    for (u32 i = 0; i < 20; i++) {
+        MEM_W8(dirent + i, (u8)name[i]);
+    }
+    MEM_W32(dirent + 0x14, 0x50);
+    MEM_W32(dirent + 0x18, size);
+    MEM_W32(dirent + 0x1C, 0);
+    MEM_W32(dirent + 0x20, (u32)block);
+    MEM_W32(dirent + 0x24, 0);
+    return dirent;
 }
 
 static u32 file_read(u32 fd, u32 dst, u32 len) {
@@ -337,10 +437,9 @@ static void bios_a0(CPUState *c, u32 fn) {
     case 0x49: /* GPU_cw(word) */
         gpu_gp0(a0);
         break;
-    case 0xAB: /* _card_info(port) */
+    case 0xAB: /* _card_info(port): port 0x00 = slot 1, 0x10 = slot 2 */
     case 0xAC: /* _card_load(port) */
-        /* No memory card yet: report a timeout, which the game treats as "no card". */
-        bios_deliver_event(c, 0xF4000001u, 0x0100u);
+        card_event(c, memcard_present((int)(a0 >> 4) & 1) ? EV_SP_IOE : EV_SP_TIMEOUT);
         c->r[2] = 1;
         return;
     default:
@@ -417,7 +516,7 @@ static void bios_b0(CPUState *c, u32 fn) {
         bios.hook = a0;
         break;
     case 0x32: /* open(name, mode) */
-        c->r[2] = file_open(a0);
+        c->r[2] = file_open(a0, a1);
         return;
     case 0x33: /* lseek(fd, offset, whence) */
         if (a0 < FD_MAX && bios.files[a0].used) {
@@ -429,10 +528,20 @@ static void bios_b0(CPUState *c, u32 fn) {
         }
         return;
     case 0x34: /* read(fd, dst, len) */
-        c->r[2] = file_read(a0, a1, a2);
+        if (a0 < FD_MAX && bios.files[a0].used && bios.files[a0].card_port >= 0) {
+            c->r[2] = card_rw(c, &bios.files[a0], a1, a2, false);
+        } else {
+            c->r[2] = file_read(a0, a1, a2);
+        }
         return;
-    case 0x35: /* write(fd, src, len): only the TTY is writable */
-        c->r[2] = a0 <= 1 ? tty_write(a1, a2) : 0xFFFFFFFFu;
+    case 0x35: /* write(fd, src, len): the TTY or a memory card file */
+        if (a0 <= 1) {
+            c->r[2] = tty_write(a1, a2);
+        } else if (a0 < FD_MAX && bios.files[a0].used && bios.files[a0].card_port >= 0) {
+            c->r[2] = card_rw(c, &bios.files[a0], a1, a2, true);
+        } else {
+            c->r[2] = 0xFFFFFFFFu;
+        }
         return;
     case 0x36: /* close(fd) */
         if (a0 < FD_MAX) {
@@ -440,6 +549,68 @@ static void bios_b0(CPUState *c, u32 fn) {
         }
         c->r[2] = a0;
         return;
+    case 0x41: { /* format(name) */
+        char path[64];
+        const char *rest;
+        read_cstr(a0, path, sizeof path);
+        int port = card_path(path, &rest);
+        if (port >= 0 && memcard_present(port)) {
+            memcard_format(port);
+            c->r[2] = 1;
+        } else {
+            c->r[2] = 0;
+        }
+        return;
+    }
+    case 0x42: { /* firstfile(pattern, direntry) */
+        char path[64];
+        const char *pattern;
+        read_cstr(a0, path, sizeof path);
+        int port = card_path(path, &pattern);
+        if (port < 0) {
+            c->r[2] = 0;
+            return;
+        }
+        bios.search.port = port;
+        bios.search.block = 0;
+        strncpy(bios.search.pattern, *pattern ? pattern : "*", 20);
+        bios.search.pattern[20] = '\0';
+        c->r[2] = card_next(a1);
+        return;
+    }
+    case 0x43: /* nextfile(direntry) */
+        c->r[2] = card_next(a0);
+        return;
+    case 0x45: { /* erase(name) */
+        char path[64];
+        const char *name;
+        read_cstr(a0, path, sizeof path);
+        int port = card_path(path, &name);
+        c->r[2] = port >= 0 && memcard_erase(port, name) ? 1 : 0;
+        return;
+    }
+    case 0x4E:   /* _card_write(port, sector, src) */
+    case 0x4F: { /* _card_read(port, sector, dst) */
+        int port = (int)(a0 >> 4) & 1;
+        u8 frame[128];
+        bool ok;
+        if (fn == 0x4E) {
+            for (u32 i = 0; i < 128; i++) {
+                frame[i] = (u8)MEM_R8(a2 + i);
+            }
+            ok = memcard_write_frame(port, a1, frame);
+        } else {
+            ok = memcard_read_frame(port, a1, frame);
+            for (u32 i = 0; ok && i < 128; i++) {
+                MEM_W8(a2 + i, frame[i]);
+            }
+        }
+        card_event(c, ok ? EV_SP_IOE : EV_SP_TIMEOUT);
+        c->r[2] = 1;
+        return;
+    }
+    case 0x50: /* _new_card */
+        break;
     case 0x4B: /* StartCARD: also re-enables interrupts, like StartPAD */
         c->cop0[COP0_SR] |= 0x401u;
         c->r[2] = 1;

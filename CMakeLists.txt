@@ -34,6 +34,7 @@ add_library(nc_runtime STATIC
     src/port/hw/spu.c
     src/port/hw/timers.c
     src/port/log.c
+    src/port/memcard.c
     src/port/memory.c
 )
 target_include_directories(nc_runtime PUBLIC src)

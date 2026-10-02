@@ -45,7 +45,7 @@ renders 3D gameplay at full speed on the reference software renderer.
 | GPU (software, 1x) | done |
 | MDEC (FMV) | done |
 | SPU audio, XA, CD music | not started |
-| Memory card saves | not started |
+| Memory card saves | done (slot 1, standard `.mcd` image) |
 | Settings: adrenaline, modern controls, volume, upscaling | not started |
 | Save states | not started |
 | Windows / Linux builds | not yet tested |
@@ -72,6 +72,17 @@ make recomp && make build
 | Select | Backspace |
 
 Gamepad support and rebinding are planned.
+
+### Saves
+
+Memory card 1 is a standard 128 KiB `.mcd` image, the same format DuckStation and other
+emulators use, so existing saves can be copied in. It lives in the user data folder:
+
+- macOS: `~/Library/Application Support/NightmareCreatures/nightmare-port/card1.mcd`
+- Linux: `~/.local/share/NightmareCreatures/nightmare-port/card1.mcd`
+- Windows: `%APPDATA%\NightmareCreatures\nightmare-port\card1.mcd`
+
+A `card2.mcd` placed next to it is used as memory card 2.
 
 ### Crashes
 

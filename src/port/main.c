@@ -2,6 +2,7 @@
 #include "port/exe.h"
 #include "port/hw/gpu.h"
 #include "port/hw/hw.h"
+#include "port/memcard.h"
 #include "port/runtime.h"
 
 #include <SDL3/SDL.h>
@@ -216,6 +217,9 @@ int main(int argc, char **argv) {
     }
 
     bios_init();
+    char *data_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
+    memcard_init(data_dir != NULL ? data_dir : "./");
+    SDL_free(data_dir);
     nc_frame_hook = on_frame;
     last_frame_ns = SDL_GetTicksNS();
 
