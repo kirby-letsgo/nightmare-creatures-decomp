@@ -33,4 +33,32 @@ Planned additions over the original:
 
 ## Status
 
-Phase 0: tooling and extraction. See `docs/` for progress notes.
+The game boots natively through its intro movies into the main game, and the attract-mode demo
+renders 3D gameplay at full speed on the reference software renderer.
+
+| Area | State |
+|---|---|
+| Recompiler (all 7 executables, ~2,500 functions) | done |
+| BIOS HLE, interrupts, DMA, timers | done |
+| CD-ROM controller (data, XA routing, CD-DA hooks) | done |
+| GTE | done |
+| GPU (software, 1x) | done |
+| MDEC (FMV) | done |
+| SPU audio, XA, CD music | not started |
+| Memory card saves | not started |
+| Settings: adrenaline, modern controls, volume, upscaling | not started |
+| Save states | not started |
+| Windows / Linux builds | not yet tested |
+
+## Running
+
+```sh
+make recomp && make build
+./build/cmake/nightmare --disc "roms/Nightmare Creatures.chd"
+```
+
+Keyboard: arrows = d-pad, Enter = Start, Backspace = Select, X / C / Z / S = Cross / Circle /
+Square / Triangle, Q / W = L1 / R1, 1 / 2 = L2 / R2.
+
+Debugging aids: `NC_SHOT_EVERY=N` saves a screenshot every N frames to `build/shots/`, and
+`NC_TRACE_STACK=1` prints the guest (MIPS) call stack once per second.
