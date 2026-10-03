@@ -21,6 +21,7 @@ typedef struct Settings {
     int render_scale; /* 1..8 */
     TextureFilter filter;
     bool show_fps;
+    bool widescreen; /* 16:9: 3D projection squeezed by 3/4, shown stretched */
 } Settings;
 
 extern Settings settings;

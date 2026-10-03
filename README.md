@@ -111,6 +111,7 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |
 | `NC_WAV=path` | Record the audio output to a WAV file |
 | `NC_SKIP_MENU=1` | Boot straight into the game (scripted runs) |
+| `NC_DATA_DIR=dir/` | Use another folder for settings and memory cards (test runs) |
 | `NC_HEADLESS=1` | No window or audio, unpaced: fast automated runs (implies `NC_SKIP_MENU`) |
 | `NC_INPUT=file` | Scripted input timeline (`first last buttons...` per line) |
 | `NC_RAMDUMP=N`, `NC_RAMDUMP_FROM=F` | Dump RAM to `build/ram/` every N frames (from frame F) |

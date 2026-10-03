@@ -62,6 +62,8 @@ void settings_load(const char *dir) {
             settings.render_scale = clamp_int(atoi(val), 1, 8);
         } else if (strcmp(key, "texture_filter") == 0) {
             settings.filter = strcmp(val, "bilinear") == 0 ? FILTER_BILINEAR : FILTER_NEAREST;
+        } else if (strcmp(key, "widescreen") == 0) {
+            settings.widescreen = parse_bool(val);
         } else if (strcmp(key, "show_fps") == 0) {
             settings.show_fps = parse_bool(val);
         }
@@ -86,5 +88,6 @@ void settings_save(void) {
     fprintf(f, "render_scale=%d\n", settings.render_scale);
     fprintf(f, "texture_filter=%s\n", settings.filter == FILTER_BILINEAR ? "bilinear" : "nearest");
     fprintf(f, "show_fps=%s\n", settings.show_fps ? "on" : "off");
+    fprintf(f, "widescreen=%s\n", settings.widescreen ? "on" : "off");
     fclose(f);
 }

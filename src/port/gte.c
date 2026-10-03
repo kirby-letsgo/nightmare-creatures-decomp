@@ -226,6 +226,14 @@ static u32 divide(CPUState *c, u32 h, u32 sz3) {
 
 /* --- commands ----------------------------------------------------------------------------- */
 
+/* Widescreen: perspective X is scaled by 3/4 so a 4:3 frame shown at 16:9 has correct
+ * proportions (and a wider field of view). Set from settings by gte_set_widescreen(). */
+static bool widescreen;
+
+void gte_set_widescreen(bool on) {
+    widescreen = on;
+}
+
 static void rtp(CPUState *c, int n, int sf, bool lm, bool last) {
     s32 v[3];
     vertex(c, n, v);
@@ -251,7 +259,8 @@ static void rtp(CPUState *c, int n, int sf, bool lm, bool last) {
 
     push_sz(c, m[2] >> 12);
     u32 q = divide(c, (u16)C[26], D[19]);
-    s64 sx = (s64)q * ir(c, 1) + (s32)C[24];
+    s64 px = (s64)q * ir(c, 1);
+    s64 sx = (widescreen ? px * 3 / 4 : px) + (s32)C[24];
     s64 sy = (s64)q * ir(c, 2) + (s32)C[25];
     set_mac0(c, sx);
     set_mac0(c, sy);

@@ -245,5 +245,6 @@ void gte_write_data(CPUState *c, int reg, u32 value);
 u32 gte_read_ctrl(CPUState *c, int reg);
 void gte_write_ctrl(CPUState *c, int reg, u32 value);
 void gte_command(CPUState *c, u32 cmd);
+void gte_set_widescreen(bool on);
 
 #endif

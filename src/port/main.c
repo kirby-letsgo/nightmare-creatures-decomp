@@ -268,7 +268,8 @@ static void update_screen(void) {
 
 static unsigned fps_shown;
 
-/* Draws the last game frame, letterboxed to 4:3 (also used behind the pause menu). */
+/* Draws the last game frame letterboxed to 4:3, or 16:9 in widescreen mode (movies, which are
+ * 24-bit, always stay 4:3). Also used behind the pause menu. */
 static void draw_game(void) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -277,9 +278,13 @@ static void draw_game(void) {
                                                                            : SDL_SCALEMODE_NEAREST);
         int ww, wh;
         SDL_GetRenderOutputSize(renderer, &ww, &wh);
-        float scale = (float)wh / 3.0f < (float)ww / 4.0f ? (float)wh / 3.0f : (float)ww / 4.0f;
-        SDL_FRect dst = {((float)ww - scale * 4.0f) / 2.0f, ((float)wh - scale * 3.0f) / 2.0f,
-                         scale * 4.0f, scale * 3.0f};
+        GpuDisplay d;
+        gpu_display_info(&d);
+        float aw = settings.widescreen && !d.rgb24 ? 16.0f : 4.0f;
+        float ah = settings.widescreen && !d.rgb24 ? 9.0f : 3.0f;
+        float scale = (float)wh / ah < (float)ww / aw ? (float)wh / ah : (float)ww / aw;
+        SDL_FRect dst = {((float)ww - scale * aw) / 2.0f, ((float)wh - scale * ah) / 2.0f,
+                         scale * aw, scale * ah};
         SDL_RenderTexture(renderer, screen, NULL, &dst);
     }
     if (settings.show_fps) {
@@ -494,7 +499,10 @@ int main(int argc, char **argv) {
     }
 
     char *data_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
-    const char *dir = data_dir != NULL ? data_dir : "./";
+    /* NC_DATA_DIR=<dir/> overrides the user data folder (settings, memory cards): lets test
+     * runs use their own settings without touching the player's. */
+    const char *dir = SDL_getenv("NC_DATA_DIR");
+    dir = dir != NULL ? dir : (data_dir != NULL ? data_dir : "./");
     settings_load(dir);
     memcard_init(dir);
     SDL_free(data_dir);
