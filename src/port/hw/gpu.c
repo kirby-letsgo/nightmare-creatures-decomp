@@ -297,7 +297,7 @@ typedef struct TexEntry {
     u8 nregions;
     u8 regions[TEX_MAX_REGIONS];
     u32 gens[TEX_MAX_REGIONS];
-    u32 *pixels; /* (256 * factor)^2 ARGB */
+    u32 *pixels;         /* (256 * factor)^2 ARGB */
     u8 flags[256 * 256]; /* semi-transparency bit of each original texel */
     u32 last_use;
     u32 window_start; /* volatile detection */
