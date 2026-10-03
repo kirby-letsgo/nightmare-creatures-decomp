@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Nightmare Creatures
+Comment=Native PC port of Nightmare Creatures (requires your own disc image)
+Exec=nightmare
+Icon=nightmare
+Categories=Game;ActionGame;
+Terminal=false

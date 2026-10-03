@@ -1,0 +1,121 @@
+name: Build
+
+# Builds the release (interpreter-only) executable on macOS, Windows and Linux. CI has no disc
+# image, so no recompiled code is involved: the packages contain only this project's code and
+# need the player's own Nightmare Creatures (USA) CHD to run. Pushes to main also refresh the
+# rolling "latest" pre-release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            os: macos-14
+            artifact: NightmareCreatures-macos.dmg
+          - name: windows
+            os: windows-latest
+            artifact: NightmareCreatures-windows-x64.exe
+          - name: linux
+            os: ubuntu-22.04
+            artifact: NightmareCreatures-linux-x86_64.AppImage
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        shell: bash
+        run: echo "NC_VERSION=rolling-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Linux dependencies (SDL3 build)
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libdrm-dev \
+            libgbm-dev libasound2-dev libpulse-dev libdbus-1-dev libudev-dev libfuse2
+
+      - name: Configure
+        shell: bash
+        run: |
+          extra=()
+          if [ "${{ matrix.name }}" = macos ]; then extra+=(-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0); fi
+          if [ "${{ matrix.name }}" = linux ]; then extra+=(-G Ninja); fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNC_INTERPRETER_ONLY=ON \
+            -DNC_VENDOR_SDL=ON -DNC_VERSION="$NC_VERSION" "${extra[@]}"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package (macOS)
+        if: matrix.name == 'macos'
+        run: sh packaging/package_macos.sh build "$NC_VERSION" "${{ matrix.artifact }}"
+
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: cp build/Release/nightmare.exe "${{ matrix.artifact }}"
+
+      - name: Package (Linux)
+        if: matrix.name == 'linux'
+        run: sh packaging/package_linux.sh build "$PWD/${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    name: Rolling release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Replace the "latest" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          cat > notes.md <<EOF
+          Automatic build of \`${GITHUB_SHA::7}\` from \`main\`.
+
+          **You need your own disc image:** Nightmare Creatures (USA, SLUS-00582) as a \`.chd\`.
+          The start screen asks for it on first launch. No game data is included.
+
+          - **macOS** (Apple Silicon and Intel): open the \`.dmg\` and drag the app to Applications.
+            The app is not notarized: the first time, right-click it and choose **Open**.
+          - **Windows**: run the \`.exe\`. SmartScreen may warn about an unknown publisher:
+            choose **More info → Run anyway**.
+          - **Linux**: \`chmod +x\` the \`.AppImage\` and run it.
+          EOF
+          gh release create latest dist/* --prerelease --title "Latest build" \
+            --notes-file notes.md --target "$GITHUB_SHA"

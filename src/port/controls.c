@@ -32,6 +32,7 @@ enum { BTN_UP = 0x10, BTN_RIGHT = 0x20, BTN_DOWN = 0x40, BTN_LEFT = 0x80 };
 #define BTN_DIRECTIONS (BTN_UP | BTN_RIGHT | BTN_DOWN | BTN_LEFT)
 
 #define DEADZONE 0.30f
+#define NC_PI 3.14159265358979323846f
 #ifndef CAMERA_ORBIT_SIGN
 #define CAMERA_ORBIT_SIGN -1
 #endif
@@ -151,7 +152,7 @@ void nc_hook_camera_view_begin(CPUState *c) {
     float px = (float)(s32)MEM_R32(ADDR_PLAYER_X) / 256.0f;
     float pz = (float)(s32)MEM_R32(ADDR_PLAYER_Z) / 256.0f;
     float dx = (float)saved_cam_x - px, dz = (float)saved_cam_z - pz;
-    float a = (float)off * (2.0f * (float)M_PI / 4096.0f) * (float)CAMERA_ORBIT_SIGN;
+    float a = (float)off * (2.0f * NC_PI / 4096.0f) * (float)CAMERA_ORBIT_SIGN;
     float ca = cosf(a), sa = sinf(a);
     MEM_W32(ADDR_CAMERA_X, (u32)(s32)lroundf(px + dx * ca - dz * sa));
     MEM_W32(ADDR_CAMERA_Z, (u32)(s32)lroundf(pz + dx * sa + dz * ca));
@@ -200,7 +201,7 @@ void nc_hook_player_input(CPUState *c) {
 
     /* Screen up = straight ahead (camera yaw); screen left = +90 degrees (turning left). */
     float angle = atan2f(-x, -y);
-    s32 target = latched_camera + (s32)lroundf(angle * (65536.0f / (2.0f * (float)M_PI)));
+    s32 target = latched_camera + (s32)lroundf(angle * (65536.0f / (2.0f * NC_PI)));
     s32 heading = (s32)MEM_R16(ADDR_PLAYER_HEADING);
     s32 diff = wrap16(target - heading);
 

@@ -26,7 +26,7 @@ typedef enum NcModule {
 extern CPUState nc_cpu;
 
 /* Logging (stderr + nightmare.log); NC_FATAL never returns. */
-void nc_log_init(void);
+void nc_log_init(const char *path);
 void nc_log(const char *fmt, ...);
 _Noreturn void nc_fatal(const char *fmt, ...);
 #define NC_LOG(...) nc_log(__VA_ARGS__)

@@ -10,9 +10,8 @@
 #define NC_HAVE_BACKTRACE 1
 #endif
 
-/* Everything logged also goes to nightmare.log (current directory), so crashes can be reported
+/* Everything logged also goes to nightmare.log (see nc_log_init), so crashes can be reported
  * without a terminal. */
-#define LOG_PATH "nightmare.log"
 
 static FILE *log_file;
 
@@ -84,8 +83,8 @@ static void on_signal(int sig) {
     raise(sig);
 }
 
-void nc_log_init(void) {
-    log_file = fopen(LOG_PATH, "w");
+void nc_log_init(const char *path) {
+    log_file = fopen(path, "w");
     signal(SIGSEGV, on_signal);
     signal(SIGILL, on_signal);
     signal(SIGFPE, on_signal);

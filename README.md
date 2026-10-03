@@ -13,6 +13,18 @@ Planned additions over the original:
 
 **This repo contains no game data.** You need your own disc dump.
 
+## Download
+
+Ready-to-run builds for macOS (`.dmg`), Windows (`.exe`) and Linux (`.AppImage`) are on the
+[latest release](https://github.com/kirby-letsgo/nightmare-creatures-decomp/releases/tag/latest),
+rebuilt on every change. They contain only this project's code: the game itself runs from your
+own Nightmare Creatures (USA, SLUS-00582) disc image in `.chd` format, which the start screen asks
+for on first launch.
+
+Release builds run the game's code through a built-in MIPS interpreter. Development builds
+(below) instead compile the code translated from your disc (`make recomp`) into the executable,
+and are the basis for the decompilation work.
+
 ## Requirements
 
 - CMake 3.20+, a C11 compiler, SDL3
@@ -105,7 +117,8 @@ A `card2.mcd` placed next to it is used as memory card 2.
 
 ### Crashes
 
-Each run writes `nightmare.log` in the current directory. If the game crashes, that file ends
+Each run writes `nightmare.log` to the user data folder (next to the memory card; in a
+development checkout with a `roms/` folder, to the current directory). If the game crashes, that file ends
 with a backtrace in which recompiled functions appear as `<module>_<address>` (for example
 `psx2_exe_8001A304`): please include it when reporting a crash.
 

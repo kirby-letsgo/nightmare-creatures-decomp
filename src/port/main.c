@@ -20,6 +20,10 @@
 #define PSX_WIDTH 320
 #define PSX_HEIGHT 240
 
+#ifndef NC_VERSION
+#define NC_VERSION "dev"
+#endif
+
 #define DEFAULT_DISC "roms/Nightmare Creatures.chd"
 #define BOOT_EXE "cdrom:\\SLUS_005.82;1"
 #define BOOT_STACK 0x801FFF00u /* SYSTEM.CNF STACK */
@@ -532,10 +536,27 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--disc") == 0 && i + 1 < argc) {
             disc_arg = argv[++i];
+        } else if (strcmp(argv[i], "--version") == 0) {
+            printf("Nightmare Creatures PC port %s (SDL %d.%d.%d)\n", NC_VERSION,
+                   SDL_VERSIONNUM_MAJOR(SDL_GetVersion()), SDL_VERSIONNUM_MINOR(SDL_GetVersion()),
+                   SDL_VERSIONNUM_MICRO(SDL_GetVersion()));
+            return 0;
         }
     }
 
-    nc_log_init();
+    /* The log goes to the user data folder; development checkouts (with a roms/ folder) keep
+     * it in the current directory for convenience. */
+    char *pref_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
+    const char *env_dir = SDL_getenv("NC_DATA_DIR");
+    const char *dir = env_dir != NULL ? env_dir : (pref_dir != NULL ? pref_dir : "./");
+    SDL_PathInfo roms_info;
+    char log_path[1200];
+    if (SDL_GetPathInfo("roms", &roms_info) && roms_info.type == SDL_PATHTYPE_DIRECTORY) {
+        SDL_snprintf(log_path, sizeof log_path, "nightmare.log");
+    } else {
+        SDL_snprintf(log_path, sizeof log_path, "%snightmare.log", dir);
+    }
+    nc_log_init(log_path);
     headless = SDL_getenv("NC_HEADLESS") != NULL;
     if (headless) {
         /* Hidden window and no sound card: nothing to steal focus or to pace against. */
@@ -546,16 +567,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    char *data_dir = SDL_GetPrefPath("NightmareCreatures", "nightmare-port");
     /* NC_DATA_DIR=<dir/> overrides the user data folder (settings, memory cards): lets test
      * runs use their own settings without touching the player's. */
-    const char *dir = SDL_getenv("NC_DATA_DIR");
-    dir = dir != NULL ? dir : (data_dir != NULL ? data_dir : "./");
     settings_load(dir);
     memcard_init(dir);
     savestate_init(dir);
     savestate_after_load = after_state_load;
-    SDL_free(data_dir);
 
     /* A disc given on the command line wins; otherwise use the remembered one, falling back
      * to the repo's roms/ folder for development builds. */

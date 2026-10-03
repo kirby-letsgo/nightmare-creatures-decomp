@@ -5,10 +5,30 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(SDL3 REQUIRED CONFIG)
+# Release builds link everything statically (no runtime dependencies to install).
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+set(NC_VERSION "dev" CACHE STRING "Version string shown by --version and in the window")
+
+# SDL3: the system package for development; NC_VENDOR_SDL builds a pinned release statically.
+option(NC_VENDOR_SDL "Build SDL3 from source and link it statically" OFF)
+include(FetchContent)
+if(NC_VENDOR_SDL)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG 829a65d769d935c4852f8159e964312c0957260a # release-3.4.18
+    )
+    FetchContent_MakeAvailable(SDL3)
+else()
+    find_package(SDL3 REQUIRED CONFIG)
+endif()
 
 # libchdr reads the user's CHD disc image at runtime.
-include(FetchContent)
 set(INSTALL_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(CHDR_WANT_TESTS OFF CACHE BOOL "" FORCE)
@@ -106,6 +126,10 @@ set(NC_GEN_DIR ${CMAKE_SOURCE_DIR}/gen)
 file(GLOB NC_GEN_SOURCES CONFIGURE_DEPENDS ${NC_GEN_DIR}/*/*.c)
 
 add_executable(nightmare src/port/main.c)
+target_compile_definitions(nightmare PRIVATE NC_VERSION="${NC_VERSION}")
+if(WIN32)
+    set_target_properties(nightmare PROPERTIES WIN32_EXECUTABLE ON) # no console window
+endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
     add_library(nc_gen STATIC ${NC_GEN_SOURCES})
@@ -126,3 +150,7 @@ if(APPLE)
 elseif(UNIX)
     target_link_options(nightmare PRIVATE -rdynamic)
 endif()
+
+# Smoke test for CI (no disc available there): the executable starts and reports its version.
+enable_testing()
+add_test(NAME version COMMAND nightmare --version)
