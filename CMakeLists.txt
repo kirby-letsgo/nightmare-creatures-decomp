@@ -53,6 +53,7 @@ add_library(nc_runtime STATIC
     src/port/dispatch.c
     src/port/exe.c
     src/port/gte.c
+    src/port/interp.c
     src/port/hw/cdrom.c
     src/port/hw/dma.c
     src/port/hw/gpu.c
@@ -83,13 +84,30 @@ else()
                                               $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 endif()
 
-# Recompiled code is generated from the user's disc by `make recomp` into gen/.
-# It is machine-written, so warnings are silenced and optimisation is kept on even in Debug
-# builds to keep compile and run times reasonable.
+# Interpreter patch/hook table, generated from config/ (addresses only, no game data).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(NC_PATCH_TABLE ${CMAKE_BINARY_DIR}/nc_patch_table.c)
+add_custom_command(
+    OUTPUT ${NC_PATCH_TABLE}
+    COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tools/gen_patch_table.py ${NC_PATCH_TABLE}
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/gen_patch_table.py ${CMAKE_SOURCE_DIR}/config/patches.txt
+            ${CMAKE_SOURCE_DIR}/config/hooks.txt
+    COMMENT "Generating interpreter patch table"
+)
+target_sources(nc_runtime PRIVATE ${NC_PATCH_TABLE})
+
+# Recompiled code is generated from the user's disc by `make recomp` into gen/. Without it (and
+# always with NC_INTERPRETER_ONLY, as in release builds) the game code is interpreted from the
+# disc at runtime, so the executable contains no code derived from the game.
+# Recompiled code is machine-written, so warnings are silenced and optimisation is kept on even
+# in Debug builds to keep compile and run times reasonable.
+option(NC_INTERPRETER_ONLY "Do not link recompiled code from gen/ (release builds)" OFF)
 set(NC_GEN_DIR ${CMAKE_SOURCE_DIR}/gen)
 file(GLOB NC_GEN_SOURCES CONFIGURE_DEPENDS ${NC_GEN_DIR}/*/*.c)
 
-if(NC_GEN_SOURCES)
+add_executable(nightmare src/port/main.c)
+target_link_libraries(nightmare PRIVATE nc_runtime)
+if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
     add_library(nc_gen STATIC ${NC_GEN_SOURCES})
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
@@ -97,15 +115,14 @@ if(NC_GEN_SOURCES)
     else()
         target_compile_options(nc_gen PRIVATE -w -O2 -fno-strict-aliasing)
     endif()
-
-    add_executable(nightmare src/port/main.c)
-    target_link_libraries(nightmare PRIVATE nc_runtime nc_gen)
-    # Export symbols so NC_TRACE_STACK backtraces show recompiled function names.
-    if(APPLE)
-        target_link_options(nightmare PRIVATE -Wl,-export_dynamic)
-    elseif(UNIX)
-        target_link_options(nightmare PRIVATE -rdynamic)
-    endif()
+    target_link_libraries(nightmare PRIVATE nc_gen)
 else()
-    message(WARNING "gen/ is empty: run `make recomp` to build the game executable")
+    target_sources(nightmare PRIVATE src/port/no_gen.c)
+    message(STATUS "Building without recompiled code: game code is interpreted")
+endif()
+# Export symbols so NC_TRACE_STACK backtraces show recompiled function names.
+if(APPLE)
+    target_link_options(nightmare PRIVATE -Wl,-export_dynamic)
+elseif(UNIX)
+    target_link_options(nightmare PRIVATE -rdynamic)
 endif()

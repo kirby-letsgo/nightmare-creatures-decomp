@@ -34,6 +34,7 @@ _Noreturn void nc_fatal(const char *fmt, ...);
 
 /* dispatch.c */
 void nc_set_module(NcModule mod);
+NcModule nc_active_module(void);
 NcModule nc_module_from_name(const char *exe_name);
 NcFunc nc_lookup(u32 addr);
 

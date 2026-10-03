@@ -1,3 +1,4 @@
+#include "port/interp.h"
 #include "port/runtime.h"
 #include "port/savestate.h"
 
@@ -32,6 +33,10 @@ static const ModuleInfo modules[NC_MOD_COUNT] = {
 };
 
 static NcModule active = NC_MOD_NONE;
+
+NcModule nc_active_module(void) {
+    return active;
+}
 
 void nc_set_module(NcModule mod) {
     active = mod;
@@ -85,10 +90,11 @@ void nc_call(CPUState *c, u32 addr) {
         break;
     }
     NcFunc fn = nc_lookup(addr);
-    if (fn == NULL) {
-        NC_FATAL("call to unknown address 0x%08X (ra=0x%08X)", addr, c->r[31]);
+    if (fn != NULL) {
+        fn(c);
+    } else {
+        interp_call(c, addr); /* no native code for this address: interpret it */
     }
-    fn(c);
 }
 
 /* An indirect jump (jr) that is not a return: a tail call as far as the recompiler knows. */

@@ -1,6 +1,6 @@
 PYTHON := .venv/bin/python
 
-.PHONY: setup extract sigs configs split recomp build build-watch lint format clean
+.PHONY: setup extract sigs configs split recomp build build-watch build-interp lint format clean
 
 setup:
 	python3 -m venv .venv
@@ -26,6 +26,11 @@ recomp:
 build:
 	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
 	cmake --build build/cmake
+
+# Release-style build: no recompiled code, everything interpreted from the disc.
+build-interp:
+	cmake -S . -B build/cmake-interp -DCMAKE_BUILD_TYPE=Release -DNC_INTERPRETER_ONLY=ON
+	cmake --build build/cmake-interp
 
 # Debug build with memory write watchpoints (NC_WATCH=<address>); slower.
 build-watch:
