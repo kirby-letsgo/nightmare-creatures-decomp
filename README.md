@@ -1,153 +1,161 @@
 # Nightmare Creatures: PC port
 
-A native macOS / Windows / Linux port of Nightmare Creatures (PS1, NTSC-U `SLUS-005.82`).
-The game code is statically recompiled from the original executables and then gradually
-replaced with hand-decompiled C.
+A native macOS, Windows and Linux version of **Nightmare Creatures** (Kalisto, 1997), the
+PlayStation gothic action game, with the improvements it always needed: the adrenaline meter
+can be switched off, modern controls replace the tank controls if you want, and the game runs
+upscaled, in widescreen, with save states.
 
-Planned additions over the original:
-
-- Adrenaline system can be turned off
-- Modern camera-relative analog controls, as an alternative to tank controls
-- Master / music / SFX volume
-- Internal-resolution upscaling and texture filtering
-
-**This repo contains no game data.** You need your own disc dump.
+**No game data is included.** You need your own copy of the game: the USA PlayStation disc
+(SLUS-00582) as a `.chd` disc image.
 
 ## Download
 
-Ready-to-run builds for macOS (`.dmg`), Windows (`.exe`) and Linux (`.AppImage`) are on the
-[latest release](https://github.com/kirby-letsgo/nightmare-creatures-decomp/releases/tag/latest),
-rebuilt on every change. They contain only this project's code: the game itself runs from your
-own Nightmare Creatures (USA, SLUS-00582) disc image in `.chd` format, which the start screen asks
-for on first launch.
+Get the latest build for your system from the
+[**latest release**](https://github.com/kirby-letsgo/nightmare-creatures-decomp/releases/tag/latest)
+(rebuilt automatically on every change):
 
-Release builds run the game's code through a built-in MIPS interpreter. Development builds
-(below) instead compile the code translated from your disc (`make recomp`) into the executable,
-and are the basis for the decompilation work.
+| System | File | First launch |
+|---|---|---|
+| macOS 11+ (Apple Silicon and Intel) | `NightmareCreatures-macos.dmg` | Drag the app to Applications. It isn't notarized, so the first time right-click it and choose **Open**. |
+| Windows 10/11 (64-bit) | `NightmareCreatures-windows-x64.exe` | Run it. If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**. |
+| Linux (x86-64) | `NightmareCreatures-linux-x86_64.AppImage` | `chmod +x` the file, then run it. |
 
-## Requirements
+Each is a single self-contained file; nothing else needs installing.
 
-- CMake 3.20+, a C11 compiler, SDL3
-- Python 3.12+
-- `chdman` (macOS: `brew install rom-tools`; Debian/Ubuntu: `apt install mame-tools`)
+## Your disc image
 
-## Getting started
+The first time you start the game, choose your disc image on the start screen. It is checked
+against the known good dump of the USA release and remembered for next time (**Change Disc...**
+picks another).
 
-1. Put your dump at `roms/Nightmare Creatures.chd`
-   (expected CHD SHA1 `8592a07f87df446601902a137d69075dde4cf206`).
-2. Run:
-
-   ```sh
-   make setup     # Python venv with splat / spimdisasm / ruff
-   make extract   # verify the CHD and extract files to build/disc/
-   make build     # build the native executable
-   ```
-
-## Status
-
-The game boots natively through its intro movies into the main game, and the attract-mode demo
-renders 3D gameplay at full speed on the reference software renderer.
-
-| Area | State |
-|---|---|
-| Recompiler (all 7 executables, ~2,500 functions) | done |
-| BIOS HLE, interrupts, DMA, timers | done |
-| CD-ROM controller (data, XA routing, CD-DA hooks) | done |
-| GTE | done |
-| GPU (software, 1x) | done |
-| MDEC (FMV) | done |
-| SPU audio, XA, CD music, reverb | done |
-| Memory card saves | done (slot 1, standard `.mcd` image) |
-| Settings: adrenaline off, volumes, fullscreen, filtering | done |
-| Upscaling (software, full speed up to ~3x) | done |
-| Widescreen 16:9 (3D widened, HUD kept in proportion) | done |
-| Modern controls, mouse / right-stick camera | done (experimental) |
-| Save states (F5 / F9, 4 slots in the pause menu) | done |
-| Save states (F5 / F9, 4 slots in the pause menu) | done |
-| Windows / Linux builds | not yet tested |
-
-## Running
+If your dump is a `.bin`/`.cue` pair rather than a `.chd`, convert it with `chdman` (part of MAME
+tools: `brew install rom-tools` on macOS, `apt install mame-tools` on Debian/Ubuntu):
 
 ```sh
-make recomp && make build
-./build/cmake/nightmare
+chdman createcd -i "Nightmare Creatures.cue" -o "Nightmare Creatures.chd"
 ```
 
-The start screen asks for your disc image the first time (it is verified against the NTSC-U
-dump and remembered). `--disc <path>` overrides it. **Esc** (or the gamepad's Guide button)
-opens the menu in game; **F11** toggles fullscreen.
+## Features
 
-Settings are stored in `settings.ini` next to the memory card (see Saves below).
+### Gameplay
 
-### Keyboard controls
+- **Adrenaline off**: the adrenaline meter, which drains your health if you don't keep
+  fighting, can be disabled. Its gauge disappears too.
+- **Modern controls** (optional, experimental): push the stick or arrow keys in a direction and
+  the character turns to face that way on screen and walks, instead of the original tank
+  controls.
+- **Mouse / right-stick camera**: look around with the mouse or the right stick; the camera
+  swings back behind the player after a moment.
+- **Button mapping**: every PS1 button, and the save-state hotkeys, can be rebound for keyboard
+  and gamepad.
+
+### Graphics
+
+- **Upscaling**: render the 3D at up to 8× the original resolution (full speed up to about 3×
+  on a modern computer).
+- **Widescreen (16:9)**: a wider view of the world, with the HUD kept in proportion.
+- **Sharp or smooth** screen filtering, fullscreen (also **F11**), and an FPS counter.
+
+### Sound
+
+- Full original sound: effects, CD music and voiced cinematics.
+- Separate **master, music and effects** volume.
+
+### Saving
+
+- **Memory card saves** work exactly as on the console and are stored as standard `.mcd`
+  memory card images, so you can copy saves to and from emulators such as DuckStation.
+- **Save states**: save anywhere in a level and come back to that exact moment.
+
+## Controls
+
+### Keyboard
 
 | PS1 button | Key |
 |---|---|
 | D-pad | Arrow keys |
-| Cross | X |
-| Circle | C |
-| Square | Z |
-| Triangle | S |
+| Cross / Circle / Square / Triangle | X / C / Z / S |
 | L1 / R1 | Q / W |
 | L2 / R2 | 1 / 2 |
-| Start | Enter |
-| Select | Backspace |
+| Start / Select | Enter / Backspace |
 
-Gamepads work out of the box (Xbox/PlayStation/Switch layouts via SDL): face buttons map by
-position (south = Cross, east = Circle, west = Square, north = Triangle), the left stick acts as
-the d-pad. Everything above is the default: **Settings > Button mapping** rebinds any PS1 button
-for keyboard and gamepad (Esc, F5, F9 and F11 are reserved).
+### Gamepad
 
-### Save states
+Xbox, PlayStation and Switch controllers work out of the box. Buttons map by position (bottom
+= Cross, right = Circle, left = Square, top = Triangle), and the left stick works as the d-pad.
 
-**Cmd+S** (Ctrl+S on Windows/Linux) or **F5** quick-saves and **Cmd+R** (Ctrl+R) or **F9** quick-loads (slot 1).
-The Cmd/Ctrl shortcuts can be changed, and gamepad buttons assigned (e.g. the stick clicks), in
-**Settings > Button mapping**; the pause menu (Esc) has four slots. States
-are taken at a fixed point in the game's level loop, so a request made elsewhere (in a movie or
-menu) is carried out at the next moment of gameplay. They are stored in a `states/` folder next to
-the memory card.
+### Other keys
 
-### Saves
-
-Memory card 1 is a standard 128 KiB `.mcd` image, the same format DuckStation and other
-emulators use, so existing saves can be copied in. It lives in the user data folder:
-
-- macOS: `~/Library/Application Support/NightmareCreatures/nightmare-port/card1.mcd`
-- Linux: `~/.local/share/NightmareCreatures/nightmare-port/card1.mcd`
-- Windows: `%APPDATA%\NightmareCreatures\nightmare-port\card1.mcd`
-
-A `card2.mcd` placed next to it is used as memory card 2.
-
-### Crashes
-
-Each run writes `nightmare.log` to the user data folder (next to the memory card; in a
-development checkout with a `roms/` folder, to the current directory). If the game crashes, that file ends
-with a backtrace in which recompiled functions appear as `<module>_<address>` (for example
-`psx2_exe_8001A304`): please include it when reporting a crash.
-
-### Debugging aids (environment variables)
-
-| Variable | Effect |
+| Key | Action |
 |---|---|
-| `NC_SHOT_EVERY=N` | Save a screenshot every N frames to `build/shots/` |
-| `NC_TRACE_STACK=1` | Print the guest (MIPS) call stack once per second |
-| `NC_PROFILE=1` | Sample the running guest function at each VBlank; print the top ones every 10 s |
-| `NC_FPS=1` | Log the game's frame rate and the VBlank rate once per second |
-| `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |
-| `NC_WAV=path` | Record the audio output to a WAV file |
-| `NC_SKIP_MENU=1` | Boot straight into the game (scripted runs) |
-| `NC_WS_TINT=1` | Widescreen: draw primitives classified as 2D (HUD/menus) in red |
-| `NC_DATA_DIR=dir/` | Use another folder for settings and memory cards (test runs) |
-| `NC_HEADLESS=1` | No window or audio, unpaced: fast automated runs (implies `NC_SKIP_MENU`) |
-| `NC_INPUT=file` | Scripted input timeline (`first last buttons...` per line) |
-| `NC_STATE_TEST=S,L,D` | Save at VBlank S, load at L, dump RAM at D on both passes (determinism check) |
-| `NC_CAM_TEST=F` | Hold a 90-degree free-look offset from VBlank F (camera testing) |
-| `NC_RAMDUMP=N`, `NC_RAMDUMP_FROM=F` | Dump RAM to `build/ram/` every N frames (from frame F) |
-| `NC_MENU_SHOT=1` / `settings` | Save a screenshot of the start screen / settings page |
+| **Esc** (gamepad: Guide / PS button) | Menu: resume, save states, settings, quit |
+| **Cmd+S** (Windows/Linux: Ctrl+S) or **F5** | Quick save (slot 1) |
+| **Cmd+R** (Windows/Linux: Ctrl+R) or **F9** | Quick load (slot 1) |
+| **F11** | Fullscreen |
+
+All of these except Esc and F11 can be changed in **Settings → Button mapping**.
+
+## Settings
+
+Open **Settings** from the start screen or the in-game menu (Esc). Changes apply immediately.
+
+| Section | Options |
+|---|---|
+| Gameplay | Adrenaline system on/off; tank or modern controls; mouse / right-stick camera and its sensitivity; button mapping |
+| Audio | Master, music and effects volume |
+| Video | Fullscreen; widescreen; sharp or smooth filtering; internal resolution (1×–8×); FPS counter |
+
+## Save states
+
+- **Quick save / quick load** use slot 1 (Cmd+S / Cmd+R, or F5 / F9).
+- The **in-game menu** (Esc) has four slots, each showing whether it's empty, with Save and Load
+  buttons.
+- States can be taken during gameplay in a level (including the game's own pause screen). If you
+  press save during a movie or loading screen, the message *"Waiting for gameplay to
+  save/load..."* appears and the state is taken as soon as you're back in control.
+
+## Where your files are
+
+Settings, memory cards, save states and the log live in one folder:
+
+| System | Folder |
+|---|---|
+| macOS | `~/Library/Application Support/NightmareCreatures/nightmare-port/` |
+| Windows | `%APPDATA%\NightmareCreatures\nightmare-port\` |
+| Linux | `~/.local/share/NightmareCreatures/nightmare-port/` |
+
+| File | Contents |
+|---|---|
+| `settings.ini` | All settings, including the disc location and button mapping |
+| `card1.mcd` | Memory card 1 (put a `card2.mcd` beside it to use memory card 2) |
+| `states/slot1.state` … | Save states |
+| `nightmare.log` | Log of the last run |
+
+## Reporting problems
+
+If the game crashes or misbehaves, please open an issue with:
+
+- your system (macOS / Windows / Linux, and the version),
+- what you were doing when it happened,
+- the `nightmare.log` file from the folder above. After a crash it ends with a backtrace that
+  shows where it happened.
+
+## How it works
+
+The game's original code runs from your disc image inside a small built-in emulator of the
+PlayStation's processor, while graphics, sound, input and saving are reimplemented natively, so
+the release builds contain only this project's own code. Alongside that, the project translates
+the game's code into C and is gradually turning it into readable source. See
+[DEVELOPMENT.md](DEVELOPMENT.md) for building from source and how everything fits together.
 
 ## Credits
 
+- **Nightmare Creatures** © 1997 Kalisto Entertainment, published by Activision. This project is
+  not affiliated with them; it contains no game data and requires your own copy of the game.
 - Adrenaline-off patch addresses: SCD (romhacking.net), packaged by
   [lightbulb-sun/nightmare-adrenaline](https://github.com/lightbulb-sun/nightmare-adrenaline) (MIT).
-- Hardware documentation: psx-spx (Martin Korth / no$psx); Psy-Q signatures:
+- PlayStation hardware documentation: psx-spx by Martin Korth (no$psx).
+- Psy-Q library signatures:
   [lab313ru/psx_psyq_signatures](https://github.com/lab313ru/psx_psyq_signatures).
+- Built with [SDL3](https://libsdl.org), [Dear ImGui](https://github.com/ocornut/imgui) and
+  [libchdr](https://github.com/rtissera/libchdr).
