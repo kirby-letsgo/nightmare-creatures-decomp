@@ -1,6 +1,7 @@
 #include "port/hw/hw.h"
 #include "port/hw/widescreen.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -190,4 +191,15 @@ void nc_mtc0(CPUState *c, int reg, u32 value) {
 void nc_rfe(CPUState *c) {
     u32 sr = c->cop0[COP0_SR];
     c->cop0[COP0_SR] = (sr & ~0x0Fu) | ((sr >> 2) & 0x0Fu);
+}
+
+void cpu_serialize(StateIO *io) {
+    extern unsigned nc_frame_count;
+    STATE_VAR(io, nc_cpu);
+    state_io(io, nc_ram, sizeof nc_ram);
+    state_io(io, nc_scratch, sizeof nc_scratch);
+    STATE_VAR(io, nc_cycles);
+    STATE_VAR(io, nc_frame_count);
+    STATE_VAR(io, next_vblank);
+    STATE_VAR(io, budget_start);
 }

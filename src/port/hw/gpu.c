@@ -7,6 +7,7 @@
  * scale x scale block, and readbacks / 24-bit (movie) display sample the block's top-left pixel.
  * Reference: psx-spx "GPU". */
 #include "port/hw/gpu.h"
+#include "port/savestate.h"
 
 #include "port/hw/hw.h"
 #include "port/hw/widescreen.h"
@@ -932,4 +933,22 @@ void gpu_display_rgba(u32 *dst, const GpuDisplay *d) {
             dst[y * ow + x] = 0xFF000000u | b << 16 | gg << 8 | r;
         }
     }
+}
+
+/* VRAM is stored at the internal resolution it was saved with; loading switches to that scale
+ * (the caller then re-applies the user's setting, which resamples). */
+void gpu_serialize(StateIO *io) {
+    ensure_vram();
+    u16 *vram = g.vram;
+    int scale = g.scale;
+    STATE_VAR(io, g);
+    if (io->loading) {
+        int saved_scale = g.scale;
+        g.vram = vram;
+        g.scale = scale;
+        gpu_set_scale(saved_scale);
+    } else {
+        g.vram = vram;
+    }
+    state_io(io, g.vram, (size_t)VRAM_W * VRAM_H * (size_t)(g.scale * g.scale) * sizeof(u16));
 }

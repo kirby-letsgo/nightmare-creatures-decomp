@@ -50,8 +50,8 @@ renders 3D gameplay at full speed on the reference software renderer.
 | Upscaling (software, full speed up to ~3x) | done |
 | Widescreen 16:9 (3D widened, HUD kept in proportion) | done |
 | Modern controls, mouse / right-stick camera | done (experimental) |
-| Save states | not started |
-| Save states | not started |
+| Save states (F5 / F9, 4 slots in the pause menu) | done |
+| Save states (F5 / F9, 4 slots in the pause menu) | done |
 | Windows / Linux builds | not yet tested |
 
 ## Running
@@ -85,6 +85,13 @@ Gamepads work out of the box (Xbox/PlayStation/Switch layouts via SDL): face but
 position (south = Cross, east = Circle, west = Square, north = Triangle), the left stick acts as
 the d-pad. Rebinding is planned.
 
+### Save states
+
+**F5** quick-saves and **F9** quick-loads (slot 1); the pause menu (Esc) has four slots. States
+are taken at a fixed point in the game's level loop, so a request made elsewhere (in a movie or
+menu) is carried out at the next moment of gameplay. They are stored in a `states/` folder next to
+the memory card.
+
 ### Saves
 
 Memory card 1 is a standard 128 KiB `.mcd` image, the same format DuckStation and other
@@ -117,6 +124,7 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_DATA_DIR=dir/` | Use another folder for settings and memory cards (test runs) |
 | `NC_HEADLESS=1` | No window or audio, unpaced: fast automated runs (implies `NC_SKIP_MENU`) |
 | `NC_INPUT=file` | Scripted input timeline (`first last buttons...` per line) |
+| `NC_STATE_TEST=S,L,D` | Save at VBlank S, load at L, dump RAM at D on both passes (determinism check) |
 | `NC_CAM_TEST=F` | Hold a 90-degree free-look offset from VBlank F (camera testing) |
 | `NC_RAMDUMP=N`, `NC_RAMDUMP_FROM=F` | Dump RAM to `build/ram/` every N frames (from frame F) |
 | `NC_MENU_SHOT=1` / `settings` | Save a screenshot of the start screen / settings page |

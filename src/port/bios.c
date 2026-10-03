@@ -1,5 +1,6 @@
 /* High-level emulation of the PS1 BIOS functions the game uses (A0/B0/C0 tables). */
 #include "port/bios.h"
+#include "port/savestate.h"
 
 #include "port/disc.h"
 #include "port/exe.h"
@@ -660,4 +661,12 @@ void bios_call(CPUState *c, u32 table) {
         bios_c0(c, fn);
         break;
     }
+}
+
+/* Save states are taken outside the exception path, so only the BIOS state record matters. */
+void bios_serialize(StateIO *io) {
+    if (in_exception) {
+        NC_FATAL("save state requested during an interrupt");
+    }
+    STATE_VAR(io, bios);
 }

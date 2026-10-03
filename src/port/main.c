@@ -6,6 +6,7 @@
 #include "port/memcard.h"
 #include "port/platform.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 #include "port/settings.h"
 #include "port/ui/menu.h"
 
@@ -266,6 +267,25 @@ static void update_screen(void) {
     save_debug_shot(&d);
 }
 
+/* Small overlay text in the top-left corner, on line `line`. SDL's debug font is 8x8 pixels:
+ * scale it with the output so it stays readable (about 1/40 of the screen height), with a dark
+ * backing for contrast. */
+static void draw_overlay_text(const char *text, int line) {
+    int ww, wh;
+    SDL_GetRenderOutputSize(renderer, &ww, &wh);
+    float scale = (float)wh / 320.0f;
+    scale = scale < 1.0f ? 1.0f : scale;
+    float y = 4.0f + (float)line * 20.0f;
+    SDL_SetRenderScale(renderer, scale, scale);
+    SDL_FRect bg = {4, y, 8.0f * (float)SDL_strlen(text) + 8, 16};
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+    SDL_RenderFillRect(renderer, &bg);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDebugText(renderer, 8, y + 4, text);
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+}
+
 static unsigned fps_shown;
 
 /* Draws the last game frame letterboxed to 4:3, or 16:9 in widescreen mode when the frame
@@ -295,22 +315,13 @@ static void draw_game(void) {
         SDL_RenderTexture(renderer, screen, NULL, &dst);
     }
     if (settings.show_fps) {
-        /* SDL's debug font is 8x8 pixels: scale it with the output so it stays readable
-         * (about 1/40 of the screen height), with a dark backing for contrast. */
         char text[32];
         SDL_snprintf(text, sizeof text, "%u fps", fps_shown);
-        int ww, wh;
-        SDL_GetRenderOutputSize(renderer, &ww, &wh);
-        float scale = (float)wh / 320.0f;
-        scale = scale < 1.0f ? 1.0f : scale;
-        SDL_SetRenderScale(renderer, scale, scale);
-        SDL_FRect bg = {4, 4, 8.0f * (float)SDL_strlen(text) + 8, 16};
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
-        SDL_RenderFillRect(renderer, &bg);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(renderer, 8, 8, text);
-        SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+        draw_overlay_text(text, 0);
+    }
+    const char *state_msg = savestate_message();
+    if (state_msg != NULL) {
+        draw_overlay_text(state_msg, settings.show_fps ? 1 : 0);
     }
 }
 
@@ -421,6 +432,15 @@ static void pace(void) {
 
 /* --- frame loop --------------------------------------------------------------------------- */
 
+/* After a save state is loaded: re-apply the user's resolution (the state carries its own) and
+ * drop audio queued from before the load. */
+static void after_state_load(void) {
+    gpu_set_scale(settings.render_scale);
+    if (audio != NULL) {
+        SDL_ClearAudioStream(audio);
+    }
+}
+
 static void quit_game(void) {
     settings_save();
     exit(0);
@@ -452,6 +472,10 @@ static void on_frame(void) {
         case SDL_EVENT_KEY_DOWN:
             if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
                 menu_requested = true;
+            } else if (event.key.scancode == SDL_SCANCODE_F5 && !event.key.repeat) {
+                savestate_request_save(0);
+            } else if (event.key.scancode == SDL_SCANCODE_F9 && !event.key.repeat) {
+                savestate_request_load(0);
             } else if (event.key.scancode == SDL_SCANCODE_F11 && !event.key.repeat) {
                 settings.fullscreen = !settings.fullscreen;
                 menu_apply_settings();
@@ -512,6 +536,8 @@ int main(int argc, char **argv) {
     dir = dir != NULL ? dir : (data_dir != NULL ? data_dir : "./");
     settings_load(dir);
     memcard_init(dir);
+    savestate_init(dir);
+    savestate_after_load = after_state_load;
     SDL_free(data_dir);
 
     /* A disc given on the command line wins; otherwise use the remembered one, falling back

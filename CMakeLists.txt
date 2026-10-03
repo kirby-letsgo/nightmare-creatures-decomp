@@ -12,11 +12,13 @@ include(FetchContent)
 set(INSTALL_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(CHDR_WANT_TESTS OFF CACHE BOOL "" FORCE)
+set(MINIZ_DEFLATE_APIS ON CACHE BOOL "" FORCE) # save states are deflate-compressed
 FetchContent_Declare(libchdr
     GIT_REPOSITORY https://github.com/rtissera/libchdr.git
     GIT_TAG 607694ca0812edfc9cc2030c64634fc2393668de
 )
 FetchContent_MakeAvailable(libchdr)
+target_include_directories(miniz PUBLIC ${libchdr_SOURCE_DIR}/deps/miniz-3.1.2)
 
 # Dear ImGui for the start screen and in-game menu (built from source with its SDL3 backends).
 FetchContent_Declare(imgui
@@ -64,11 +66,12 @@ add_library(nc_runtime STATIC
     src/port/memory.c
     src/port/patches.c
     src/port/platform.c
+    src/port/savestate.c
     src/port/settings.c
     src/port/ui/menu.cpp
 )
 target_include_directories(nc_runtime PUBLIC src)
-target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static imgui)
+target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static imgui miniz)
 if(APPLE)
     target_link_libraries(nc_runtime PUBLIC objc) # platform.c: App Nap opt-out
 endif()

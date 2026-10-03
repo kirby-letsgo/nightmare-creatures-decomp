@@ -13,6 +13,7 @@ extern "C" {
 #include "port/hw/widescreen.h"
 #include "port/patches.h"
 #include "port/recomp.h"
+#include "port/savestate.h"
 #include "port/settings.h"
 }
 
@@ -381,6 +382,36 @@ extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
                     ImGui::EndFrame();
                     return MENU_RESUME;
                 }
+                /* Save states: the request runs at the next safe point after resuming. */
+                static int slot = 0;
+                ImGui::SeparatorText("Save state");
+                for (int i = 0; i < SAVESTATE_SLOTS - 1; i++) {
+                    char label[32];
+                    std::snprintf(label, sizeof label, savestate_exists(i) ? "%d" : "%d (empty)",
+                                  i + 1);
+                    if (i > 0) {
+                        ImGui::SameLine();
+                    }
+                    ImGui::RadioButton(label, &slot, i);
+                }
+                float half =
+                    (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
+                bool save = ImGui::Button("Save", ImVec2(half, 0));
+                ImGui::SameLine();
+                ImGui::BeginDisabled(!savestate_exists(slot));
+                bool load = ImGui::Button("Load", ImVec2(half, 0));
+                ImGui::EndDisabled();
+                if (save || load) {
+                    if (save) {
+                        savestate_request_save(slot);
+                    } else {
+                        savestate_request_load(slot);
+                    }
+                    ImGui::End();
+                    ImGui::EndFrame();
+                    return MENU_RESUME;
+                }
+                ImGui::Spacing();
                 if (wide_button("Settings")) {
                     page = Page::Settings;
                 }

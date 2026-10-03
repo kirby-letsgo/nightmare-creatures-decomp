@@ -1,4 +1,5 @@
 #include "port/hw/hw.h"
+#include "port/savestate.h"
 
 static u32 i_stat, i_mask;
 
@@ -20,4 +21,9 @@ void irq_write(u32 reg, u32 value) {
     } else {
         i_mask = value & 0x7FFu;
     }
+}
+
+void irq_serialize(StateIO *io) {
+    STATE_VAR(io, i_stat);
+    STATE_VAR(io, i_mask);
 }

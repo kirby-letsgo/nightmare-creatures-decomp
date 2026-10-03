@@ -12,3 +12,8 @@ psx2_exe 0x80044780 player_input
 # start of the next camera update (func_8002B348) so the game's camera-follow logic never sees it.
 psx2_exe 0x80049838 camera_view_begin
 psx2_exe 0x8002B348 camera_update_begin
+
+# Save states: safe point in the level loop (func_8006E38C), once per game frame, where the
+# native call stack always has the same shape.
+psx2_exe 0x8006E7EC savestate_point  # playing
+psx2_exe 0x8006E50C savestate_point  # paused

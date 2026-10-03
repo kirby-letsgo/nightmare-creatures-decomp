@@ -160,6 +160,10 @@ void nc_hook_camera_view_begin(CPUState *c) {
 
 void nc_hook_camera_update_begin(CPUState *c) {
     (void)c;
+    controls_unpatch_camera();
+}
+
+void controls_unpatch_camera(void) {
     if (!view_patched) {
         return;
     }
@@ -210,4 +214,9 @@ void nc_hook_player_input(CPUState *c) {
         }
     }
     c->r[2] = buttons;
+}
+
+void controls_reset(void) {
+    controls_unpatch_camera();
+    camera_offset = 0.0f;
 }

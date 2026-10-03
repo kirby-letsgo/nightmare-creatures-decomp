@@ -1,4 +1,5 @@
 #include "port/hw/hw.h"
+#include "port/savestate.h"
 
 /* Root counters 0-2. Only the free-running/system-clock behaviour the game needs is modelled:
  * counter 0 = system clock (dot clock approximated), 1 = hblank, 2 = system clock (/8 option). */
@@ -69,4 +70,8 @@ void timers_write(u32 reg, u32 value, u64 cycles) {
     default:
         break;
     }
+}
+
+void timers_serialize(StateIO *io) {
+    STATE_VAR(io, timers);
 }

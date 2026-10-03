@@ -4,6 +4,7 @@
 #include "port/disc.h"
 #include "port/hw/hw.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 
 #include <string.h>
 
@@ -446,4 +447,9 @@ u32 cdrom_dma_read(u8 *dst, u32 bytes) {
         dst[n++] = cd.data_pos < cd.data_len ? cd.data[cd.data_pos++] : 0;
     }
     return n;
+}
+
+void cdrom_serialize(StateIO *io) {
+    STATE_VAR(io, cd);
+    STATE_VAR(io, now);
 }

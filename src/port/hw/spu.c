@@ -4,6 +4,7 @@
  * Interpolation uses a cubic filter instead of the hardware's Gaussian table, and reverb
  * resamples to 22.05 kHz by averaging/holding instead of the hardware's FIR filters. */
 #include "port/hw/spu.h"
+#include "port/savestate.h"
 
 #include "port/hw/hw.h"
 #include "port/runtime.h"
@@ -646,4 +647,8 @@ void spu_render(s16 *out, int frames) {
         out[f * 2] = clamp16(l * gain_master / 256);
         out[f * 2 + 1] = clamp16(r * gain_master / 256);
     }
+}
+
+void spu_serialize(StateIO *io) {
+    STATE_VAR(io, spu);
 }

@@ -1,5 +1,6 @@
 #include "port/hw/hw.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 
 /* DMA channels: 0 MDECin, 1 MDECout, 2 GPU, 3 CDROM, 4 SPU, 5 PIO, 6 OTC.
  * Transfers complete instantly when started. */
@@ -155,4 +156,10 @@ void dma_write(u32 reg, u32 value) {
     default:
         break;
     }
+}
+
+void dma_serialize(StateIO *io) {
+    STATE_VAR(io, ch);
+    STATE_VAR(io, dpcr);
+    STATE_VAR(io, dicr);
 }

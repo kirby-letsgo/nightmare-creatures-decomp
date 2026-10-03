@@ -1,4 +1,5 @@
 #include "port/runtime.h"
+#include "port/savestate.h"
 
 #include <string.h>
 #include <strings.h>
@@ -93,4 +94,8 @@ void nc_call(CPUState *c, u32 addr) {
 /* An indirect jump (jr) that is not a return: a tail call as far as the recompiler knows. */
 void nc_jump(CPUState *c, u32 addr) {
     nc_call(c, addr);
+}
+
+void dispatch_serialize(StateIO *io) {
+    STATE_VAR(io, active);
 }

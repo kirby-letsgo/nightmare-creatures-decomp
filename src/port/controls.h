@@ -7,5 +7,9 @@
 void nc_hook_player_input(CPUState *c);
 void nc_hook_camera_view_begin(CPUState *c);
 void nc_hook_camera_update_begin(CPUState *c);
+/* Puts back the game's own camera values if free-look has modified them (before save states). */
+void controls_unpatch_camera(void);
+/* Drops any free-look offset (after a save state is loaded). */
+void controls_reset(void);
 
 #endif

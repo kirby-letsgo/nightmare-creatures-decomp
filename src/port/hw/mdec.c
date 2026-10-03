@@ -3,6 +3,7 @@
  * Reference: psx-spx "Macroblock Decoder (MDEC)". Commands complete instantly. */
 #include "port/hw/hw.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 
 #include <string.h>
 
@@ -273,4 +274,8 @@ void mdec_dma_read(u8 *dst, u32 bytes) {
     for (u32 i = 0; i < bytes; i++) {
         dst[i] = md.out_pos < md.out_len ? md.out[md.out_pos++] : 0;
     }
+}
+
+void mdec_serialize(StateIO *io) {
+    STATE_VAR(io, md);
 }
