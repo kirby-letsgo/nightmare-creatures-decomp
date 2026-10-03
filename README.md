@@ -49,7 +49,8 @@ renders 3D gameplay at full speed on the reference software renderer.
 | Settings: adrenaline off, volumes, fullscreen, filtering | done |
 | Upscaling (software, full speed up to ~3x) | done |
 | Widescreen 16:9 (3D widened, HUD kept in proportion) | done |
-| Modern controls, save states | in progress |
+| Modern controls, mouse / right-stick camera | done (experimental) |
+| Save states | not started |
 | Save states | not started |
 | Windows / Linux builds | not yet tested |
 
@@ -116,6 +117,7 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_DATA_DIR=dir/` | Use another folder for settings and memory cards (test runs) |
 | `NC_HEADLESS=1` | No window or audio, unpaced: fast automated runs (implies `NC_SKIP_MENU`) |
 | `NC_INPUT=file` | Scripted input timeline (`first last buttons...` per line) |
+| `NC_CAM_TEST=F` | Hold a 90-degree free-look offset from VBlank F (camera testing) |
 | `NC_RAMDUMP=N`, `NC_RAMDUMP_FROM=F` | Dump RAM to `build/ram/` every N frames (from frame F) |
 | `NC_MENU_SHOT=1` / `settings` | Save a screenshot of the start screen / settings page |
 

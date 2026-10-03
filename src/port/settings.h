@@ -12,6 +12,8 @@ typedef struct Settings {
     /* gameplay */
     bool adrenaline;
     ControlScheme controls;
+    bool mouse_camera;     /* mouse / right stick rotates the camera */
+    int mouse_sensitivity; /* 1..100 */
     /* audio, 0..100 */
     int volume_master;
     int volume_music;

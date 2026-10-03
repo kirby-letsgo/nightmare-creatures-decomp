@@ -177,6 +177,14 @@ void settings_page(bool *back) {
     ImGui::SameLine();
     ImGui::TextDisabled("(experimental)");
     settings.controls = static_cast<ControlScheme>(controls);
+    changed |= ImGui::Checkbox("Mouse / right stick camera", &settings.mouse_camera);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Look around with the mouse or the right stick. The camera returns\n"
+                          "behind the player after a moment. Esc releases the mouse.");
+    }
+    if (settings.mouse_camera) {
+        changed |= ImGui::SliderInt("Mouse sensitivity", &settings.mouse_sensitivity, 1, 100);
+    }
 
     ImGui::SeparatorText("Audio");
     changed |= ImGui::SliderInt("Master volume", &settings.volume_master, 0, 100, "%d%%");
@@ -272,7 +280,13 @@ extern "C" void menu_apply_settings(void) {
     }
 }
 
+/* Menus need the cursor: leave free-look's relative mouse mode. */
+static void release_mouse() {
+    SDL_SetWindowRelativeMouseMode(g_window, false);
+}
+
 extern "C" MenuResult menu_run_start(void) {
+    release_mouse();
     const char *shot = SDL_getenv("NC_MENU_SHOT");
     Page page = shot != nullptr && std::strcmp(shot, "settings") == 0 ? Page::Settings : Page::Main;
     DiscCheck check = disc_check(settings.disc_path);
@@ -342,6 +356,7 @@ extern "C" MenuResult menu_run_start(void) {
 }
 
 extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
+    release_mouse();
     Page page = Page::Main;
     bool first = true;
     for (;;) {

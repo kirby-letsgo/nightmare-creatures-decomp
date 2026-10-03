@@ -6,3 +6,9 @@
 # Player control (func_80044724): $v0 holds the buttons just read by the input routine. Modern
 # controls rewrite them here, so only player movement is affected (menus read input elsewhere).
 psx2_exe 0x80044780 player_input
+
+# Camera (free-look): func_80049838 copies the camera position globals into the camera record
+# that rendering uses later in the frame; the orbit offset is applied there. It is undone at the
+# start of the next camera update (func_8002B348) so the game's camera-follow logic never sees it.
+psx2_exe 0x80049838 camera_view_begin
+psx2_exe 0x8002B348 camera_update_begin
