@@ -39,6 +39,7 @@ NcFunc nc_lookup(u32 addr);
 
 /* cpu.c: total emulated cycles, and a hook run once per emulated frame (VBlank). */
 extern u64 nc_cycles;
+extern unsigned nc_frame_count; /* VBlanks since boot */
 extern void (*nc_frame_hook)(void);
 
 #endif

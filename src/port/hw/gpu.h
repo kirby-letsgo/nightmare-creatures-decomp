@@ -22,5 +22,7 @@ void gpu_set_scale(int scale);
 int gpu_scale(void);
 /* Number of display-start changes so far (one per game frame when double buffering). */
 u32 gpu_flip_count(void);
+/* Widescreen: whether the presented frame contains GTE-projected 3D polygons. */
+bool gpu_frame_has_3d(void);
 
 #endif

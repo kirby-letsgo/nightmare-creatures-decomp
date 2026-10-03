@@ -52,6 +52,10 @@ typedef struct GpuState {
     bool odd_line;
     u32 frame;
     u32 flips; /* display start changes = game frames presented */
+    /* Widescreen: does the presented frame contain 3D? Still pictures and movies do not. */
+    u32 polys3d_since_flip;
+    u32 vblanks_since_flip;
+    bool frame_has_3d;
 } GpuState;
 
 static GpuState g = {.disp_off = true};
@@ -442,6 +446,9 @@ static void gp0_polygon(void) {
         }
     }
     bool flat2d = ws_fix_polygon(raw_x, raw_y, nverts);
+    if (ws_enabled() && !flat2d) {
+        g.polys3d_since_flip++;
+    }
     for (int n = 0; n < nverts; n++) {
         v[n].x = raw_x[n] + g.off_x;
         if (flat2d && ws_tint()) {
@@ -792,6 +799,9 @@ void gpu_gp1(u32 word) {
         break;
     case 0x05:
         g.flips++;
+        g.frame_has_3d = g.polys3d_since_flip > 0;
+        g.polys3d_since_flip = 0;
+        g.vblanks_since_flip = 0;
         g.disp_x = word & 0x3FE;
         g.disp_y = (word >> 10) & 0x1FF;
         break;
@@ -849,7 +859,15 @@ u32 gpu_status(void) {
 
 void gpu_vblank(void) {
     g.frame++;
+    /* A single-buffered still picture never flips: decide from what was drawn. */
+    if (++g.vblanks_since_flip > 15) {
+        g.frame_has_3d = g.polys3d_since_flip > 0;
+    }
     g.odd_line = !g.odd_line;
+}
+
+bool gpu_frame_has_3d(void) {
+    return g.frame_has_3d;
 }
 
 u32 gpu_flip_count(void) {

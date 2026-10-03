@@ -268,8 +268,9 @@ static void update_screen(void) {
 
 static unsigned fps_shown;
 
-/* Draws the last game frame letterboxed to 4:3, or 16:9 in widescreen mode (movies, which are
- * 24-bit, always stay 4:3). Also used behind the pause menu. */
+/* Draws the last game frame letterboxed to 4:3, or 16:9 in widescreen mode when the frame
+ * contains 3D (still pictures such as level intro cards, and movies, stay 4:3). Also used
+ * behind the pause menu. */
 static void draw_game(void) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -280,8 +281,14 @@ static void draw_game(void) {
         SDL_GetRenderOutputSize(renderer, &ww, &wh);
         GpuDisplay d;
         gpu_display_info(&d);
-        float aw = settings.widescreen && !d.rgb24 ? 16.0f : 4.0f;
-        float ah = settings.widescreen && !d.rgb24 ? 9.0f : 3.0f;
+        bool wide = settings.widescreen && !d.rgb24 && gpu_frame_has_3d();
+        static int last_wide = -1;
+        if (wide != last_wide) {
+            NC_LOG("display: %s (vblank %u)", wide ? "16:9" : "4:3", nc_frame_count);
+            last_wide = wide;
+        }
+        float aw = wide ? 16.0f : 4.0f;
+        float ah = wide ? 9.0f : 3.0f;
         float scale = (float)wh / ah < (float)ww / aw ? (float)wh / ah : (float)ww / aw;
         SDL_FRect dst = {((float)ww - scale * aw) / 2.0f, ((float)wh - scale * ah) / 2.0f,
                          scale * aw, scale * ah};
