@@ -37,6 +37,11 @@ target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/
 target_link_libraries(imgui PUBLIC SDL3::SDL3)
 target_compile_features(imgui PUBLIC cxx_std_17)
 
+option(NC_WATCHPOINTS "Debug build: report guest stores to NC_WATCH=<address>" OFF)
+if(NC_WATCHPOINTS)
+    add_compile_definitions(NC_WATCHPOINTS=1)
+endif()
+
 # Native runtime: everything except the recompiled game code.
 add_library(nc_runtime STATIC
     src/port/bios.c
@@ -56,11 +61,15 @@ add_library(nc_runtime STATIC
     src/port/memcard.c
     src/port/memory.c
     src/port/patches.c
+    src/port/platform.c
     src/port/settings.c
     src/port/ui/menu.cpp
 )
 target_include_directories(nc_runtime PUBLIC src)
 target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static imgui)
+if(APPLE)
+    target_link_libraries(nc_runtime PUBLIC objc) # platform.c: App Nap opt-out
+endif()
 
 if(MSVC)
     target_compile_options(nc_runtime PRIVATE /W4)

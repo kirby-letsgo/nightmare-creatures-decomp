@@ -488,7 +488,11 @@ class Emitter:
         targets.update(a + 4 for a in slot_targets)
 
         name = self.mod.cname(f.addr) if entry is None else self.mod.resume_name(entry)
-        out = [f"void {name}(CPUState *c) {{", f"    NC_POLL(c, {POLL_COST});"]
+        out = [
+            f"void {name}(CPUState *c) {{",
+            f"    NC_FN_ENTER(0x{f.addr:08X}u);",
+            f"    NC_POLL(c, {POLL_COST});",
+        ]
         if entry is not None:
             out.append(f"    goto L_{entry:08X};")
         k = 0

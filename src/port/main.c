@@ -4,12 +4,14 @@
 #include "port/hw/hw.h"
 #include "port/hw/spu.h"
 #include "port/memcard.h"
+#include "port/platform.h"
 #include "port/runtime.h"
 #include "port/settings.h"
 #include "port/ui/menu.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,6 +31,7 @@ static u32 *screen_pixels;
 static Uint64 last_frame_ns;
 static SDL_AudioStream *audio;
 static bool menu_requested;
+static bool headless; /* NC_HEADLESS=1: no window, no audio device, unpaced (automated runs) */
 
 /* --- input -------------------------------------------------------------------------------- */
 
@@ -115,6 +118,65 @@ static u16 read_gamepads(void) {
     return buttons;
 }
 
+/* Testing aid: NC_INPUT=file plays a scripted input timeline. Each line is
+ * "<first_frame> <last_frame> <buttons...>" with buttons from: up down left right cross circle
+ * square triangle l1 r1 l2 r2 start select. Lines starting with '#' are comments. */
+typedef struct ScriptStep {
+    unsigned first, last;
+    u16 buttons;
+} ScriptStep;
+
+static u16 input_script(void) {
+    static ScriptStep steps[256];
+    static int count = -1;
+    static unsigned frame;
+    if (count < 0) {
+        count = 0;
+        const char *path = SDL_getenv("NC_INPUT");
+        FILE *f = path ? fopen(path, "r") : NULL;
+        char line[256];
+        while (f != NULL && fgets(line, sizeof line, f) != NULL && count < 256) {
+            static const struct {
+                const char *name;
+                u16 bit;
+            } names[] = {{"up", PAD_UP},         {"down", PAD_DOWN},
+                         {"left", PAD_LEFT},     {"right", PAD_RIGHT},
+                         {"cross", PAD_CROSS},   {"circle", PAD_CIRCLE},
+                         {"square", PAD_SQUARE}, {"triangle", PAD_TRIANGLE},
+                         {"l1", PAD_L1},         {"r1", PAD_R1},
+                         {"l2", PAD_L2},         {"r2", PAD_R2},
+                         {"start", PAD_START},   {"select", PAD_SELECT}};
+            ScriptStep st = {0};
+            char *tok = strtok(line, " \t\r\n");
+            if (tok == NULL || tok[0] == '#') {
+                continue;
+            }
+            st.first = (unsigned)atoi(tok);
+            tok = strtok(NULL, " \t\r\n");
+            st.last = tok ? (unsigned)atoi(tok) : st.first;
+            while ((tok = strtok(NULL, " \t\r\n")) != NULL) {
+                for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+                    if (strcmp(tok, names[i].name) == 0) {
+                        st.buttons |= names[i].bit;
+                    }
+                }
+            }
+            steps[count++] = st;
+        }
+        if (f != NULL) {
+            fclose(f);
+        }
+    }
+    frame++;
+    u16 buttons = 0;
+    for (int i = 0; i < count; i++) {
+        if (frame >= steps[i].first && frame <= steps[i].last) {
+            buttons |= steps[i].buttons;
+        }
+    }
+    return buttons;
+}
+
 /* Testing aid: NC_PRESS_START=N taps Start for a few frames every N frames (skips movies,
  * advances menus) so later parts of the game can be reached unattended. */
 static u16 scripted_input(void) {
@@ -142,7 +204,12 @@ static void dump_ram(void) {
             SDL_CreateDirectory("build/ram");
         }
     }
-    if (every <= 0 || ++frame % (unsigned)every != 0) {
+    static int from = -1;
+    if (from < 0) {
+        const char *env = SDL_getenv("NC_RAMDUMP_FROM");
+        from = env ? SDL_atoi(env) : 0;
+    }
+    if (every <= 0 || ++frame % (unsigned)every != 0 || frame < (unsigned)from) {
         return;
     }
     char path[64];
@@ -313,6 +380,9 @@ static void output_audio(void) {
  * audio) and never drifts against video. Without audio, absolute 60 Hz deadlines are used. */
 static void pace(void) {
     const Uint64 frame_ns = 1000000000ull / 60;
+    if (headless) {
+        return;
+    }
     if (audio != NULL) {
         enum { TARGET_BYTES = (SPU_RATE / 60) * 4 * 3 }; /* ~50 ms */
         /* Bounded wait: if the device stops consuming (output switched, Bluetooth asleep),
@@ -387,7 +457,7 @@ static void on_frame(void) {
             break;
         }
     }
-    bios_set_pad(read_keyboard() | read_gamepads() | scripted_input());
+    bios_set_pad(read_keyboard() | read_gamepads() | scripted_input() | input_script());
     dump_ram();
     update_screen();
     draw_game();
@@ -413,6 +483,11 @@ int main(int argc, char **argv) {
     }
 
     nc_log_init();
+    headless = SDL_getenv("NC_HEADLESS") != NULL;
+    if (headless) {
+        /* Hidden window and no sound card: nothing to steal focus or to pace against. */
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    }
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
@@ -433,7 +508,9 @@ int main(int argc, char **argv) {
     }
 
     window = SDL_CreateWindow("Nightmare Creatures", PSX_WIDTH * 3, PSX_HEIGHT * 3,
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                                  (headless ? SDL_WINDOW_HIDDEN : 0));
+    platform_keep_awake();
     renderer = window != NULL ? SDL_CreateRenderer(window, NULL) : NULL;
     if (renderer == NULL) {
         SDL_Log("Could not create the window: %s", SDL_GetError());
@@ -443,7 +520,9 @@ int main(int argc, char **argv) {
     SDL_SetRenderVSync(renderer, 0); /* pacing is done by on_frame */
 
     SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, SPU_RATE};
-    audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    audio = headless
+                ? NULL
+                : SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
     if (audio == NULL) {
         SDL_Log("No audio output: %s", SDL_GetError());
     }
@@ -452,8 +531,8 @@ int main(int argc, char **argv) {
     menu_apply_settings();
 
     /* NC_SKIP_MENU=1 boots straight into the game (for scripted test runs). */
-    bool skip_menu =
-        SDL_getenv("NC_SKIP_MENU") != NULL && disc_check(settings.disc_path) == DISC_OK;
+    bool skip_menu = (SDL_getenv("NC_SKIP_MENU") != NULL || headless) &&
+                     disc_check(settings.disc_path) == DISC_OK;
     if (!skip_menu && menu_run_start() == MENU_QUIT) {
         quit_game();
     }

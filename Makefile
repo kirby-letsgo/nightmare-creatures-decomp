@@ -1,6 +1,6 @@
 PYTHON := .venv/bin/python
 
-.PHONY: setup extract sigs configs split recomp build lint format clean
+.PHONY: setup extract sigs configs split recomp build build-watch lint format clean
 
 setup:
 	python3 -m venv .venv
@@ -26,6 +26,11 @@ recomp:
 build:
 	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
 	cmake --build build/cmake
+
+# Debug build with memory write watchpoints (NC_WATCH=<address>); slower.
+build-watch:
+	cmake -S . -B build/cmake-watch -DCMAKE_BUILD_TYPE=RelWithDebInfo -DNC_WATCHPOINTS=ON
+	cmake --build build/cmake-watch
 
 lint:
 	$(PYTHON) -m ruff check tools

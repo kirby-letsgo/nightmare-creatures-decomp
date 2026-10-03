@@ -12,6 +12,7 @@ CPUState nc_cpu;
 u8 nc_ram[RAM_SIZE];
 u8 nc_scratch[SCRATCH_SIZE];
 u64 nc_cycles;
+unsigned nc_frame_count; /* VBlanks since boot */
 void (*nc_frame_hook)(void);
 
 enum { COP0_SR = 12, COP0_CAUSE = 13, COP0_EPC = 14 };
@@ -128,6 +129,7 @@ void nc_poll(CPUState *c) {
     if (nc_cycles >= next_vblank) {
         next_vblank += PSX_CYCLES_PER_FRAME;
         gpu_vblank();
+        nc_frame_count++;
         irq_raise(IRQ_VBLANK);
         trace_stack();
         profile_sample();

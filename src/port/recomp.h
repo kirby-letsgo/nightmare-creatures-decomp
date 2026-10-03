@@ -75,8 +75,24 @@ static inline u8 *nc_fast_ptr(u32 addr) {
         }                                                                                          \
         return (type)io_read(nc_phys(addr), size);                                                 \
     }
+/* Debug builds (-DNC_WATCHPOINTS): stores to the address in NC_WATCH are reported with a guest
+ * backtrace, to find which game code writes a variable. */
+#ifdef NC_WATCHPOINTS
+extern u32 nc_watch_addr;
+void nc_watch_hit(u32 addr, u32 value, int size);
+#define NC_WATCH_CHECK(addr, value, size)                                                          \
+    do {                                                                                           \
+        if (((addr) & 0x1FFFFCu) == nc_watch_addr) {                                               \
+            nc_watch_hit((addr), (u32)(value), (size));                                            \
+        }                                                                                          \
+    } while (0)
+#else
+#define NC_WATCH_CHECK(addr, value, size) ((void)0)
+#endif
+
 #define NC_DEFINE_STORE(name, type, size)                                                          \
     static inline void name(u32 addr, type value) {                                                \
+        NC_WATCH_CHECK(addr, value, size);                                                         \
         u8 *p = nc_fast_ptr(addr);                                                                 \
         if (p != NULL) {                                                                           \
             memcpy(p, &value, sizeof value);                                                       \
@@ -206,6 +222,14 @@ void nc_unimplemented(CPUState *c, u32 pc, u32 word);
 u32 nc_mfc0(CPUState *c, int reg);
 void nc_mtc0(CPUState *c, int reg, u32 value);
 void nc_rfe(CPUState *c);
+
+/* Debug builds (-DNC_WATCHPOINTS): count function entries for coverage diffs (NC_COVERAGE). */
+#ifdef NC_WATCHPOINTS
+void nc_fn_enter(u32 addr);
+#define NC_FN_ENTER(addr) nc_fn_enter(addr)
+#else
+#define NC_FN_ENTER(addr) ((void)0)
+#endif
 
 #define NC_POLL(c, cost)                                                                           \
     do {                                                                                           \
