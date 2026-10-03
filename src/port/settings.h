@@ -16,6 +16,9 @@ typedef struct Settings {
     int mouse_sensitivity; /* 1..100 */
     int key_bind[14];      /* SDL_Scancode per input_buttons[] entry, 0 = unbound */
     int pad_bind[14];      /* gamepad binding per input_buttons[] entry (see input.h) */
+    int hotkey_key[2];     /* per input_hotkeys[] entry: scancode, 0 = unbound */
+    int hotkey_mods[2];    /* HOTMOD_* bits */
+    int hotkey_pad[2];     /* gamepad button or INPUT_UNBOUND */
     /* audio, 0..100 */
     int volume_master;
     int volume_music;

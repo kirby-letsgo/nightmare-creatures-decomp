@@ -20,6 +20,10 @@ static void set_defaults(void) {
         settings.key_bind[i] = input_default_key(i);
         settings.pad_bind[i] = input_default_pad(i);
     }
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        input_default_hotkey(i, &settings.hotkey_key[i], &settings.hotkey_mods[i],
+                             &settings.hotkey_pad[i]);
+    }
     settings.volume_master = 100;
     settings.volume_music = 100;
     settings.volume_sfx = 100;
@@ -61,6 +65,24 @@ void settings_load(const char *dir) {
             settings.mouse_camera = parse_bool(val);
         } else if (strcmp(key, "mouse_sensitivity") == 0) {
             settings.mouse_sensitivity = clamp_int(atoi(val), 1, 100);
+        } else if (strncmp(key, "hotkey_", 7) == 0) {
+            for (int i = 0; i < HOTKEY_COUNT; i++) {
+                size_t n = strlen(input_hotkeys[i].id);
+                if (strncmp(key + 7, input_hotkeys[i].id, n) != 0) {
+                    continue;
+                }
+                const char *field = key + 7 + n;
+                if (strcmp(field, "_key") == 0) {
+                    settings.hotkey_key[i] =
+                        strcmp(val, "none") == 0 ? 0 : (int)SDL_GetScancodeFromName(val);
+                } else if (strcmp(field, "_mods") == 0) {
+                    settings.hotkey_mods[i] = (strstr(val, "shortcut") ? HOTMOD_SHORTCUT : 0) |
+                                              (strstr(val, "shift") ? HOTMOD_SHIFT : 0) |
+                                              (strstr(val, "alt") ? HOTMOD_ALT : 0);
+                } else if (strcmp(field, "_pad") == 0) {
+                    settings.hotkey_pad[i] = input_pad_from_id(val);
+                }
+            }
         } else if (strncmp(key, "key_", 4) == 0 || strncmp(key, "pad_", 4) == 0) {
             for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
                 if (strcmp(key + 4, input_buttons[i].id) != 0) {
@@ -111,6 +133,15 @@ void settings_save(void) {
         fprintf(f, "key_%s=%s\n", input_buttons[i].id,
                 k > 0 ? SDL_GetScancodeName((SDL_Scancode)k) : "none");
         fprintf(f, "pad_%s=%s\n", input_buttons[i].id, input_pad_id(settings.pad_bind[i]));
+    }
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        int k = settings.hotkey_key[i], m = settings.hotkey_mods[i];
+        fprintf(f, "hotkey_%s_key=%s\n", input_hotkeys[i].id,
+                k > 0 ? SDL_GetScancodeName((SDL_Scancode)k) : "none");
+        fprintf(f, "hotkey_%s_mods=%s%s%s\n", input_hotkeys[i].id,
+                (m & HOTMOD_SHORTCUT) ? "shortcut " : "", (m & HOTMOD_SHIFT) ? "shift " : "",
+                (m & HOTMOD_ALT) ? "alt" : "");
+        fprintf(f, "hotkey_%s_pad=%s\n", input_hotkeys[i].id, input_pad_id(settings.hotkey_pad[i]));
     }
     fprintf(f, "volume_master=%d\n", settings.volume_master);
     fprintf(f, "volume_music=%d\n", settings.volume_music);

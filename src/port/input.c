@@ -123,6 +123,63 @@ int input_pad_from_id(const char *id) {
     return b == SDL_GAMEPAD_BUTTON_INVALID ? INPUT_UNBOUND : (int)b;
 }
 
+const InputHotkey input_hotkeys[HOTKEY_COUNT] = {
+    {"Quick save (slot 1)", "quicksave"},
+    {"Quick load (slot 1)", "quickload"},
+};
+
+void input_default_hotkey(int hotkey, int *key, int *mods, int *pad) {
+    *key = hotkey == HOTKEY_QUICK_SAVE ? SDL_SCANCODE_S : SDL_SCANCODE_R;
+    *mods = HOTMOD_SHORTCUT;
+    *pad = INPUT_UNBOUND; /* every pad button is used by the game; L3/R3 are free */
+}
+
+int input_mods_from_sdl(SDL_Keymod mod) {
+    return (input_shortcut_modifier(mod) ? HOTMOD_SHORTCUT : 0) |
+           ((mod & SDL_KMOD_SHIFT) ? HOTMOD_SHIFT : 0) | ((mod & SDL_KMOD_ALT) ? HOTMOD_ALT : 0);
+}
+
+const char *input_hotkey_label(int key, int mods) {
+    static char buf[64];
+    if (key <= 0) {
+        return "-";
+    }
+#ifdef __APPLE__
+    const char *shortcut = "Cmd+";
+#else
+    const char *shortcut = "Ctrl+";
+#endif
+    SDL_snprintf(buf, sizeof buf, "%s%s%s%s", (mods & HOTMOD_SHORTCUT) ? shortcut : "",
+                 (mods & HOTMOD_SHIFT) ? "Shift+" : "", (mods & HOTMOD_ALT) ? "Alt+" : "",
+                 input_key_label(key));
+    return buf;
+}
+
+int input_hotkey_for_key(SDL_Scancode key, SDL_Keymod mod) {
+    int mods = input_mods_from_sdl(mod);
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        if (settings.hotkey_key[i] == (int)key && settings.hotkey_mods[i] == mods) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int input_hotkey_for_pad(int button) {
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        if (settings.hotkey_pad[i] != INPUT_UNBOUND && settings.hotkey_pad[i] == button) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool input_is_modifier_key(SDL_Scancode key) {
+    return key == SDL_SCANCODE_LCTRL || key == SDL_SCANCODE_RCTRL || key == SDL_SCANCODE_LSHIFT ||
+           key == SDL_SCANCODE_RSHIFT || key == SDL_SCANCODE_LALT || key == SDL_SCANCODE_RALT ||
+           key == SDL_SCANCODE_LGUI || key == SDL_SCANCODE_RGUI;
+}
+
 bool input_key_reserved(SDL_Scancode key) {
     return key == SDL_SCANCODE_ESCAPE || key == SDL_SCANCODE_F5 || key == SDL_SCANCODE_F9 ||
            key == SDL_SCANCODE_F11;
@@ -144,8 +201,13 @@ u16 input_read_keyboard(void) {
     int numkeys = 0;
     const bool *keys = SDL_GetKeyboardState(&numkeys);
     u16 buttons = 0;
+    int mods = input_mods_from_sdl(SDL_GetModState());
     for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
         int k = settings.key_bind[i];
+        /* A key held as part of a Shift/Alt hotkey is not also a game button. */
+        if (mods != 0 && input_hotkey_for_key((SDL_Scancode)k, SDL_GetModState()) >= 0) {
+            continue;
+        }
         if (k > 0 && k < numkeys && keys[k]) {
             buttons |= input_buttons[i].bit;
         }

@@ -54,6 +54,28 @@ bool input_key_reserved(SDL_Scancode key);
 /* Shortcut modifier: Cmd on macOS, Ctrl elsewhere. */
 bool input_shortcut_modifier(SDL_Keymod mod);
 
+/* Hotkeys (port functions, not game buttons). */
+enum { HOTKEY_QUICK_SAVE, HOTKEY_QUICK_LOAD, HOTKEY_COUNT };
+
+/* Keyboard hotkey modifiers (bit set). */
+enum { HOTMOD_SHORTCUT = 1, HOTMOD_SHIFT = 2, HOTMOD_ALT = 4 };
+
+typedef struct InputHotkey {
+    const char *name;
+    const char *id;
+} InputHotkey;
+
+extern const InputHotkey input_hotkeys[HOTKEY_COUNT];
+
+void input_default_hotkey(int hotkey, int *key, int *mods, int *pad);
+int input_mods_from_sdl(SDL_Keymod mod);
+/* "Cmd+S", "Shift+F1"... (static buffer). */
+const char *input_hotkey_label(int key, int mods);
+/* Which hotkey a key press / gamepad button triggers, or -1. */
+int input_hotkey_for_key(SDL_Scancode key, SDL_Keymod mod);
+int input_hotkey_for_pad(int button);
+bool input_is_modifier_key(SDL_Scancode key);
+
 /* Current pad state from the keyboard / all connected gamepads (left stick = d-pad). */
 u16 input_read_keyboard(void);
 u16 input_read_gamepads(void);

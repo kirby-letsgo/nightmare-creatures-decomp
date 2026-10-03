@@ -100,7 +100,9 @@ for keyboard and gamepad (Esc, F5, F9 and F11 are reserved).
 
 ### Save states
 
-**Cmd+S** (Ctrl+S on Windows/Linux) or **F5** quick-saves and **Cmd+R** (Ctrl+R) or **F9** quick-loads (slot 1); the pause menu (Esc) has four slots. States
+**Cmd+S** (Ctrl+S on Windows/Linux) or **F5** quick-saves and **Cmd+R** (Ctrl+R) or **F9** quick-loads (slot 1).
+The Cmd/Ctrl shortcuts can be changed, and gamepad buttons assigned (e.g. the stick clicks), in
+**Settings > Button mapping**; the pause menu (Esc) has four slots. States
 are taken at a fixed point in the game's level loop, so a request made elsewhere (in a movie or
 menu) is carried out at the next moment of gameplay. They are stored in a `states/` folder next to
 the memory card.

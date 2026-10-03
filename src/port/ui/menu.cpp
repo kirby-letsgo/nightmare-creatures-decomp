@@ -86,18 +86,60 @@ void update_scale() {
 
 /* Button mapping: while waiting for a key or gamepad button, input goes to the binding instead of
  * the menu. */
-enum class Capture { None, Key, Pad };
+enum class Capture { None, Key, Pad, HotkeyKey, HotkeyPad };
 Capture g_capture = Capture::None;
 int g_capture_button;
 
-/* Assigns a binding, removing it from any other button that had it. */
+/* Assigns a game-button binding, removing it from any other button or hotkey that had it. */
 void bind(int *table, int value) {
+    bool keys = table == settings.key_bind;
     for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
         if (table[i] == value) {
-            table[i] = table == settings.key_bind ? 0 : INPUT_UNBOUND;
+            table[i] = keys ? 0 : INPUT_UNBOUND;
+        }
+    }
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        if (keys && settings.hotkey_key[i] == value && settings.hotkey_mods[i] == 0) {
+            settings.hotkey_key[i] = 0;
+        } else if (!keys && settings.hotkey_pad[i] == value) {
+            settings.hotkey_pad[i] = INPUT_UNBOUND;
         }
     }
     table[g_capture_button] = value;
+    settings_save();
+}
+
+/* Assigns a hotkey key (with modifiers) or gamepad button, removing conflicts. */
+void bind_hotkey_key(int key, int mods) {
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        if (settings.hotkey_key[i] == key && settings.hotkey_mods[i] == mods) {
+            settings.hotkey_key[i] = 0;
+        }
+    }
+    if (mods == 0) {
+        for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+            if (settings.key_bind[i] == key) {
+                settings.key_bind[i] = 0;
+            }
+        }
+    }
+    settings.hotkey_key[g_capture_button] = key;
+    settings.hotkey_mods[g_capture_button] = mods;
+    settings_save();
+}
+
+void bind_hotkey_pad(int button) {
+    for (int i = 0; i < HOTKEY_COUNT; i++) {
+        if (settings.hotkey_pad[i] == button) {
+            settings.hotkey_pad[i] = INPUT_UNBOUND;
+        }
+    }
+    for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+        if (settings.pad_bind[i] == button) {
+            settings.pad_bind[i] = INPUT_UNBOUND;
+        }
+    }
+    settings.hotkey_pad[g_capture_button] = button;
     settings_save();
 }
 
@@ -109,6 +151,24 @@ bool capture_event(const SDL_Event &e) {
     if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE) {
         g_capture = Capture::None; /* cancel */
         return true;
+    }
+    if (g_capture == Capture::HotkeyKey && e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+        /* Wait for the main key; modifiers held with it become part of the hotkey. */
+        if (!input_is_modifier_key(e.key.scancode) && !input_key_reserved(e.key.scancode)) {
+            bind_hotkey_key((int)e.key.scancode, input_mods_from_sdl(e.key.mod));
+            g_capture = Capture::None;
+        }
+        return true;
+    }
+    if (g_capture == Capture::HotkeyPad) {
+        if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+            e.gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) {
+            bind_hotkey_pad((int)e.gbutton.button);
+            g_capture = Capture::None;
+            return true;
+        }
+        return e.type == SDL_EVENT_GAMEPAD_BUTTON_UP || e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION ||
+               e.type == SDL_EVENT_KEY_UP;
     }
     if (g_capture == Capture::Key && e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
         if (!input_key_reserved(e.key.scancode)) {
@@ -253,14 +313,46 @@ void bindings_page(bool *back) {
             }
             ImGui::PopID();
         }
+        /* Hotkeys: port functions, with optional modifiers on the keyboard. */
+        for (int i = 0; i < HOTKEY_COUNT; i++) {
+            ImGui::PushID(100 + i);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(input_hotkeys[i].name);
+            ImGui::TableNextColumn();
+            bool waiting_key = g_capture == Capture::HotkeyKey && g_capture_button == i;
+            if (ImGui::Button(waiting_key ? "Press keys..."
+                                          : input_hotkey_label(settings.hotkey_key[i],
+                                                               settings.hotkey_mods[i]),
+                              ImVec2(-FLT_MIN, 0))) {
+                g_capture = Capture::HotkeyKey;
+                g_capture_button = i;
+            }
+            ImGui::TableNextColumn();
+            bool waiting_pad = g_capture == Capture::HotkeyPad && g_capture_button == i;
+            if (ImGui::Button(waiting_pad ? "Press a button..."
+                                          : input_pad_label(settings.hotkey_pad[i]),
+                              ImVec2(-FLT_MIN, 0))) {
+                g_capture = Capture::HotkeyPad;
+                g_capture_button = i;
+            }
+            ImGui::PopID();
+        }
         ImGui::EndTable();
     }
+    ImGui::TextDisabled("F5 / F9 always quick save / load too. Stick clicks (L3, R3) are free "
+                        "on the gamepad.");
     ImGui::Spacing();
     float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
     if (ImGui::Button("Reset to defaults", ImVec2(half, 0))) {
         for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
             settings.key_bind[i] = input_default_key(i);
             settings.pad_bind[i] = input_default_pad(i);
+        }
+        for (int i = 0; i < HOTKEY_COUNT; i++) {
+            input_default_hotkey(i, &settings.hotkey_key[i], &settings.hotkey_mods[i],
+                                 &settings.hotkey_pad[i]);
         }
         g_capture = Capture::None;
         settings_save();

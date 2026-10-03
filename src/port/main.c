@@ -394,13 +394,15 @@ static void on_frame(void) {
         case SDL_EVENT_KEY_DOWN:
             if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
                 menu_requested = true;
-            } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F5 ||
-                                             (input_shortcut_modifier(event.key.mod) &&
-                                              event.key.scancode == SDL_SCANCODE_S))) {
+            } else if (!event.key.repeat &&
+                       (event.key.scancode == SDL_SCANCODE_F5 ||
+                        input_hotkey_for_key(event.key.scancode, event.key.mod) ==
+                            HOTKEY_QUICK_SAVE)) {
                 savestate_request_save(0);
-            } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F9 ||
-                                             (input_shortcut_modifier(event.key.mod) &&
-                                              event.key.scancode == SDL_SCANCODE_R))) {
+            } else if (!event.key.repeat &&
+                       (event.key.scancode == SDL_SCANCODE_F9 ||
+                        input_hotkey_for_key(event.key.scancode, event.key.mod) ==
+                            HOTKEY_QUICK_LOAD)) {
                 savestate_request_load(0);
             } else if (event.key.scancode == SDL_SCANCODE_F11 && !event.key.repeat) {
                 settings.fullscreen = !settings.fullscreen;
@@ -413,6 +415,10 @@ static void on_frame(void) {
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             if (event.gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE) {
                 menu_requested = true;
+            } else if (input_hotkey_for_pad(event.gbutton.button) == HOTKEY_QUICK_SAVE) {
+                savestate_request_save(0);
+            } else if (input_hotkey_for_pad(event.gbutton.button) == HOTKEY_QUICK_LOAD) {
+                savestate_request_load(0);
             }
             break;
         default:
