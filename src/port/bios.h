@@ -14,5 +14,6 @@ bool bios_in_exception(void);
 void bios_deliver_event(CPUState *c, u32 cls, u32 spec);
 /* Port 1 digital pad state, PS1 bit layout, 1 = pressed. */
 void bios_set_pad(u16 buttons);
+u16 bios_get_pad(void);
 
 #endif

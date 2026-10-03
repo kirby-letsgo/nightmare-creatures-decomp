@@ -173,7 +173,7 @@ void settings_page(bool *back) {
     ImGui::SameLine();
     changed |= ImGui::RadioButton("Modern (camera-relative)", &controls, CONTROLS_MODERN);
     ImGui::SameLine();
-    ImGui::TextDisabled("(coming soon)");
+    ImGui::TextDisabled("(experimental)");
     settings.controls = static_cast<ControlScheme>(controls);
 
     ImGui::SeparatorText("Audio");

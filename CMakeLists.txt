@@ -45,6 +45,7 @@ endif()
 # Native runtime: everything except the recompiled game code.
 add_library(nc_runtime STATIC
     src/port/bios.c
+    src/port/controls.c
     src/port/cpu.c
     src/port/disc.c
     src/port/dispatch.c
