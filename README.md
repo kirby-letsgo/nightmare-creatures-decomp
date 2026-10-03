@@ -87,7 +87,7 @@ the d-pad. Rebinding is planned.
 
 ### Save states
 
-**F5** quick-saves and **F9** quick-loads (slot 1); the pause menu (Esc) has four slots. States
+**Cmd+S** (Ctrl+S on Windows/Linux) or **F5** quick-saves and **Cmd+R** (Ctrl+R) or **F9** quick-loads (slot 1); the pause menu (Esc) has four slots. States
 are taken at a fixed point in the game's level loop, so a request made elsewhere (in a movie or
 menu) is carried out at the next moment of gameplay. They are stored in a `states/` folder next to
 the memory card.

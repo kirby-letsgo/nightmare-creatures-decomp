@@ -54,6 +54,15 @@ enum {
     PAD_SQUARE = 1 << 15,
 };
 
+/* Shortcut modifier: Cmd on macOS, Ctrl elsewhere. */
+static bool shortcut_modifier(SDL_Keymod mod) {
+#ifdef __APPLE__
+    return (mod & SDL_KMOD_GUI) != 0;
+#else
+    return (mod & SDL_KMOD_CTRL) != 0;
+#endif
+}
+
 static u16 read_keyboard(void) {
     static const struct {
         SDL_Scancode key;
@@ -67,6 +76,10 @@ static u16 read_keyboard(void) {
         {SDL_SCANCODE_Q, PAD_L1},         {SDL_SCANCODE_W, PAD_R1},
         {SDL_SCANCODE_1, PAD_L2},         {SDL_SCANCODE_2, PAD_R2},
     };
+    /* Keys pressed together with Cmd/Ctrl are shortcuts (Cmd+S, Cmd+R), not game input. */
+    if (shortcut_modifier(SDL_GetModState())) {
+        return 0;
+    }
     const bool *keys = SDL_GetKeyboardState(NULL);
     u16 buttons = 0;
     for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
@@ -472,9 +485,13 @@ static void on_frame(void) {
         case SDL_EVENT_KEY_DOWN:
             if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
                 menu_requested = true;
-            } else if (event.key.scancode == SDL_SCANCODE_F5 && !event.key.repeat) {
+            } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F5 ||
+                                             (shortcut_modifier(event.key.mod) &&
+                                              event.key.scancode == SDL_SCANCODE_S))) {
                 savestate_request_save(0);
-            } else if (event.key.scancode == SDL_SCANCODE_F9 && !event.key.repeat) {
+            } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F9 ||
+                                             (shortcut_modifier(event.key.mod) &&
+                                              event.key.scancode == SDL_SCANCODE_R))) {
                 savestate_request_load(0);
             } else if (event.key.scancode == SDL_SCANCODE_F11 && !event.key.repeat) {
                 settings.fullscreen = !settings.fullscreen;
