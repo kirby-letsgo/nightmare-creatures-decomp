@@ -48,6 +48,7 @@ renders 3D gameplay at full speed on the reference software renderer.
 | Memory card saves | done (slot 1, standard `.mcd` image) |
 | Settings: adrenaline off, volumes, fullscreen, filtering | done |
 | Upscaling (software, full speed up to ~3x) | done |
+| Widescreen 16:9 (3D widened, HUD kept in proportion) | done |
 | Modern controls, save states | in progress |
 | Save states | not started |
 | Windows / Linux builds | not yet tested |
@@ -111,6 +112,7 @@ with a backtrace in which recompiled functions appear as `<module>_<address>` (f
 | `NC_PRESS_START=N` | Tap Start every N frames (skips movies, advances menus) |
 | `NC_WAV=path` | Record the audio output to a WAV file |
 | `NC_SKIP_MENU=1` | Boot straight into the game (scripted runs) |
+| `NC_WS_TINT=1` | Widescreen: draw primitives classified as 2D (HUD/menus) in red |
 | `NC_DATA_DIR=dir/` | Use another folder for settings and memory cards (test runs) |
 | `NC_HEADLESS=1` | No window or audio, unpaced: fast automated runs (implies `NC_SKIP_MENU`) |
 | `NC_INPUT=file` | Scripted input timeline (`first last buttons...` per line) |

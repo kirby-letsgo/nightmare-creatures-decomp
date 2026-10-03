@@ -2,6 +2,7 @@
  * Reference: psx-spx "Geometry Transformation Engine (GTE)". Results follow the hardware's
  * fixed-point behaviour, including its UNR division for perspective projection, the
  * saturation flags and the register read/write quirks. */
+#include "port/hw/widescreen.h"
 #include "port/runtime.h"
 
 #include <string.h>
@@ -227,12 +228,7 @@ static u32 divide(CPUState *c, u32 h, u32 sz3) {
 /* --- commands ----------------------------------------------------------------------------- */
 
 /* Widescreen: perspective X is scaled by 3/4 so a 4:3 frame shown at 16:9 has correct
- * proportions (and a wider field of view). Set from settings by gte_set_widescreen(). */
-static bool widescreen;
-
-void gte_set_widescreen(bool on) {
-    widescreen = on;
-}
+ * proportions (and a wider field of view). See hw/widescreen.h. */
 
 static void rtp(CPUState *c, int n, int sf, bool lm, bool last) {
     s32 v[3];
@@ -260,11 +256,13 @@ static void rtp(CPUState *c, int n, int sf, bool lm, bool last) {
     push_sz(c, m[2] >> 12);
     u32 q = divide(c, (u16)C[26], D[19]);
     s64 px = (s64)q * ir(c, 1);
-    s64 sx = (widescreen ? px * 3 / 4 : px) + (s32)C[24];
+    s64 sx = (ws_enabled() ? px * 3 / 4 : px) + (s32)C[24];
     s64 sy = (s64)q * ir(c, 2) + (s32)C[25];
     set_mac0(c, sx);
     set_mac0(c, sy);
-    push_sxy(c, sat_sxy(c, sx >> 16, F_SX), sat_sxy(c, sy >> 16, F_SY));
+    s32 out_x = sat_sxy(c, sx >> 16, F_SX), out_y = sat_sxy(c, sy >> 16, F_SY);
+    push_sxy(c, out_x, out_y);
+    ws_note_projected(out_x, out_y);
     if (last) {
         s64 dq = (s64)q * lo16(C[27]) + (s32)C[28];
         set_mac0(c, dq);

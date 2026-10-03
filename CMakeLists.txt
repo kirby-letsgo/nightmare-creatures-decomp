@@ -57,6 +57,7 @@ add_library(nc_runtime STATIC
     src/port/hw/mdec.c
     src/port/hw/spu.c
     src/port/hw/timers.c
+    src/port/hw/widescreen.c
     src/port/log.c
     src/port/memcard.c
     src/port/memory.c

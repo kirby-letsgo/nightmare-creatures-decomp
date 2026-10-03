@@ -9,6 +9,7 @@
 #include "port/hw/gpu.h"
 
 #include "port/hw/hw.h"
+#include "port/hw/widescreen.h"
 #include "port/runtime.h"
 
 #include <stdlib.h>
@@ -363,6 +364,41 @@ static void draw_triangle(const DrawState *ds, Vertex v0, Vertex v1, Vertex v2) 
     }
 }
 
+/* 2D primitives span at most this much of the 320-wide screen before they are treated as
+ * full-screen (fades, backdrops) and left stretched across the whole 16:9 frame. */
+#define WS_FULLSCREEN_WIDTH 300
+
+/* Debugging aid: NC_WS_TINT=1 draws primitives classified as 2D in red. */
+static bool ws_tint(void) {
+    static int enabled = -1;
+    if (enabled < 0) {
+        enabled = getenv("NC_WS_TINT") != NULL;
+    }
+    return enabled;
+}
+
+/* Widescreen: squeezes a 2D polygon (raw packet X, before the drawing offset). Returns true if
+ * it was treated as 2D. */
+static bool ws_fix_polygon(int *raw_x, const int *raw_y, int n) {
+    if (!ws_enabled()) {
+        return false;
+    }
+    int minx = raw_x[0], maxx = raw_x[0];
+    bool projected = true;
+    for (int i = 0; i < n; i++) {
+        projected = projected && ws_is_projected(raw_x[i], raw_y[i]);
+        minx = raw_x[i] < minx ? raw_x[i] : minx;
+        maxx = raw_x[i] > maxx ? raw_x[i] : maxx;
+    }
+    if (projected || maxx - minx >= WS_FULLSCREEN_WIDTH) {
+        return false;
+    }
+    for (int i = 0; i < n; i++) {
+        raw_x[i] = ws_squeeze_x(raw_x[i]);
+    }
+    return true;
+}
+
 static void gp0_polygon(void) {
     u32 op = g.fifo[0] >> 24;
     bool quad = op & 0x08, textured = op & 0x04, gouraud = op & 0x10;
@@ -375,6 +411,7 @@ static void gp0_polygon(void) {
 
     /* Packet: colour+cmd, xy, [uv], then per further vertex: [colour if gouraud], xy, [uv]. */
     Vertex v[4];
+    int raw_x[4], raw_y[4];
     u32 i = 0;
     u32 color = 0;
     int nverts = quad ? 4 : 3;
@@ -383,8 +420,9 @@ static void gp0_polygon(void) {
             color = g.fifo[i++];
         }
         u32 xy = g.fifo[i++];
-        v[n].x = sext11(xy) + g.off_x;
-        v[n].y = sext11(xy >> 16) + g.off_y;
+        raw_x[n] = sext11(xy);
+        raw_y[n] = sext11(xy >> 16);
+        v[n].y = raw_y[n] + g.off_y;
         v[n].r = (int)(color & 0xFF);
         v[n].g = (int)((color >> 8) & 0xFF);
         v[n].b = (int)((color >> 16) & 0xFF);
@@ -401,6 +439,14 @@ static void gp0_polygon(void) {
                 apply_texpage(&ds, tp);
                 g.texpage = (g.texpage & ~0x1FFu) | (tp & 0x1FF);
             }
+        }
+    }
+    bool flat2d = ws_fix_polygon(raw_x, raw_y, nverts);
+    for (int n = 0; n < nverts; n++) {
+        v[n].x = raw_x[n] + g.off_x;
+        if (flat2d && ws_tint()) {
+            v[n].r = 255;
+            v[n].g = v[n].b = 0;
         }
     }
     draw_triangle(&ds, v[0], v[1], v[2]);
@@ -469,7 +515,8 @@ static void gp0_rect(void) {
     apply_texpage(&ds, g.texpage);
     u32 i = 1;
     u32 xy = g.fifo[i++];
-    int x0 = sext11(xy) + g.off_x, y0 = sext11(xy >> 16) + g.off_y;
+    int raw_x0 = sext11(xy), raw_y0 = sext11(xy >> 16);
+    int x0 = raw_x0 + g.off_x, y0 = raw_y0 + g.off_y;
     int u0 = 0, v0 = 0;
     if (textured) {
         u32 uv = g.fifo[i++];
@@ -498,9 +545,23 @@ static void gp0_rect(void) {
     }
     int r = (int)(g.fifo[0] & 0xFF), gg = (int)((g.fifo[0] >> 8) & 0xFF),
         b = (int)((g.fifo[0] >> 16) & 0xFF);
+    /* Widescreen: sprites are drawn 3/4 as wide. Ones anchored on a projected point
+     * (billboards) keep their position; HUD sprites also move towards the centre. */
+    int dw = w;
+    if (ws_enabled() && w < WS_FULLSCREEN_WIDTH) {
+        if (!ws_is_projected(raw_x0, raw_y0)) {
+            x0 = ws_squeeze_x(raw_x0) + g.off_x;
+            if (ws_tint()) {
+                r = 255;
+                gg = b = 0;
+            }
+        }
+        dw = (w * 3 + 2) / 4;
+    }
     int s = g.scale;
     for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
+        for (int dx = 0; dx < dw; dx++) {
+            int x = dw == w ? dx : dx * w / dw;
             u16 texel = 0;
             if (textured) {
                 int u = g.tex_flip_x ? u0 - x : u0 + x;
@@ -509,7 +570,7 @@ static void gp0_rect(void) {
             }
             for (int j = 0; j < s; j++) {
                 for (int k = 0; k < s; k++) {
-                    plot(&ds, (x0 + x) * s + k, (y0 + y) * s + j, r, gg, b, textured, texel);
+                    plot(&ds, (x0 + dx) * s + k, (y0 + y) * s + j, r, gg, b, textured, texel);
                 }
             }
         }

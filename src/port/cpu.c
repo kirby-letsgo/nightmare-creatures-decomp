@@ -1,4 +1,5 @@
 #include "port/hw/hw.h"
+#include "port/hw/widescreen.h"
 #include "port/runtime.h"
 
 #include <stdlib.h>
@@ -129,6 +130,7 @@ void nc_poll(CPUState *c) {
     if (nc_cycles >= next_vblank) {
         next_vblank += PSX_CYCLES_PER_FRAME;
         gpu_vblank();
+        ws_vblank();
         nc_frame_count++;
         irq_raise(IRQ_VBLANK);
         trace_stack();

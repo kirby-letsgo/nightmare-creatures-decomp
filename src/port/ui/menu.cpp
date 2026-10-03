@@ -10,6 +10,7 @@ extern "C" {
 #include "port/disc.h"
 #include "port/hw/gpu.h"
 #include "port/hw/spu.h"
+#include "port/hw/widescreen.h"
 #include "port/patches.h"
 #include "port/recomp.h"
 #include "port/settings.h"
@@ -186,7 +187,8 @@ void settings_page(bool *back) {
     changed |= ImGui::Checkbox("Fullscreen", &settings.fullscreen);
     changed |= ImGui::Checkbox("Widescreen (16:9)", &settings.widescreen);
     if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Widens the 3D view. Movies stay 4:3; the HUD is stretched for now.");
+        ImGui::SetTooltip("Widens the 3D view to 16:9. The HUD and menus keep their proportions;\n"
+                          "movies stay 4:3.");
     }
     int filter = settings.filter;
     ImGui::AlignTextToFramePadding();
@@ -254,7 +256,7 @@ extern "C" void menu_shutdown(void) {
 extern "C" void menu_apply_settings(void) {
     patches_apply();
     gpu_set_scale(settings.render_scale);
-    gte_set_widescreen(settings.widescreen);
+    ws_set_enabled(settings.widescreen);
     spu_set_gains(settings.volume_master * 256 / 100, settings.volume_music * 256 / 100,
                   settings.volume_sfx * 256 / 100);
     SDL_SetWindowFullscreen(g_window, settings.fullscreen);
