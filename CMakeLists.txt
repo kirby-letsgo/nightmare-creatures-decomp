@@ -129,6 +129,7 @@ add_executable(nightmare src/port/main.c)
 target_compile_definitions(nightmare PRIVATE NC_VERSION="${NC_VERSION}")
 if(WIN32)
     set_target_properties(nightmare PROPERTIES WIN32_EXECUTABLE ON) # no console window
+    target_sources(nightmare PRIVATE packaging/windows/icon.rc)    # app icon
 endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
