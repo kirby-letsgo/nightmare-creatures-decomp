@@ -83,6 +83,7 @@ add_library(nc_runtime STATIC
     src/port/hw/spu.c
     src/port/hw/timers.c
     src/port/hw/widescreen.c
+    src/port/hw/xbrz_wrap.cpp
     src/port/log.c
     src/port/memcard.c
     src/port/memory.c
@@ -93,6 +94,12 @@ add_library(nc_runtime STATIC
     src/port/ui/menu.cpp
 )
 target_include_directories(nc_runtime PUBLIC src)
+
+# xBRZ texture upscaler (GPLv3, third_party/xbrz).
+add_library(xbrz STATIC third_party/xbrz/xbrz.cpp)
+target_include_directories(xbrz PUBLIC third_party/xbrz)
+target_compile_features(xbrz PUBLIC cxx_std_17)
+target_link_libraries(nc_runtime PRIVATE xbrz)
 target_link_libraries(nc_runtime PUBLIC SDL3::SDL3 chdr-static imgui miniz)
 if(APPLE)
     target_link_libraries(nc_runtime PUBLIC objc) # platform.c: App Nap opt-out

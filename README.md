@@ -53,6 +53,8 @@ chdman createcd -i "Nightmare Creatures.cue" -o "Nightmare Creatures.chd"
 
 - **Upscaling**: render the 3D at up to 8× the original resolution (full speed up to about 3×
   on a modern computer).
+- **Upscaled textures (xBRZ)**: the game's pixel-art textures smoothed with the xBRZ scaler at
+  2×–4× (needs a resolution above 1×).
 - **Widescreen (16:9)**: a wider view of the world, with the HUD kept in proportion.
 - **Sharp or smooth** screen filtering, fullscreen (also **F11**), and an FPS counter.
 
@@ -103,7 +105,7 @@ Open **Settings** from the start screen or the in-game menu (Esc). Changes apply
 |---|---|
 | Gameplay | Adrenaline system on/off; tank or modern controls; mouse / right-stick camera and its sensitivity; button mapping |
 | Audio | Master, music and effects volume |
-| Video | Fullscreen; widescreen; sharp or smooth filtering; internal resolution (1×–8×); FPS counter |
+| Video | Fullscreen; widescreen; sharp or smooth filtering; internal resolution (1×–8×); texture upscaling (off, xBRZ 2×–4×); FPS counter |
 
 ## Save states
 
@@ -157,5 +159,10 @@ the game's code into C and is gradually turning it into readable source. See
 - PlayStation hardware documentation: psx-spx by Martin Korth (no$psx).
 - Psy-Q library signatures:
   [lab313ru/psx_psyq_signatures](https://github.com/lab313ru/psx_psyq_signatures).
-- Built with [SDL3](https://libsdl.org), [Dear ImGui](https://github.com/ocornut/imgui) and
-  [libchdr](https://github.com/rtissera/libchdr).
+- Built with [SDL3](https://libsdl.org), [Dear ImGui](https://github.com/ocornut/imgui),
+  [libchdr](https://github.com/rtissera/libchdr) and the xBRZ scaler by Zenju.
+
+## License
+
+This project is free software under the [GNU General Public License v3](LICENSE). It includes
+xBRZ (GPLv3) in `third_party/xbrz/`.

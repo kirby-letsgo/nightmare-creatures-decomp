@@ -25,7 +25,8 @@ typedef struct Settings {
     int volume_sfx;
     /* video */
     bool fullscreen;
-    int render_scale; /* 1..8 */
+    int render_scale;  /* 1..8 */
+    int texture_scale; /* xBRZ texture upscaling: 1 = off, 2..4 */
     TextureFilter filter;
     bool show_fps;
     bool widescreen; /* 16:9: 3D projection squeezed by 3/4, shown stretched */

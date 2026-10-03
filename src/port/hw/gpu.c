@@ -13,6 +13,7 @@
 #include "port/hw/widescreen.h"
 #include "port/runtime.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -148,10 +149,13 @@ typedef struct Vertex {
     int u, v;
 } Vertex;
 
+struct TexEntry;
+
 typedef struct DrawState {
     bool textured, raw, semi, gouraud, dither;
     u32 clut_x, clut_y;
     u32 tp_x, tp_y, tp_depth, blend;
+    const struct TexEntry *hires; /* xBRZ-upscaled texture page, or NULL */
 } DrawState;
 
 static void apply_texpage(DrawState *ds, u32 tp) {
@@ -192,9 +196,11 @@ static bool in_clip(int hx, int hy) {
            hy < (g.clip_y2 + 1) * s;
 }
 
-/* Shades and writes one internal-resolution pixel. Dithering follows native pixel positions. */
-static void plot(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool textured_px,
-                 u16 texel) {
+/* Shades and writes one internal-resolution pixel. Dithering follows native pixel positions.
+ * For textured pixels, (tr, tg, tb) is the texel colour in 8 bits per channel and `tex_flag` its
+ * semi-transparency / mask bit. */
+static void plot_px(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool textured_px,
+                    int tr, int tg, int tb, bool tex_flag) {
     if (!in_clip(hx, hy)) {
         return;
     }
@@ -204,20 +210,16 @@ static void plot(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool
     }
     bool semi = ds->semi;
     if (textured_px) {
-        if (texel == 0) {
-            return; /* fully transparent */
-        }
-        int tr = texel & 0x1F, tg = (texel >> 5) & 0x1F, tb = (texel >> 10) & 0x1F;
         if (ds->raw) {
-            r = tr << 3;
-            gg = tg << 3;
-            b = tb << 3;
+            r = tr;
+            gg = tg;
+            b = tb;
         } else {
-            r = (tr << 3) * r / 128;
-            gg = (tg << 3) * gg / 128;
-            b = (tb << 3) * b / 128;
+            r = tr * r / 128;
+            gg = tg * gg / 128;
+            b = tb * b / 128;
         }
-        semi = semi && (texel & 0x8000);
+        semi = semi && tex_flag;
     }
     if (ds->dither) {
         int d = dither[(hy / g.scale) & 3][(hx / g.scale) & 3];
@@ -255,8 +257,248 @@ static void plot(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool
         g5 = clamp(g5, 0, 31);
         b5 = clamp(b5, 0, 31);
     }
-    u16 mask = (g.mask_set || (textured_px && (texel & 0x8000))) ? 0x8000 : 0;
+    u16 mask = (g.mask_set || (textured_px && tex_flag)) ? 0x8000 : 0;
     *dst = (u16)(r5 | (g5 << 5) | (b5 << 10) | mask);
+}
+
+/* Same, with a native 15-bit texel (0 = fully transparent). */
+static void plot(const DrawState *ds, int hx, int hy, int r, int gg, int b, bool textured_px,
+                 u16 texel) {
+    if (textured_px && texel == 0) {
+        return;
+    }
+    plot_px(ds, hx, hy, r, gg, b, textured_px, (texel & 0x1F) << 3, ((texel >> 5) & 0x1F) << 3,
+            ((texel >> 10) & 0x1F) << 3, (texel & 0x8000) != 0);
+}
+
+/* --- texture upscaling (xBRZ) ---------------------------------------------------------------
+ * Each texture page + palette the game draws with is decoded to ARGB, scaled with xBRZ and
+ * cached. VRAM is tracked in 64x256 regions: any write to a region (upload, fill, copy, drawing)
+ * bumps its generation, and cached textures built from it are rebuilt on next use. Textures that
+ * keep changing (render-to-texture) are drawn without upscaling for a while. */
+
+void xbrz_upscale_argb(int factor, const u32 *src, u32 *dst, int width, int height);
+
+#define REGION_W 64
+#define REGION_H 256
+#define REGIONS_X (VRAM_W / REGION_W)
+#define REGIONS (REGIONS_X * (VRAM_H / REGION_H))
+#define TEX_BUDGET_BYTES (256u << 20)
+#define TEX_MAX_ENTRIES 128
+#define TEX_MAX_REGIONS 6
+#define VOLATILE_REBUILDS 3 /* rebuilds within VOLATILE_WINDOW frames: stop upscaling it */
+#define VOLATILE_WINDOW 60
+#define VOLATILE_COOLDOWN 600
+
+typedef struct TexEntry {
+    bool used;
+    u32 key;
+    int factor;
+    u8 nregions;
+    u8 regions[TEX_MAX_REGIONS];
+    u32 gens[TEX_MAX_REGIONS];
+    u32 *pixels; /* (256 * factor)^2 ARGB */
+    u8 flags[256 * 256]; /* semi-transparency bit of each original texel */
+    u32 last_use;
+    u32 window_start; /* volatile detection */
+    u32 rebuilds;
+    u32 volatile_until;
+} TexEntry;
+
+static u32 region_gen[REGIONS];
+static TexEntry tex_cache[TEX_MAX_ENTRIES];
+static int tex_factor = 1; /* 1 = off */
+static u32 tex_clock;
+
+/* Marks native VRAM rectangle [x, x+w) x [y, y+h) as written (wraps like VRAM addressing). */
+static void mark_written(int x, int y, int w, int h) {
+    if (tex_factor <= 1 || w <= 0 || h <= 0) {
+        return;
+    }
+    if (w > VRAM_W) {
+        w = VRAM_W;
+    }
+    if (h > VRAM_H) {
+        h = VRAM_H;
+    }
+    int rx0 = (x & (VRAM_W - 1)) / REGION_W, ry0 = (y & (VRAM_H - 1)) / REGION_H;
+    int rx1 = ((x + w - 1) & (VRAM_W - 1)) / REGION_W,
+        ry1 = ((y + h - 1) & (VRAM_H - 1)) / REGION_H;
+    for (int ry = ry0;; ry = (ry + 1) % (VRAM_H / REGION_H)) {
+        for (int rx = rx0;; rx = (rx + 1) % REGIONS_X) {
+            region_gen[ry * REGIONS_X + rx]++;
+            if (rx == rx1) {
+                break;
+            }
+        }
+        if (ry == ry1) {
+            break;
+        }
+    }
+}
+
+static void tex_clear(void) {
+    for (int i = 0; i < TEX_MAX_ENTRIES; i++) {
+        free(tex_cache[i].pixels);
+    }
+    memset(tex_cache, 0, sizeof tex_cache);
+}
+
+void gpu_set_texture_scale(int factor) {
+    factor = factor < 1 ? 1 : (factor > 4 ? 4 : factor);
+    if (factor != tex_factor) {
+        tex_clear();
+        tex_factor = factor;
+    }
+}
+
+/* Regions holding a texture page (and its palette). */
+static int tex_regions(const DrawState *ds, u8 out[TEX_MAX_REGIONS]) {
+    int n = 0;
+    int width = ds->tp_depth == 0 ? 64 : (ds->tp_depth == 1 ? 128 : 256);
+    int ry = (int)ds->tp_y / REGION_H;
+    for (int x = (int)ds->tp_x; x < (int)ds->tp_x + width; x += REGION_W) {
+        out[n++] = (u8)(ry * REGIONS_X + ((x & (VRAM_W - 1)) / REGION_W));
+    }
+    if (ds->tp_depth < 2) {
+        int entries = ds->tp_depth == 0 ? 16 : 256;
+        int cy = (int)(ds->clut_y & (VRAM_H - 1)) / REGION_H;
+        for (int x = (int)ds->clut_x; x < (int)ds->clut_x + entries; x += REGION_W) {
+            u8 r = (u8)(cy * REGIONS_X + ((x & (VRAM_W - 1)) / REGION_W));
+            bool dup = false;
+            for (int i = 0; i < n; i++) {
+                dup = dup || out[i] == r;
+            }
+            if (!dup && n < TEX_MAX_REGIONS) {
+                out[n++] = r;
+            }
+        }
+    }
+    return n;
+}
+
+static void tex_build(TexEntry *e, const DrawState *ds) {
+    static u32 decoded[256 * 256];
+    DrawState plain = *ds;
+    u32 saved_window = g.tex_window;
+    g.tex_window = 0; /* decode the whole page; the window applies when sampling */
+    for (int v = 0; v < 256; v++) {
+        for (int u = 0; u < 256; u++) {
+            u16 t = sample(&plain, u, v);
+            e->flags[v * 256 + u] = (t & 0x8000) != 0;
+            u32 r = (t & 0x1F) << 3, gg = ((t >> 5) & 0x1F) << 3, b = ((t >> 10) & 0x1F) << 3;
+            decoded[v * 256 + u] = t == 0 ? 0 : (0xFF000000u | r << 16 | gg << 8 | b);
+        }
+    }
+    g.tex_window = saved_window;
+    size_t side = 256u * (size_t)tex_factor;
+    if (e->pixels == NULL || e->factor != tex_factor) {
+        free(e->pixels);
+        e->pixels = malloc(side * side * sizeof(u32));
+        e->factor = tex_factor;
+    }
+    if (e->pixels != NULL) {
+        xbrz_upscale_argb(tex_factor, decoded, e->pixels, 256, 256);
+    }
+}
+
+/* Returns the upscaled texture for a primitive, or NULL to sample natively. */
+static const TexEntry *tex_lookup(const DrawState *ds) {
+    if (tex_factor <= 1 || g.scale <= 1 || !ds->textured) {
+        return NULL;
+    }
+    u32 key = (ds->tp_x / 64) | ((ds->tp_y / 256) << 4) | (ds->tp_depth << 5);
+    if (ds->tp_depth < 2) {
+        key |= ((ds->clut_x / 16) << 7) | ((ds->clut_y & 0x1FF) << 13);
+    }
+    tex_clock++;
+    TexEntry *hit = NULL, *victim = NULL;
+    int max_entries = (int)(TEX_BUDGET_BYTES / (256u * 256u * 4u * (u32)(tex_factor * tex_factor)));
+    max_entries = max_entries > TEX_MAX_ENTRIES ? TEX_MAX_ENTRIES : max_entries;
+    for (int i = 0; i < max_entries; i++) {
+        TexEntry *e = &tex_cache[i];
+        if (e->used && e->key == key) {
+            hit = e;
+            break;
+        }
+        if (victim == NULL || !e->used || (victim->used && e->last_use < victim->last_use)) {
+            victim = e;
+        }
+    }
+    TexEntry *e = hit;
+    bool stale = false;
+    if (e == NULL) {
+        e = victim;
+        e->used = true;
+        e->key = key;
+        e->rebuilds = 0;
+        e->window_start = g.frame;
+        e->volatile_until = 0;
+        stale = true;
+    } else {
+        for (int i = 0; i < e->nregions; i++) {
+            stale = stale || region_gen[e->regions[i]] != e->gens[i];
+        }
+    }
+    e->last_use = tex_clock;
+    if (g.frame < e->volatile_until) {
+        return NULL;
+    }
+    if (stale) {
+        if (hit != NULL) {
+            if (g.frame - e->window_start > VOLATILE_WINDOW) {
+                e->window_start = g.frame;
+                e->rebuilds = 0;
+            }
+            if (++e->rebuilds > VOLATILE_REBUILDS) {
+                e->volatile_until = g.frame + VOLATILE_COOLDOWN;
+                return NULL;
+            }
+        }
+        e->nregions = (u8)tex_regions(ds, e->regions);
+        for (int i = 0; i < e->nregions; i++) {
+            e->gens[i] = region_gen[e->regions[i]];
+        }
+        tex_build(e, ds);
+    }
+    return e->pixels != NULL ? e : NULL;
+}
+
+/* Samples the upscaled texture at texel coordinates (uf, vf); returns false if transparent. */
+static bool sample_hires(const DrawState *ds, double uf, double vf, int *r, int *gg, int *b,
+                         bool *flag) {
+    const TexEntry *e = ds->hires;
+    int f = e->factor;
+    double fu = floor(uf), fv = floor(vf);
+    int ui = (int)fu, vi = (int)fv;
+    int su = (int)((uf - fu) * f), sv = (int)((vf - fv) * f);
+    su = su >= f ? f - 1 : su;
+    sv = sv >= f ? f - 1 : sv;
+    u32 tw = g.tex_window;
+    u32 mask_x = (tw & 0x1F) * 8, mask_y = ((tw >> 5) & 0x1F) * 8;
+    u32 off_x = ((tw >> 10) & 0x1F) * 8, off_y = ((tw >> 15) & 0x1F) * 8;
+    u32 uu = ((u32)ui & 0xFF), vv = ((u32)vi & 0xFF);
+    uu = (uu & ~mask_x) | (off_x & mask_x);
+    vv = (vv & ~mask_y) | (off_y & mask_y);
+    u32 p = e->pixels[(vv * (u32)f + (u32)sv) * 256u * (u32)f + uu * (u32)f + (u32)su];
+    if ((p >> 24) < 128) {
+        return false;
+    }
+    *r = (int)((p >> 16) & 0xFF);
+    *gg = (int)((p >> 8) & 0xFF);
+    *b = (int)(p & 0xFF);
+    /* Semi-transparency follows the original texel. */
+    *flag = e->flags[vv * 256 + uu] != 0;
+    return true;
+}
+
+static void plot_hires(const DrawState *ds, int hx, int hy, int r, int gg, int b, double uf,
+                       double vf) {
+    int tr, tg, tb;
+    bool flag;
+    if (sample_hires(ds, uf, vf, &tr, &tg, &tb, &flag)) {
+        plot_px(ds, hx, hy, r, gg, b, true, tr, tg, tb, flag);
+    }
 }
 
 /* --- triangles ------------------------------------------------------------------------ */
@@ -296,6 +538,7 @@ static void draw_triangle(const DrawState *ds, Vertex v0, Vertex v1, Vertex v2) 
     if (maxx - minx >= 1024 || maxy - miny >= 512) {
         return;
     }
+    mark_written(minx, miny, maxx - minx + 1, maxy - miny + 1);
 
     /* Work in internal coordinates; vertices sit on native pixel corners. */
     const s64 s = g.scale;
@@ -358,7 +601,10 @@ static void draw_triangle(const DrawState *ds, Vertex v0, Vertex v1, Vertex v2) 
                 gg = (int)(pg.a * fx + pg.b * fy + pg.c);
                 b = (int)(pb.a * fx + pb.b * fy + pb.c);
             }
-            if (ds->textured) {
+            if (ds->hires != NULL) {
+                plot_hires(ds, x, y, r, gg, b, pu.a * fx + pu.b * fy + pu.c,
+                           pv.a * fx + pv.b * fy + pv.c);
+            } else if (ds->textured) {
                 int u = (int)(pu.a * fx + pu.b * fy + pu.c);
                 int v = (int)(pv.a * fx + pv.b * fy + pv.c);
                 plot(ds, x, y, r, gg, b, true, sample(ds, u, v));
@@ -464,6 +710,7 @@ static void gp0_polygon(void) {
             v[n].g = v[n].b = 0;
         }
     }
+    ds.hires = tex_lookup(&ds);
     draw_triangle(&ds, v[0], v[1], v[2]);
     if (quad) {
         draw_triangle(&ds, v[1], v[2], v[3]);
@@ -482,6 +729,7 @@ static void draw_line(const DrawState *ds, Vertex a, Vertex b) {
     if (iabs(dx) >= 1024 || iabs(dy) >= 512) {
         return;
     }
+    mark_written(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, iabs(dx) + 1, iabs(dy) + 1);
     int s = g.scale, half = s / 2;
     int hdx = dx * s, hdy = dy * s;
     int steps = iabs(hdx) > iabs(hdy) ? iabs(hdx) : iabs(hdy);
@@ -576,6 +824,21 @@ static void gp0_rect(void) {
         dw = (w * 3 + 2) / 4;
     }
     int s = g.scale;
+    mark_written(x0, y0, dw, h);
+    ds.hires = tex_lookup(&ds);
+    if (ds.hires != NULL) {
+        /* Upscaled texture: sample every internal pixel at sub-texel precision. */
+        for (int y = 0; y < h * s; y++) {
+            double ty = (y + 0.5) / s;
+            double vf = g.tex_flip_y ? v0 + 1 - ty : v0 + ty;
+            for (int dx = 0; dx < dw * s; dx++) {
+                double tx = (double)dx * w / dw / s + 0.5 / s;
+                double uf = g.tex_flip_x ? u0 + 1 - tx : u0 + tx;
+                plot_hires(&ds, x0 * s + dx, y0 * s + y, r, gg, b, uf, vf);
+            }
+        }
+        return;
+    }
     for (int y = 0; y < h; y++) {
         for (int dx = 0; dx < dw; dx++) {
             int x = dw == w ? dx : dx * w / dw;
@@ -599,6 +862,8 @@ static void gp0_fill(void) {
     u16 color =
         (u16)(((c & 0xFF) >> 3) | (((c >> 8) & 0xFF) >> 3) << 5 | (((c >> 16) & 0xFF) >> 3) << 10);
     int s = g.scale;
+    mark_written((int)(g.fifo[1] & 0x3F0), (int)((g.fifo[1] >> 16) & 0x1FF),
+                 (int)(((g.fifo[2] & 0x3FF) + 0xF) & ~0xFu), (int)((g.fifo[2] >> 16) & 0x1FF));
     int x0 = (int)(g.fifo[1] & 0x3F0) * s, y0 = (int)((g.fifo[1] >> 16) & 0x1FF) * s;
     int w = (int)(((g.fifo[2] & 0x3FF) + 0xF) & ~0xFu) * s,
         h = (int)((g.fifo[2] >> 16) & 0x1FF) * s;
@@ -614,6 +879,8 @@ static void gp0_copy(void) {
     int sx = (int)(g.fifo[1] & 0x3FF) * s, sy = (int)((g.fifo[1] >> 16) & 0x1FF) * s;
     int dx = (int)(g.fifo[2] & 0x3FF) * s, dy = (int)((g.fifo[2] >> 16) & 0x1FF) * s;
     int w = (int)(g.fifo[3] & 0x3FF), h = (int)((g.fifo[3] >> 16) & 0x1FF);
+    mark_written((int)(g.fifo[2] & 0x3FF), (int)((g.fifo[2] >> 16) & 0x1FF), w ? w : 1024,
+                 h ? h : 512);
     w = (w ? w : 1024) * s;
     h = (h ? h : 512) * s;
     for (int y = 0; y < h; y++) {
@@ -635,6 +902,9 @@ static void begin_transfer(bool upload) {
     g.xfer_w = g.xfer_w ? g.xfer_w : 1024;
     g.xfer_h = g.xfer_h ? g.xfer_h : 512;
     g.xfer_i = 0;
+    if (upload) {
+        mark_written((int)g.xfer_x, (int)g.xfer_y, (int)g.xfer_w, (int)g.xfer_h);
+    }
     g.uploading = upload;
     g.downloading = !upload;
 }
@@ -943,6 +1213,7 @@ void gpu_serialize(StateIO *io) {
     int scale = g.scale;
     STATE_VAR(io, g);
     if (io->loading) {
+        tex_clear(); /* VRAM is replaced: cached upscaled textures are stale */
         int saved_scale = g.scale;
         g.vram = vram;
         g.scale = scale;

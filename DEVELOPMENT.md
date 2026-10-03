@@ -5,6 +5,7 @@ game, see the [README](README.md).
 
 ## Ground rules
 
+- The project is licensed **GPLv3** (`LICENSE`); it vendors xBRZ (GPLv3) in `third_party/xbrz/`.
 - **Never commit game data or anything derived from it**: no disc images, extracted files,
   `gen/` (recompiled code) or RAM dumps. `.gitignore` covers `roms/`, `build/` and `gen/`.
   Addresses, sizes and symbol names (`config/`) are fine.
@@ -98,7 +99,7 @@ roms/*.chd ─► tools/extract.py ─► build/disc/ ─► splat ─► build/
 | `dispatch.c`, `interp.c` | Address → function dispatch; interpreter fallback |
 | `bios.c`, `exe.c` | High-level BIOS (events, files, memory card, Load/Exec, interrupts); EXE loading |
 | `disc.c` | CHD reading (libchdr), ISO9660, track table |
-| `hw/` | GPU (software rasterizer, upscaling), GTE (`gte.c`), SPU (+ reverb, CD audio, XA), CD-ROM controller, MDEC, DMA, timers, IRQ, widescreen helpers |
+| `hw/` | GPU (software rasterizer, upscaling, xBRZ texture cache), GTE (`gte.c`), SPU (+ reverb, CD audio, XA), CD-ROM controller, MDEC, DMA, timers, IRQ, widescreen helpers |
 | `controls.c` | Modern controls and free-look camera (hooks) |
 | `savestate.c` | Whole-machine snapshots at the level-loop safe point |
 | `input.c`, `settings.c`, `memcard.c` | Bindings, `settings.ini`, `.mcd` memory cards |
@@ -109,6 +110,16 @@ budget; when it runs out, `nc_poll` advances time, raises VBlank and runs the BI
 path). Psy-Q's busy-wait functions (`VSync`, `DrawSync`, CD/SPU sync) are charged realistic
 cycle costs so their iteration-count timeouts behave as on hardware. Frames are paced by the
 audio device's clock.
+
+### Texture upscaling
+
+With a texture scale above 1 (and internal resolution above 1×), each texture page + palette the
+game draws with is decoded to ARGB, scaled with xBRZ and cached (`gpu.c`, `tex_lookup`). VRAM is
+tracked in 64×256 regions whose generation counters are bumped by uploads, fills, copies and
+drawing; a cached texture is rebuilt when a region it came from changes. Textures rebuilt more
+than three times within a second (render-to-texture) are drawn natively for a while. Polygons and
+sprites sample the upscaled texture at sub-texel precision; semi-transparency comes from the
+original texel.
 
 ### Save states
 

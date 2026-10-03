@@ -28,6 +28,7 @@ static void set_defaults(void) {
     settings.volume_music = 100;
     settings.volume_sfx = 100;
     settings.render_scale = 1;
+    settings.texture_scale = 1;
     settings.filter = FILTER_NEAREST;
 }
 
@@ -103,6 +104,8 @@ void settings_load(const char *dir) {
             settings.volume_sfx = clamp_int(atoi(val), 0, 100);
         } else if (strcmp(key, "fullscreen") == 0) {
             settings.fullscreen = parse_bool(val);
+        } else if (strcmp(key, "texture_scale") == 0) {
+            settings.texture_scale = clamp_int(atoi(val), 1, 4);
         } else if (strcmp(key, "render_scale") == 0) {
             settings.render_scale = clamp_int(atoi(val), 1, 8);
         } else if (strcmp(key, "texture_filter") == 0) {
@@ -148,6 +151,7 @@ void settings_save(void) {
     fprintf(f, "volume_sfx=%d\n", settings.volume_sfx);
     fprintf(f, "fullscreen=%s\n", settings.fullscreen ? "on" : "off");
     fprintf(f, "render_scale=%d\n", settings.render_scale);
+    fprintf(f, "texture_scale=%d\n", settings.texture_scale);
     fprintf(f, "texture_filter=%s\n", settings.filter == FILTER_BILINEAR ? "bilinear" : "nearest");
     fprintf(f, "show_fps=%s\n", settings.show_fps ? "on" : "off");
     fprintf(f, "widescreen=%s\n", settings.widescreen ? "on" : "off");

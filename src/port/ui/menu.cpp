@@ -428,6 +428,21 @@ void settings_page(bool *back, bool *open_bindings) {
         ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
                            "Above 3x the game may slow down on this renderer.");
     }
+    static const char *texture_modes[] = {"Off", "xBRZ 2x", "xBRZ 3x", "xBRZ 4x"};
+    int tex_mode = settings.texture_scale - 1;
+    ImGui::BeginDisabled(settings.render_scale <= 1);
+    if (ImGui::Combo("Texture upscaling", &tex_mode, texture_modes, 4)) {
+        settings.texture_scale = tex_mode + 1;
+        changed = true;
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip(settings.render_scale <= 1
+                              ? "Needs a resolution above 1x."
+                              : "Smooths the game's pixel-art textures with the xBRZ scaler.\n"
+                                "Textures are upscaled the first time they appear, which can\n"
+                                "cause a brief stutter when entering a new area.");
+    }
     changed |= ImGui::Checkbox("Show FPS", &settings.show_fps);
 
     ImGui::PopItemWidth();
@@ -477,6 +492,7 @@ extern "C" void menu_shutdown(void) {
 extern "C" void menu_apply_settings(void) {
     patches_apply();
     gpu_set_scale(settings.render_scale);
+    gpu_set_texture_scale(settings.texture_scale);
     ws_set_enabled(settings.widescreen);
     spu_set_gains(settings.volume_master * 256 / 100, settings.volume_music * 256 / 100,
                   settings.volume_sfx * 256 / 100);
