@@ -483,6 +483,9 @@ static void on_frame(void) {
             quit_game();
             break;
         case SDL_EVENT_KEY_DOWN:
+            if (event.key.mod & (SDL_KMOD_GUI | SDL_KMOD_CTRL)) {
+                NC_LOG("key: shortcut scancode=%d mod=0x%04X", event.key.scancode, event.key.mod);
+            }
             if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
                 menu_requested = true;
             } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F5 ||

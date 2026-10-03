@@ -77,6 +77,13 @@ static void set_message(const char *fmt, int slot) {
 }
 
 const char *savestate_message(void) {
+    /* A request made outside gameplay waits for the next safe point: keep saying so. */
+    if (pending_save >= 0 || pending_load >= 0) {
+        if (SDL_GetTicksNS() - message_ns > (Uint64)MESSAGE_MS * 1000000u) {
+            return "Waiting for gameplay to save/load...";
+        }
+        return message;
+    }
     if (message[0] == '\0' || SDL_GetTicksNS() - message_ns > (Uint64)MESSAGE_MS * 1000000u) {
         return NULL;
     }
@@ -94,6 +101,7 @@ void savestate_init(const char *dir) {
 
 void savestate_request_save(int slot) {
     pending_save = slot;
+    set_message("Saving state %d...", slot);
 }
 
 void savestate_request_load(int slot) {
@@ -102,6 +110,7 @@ void savestate_request_load(int slot) {
         return;
     }
     pending_load = slot;
+    set_message("Loading state %d...", slot);
 }
 
 bool savestate_exists(int slot) {
