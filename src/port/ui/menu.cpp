@@ -11,6 +11,7 @@ extern "C" {
 #include "port/hw/gpu.h"
 #include "port/hw/spu.h"
 #include "port/hw/widescreen.h"
+#include "port/input.h"
 #include "port/patches.h"
 #include "port/recomp.h"
 #include "port/savestate.h"
@@ -26,7 +27,7 @@ namespace {
 SDL_Window *g_window;
 SDL_Renderer *g_renderer;
 
-enum class Page { Main, Settings };
+enum class Page { Main, Settings, Bindings };
 
 /* File dialog results arrive via callback (possibly on another thread). */
 std::atomic<bool> g_dialog_done{false};
@@ -83,10 +84,68 @@ void update_scale() {
     ImGui::GetStyle().FontScaleMain = h > 0 ? h / 720.0f : 1.0f;
 }
 
+/* Button mapping: while waiting for a key or gamepad button, input goes to the binding instead of
+ * the menu. */
+enum class Capture { None, Key, Pad };
+Capture g_capture = Capture::None;
+int g_capture_button;
+
+/* Assigns a binding, removing it from any other button that had it. */
+void bind(int *table, int value) {
+    for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+        if (table[i] == value) {
+            table[i] = table == settings.key_bind ? 0 : INPUT_UNBOUND;
+        }
+    }
+    table[g_capture_button] = value;
+    settings_save();
+}
+
+/* Returns true if the event was consumed by a pending capture. */
+bool capture_event(const SDL_Event &e) {
+    if (g_capture == Capture::None) {
+        return false;
+    }
+    if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE) {
+        g_capture = Capture::None; /* cancel */
+        return true;
+    }
+    if (g_capture == Capture::Key && e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+        if (!input_key_reserved(e.key.scancode)) {
+            bind(settings.key_bind, (int)e.key.scancode);
+            g_capture = Capture::None;
+        }
+        return true;
+    }
+    if (g_capture == Capture::Pad) {
+        if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+            e.gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) {
+            bind(settings.pad_bind, (int)e.gbutton.button);
+            g_capture = Capture::None;
+            return true;
+        }
+        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e.gaxis.value > 16000 &&
+            (e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ||
+             e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) {
+            bind(settings.pad_bind, e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER
+                                        ? INPUT_PAD_LEFT_TRIGGER
+                                        : INPUT_PAD_RIGHT_TRIGGER);
+            g_capture = Capture::None;
+            return true;
+        }
+        /* Keep other gamepad input (sticks, releases) away from menu navigation meanwhile. */
+        return e.type == SDL_EVENT_GAMEPAD_BUTTON_UP || e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    }
+    return e.type == SDL_EVENT_KEY_UP;
+}
+
 /* Returns false if the window was closed. */
 bool pump_events() {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        if (e.type != SDL_EVENT_QUIT && capture_event(e)) {
+            continue;
+        }
         ImGui_ImplSDL3_ProcessEvent(&e);
         if (e.type == SDL_EVENT_QUIT) {
             return false;
@@ -158,7 +217,65 @@ bool wide_button(const char *label) {
     return ImGui::Button(label, ImVec2(-FLT_MIN, 0));
 }
 
-void settings_page(bool *back) {
+/* Button mapping page: one row per PS1 button, keyboard and gamepad columns. */
+void bindings_page(bool *back) {
+    ImGui::TextWrapped("Click a binding, then press the key or gamepad button to use. Esc cancels. "
+                       "The left stick always works as the d-pad.");
+    ImGui::Spacing();
+    if (ImGui::BeginTable("##bindings", 3,
+                          ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("PS1 button");
+        ImGui::TableSetupColumn("Keyboard");
+        ImGui::TableSetupColumn("Gamepad");
+        ImGui::TableHeadersRow();
+        for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(input_buttons[i].name);
+
+            ImGui::TableNextColumn();
+            bool waiting_key = g_capture == Capture::Key && g_capture_button == i;
+            if (ImGui::Button(waiting_key ? "Press a key..."
+                                          : input_key_label(settings.key_bind[i]),
+                              ImVec2(-FLT_MIN, 0))) {
+                g_capture = Capture::Key;
+                g_capture_button = i;
+            }
+            ImGui::TableNextColumn();
+            bool waiting_pad = g_capture == Capture::Pad && g_capture_button == i;
+            if (ImGui::Button(waiting_pad ? "Press a button..."
+                                          : input_pad_label(settings.pad_bind[i]),
+                              ImVec2(-FLT_MIN, 0))) {
+                g_capture = Capture::Pad;
+                g_capture_button = i;
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::Spacing();
+    float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
+    if (ImGui::Button("Reset to defaults", ImVec2(half, 0))) {
+        for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+            settings.key_bind[i] = input_default_key(i);
+            settings.pad_bind[i] = input_default_pad(i);
+        }
+        g_capture = Capture::None;
+        settings_save();
+    }
+    ImGui::SameLine();
+    bool idle = g_capture == Capture::None;
+    if (ImGui::Button("Back", ImVec2(half, 0)) ||
+        (idle && (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                  ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight)))) {
+        g_capture = Capture::None;
+        *back = true;
+    }
+}
+
+void settings_page(bool *back, bool *open_bindings) {
     bool changed = false;
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
 
@@ -185,6 +302,9 @@ void settings_page(bool *back) {
     }
     if (settings.mouse_camera) {
         changed |= ImGui::SliderInt("Mouse sensitivity", &settings.mouse_sensitivity, 1, 100);
+    }
+    if (ImGui::Button("Button mapping...")) {
+        *open_bindings = true;
     }
 
     ImGui::SeparatorText("Audio");
@@ -289,7 +409,12 @@ static void release_mouse() {
 extern "C" MenuResult menu_run_start(void) {
     release_mouse();
     const char *shot = SDL_getenv("NC_MENU_SHOT");
-    Page page = shot != nullptr && std::strcmp(shot, "settings") == 0 ? Page::Settings : Page::Main;
+    Page page = Page::Main;
+    if (shot != nullptr && std::strcmp(shot, "settings") == 0) {
+        page = Page::Settings;
+    } else if (shot != nullptr && std::strcmp(shot, "bindings") == 0) {
+        page = Page::Bindings;
+    }
     DiscCheck check = disc_check(settings.disc_path);
     bool dialog_open = false;
 
@@ -341,10 +466,19 @@ extern "C" MenuResult menu_run_start(void) {
                     return MENU_QUIT;
                 }
             } else {
-                bool back = false;
-                settings_page(&back);
-                if (back) {
-                    page = Page::Main;
+                bool back = false, bindings = false;
+                if (page == Page::Bindings) {
+                    bindings_page(&back);
+                    if (back) {
+                        page = Page::Settings;
+                    }
+                } else {
+                    settings_page(&back, &bindings);
+                    if (back) {
+                        page = Page::Main;
+                    } else if (bindings) {
+                        page = Page::Bindings;
+                    }
                 }
             }
         }
@@ -421,10 +555,19 @@ extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
                     return MENU_QUIT;
                 }
             } else {
-                bool back = false;
-                settings_page(&back);
-                if (back) {
-                    page = Page::Main;
+                bool back = false, bindings = false;
+                if (page == Page::Bindings) {
+                    bindings_page(&back);
+                    if (back) {
+                        page = Page::Settings;
+                    }
+                } else {
+                    settings_page(&back, &bindings);
+                    if (back) {
+                        page = Page::Main;
+                    } else if (bindings) {
+                        page = Page::Bindings;
+                    }
                 }
             }
         }

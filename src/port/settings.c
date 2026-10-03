@@ -1,5 +1,6 @@
 #include "port/settings.h"
 
+#include "port/input.h"
 #include "port/runtime.h"
 
 #include <stdio.h>
@@ -15,6 +16,10 @@ static void set_defaults(void) {
     settings.controls = CONTROLS_TANK;
     settings.mouse_camera = true;
     settings.mouse_sensitivity = 50;
+    for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+        settings.key_bind[i] = input_default_key(i);
+        settings.pad_bind[i] = input_default_pad(i);
+    }
     settings.volume_master = 100;
     settings.volume_music = 100;
     settings.volume_sfx = 100;
@@ -56,6 +61,18 @@ void settings_load(const char *dir) {
             settings.mouse_camera = parse_bool(val);
         } else if (strcmp(key, "mouse_sensitivity") == 0) {
             settings.mouse_sensitivity = clamp_int(atoi(val), 1, 100);
+        } else if (strncmp(key, "key_", 4) == 0 || strncmp(key, "pad_", 4) == 0) {
+            for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+                if (strcmp(key + 4, input_buttons[i].id) != 0) {
+                    continue;
+                }
+                if (key[0] == 'k') {
+                    SDL_Scancode sc = SDL_GetScancodeFromName(val);
+                    settings.key_bind[i] = strcmp(val, "none") == 0 ? 0 : (int)sc;
+                } else {
+                    settings.pad_bind[i] = input_pad_from_id(val);
+                }
+            }
         } else if (strcmp(key, "volume_master") == 0) {
             settings.volume_master = clamp_int(atoi(val), 0, 100);
         } else if (strcmp(key, "volume_music") == 0) {
@@ -89,6 +106,12 @@ void settings_save(void) {
     fprintf(f, "controls=%s\n", settings.controls == CONTROLS_MODERN ? "modern" : "tank");
     fprintf(f, "mouse_camera=%s\n", settings.mouse_camera ? "on" : "off");
     fprintf(f, "mouse_sensitivity=%d\n", settings.mouse_sensitivity);
+    for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
+        int k = settings.key_bind[i];
+        fprintf(f, "key_%s=%s\n", input_buttons[i].id,
+                k > 0 ? SDL_GetScancodeName((SDL_Scancode)k) : "none");
+        fprintf(f, "pad_%s=%s\n", input_buttons[i].id, input_pad_id(settings.pad_bind[i]));
+    }
     fprintf(f, "volume_master=%d\n", settings.volume_master);
     fprintf(f, "volume_music=%d\n", settings.volume_music);
     fprintf(f, "volume_sfx=%d\n", settings.volume_sfx);

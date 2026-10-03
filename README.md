@@ -95,7 +95,8 @@ Settings are stored in `settings.ini` next to the memory card (see Saves below).
 
 Gamepads work out of the box (Xbox/PlayStation/Switch layouts via SDL): face buttons map by
 position (south = Cross, east = Circle, west = Square, north = Triangle), the left stick acts as
-the d-pad. Rebinding is planned.
+the d-pad. Everything above is the default: **Settings > Button mapping** rebinds any PS1 button
+for keyboard and gamepad (Esc, F5, F9 and F11 are reserved).
 
 ### Save states
 

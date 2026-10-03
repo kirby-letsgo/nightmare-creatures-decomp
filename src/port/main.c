@@ -3,6 +3,7 @@
 #include "port/hw/gpu.h"
 #include "port/hw/hw.h"
 #include "port/hw/spu.h"
+#include "port/input.h"
 #include "port/memcard.h"
 #include "port/platform.h"
 #include "port/runtime.h"
@@ -39,102 +40,6 @@ static bool menu_requested;
 static bool headless; /* NC_HEADLESS=1: no window, no audio device, unpaced (automated runs) */
 
 /* --- input -------------------------------------------------------------------------------- */
-
-/* PS1 digital pad bits (1 = pressed). */
-enum {
-    PAD_SELECT = 1 << 0,
-    PAD_START = 1 << 3,
-    PAD_UP = 1 << 4,
-    PAD_RIGHT = 1 << 5,
-    PAD_DOWN = 1 << 6,
-    PAD_LEFT = 1 << 7,
-    PAD_L2 = 1 << 8,
-    PAD_R2 = 1 << 9,
-    PAD_L1 = 1 << 10,
-    PAD_R1 = 1 << 11,
-    PAD_TRIANGLE = 1 << 12,
-    PAD_CIRCLE = 1 << 13,
-    PAD_CROSS = 1 << 14,
-    PAD_SQUARE = 1 << 15,
-};
-
-/* Shortcut modifier: Cmd on macOS, Ctrl elsewhere. */
-static bool shortcut_modifier(SDL_Keymod mod) {
-#ifdef __APPLE__
-    return (mod & SDL_KMOD_GUI) != 0;
-#else
-    return (mod & SDL_KMOD_CTRL) != 0;
-#endif
-}
-
-static u16 read_keyboard(void) {
-    static const struct {
-        SDL_Scancode key;
-        u16 bit;
-    } map[] = {
-        {SDL_SCANCODE_UP, PAD_UP},        {SDL_SCANCODE_DOWN, PAD_DOWN},
-        {SDL_SCANCODE_LEFT, PAD_LEFT},    {SDL_SCANCODE_RIGHT, PAD_RIGHT},
-        {SDL_SCANCODE_RETURN, PAD_START}, {SDL_SCANCODE_BACKSPACE, PAD_SELECT},
-        {SDL_SCANCODE_X, PAD_CROSS},      {SDL_SCANCODE_C, PAD_CIRCLE},
-        {SDL_SCANCODE_Z, PAD_SQUARE},     {SDL_SCANCODE_S, PAD_TRIANGLE},
-        {SDL_SCANCODE_Q, PAD_L1},         {SDL_SCANCODE_W, PAD_R1},
-        {SDL_SCANCODE_1, PAD_L2},         {SDL_SCANCODE_2, PAD_R2},
-    };
-    /* Keys pressed together with Cmd/Ctrl are shortcuts (Cmd+S, Cmd+R), not game input. */
-    if (shortcut_modifier(SDL_GetModState())) {
-        return 0;
-    }
-    const bool *keys = SDL_GetKeyboardState(NULL);
-    u16 buttons = 0;
-    for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
-        if (keys[map[i].key]) {
-            buttons |= map[i].bit;
-        }
-    }
-    return buttons;
-}
-
-/* All connected gamepads drive pad 1. The left stick acts as the d-pad. */
-static u16 read_gamepads(void) {
-    static const struct {
-        SDL_GamepadButton button;
-        u16 bit;
-    } map[] = {
-        {SDL_GAMEPAD_BUTTON_SOUTH, PAD_CROSS},      {SDL_GAMEPAD_BUTTON_EAST, PAD_CIRCLE},
-        {SDL_GAMEPAD_BUTTON_WEST, PAD_SQUARE},      {SDL_GAMEPAD_BUTTON_NORTH, PAD_TRIANGLE},
-        {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, PAD_L1}, {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, PAD_R1},
-        {SDL_GAMEPAD_BUTTON_START, PAD_START},      {SDL_GAMEPAD_BUTTON_BACK, PAD_SELECT},
-        {SDL_GAMEPAD_BUTTON_DPAD_UP, PAD_UP},       {SDL_GAMEPAD_BUTTON_DPAD_DOWN, PAD_DOWN},
-        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, PAD_LEFT},   {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, PAD_RIGHT},
-    };
-    enum { STICK_DEADZONE = 12000, TRIGGER_THRESHOLD = 8000 };
-    u16 buttons = 0;
-    int count = 0;
-    SDL_JoystickID *ids = SDL_GetGamepads(&count);
-    for (int g = 0; g < count; g++) {
-        SDL_Gamepad *pad = SDL_GetGamepadFromID(ids[g]);
-        if (pad == NULL) {
-            continue;
-        }
-        for (size_t i = 0; i < sizeof map / sizeof map[0]; i++) {
-            if (SDL_GetGamepadButton(pad, map[i].button)) {
-                buttons |= map[i].bit;
-            }
-        }
-        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > TRIGGER_THRESHOLD) {
-            buttons |= PAD_L2;
-        }
-        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > TRIGGER_THRESHOLD) {
-            buttons |= PAD_R2;
-        }
-        Sint16 x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
-        Sint16 y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
-        buttons |= x < -STICK_DEADZONE ? PAD_LEFT : (x > STICK_DEADZONE ? PAD_RIGHT : 0);
-        buttons |= y < -STICK_DEADZONE ? PAD_UP : (y > STICK_DEADZONE ? PAD_DOWN : 0);
-    }
-    SDL_free(ids);
-    return buttons;
-}
 
 /* Testing aid: NC_INPUT=file plays a scripted input timeline. Each line is
  * "<first_frame> <last_frame> <buttons...>" with buttons from: up down left right cross circle
@@ -490,11 +395,11 @@ static void on_frame(void) {
             if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
                 menu_requested = true;
             } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F5 ||
-                                             (shortcut_modifier(event.key.mod) &&
+                                             (input_shortcut_modifier(event.key.mod) &&
                                               event.key.scancode == SDL_SCANCODE_S))) {
                 savestate_request_save(0);
             } else if (!event.key.repeat && (event.key.scancode == SDL_SCANCODE_F9 ||
-                                             (shortcut_modifier(event.key.mod) &&
+                                             (input_shortcut_modifier(event.key.mod) &&
                                               event.key.scancode == SDL_SCANCODE_R))) {
                 savestate_request_load(0);
             } else if (event.key.scancode == SDL_SCANCODE_F11 && !event.key.repeat) {
@@ -514,7 +419,7 @@ static void on_frame(void) {
             break;
         }
     }
-    bios_set_pad(read_keyboard() | read_gamepads() | scripted_input() | input_script());
+    bios_set_pad(input_read_keyboard() | input_read_gamepads() | scripted_input() | input_script());
     dump_ram();
     update_screen();
     draw_game();

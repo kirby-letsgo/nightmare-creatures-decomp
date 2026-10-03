@@ -14,6 +14,8 @@ typedef struct Settings {
     ControlScheme controls;
     bool mouse_camera;     /* mouse / right stick rotates the camera */
     int mouse_sensitivity; /* 1..100 */
+    int key_bind[14];      /* SDL_Scancode per input_buttons[] entry, 0 = unbound */
+    int pad_bind[14];      /* gamepad binding per input_buttons[] entry (see input.h) */
     /* audio, 0..100 */
     int volume_master;
     int volume_music;

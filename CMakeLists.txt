@@ -73,6 +73,7 @@ add_library(nc_runtime STATIC
     src/port/dispatch.c
     src/port/exe.c
     src/port/gte.c
+    src/port/input.c
     src/port/interp.c
     src/port/hw/cdrom.c
     src/port/hw/dma.c
