@@ -13,6 +13,8 @@ static void set_defaults(void) {
     memset(&settings, 0, sizeof settings);
     settings.adrenaline = true;
     settings.controls = CONTROLS_TANK;
+    settings.mouse_camera = true;
+    settings.mouse_sensitivity = 50;
     settings.volume_master = 100;
     settings.volume_music = 100;
     settings.volume_sfx = 100;
@@ -50,6 +52,10 @@ void settings_load(const char *dir) {
             settings.adrenaline = parse_bool(val);
         } else if (strcmp(key, "controls") == 0) {
             settings.controls = strcmp(val, "modern") == 0 ? CONTROLS_MODERN : CONTROLS_TANK;
+        } else if (strcmp(key, "mouse_camera") == 0) {
+            settings.mouse_camera = parse_bool(val);
+        } else if (strcmp(key, "mouse_sensitivity") == 0) {
+            settings.mouse_sensitivity = clamp_int(atoi(val), 1, 100);
         } else if (strcmp(key, "volume_master") == 0) {
             settings.volume_master = clamp_int(atoi(val), 0, 100);
         } else if (strcmp(key, "volume_music") == 0) {
@@ -81,6 +87,8 @@ void settings_save(void) {
     fprintf(f, "disc_path=%s\n", settings.disc_path);
     fprintf(f, "adrenaline=%s\n", settings.adrenaline ? "on" : "off");
     fprintf(f, "controls=%s\n", settings.controls == CONTROLS_MODERN ? "modern" : "tank");
+    fprintf(f, "mouse_camera=%s\n", settings.mouse_camera ? "on" : "off");
+    fprintf(f, "mouse_sensitivity=%d\n", settings.mouse_sensitivity);
     fprintf(f, "volume_master=%d\n", settings.volume_master);
     fprintf(f, "volume_music=%d\n", settings.volume_music);
     fprintf(f, "volume_sfx=%d\n", settings.volume_sfx);

@@ -5,5 +5,7 @@
 #include "port/recomp.h"
 
 void nc_hook_player_input(CPUState *c);
+void nc_hook_camera_view_begin(CPUState *c);
+void nc_hook_camera_update_begin(CPUState *c);
 
 #endif

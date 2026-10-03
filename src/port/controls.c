@@ -21,12 +21,20 @@
 /* Game variables (PSX2.EXE), located by RAM diffing (see docs/analysis.md). */
 #define ADDR_PLAYER_HEADING 0x800CB1CCu /* u16, 65536 = full turn, turning left increases it */
 #define ADDR_CAMERA_YAW 0x800D763Au     /* u16, 4096 = full turn, eases towards the player */
+#define ADDR_PLAYER_X 0x800CB170u       /* s32, world units << 8 */
+#define ADDR_PLAYER_Z 0x800CB178u
+#define ADDR_CAMERA_X 0x800CB160u /* s32, world units */
+#define ADDR_CAMERA_Z 0x800CB168u
+#define CAMERA_RECORD_YAW 0xAu /* offset of the yaw in the camera record (func_80049838) */
 
 /* Pad bits as seen by the player-control routine (PS1 layout, 1 = pressed). */
 enum { BTN_UP = 0x10, BTN_RIGHT = 0x20, BTN_DOWN = 0x40, BTN_LEFT = 0x80 };
 #define BTN_DIRECTIONS (BTN_UP | BTN_RIGHT | BTN_DOWN | BTN_LEFT)
 
 #define DEADZONE 0.30f
+#ifndef CAMERA_ORBIT_SIGN
+#define CAMERA_ORBIT_SIGN -1
+#endif
 #define SNAP_UNITS 1100          /* within one turn step: face the target exactly */
 #define WALK_WHILE_TURNING 12743 /* ~70 degrees: start walking once roughly facing the target */
 
@@ -58,6 +66,109 @@ static void read_stick(float *x, float *y) {
     *y = sy;
 }
 
+/* --- free-look camera ------------------------------------------------------------------- */
+
+#define FREELOOK_RETURN_DELAY_MS 1000
+#define FREELOOK_RETURN_RATE 0.06f /* fraction of the offset removed per game frame */
+#define STICK_TURN_RATE 60.0f      /* 4096-units per game frame at full right-stick deflection */
+
+static float camera_offset; /* 4096 units, added to the game's camera yaw */
+extern unsigned nc_frame_count;
+static Uint64 last_look_ns;
+
+static s32 camera_offset_units(void) {
+    return (s32)lroundf(camera_offset);
+}
+
+/* Mouse and right-stick look. Called once per game frame from the player-control hook. */
+static void update_freelook(void) {
+    float delta = 0.0f;
+    float mx = 0.0f;
+    SDL_Window *win = SDL_GetKeyboardFocus();
+    if (settings.mouse_camera && win != NULL) {
+        if (!SDL_GetWindowRelativeMouseMode(win)) {
+            SDL_SetWindowRelativeMouseMode(win, true);
+        }
+        SDL_GetRelativeMouseState(&mx, NULL);
+        delta -= mx * (float)settings.mouse_sensitivity * 0.05f;
+    }
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&count);
+    for (int i = 0; i < count; i++) {
+        SDL_Gamepad *gp = SDL_GetGamepadFromID(ids[i]);
+        float rx = gp ? SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f : 0.0f;
+        if (rx * rx > DEADZONE * DEADZONE) {
+            delta -= rx * STICK_TURN_RATE;
+        }
+    }
+    SDL_free(ids);
+
+    /* Testing aid: NC_CAM_TEST=<frame> holds a 90-degree offset from that VBlank on. */
+    static int test_frame = -1;
+    if (test_frame < 0) {
+        const char *env = getenv("NC_CAM_TEST");
+        test_frame = env ? atoi(env) : 0;
+    }
+    if (test_frame > 0 && nc_frame_count >= (unsigned)test_frame) {
+        camera_offset = 1024.0f;
+        last_look_ns = SDL_GetTicksNS();
+        return;
+    }
+
+    Uint64 now = SDL_GetTicksNS();
+    if (delta != 0.0f) {
+        camera_offset += delta;
+        last_look_ns = now;
+    } else if (now - last_look_ns > (Uint64)FREELOOK_RETURN_DELAY_MS * 1000000u) {
+        camera_offset -= camera_offset * FREELOOK_RETURN_RATE;
+        if (fabsf(camera_offset) < 1.0f) {
+            camera_offset = 0.0f;
+        }
+    }
+    /* Keep within half a turn either way so the return goes the short way round. */
+    camera_offset = remainderf(camera_offset, 4096.0f);
+}
+
+/* View build entry: orbit the camera around the player by the free-look offset. */
+static s32 saved_cam_x, saved_cam_z;
+static u16 saved_yaw;
+static bool view_patched;
+
+static u32 patched_record;
+
+void nc_hook_camera_view_begin(CPUState *c) {
+    s32 off = camera_offset_units();
+    if (off == 0 || view_patched) {
+        return;
+    }
+    view_patched = true;
+    u32 record = c->r[4];
+    patched_record = record;
+    saved_cam_x = (s32)MEM_R32(ADDR_CAMERA_X);
+    saved_cam_z = (s32)MEM_R32(ADDR_CAMERA_Z);
+    saved_yaw = MEM_R16(record + CAMERA_RECORD_YAW);
+
+    float px = (float)(s32)MEM_R32(ADDR_PLAYER_X) / 256.0f;
+    float pz = (float)(s32)MEM_R32(ADDR_PLAYER_Z) / 256.0f;
+    float dx = (float)saved_cam_x - px, dz = (float)saved_cam_z - pz;
+    float a = (float)off * (2.0f * (float)M_PI / 4096.0f) * (float)CAMERA_ORBIT_SIGN;
+    float ca = cosf(a), sa = sinf(a);
+    MEM_W32(ADDR_CAMERA_X, (u32)(s32)lroundf(px + dx * ca - dz * sa));
+    MEM_W32(ADDR_CAMERA_Z, (u32)(s32)lroundf(pz + dx * sa + dz * ca));
+    MEM_W16(record + CAMERA_RECORD_YAW, (u16)(saved_yaw + off));
+}
+
+void nc_hook_camera_update_begin(CPUState *c) {
+    (void)c;
+    if (!view_patched) {
+        return;
+    }
+    MEM_W32(ADDR_CAMERA_X, (u32)saved_cam_x);
+    MEM_W32(ADDR_CAMERA_Z, (u32)saved_cam_z);
+    MEM_W16(patched_record + CAMERA_RECORD_YAW, saved_yaw);
+    view_patched = false;
+}
+
 static s32 wrap16(s32 v) {
     return (s32)(s16)(u16)v;
 }
@@ -66,6 +177,7 @@ void nc_hook_player_input(CPUState *c) {
     static bool latched;
     static s32 latched_camera; /* 65536 units */
 
+    update_freelook();
     if (settings.controls != CONTROLS_MODERN) {
         return;
     }
@@ -78,7 +190,7 @@ void nc_hook_player_input(CPUState *c) {
         return;
     }
     if (!latched) {
-        latched_camera = (s32)MEM_R16(ADDR_CAMERA_YAW) * 16;
+        latched_camera = ((s32)MEM_R16(ADDR_CAMERA_YAW) + camera_offset_units()) * 16;
         latched = true;
     }
 

@@ -104,8 +104,22 @@ __attribute__((constructor)) static void watch_init(void) {
     }
 }
 
-/* NC_WATCH_SKIP=N ignores the first N hits; repeated call stacks are reported once. */
+/* NC_WATCH_SKIP=N ignores the first N hits, NC_WATCH_FROM=F ignores hits before VBlank F;
+ * only stores that cover the exact NC_WATCH byte count; repeated call stacks are reported once. */
+extern unsigned nc_frame_count;
+
 void nc_watch_hit(u32 addr, u32 value, int size) {
+    static long from = -1;
+    static u32 exact;
+    if (from < 0) {
+        const char *env = getenv("NC_WATCH_FROM");
+        from = env ? atol(env) : 0;
+        exact = (u32)strtoul(getenv("NC_WATCH"), NULL, 16) & 0x1FFFFFu;
+    }
+    u32 lo = addr & 0x1FFFFFu;
+    if (nc_frame_count < (unsigned)from || exact < lo || exact >= lo + (u32)size) {
+        return;
+    }
     static long skip = -1;
     static unsigned reported;
     static void *seen[64];
