@@ -38,6 +38,7 @@ enum { BTN_UP = 0x10, BTN_RIGHT = 0x20, BTN_DOWN = 0x40, BTN_LEFT = 0x80 };
 #endif
 #define SNAP_UNITS 1100          /* within one turn step: face the target exactly */
 #define WALK_WHILE_TURNING 12743 /* ~70 degrees: start walking once roughly facing the target */
+#define BACKPEDAL_FROM 24576     /* 135 degrees: a target this far behind means walk backwards */
 
 /* Direction the player is pushing, in screen space (x right, y down). Digital directions come
  * from the emulated pad (keyboard, d-pad, scripted input); a gamepad's left stick, when moved,
@@ -205,7 +206,15 @@ void nc_hook_player_input(CPUState *c) {
     s32 heading = (s32)MEM_R16(ADDR_PLAYER_HEADING);
     s32 diff = wrap16(target - heading);
 
-    if (abs(diff) <= SNAP_UNITS) {
+    if (abs(diff) >= BACKPEDAL_FROM) {
+        /* Target roughly behind the player: walk backwards (the game's own move) instead of
+         * turning all the way round, steering so the back faces the target. */
+        s32 back_diff = wrap16(target + 32768 - heading);
+        buttons |= BTN_DOWN;
+        if (abs(back_diff) > SNAP_UNITS) {
+            buttons |= back_diff > 0 ? BTN_LEFT : BTN_RIGHT;
+        }
+    } else if (abs(diff) <= SNAP_UNITS) {
         MEM_W16(ADDR_PLAYER_HEADING, (u16)target);
         buttons |= BTN_UP;
     } else {
