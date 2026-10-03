@@ -260,6 +260,16 @@ extern "C" void menu_apply_settings(void) {
     spu_set_gains(settings.volume_master * 256 / 100, settings.volume_music * 256 / 100,
                   settings.volume_sfx * 256 / 100);
     SDL_SetWindowFullscreen(g_window, settings.fullscreen);
+    /* Reshape a windowed game to the chosen aspect ratio (keeping its height). */
+    static int applied_widescreen = -1;
+    if (applied_widescreen != (int)settings.widescreen) {
+        applied_widescreen = settings.widescreen;
+        if (!settings.fullscreen) {
+            int w = 0, h = 0;
+            SDL_GetWindowSize(g_window, &w, &h);
+            SDL_SetWindowSize(g_window, settings.widescreen ? h * 16 / 9 : h * 4 / 3, h);
+        }
+    }
 }
 
 extern "C" MenuResult menu_run_start(void) {
