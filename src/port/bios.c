@@ -96,6 +96,10 @@ void bios_set_pad(u16 buttons) {
     bios.pad_buttons = buttons;
 }
 
+u16 bios_get_pad(void) {
+    return bios.pad_buttons;
+}
+
 static u32 open_event(u32 cls, u32 spec, u32 mode, u32 func) {
     for (u32 i = 0; i < EV_MAX; i++) {
         if (bios.events[i].status == EV_ST_UNUSED) {

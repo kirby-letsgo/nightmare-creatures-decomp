@@ -267,11 +267,25 @@ def load_patches(module: str) -> dict[int, str]:
     return patches
 
 
+def load_hooks(module: str) -> dict[int, str]:
+    """config/hooks.txt: native functions called before the instruction at an address."""
+    hooks: dict[int, str] = {}
+    path = ROOT / "config" / "hooks.txt"
+    if not path.exists():
+        return hooks
+    for line in path.read_text().splitlines():
+        fields = line.split("#", 1)[0].split()
+        if len(fields) == 3 and fields[0] == module:
+            hooks[int(fields[1], 16)] = fields[2]
+    return hooks
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
         self.launcher = launcher
         self.patches = load_patches(mod.name)
+        self.hooks = load_hooks(mod.name)
 
     def guarded(self, addr: int, stmt: str) -> str:
         """Wraps a translated instruction so it is skipped while its patch flag is set."""
@@ -490,7 +504,7 @@ class Emitter:
         name = self.mod.cname(f.addr) if entry is None else self.mod.resume_name(entry)
         out = [
             f"void {name}(CPUState *c) {{",
-            f"    NC_FN_ENTER(0x{f.addr:08X}u);",
+            f"    NC_FN_ENTER(c, 0x{f.addr:08X}u);",
             f"    NC_POLL(c, {POLL_COST});",
         ]
         if entry is not None:
@@ -500,6 +514,8 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if i.addr in self.hooks:
+                out.append(f"    nc_hook_{self.hooks[i.addr]}(c);")
             if not i.has_delay():
                 stmt = self.guarded(i.addr, self.simple(i))
                 if stmt:
@@ -597,6 +613,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)
         lines.extend(f"extern bool nc_flag_{flag};" for flag in sorted(set(em.patches.values())))
+        lines.extend(f"void nc_hook_{h}(CPUState *c);" for h in sorted(set(em.hooks.values())))
         if launcher:
             lines.insert(2, f'#include "../{LAUNCHER}/{LAUNCHER}.h"')
         for f in chunk:

@@ -150,20 +150,30 @@ void nc_watch_hit(u32 addr, u32 value, int size) {
 
 #ifdef NC_WATCHPOINTS
 /* NC_COVERAGE=<first>,<last>,<file>: counts guest function entries between two VBlank frame
- * numbers and writes "address count" lines to <file>. */
+ * numbers and writes "address count" lines to <file>. With NC_COVERAGE_CALLERS=<address>, calls
+ * to that function are counted per return address instead. */
 extern unsigned nc_frame_count;
 #define COV_SLOTS 8192
 
 static u32 cov_addr[COV_SLOTS];
 static u32 cov_hits[COV_SLOTS];
 
-void nc_fn_enter(u32 addr) {
+void nc_fn_enter(u32 addr, u32 ra) {
     static int state = -1;
     static unsigned first, last;
     static char path[256];
+    static u32 callers_of;
     if (state < 0) {
         const char *env = getenv("NC_COVERAGE");
         state = env != NULL && sscanf(env, "%u,%u,%255s", &first, &last, path) == 3 ? 1 : 0;
+        const char *callers = getenv("NC_COVERAGE_CALLERS");
+        callers_of = callers ? (u32)strtoul(callers, NULL, 16) : 0;
+    }
+    if (callers_of != 0) {
+        if (addr != callers_of) {
+            return;
+        }
+        addr = ra; /* count by call site */
     }
     if (state != 1 || nc_frame_count < first) {
         return;

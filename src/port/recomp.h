@@ -225,10 +225,10 @@ void nc_rfe(CPUState *c);
 
 /* Debug builds (-DNC_WATCHPOINTS): count function entries for coverage diffs (NC_COVERAGE). */
 #ifdef NC_WATCHPOINTS
-void nc_fn_enter(u32 addr);
-#define NC_FN_ENTER(addr) nc_fn_enter(addr)
+void nc_fn_enter(u32 addr, u32 ra);
+#define NC_FN_ENTER(c, addr) nc_fn_enter((addr), (c)->r[31])
 #else
-#define NC_FN_ENTER(addr) ((void)0)
+#define NC_FN_ENTER(c, addr) ((void)0)
 #endif
 
 #define NC_POLL(c, cost)                                                                           \
