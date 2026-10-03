@@ -21,7 +21,18 @@ bool ws_is_projected(int x, int y);
 /* Ages the table (only if the GTE projected anything since the last call); once per VBlank. */
 void ws_vblank(void);
 
-/* Maps a 2D X position (before the drawing offset) into the squeezed frame. */
-int ws_squeeze_x(int x);
+/* 2D layout. Each frame's 2D primitives are grouped into clusters of neighbouring boxes (a
+ * text line, a health bar). Clusters entirely in the left half are pinned to the left edge of
+ * the wide frame, entirely in the right half to the right edge, otherwise kept centred. The
+ * clusters from the previous frame decide where this frame's primitives go. */
+
+/* Records a 2D primitive's box (raw coordinates, before squeezing) for the next layout. */
+void ws_record_2d(int minx, int miny, int maxx, int maxy);
+/* Computes the layout from the recorded boxes; called when the game presents a frame. */
+void ws_end_frame(void);
+/* Horizontal shift (added after scaling X by 3/4) for a 2D primitive with this box. */
+int ws_anchor_offset(int minx, int miny, int maxx, int maxy);
+/* Maps a 2D X position into the squeezed frame with the given anchor offset. */
+int ws_squeeze_x(int x, int offset);
 
 #endif

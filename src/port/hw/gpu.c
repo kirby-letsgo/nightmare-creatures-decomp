@@ -397,8 +397,15 @@ static bool ws_fix_polygon(int *raw_x, const int *raw_y, int n) {
     if (projected || maxx - minx >= WS_FULLSCREEN_WIDTH) {
         return false;
     }
+    int miny = raw_y[0], maxy = raw_y[0];
+    for (int i = 1; i < n; i++) {
+        miny = raw_y[i] < miny ? raw_y[i] : miny;
+        maxy = raw_y[i] > maxy ? raw_y[i] : maxy;
+    }
+    ws_record_2d(minx, miny, maxx, maxy);
+    int offset = ws_anchor_offset(minx, miny, maxx, maxy);
     for (int i = 0; i < n; i++) {
-        raw_x[i] = ws_squeeze_x(raw_x[i]);
+        raw_x[i] = ws_squeeze_x(raw_x[i], offset);
     }
     return true;
 }
@@ -553,11 +560,13 @@ static void gp0_rect(void) {
     int r = (int)(g.fifo[0] & 0xFF), gg = (int)((g.fifo[0] >> 8) & 0xFF),
         b = (int)((g.fifo[0] >> 16) & 0xFF);
     /* Widescreen: sprites are drawn 3/4 as wide. Ones anchored on a projected point
-     * (billboards) keep their position; HUD sprites also move towards the centre. */
+     * (billboards) keep their position; HUD sprites are laid out by widescreen.c. */
     int dw = w;
     if (ws_enabled() && w < WS_FULLSCREEN_WIDTH) {
         if (!ws_is_projected(raw_x0, raw_y0)) {
-            x0 = ws_squeeze_x(raw_x0) + g.off_x;
+            ws_record_2d(raw_x0, raw_y0, raw_x0 + w - 1, raw_y0 + h - 1);
+            int offset = ws_anchor_offset(raw_x0, raw_y0, raw_x0 + w - 1, raw_y0 + h - 1);
+            x0 = ws_squeeze_x(raw_x0, offset) + g.off_x;
             if (ws_tint()) {
                 r = 255;
                 gg = b = 0;
@@ -799,6 +808,7 @@ void gpu_gp1(u32 word) {
         break;
     case 0x05:
         g.flips++;
+        ws_end_frame();
         g.frame_has_3d = g.polys3d_since_flip > 0;
         g.polys3d_since_flip = 0;
         g.vblanks_since_flip = 0;
@@ -861,6 +871,7 @@ void gpu_vblank(void) {
     g.frame++;
     /* A single-buffered still picture never flips: decide from what was drawn. */
     if (++g.vblanks_since_flip > 15) {
+        ws_end_frame();
         g.frame_has_3d = g.polys3d_since_flip > 0;
     }
     g.odd_line = !g.odd_line;
