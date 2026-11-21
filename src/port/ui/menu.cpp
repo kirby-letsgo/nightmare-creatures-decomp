@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include "menu_font.h"
 
 extern "C" {
 #include "port/disc.h"
@@ -18,7 +19,9 @@ extern "C" {
 #include "port/settings.h"
 }
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -54,39 +57,58 @@ void open_disc_dialog() {
 #endif
 }
 
-void apply_style() {
+const ImVec4 ink(0.95f, 0.91f, 0.84f, 1.0f), muted(0.75f, 0.68f, 0.62f, 1.0f);
+const ImVec4 copper(0.93f, 0.67f, 0.44f, 1.0f), wine(0.40f, 0.14f, 0.16f, 1.0f);
+float ui_scale = 1.0f;
+SDL_Rect safe_area;
+SDL_FRect scroll_area;
+float scroll_delta;
+
+void apply_style(float scale) {
     ImGuiStyle &s = ImGui::GetStyle();
+    s = ImGuiStyle();
     ImGui::StyleColorsDark(&s);
-    s.WindowRounding = 4.0f;
-    s.FrameRounding = 3.0f;
-    s.GrabRounding = 3.0f;
-    s.WindowPadding = ImVec2(24, 20);
-    s.ItemSpacing = ImVec2(12, 10);
-    s.FramePadding = ImVec2(10, 6);
+    s.FontSizeBase = 18;
+    s.FontScaleMain = scale;
+    s.WindowPadding = ImVec2(20, 18);
+    s.ItemSpacing = ImVec2(6, 6);
+    s.FramePadding = ImVec2(12, 13);
+    s.GrabMinSize = 18;
+    s.ScrollbarSize = 14;
+    s.FrameRounding = 3;
+    s.WindowRounding = 6;
+    s.ScaleAllSizes(scale);
     ImVec4 *c = s.Colors;
-    const ImVec4 blood(0.55f, 0.05f, 0.06f, 1.0f), blood_hi(0.75f, 0.10f, 0.10f, 1.0f);
-    c[ImGuiCol_WindowBg] = ImVec4(0.05f, 0.04f, 0.05f, 0.94f);
-    c[ImGuiCol_Button] = ImVec4(0.18f, 0.10f, 0.11f, 1.0f);
-    c[ImGuiCol_ButtonHovered] = blood;
-    c[ImGuiCol_ButtonActive] = blood_hi;
-    c[ImGuiCol_FrameBg] = ImVec4(0.14f, 0.10f, 0.11f, 1.0f);
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.25f, 0.12f, 0.13f, 1.0f);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.32f, 0.12f, 0.13f, 1.0f);
-    c[ImGuiCol_SliderGrab] = blood;
-    c[ImGuiCol_SliderGrabActive] = blood_hi;
-    c[ImGuiCol_CheckMark] = blood_hi;
-    c[ImGuiCol_CheckboxSelectedBg] = ImVec4(0.14f, 0.10f, 0.11f, 1.0f);
-    c[ImGuiCol_Header] = blood;
-    c[ImGuiCol_HeaderHovered] = blood_hi;
-    c[ImGuiCol_NavCursor] = blood_hi;
-    c[ImGuiCol_Separator] = ImVec4(0.35f, 0.15f, 0.15f, 1.0f);
+    c[ImGuiCol_Text] = ink;
+    c[ImGuiCol_TextDisabled] = muted;
+    c[ImGuiCol_WindowBg] = ImVec4(0.085f, 0.065f, 0.076f, 1);
+    c[ImGuiCol_Border] = ImVec4(0.32f, 0.24f, 0.23f, 1);
+    c[ImGuiCol_Button] = ImVec4(0.16f, 0.125f, 0.14f, 1);
+    c[ImGuiCol_ButtonHovered] = ImVec4(0.30f, 0.18f, 0.19f, 1);
+    c[ImGuiCol_ButtonActive] = wine;
+    c[ImGuiCol_FrameBg] = c[ImGuiCol_Button];
+    c[ImGuiCol_FrameBgHovered] = c[ImGuiCol_ButtonHovered];
+    c[ImGuiCol_FrameBgActive] = wine;
+    c[ImGuiCol_SliderGrab] = ImVec4(0.57f, 0.27f, 0.22f, 1);
+    c[ImGuiCol_SliderGrabActive] = ImVec4(0.64f, 0.31f, 0.24f, 1);
+    c[ImGuiCol_NavCursor] = copper;
+    c[ImGuiCol_Separator] = c[ImGuiCol_Border];
 }
 
-/* Scales the UI with the window (in points; HiDPI is handled by the framebuffer scale). */
 void update_scale() {
-    int w = 0, h = 0;
-    SDL_GetWindowSize(g_window, &w, &h);
-    ImGui::GetStyle().FontScaleMain = h > 0 ? h / 720.0f : 1.0f;
+    if (!SDL_GetWindowSafeArea(g_window, &safe_area) || safe_area.w <= 0 || safe_area.h <= 0) {
+        safe_area = {};
+        SDL_GetWindowSize(g_window, &safe_area.w, &safe_area.h);
+    }
+    // SDL reports mouse and window coordinates in points on Retina, in pixels on Android.
+    float density = SDL_GetWindowPixelDensity(g_window);
+    float factor = density > 0 ? SDL_GetWindowDisplayScale(g_window) / density : 1;
+    float scale = std::max(
+        0.5f, std::min({std::max(1.0f, factor), safe_area.w / 300.0f, safe_area.h / 240.0f}));
+    if (scale != ui_scale) {
+        apply_style(scale);
+        ui_scale = scale;
+    }
 }
 
 /* Button mapping: while waiting for a key or gamepad button, input goes to the binding instead of
@@ -153,7 +175,8 @@ bool capture_event(const SDL_Event &e) {
     if (g_capture == Capture::None) {
         return false;
     }
-    if (e.type == SDL_EVENT_KEY_DOWN && e.key.scancode == SDL_SCANCODE_ESCAPE) {
+    if (e.type == SDL_EVENT_KEY_DOWN &&
+        (e.key.scancode == SDL_SCANCODE_ESCAPE || e.key.scancode == SDL_SCANCODE_AC_BACK)) {
         g_capture = Capture::None; /* cancel */
         return true;
     }
@@ -204,11 +227,53 @@ bool capture_event(const SDL_Event &e) {
     return e.type == SDL_EVENT_KEY_UP;
 }
 
+// Delay touch presses in a scrollable list until a tap or a horizontal slider drag
+// is clear. A vertical swipe must not activate the row it starts on.
+bool scroll_touch_list(const SDL_Event &event) {
+    enum class Gesture { Idle, Pending, Scrolling };
+    static Gesture gesture = Gesture::Idle;
+    static SDL_Event down;
+    static float previous_y;
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.which == SDL_TOUCH_MOUSEID) {
+        SDL_FPoint pos = {event.button.x, event.button.y};
+        if (scroll_area.h > 0 && SDL_PointInRectFloat(&pos, &scroll_area)) {
+            down = event;
+            previous_y = pos.y;
+            gesture = Gesture::Pending;
+            return true;
+        }
+    } else if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID &&
+               gesture != Gesture::Idle) {
+        if (gesture == Gesture::Pending) {
+            float dx = std::fabs(event.motion.x - down.button.x);
+            float dy = std::fabs(event.motion.y - down.button.y);
+            if (std::max(dx, dy) < 8 * ui_scale)
+                return true;
+            if (dx > dy) {
+                gesture = Gesture::Idle;
+                ImGui_ImplSDL3_ProcessEvent(&down);
+                return false;
+            }
+            gesture = Gesture::Scrolling;
+        }
+        scroll_delta += previous_y - event.motion.y;
+        previous_y = event.motion.y;
+        return true;
+    } else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.which == SDL_TOUCH_MOUSEID) {
+        if (gesture == Gesture::Pending)
+            ImGui_ImplSDL3_ProcessEvent(&down);
+        bool consumed = gesture == Gesture::Scrolling;
+        gesture = Gesture::Idle;
+        return consumed;
+    }
+    return false;
+}
+
 /* Returns false if the window was closed. */
 bool pump_events() {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
-        if (e.type != SDL_EVENT_QUIT && capture_event(e)) {
+        if (e.type != SDL_EVENT_QUIT && (capture_event(e) || scroll_touch_list(e))) {
             continue;
         }
         ImGui_ImplSDL3_ProcessEvent(&e);
@@ -257,100 +322,155 @@ void end_frame() {
     SDL_RenderPresent(g_renderer);
 }
 
-/* Centred, auto-sized window. */
-bool begin_panel(const char *id, float width_frac) {
-    const ImGuiViewport *vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(vp->Size.x * width_frac, 0), ImGuiCond_Always);
+bool begin_panel(const char *id, Page page) {
+    float gutter = 10 * ui_scale;
+    float width = std::min(safe_area.w - 2 * gutter, (page == Page::Main ? 440 : 540) * ui_scale);
+    float height = std::max(1.0f, safe_area.h - 2 * gutter);
+    ImGui::SetNextWindowPos(
+        ImVec2(safe_area.x + safe_area.w * 0.5f, safe_area.y + safe_area.h * 0.5f),
+        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(FLT_MAX, height));
+    ImGui::SetNextWindowSize(
+        ImVec2(std::max(1.0f, width), page == Page::Main ? 0 : std::min(height, 590 * ui_scale)));
+    scroll_area = {};
     return ImGui::Begin(id, nullptr,
                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                            ImGuiWindowFlags_NoSavedSettings);
-}
-
-void title(const char *text) {
-    float scale = 1.8f;
-    ImGui::SetWindowFontScale(scale);
-    float w = ImGui::CalcTextSize(text).x;
-    ImGui::SetCursorPosX((ImGui::GetWindowSize().x - w) * 0.5f);
-    ImGui::TextColored(ImVec4(0.80f, 0.12f, 0.12f, 1.0f), "%s", text);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::Spacing();
+                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 }
 
 bool wide_button(const char *label) {
     return ImGui::Button(label, ImVec2(-FLT_MIN, 0));
 }
 
-/* Button mapping page: one row per PS1 button, keyboard and gamepad columns. */
-void bindings_page(bool *back) {
-    ImGui::TextWrapped("Click a binding, then press the key or gamepad button to use. Esc cancels. "
-                       "The left stick always works as the d-pad.");
-    ImGui::Spacing();
-    if (ImGui::BeginTable("##bindings", 3,
-                          ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("PS1 button");
-        ImGui::TableSetupColumn("Keyboard");
-        ImGui::TableSetupColumn("Gamepad");
-        ImGui::TableHeadersRow();
-        for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
-            ImGui::PushID(i);
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(input_buttons[i].name);
-
-            ImGui::TableNextColumn();
-            bool waiting_key = g_capture == Capture::Key && g_capture_button == i;
-            if (ImGui::Button(waiting_key ? "Press a key..."
-                                          : input_key_label(settings.key_bind[i]),
-                              ImVec2(-FLT_MIN, 0))) {
-                g_capture = Capture::Key;
-                g_capture_button = i;
-            }
-            ImGui::TableNextColumn();
-            bool waiting_pad = g_capture == Capture::Pad && g_capture_button == i;
-            if (ImGui::Button(waiting_pad ? "Press a button..."
-                                          : input_pad_label(settings.pad_bind[i]),
-                              ImVec2(-FLT_MIN, 0))) {
-                g_capture = Capture::Pad;
-                g_capture_button = i;
-            }
-            ImGui::PopID();
-        }
-        /* Hotkeys: port functions, with optional modifiers on the keyboard. */
-        for (int i = 0; i < HOTKEY_COUNT; i++) {
-            ImGui::PushID(100 + i);
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(input_hotkeys[i].name);
-            ImGui::TableNextColumn();
-            bool waiting_key = g_capture == Capture::HotkeyKey && g_capture_button == i;
-            if (ImGui::Button(waiting_key ? "Press keys..."
-                                          : input_hotkey_label(settings.hotkey_key[i],
-                                                               settings.hotkey_mods[i]),
-                              ImVec2(-FLT_MIN, 0))) {
-                g_capture = Capture::HotkeyKey;
-                g_capture_button = i;
-            }
-            ImGui::TableNextColumn();
-            bool waiting_pad = g_capture == Capture::HotkeyPad && g_capture_button == i;
-            if (ImGui::Button(waiting_pad ? "Press a button..."
-                                          : input_pad_label(settings.hotkey_pad[i]),
-                              ImVec2(-FLT_MIN, 0))) {
-                g_capture = Capture::HotkeyPad;
-                g_capture_button = i;
-            }
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
+void heading(const char *label, bool subpage) {
+    if (subpage) {
+        ImGui::PushFont(nullptr, 14);
+        ImGui::TextColored(copper, "NIGHTMARE CREATURES");
+        ImGui::PopFont();
     }
-    ImGui::TextDisabled("F5 / F9 always quick save / load too. Stick clicks (L3, R3) are free "
-                        "on the gamepad.");
-    ImGui::Spacing();
-    float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
-    if (ImGui::Button("Reset to defaults", ImVec2(half, 0))) {
+    ImGui::PushFont(nullptr, 32);
+    ImGui::TextWrapped("%s", label);
+    ImGui::PopFont();
+    ImGui::Separator();
+}
+
+bool back_pressed() {
+    return ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+           ImGui::IsKeyPressed(ImGuiKey_AppBack, false) ||
+           ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+}
+
+// A full-width target keeps the name and current value together for touch and gamepad users.
+// A long binding or a narrow window moves the value below the name.
+bool value_row(const char *label, const char *value, bool accent = true) {
+    const ImVec2 pad = ImGui::GetStyle().FramePadding;
+    float width = std::max(1.0f, ImGui::GetContentRegionAvail().x);
+    float inner = std::max(1.0f, width - 2 * pad.x);
+    ImVec2 name_size = ImGui::CalcTextSize(label, nullptr, false, inner);
+    ImVec2 value_size = ImGui::CalcTextSize(value, nullptr, false, inner);
+    bool stack = name_size.x + value_size.x + pad.x > inner;
+    float height = 2 * pad.y + (stack ? name_size.y + value_size.y : name_size.y);
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImGui::PushID(label);
+    bool pressed = ImGui::Button("##row", ImVec2(width, height));
+    ImGui::PopID();
+    ImDrawList *draw = ImGui::GetWindowDrawList();
+    draw->AddText(nullptr, 0, ImVec2(pos.x + pad.x, pos.y + pad.y), ImGui::GetColorU32(ink), label,
+                  nullptr, inner);
+    float x = stack ? pad.x : width - pad.x - value_size.x;
+    float y = pad.y + (stack ? name_size.y : 0);
+    draw->AddText(nullptr, 0, ImVec2(pos.x + x, pos.y + y),
+                  ImGui::GetColorU32(accent ? copper : muted), value, nullptr, inner);
+    return pressed;
+}
+
+bool toggle_row(const char *label, bool &value) {
+    if (!value_row(label, value ? "On" : "Off", value))
+        return false;
+    value = !value;
+    return true;
+}
+
+bool slider_row(const char *label, int *value, int lo, int hi, const char *format) {
+    ImGui::TextUnformatted(label);
+    ImGui::PushID(label);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    bool changed = ImGui::SliderInt("##slider", value, lo, hi, format);
+    ImGui::PopID();
+    return changed;
+}
+
+int tabs(const char *const *labels, int count, int selected) {
+    float gap = ImGui::GetStyle().ItemSpacing.x;
+    float width = (ImGui::GetContentRegionAvail().x - (count - 1) * gap) / count;
+    for (int i = 0; i < count; i++) {
+        if (i)
+            ImGui::SameLine();
+        bool active = i == selected;
+        if (active)
+            ImGui::PushStyleColor(ImGuiCol_Button, wine);
+        if (ImGui::Button(labels[i], ImVec2(i == count - 1 ? -FLT_MIN : width, 0)))
+            selected = i;
+        if (active) {
+            ImGui::PopStyleColor();
+            ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(lo.x, hi.y - ui_scale),
+                                                ImVec2(hi.x, hi.y - ui_scale),
+                                                ImGui::GetColorU32(copper), 2 * ui_scale);
+        }
+    }
+    return selected;
+}
+
+void begin_list(const char *id) {
+    // Reserve a fixed Back button below the independently scrolling list.
+    ImGui::BeginChild(id, ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
+    ImVec2 pos = ImGui::GetWindowPos(), size = ImGui::GetWindowSize();
+    if (ImGui::GetScrollMaxY() > 0) {
+        scroll_area = {pos.x, pos.y, size.x - ImGui::GetStyle().ScrollbarSize, size.y};
+        if (scroll_delta)
+            ImGui::SetScrollY(ImGui::GetScrollY() + scroll_delta);
+    }
+    scroll_delta = 0;
+}
+
+void bindings_page(bool *back) {
+    static int device = 0;
+    const char *devices[] = {"Keyboard", "Gamepad"};
+    heading("Button mapping", true);
+    int next = tabs(devices, 2, device);
+    if (next != device)
+        g_capture = Capture::None;
+    device = next;
+    bool keyboard = device == 0;
+    begin_list(devices[device]);
+    ImGui::TextWrapped("Select an action, then press the %s to assign.",
+                       keyboard ? "key" : "gamepad button");
+    for (int i = 0; i < INPUT_BUTTON_COUNT + HOTKEY_COUNT; i++) {
+        bool hotkey = i >= INPUT_BUTTON_COUNT;
+        int index = hotkey ? i - INPUT_BUTTON_COUNT : i;
+        if (index == 0)
+            ImGui::SeparatorText(hotkey ? "Shortcuts" : "PS1 buttons");
+        Capture kind = hotkey ? (keyboard ? Capture::HotkeyKey : Capture::HotkeyPad)
+                              : (keyboard ? Capture::Key : Capture::Pad);
+        const char *value;
+        if (g_capture == kind && g_capture_button == index) {
+            value = keyboard ? "Press a key..." : "Press a button...";
+        } else if (hotkey && keyboard) {
+            value = input_hotkey_label(settings.hotkey_key[index], settings.hotkey_mods[index]);
+        } else if (keyboard) {
+            value = input_key_label(settings.key_bind[index]);
+        } else {
+            value = input_pad_label(hotkey ? settings.hotkey_pad[index] : settings.pad_bind[index]);
+        }
+        if (value_row(hotkey ? input_hotkeys[index].name : input_buttons[index].name, value)) {
+            g_capture = kind;
+            g_capture_button = index;
+        }
+    }
+    ImGui::TextWrapped(
+        "F5 and F9 always quick save and load. The left stick also works as the D-pad.");
+    if (wide_button("Reset bindings to defaults")) {
         for (int i = 0; i < INPUT_BUTTON_COUNT; i++) {
             settings.key_bind[i] = input_default_key(i);
             settings.pad_bind[i] = input_default_pad(i);
@@ -362,100 +482,73 @@ void bindings_page(bool *back) {
         g_capture = Capture::None;
         settings_save();
     }
-    ImGui::SameLine();
-    bool idle = g_capture == Capture::None;
-    if (ImGui::Button("Back", ImVec2(half, 0)) ||
-        (idle && (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
-                  ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight)))) {
+    ImGui::EndChild();
+    if (wide_button("Back") || (g_capture == Capture::None && back_pressed())) {
         g_capture = Capture::None;
         *back = true;
     }
 }
 
 void settings_page(bool *back, bool *open_bindings) {
+    static int section = 0;
+    const char *sections[] = {"Play", "Audio", "Video"};
+    heading("Settings", true);
+    section = tabs(sections, 3, section);
+    begin_list(sections[section]);
     bool changed = false;
-    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
-
-    ImGui::SeparatorText("Gameplay");
-    changed |= ImGui::Checkbox("Adrenaline system", &settings.adrenaline);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Off: the adrenaline meter never fills or drains your health,\n"
-                          "and its gauge is hidden.");
+    switch (section) {
+    case 0:
+        ImGui::SeparatorText("Movement");
+        if (value_row("Control scheme", settings.controls == CONTROLS_TANK ? "Tank" : "Modern")) {
+            settings.controls =
+                settings.controls == CONTROLS_TANK ? CONTROLS_MODERN : CONTROLS_TANK;
+            changed = true;
+        }
+        if (settings.controls == CONTROLS_MODERN)
+            ImGui::TextWrapped("Modern controls are camera-relative and experimental.");
+        changed |= toggle_row("Adrenaline system", settings.adrenaline);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("When off, the meter is hidden and never drains health.");
+        ImGui::SeparatorText("Camera");
+        changed |= toggle_row("Mouse / right stick camera", settings.mouse_camera);
+        if (settings.mouse_camera)
+            changed |= slider_row("Mouse sensitivity", &settings.mouse_sensitivity, 1, 100, "%d");
+        ImGui::Spacing();
+        *open_bindings = value_row("Button mapping", ">");
+        break;
+    case 1:
+        ImGui::SeparatorText("Volume");
+        changed |= slider_row("Master", &settings.volume_master, 0, 100, "%d%%");
+        changed |= slider_row("Music", &settings.volume_music, 0, 100, "%d%%");
+        changed |= slider_row("Effects", &settings.volume_sfx, 0, 100, "%d%%");
+        break;
+    case 2: {
+        ImGui::SeparatorText("Display");
+        changed |= toggle_row("Fullscreen", settings.fullscreen);
+        changed |= toggle_row("Widescreen (16:9)", settings.widescreen);
+        changed |= toggle_row("Show FPS", settings.show_fps);
+        ImGui::SeparatorText("Rendering");
+        if (value_row("Screen filtering", settings.filter == FILTER_NEAREST ? "Sharp" : "Smooth")) {
+            settings.filter = settings.filter == FILTER_NEAREST ? FILTER_BILINEAR : FILTER_NEAREST;
+            changed = true;
+        }
+        changed |= slider_row("Resolution", &settings.render_scale, 1, 8, "%dx native");
+        if (settings.render_scale > 3)
+            ImGui::TextWrapped("Above 3x, the game may slow down.");
+        static const char *modes[] = {"Off", "xBRZ 2x", "xBRZ 3x", "xBRZ 4x"};
+        ImGui::BeginDisabled(settings.render_scale <= 1);
+        if (value_row("Texture upscaling", modes[settings.texture_scale - 1])) {
+            settings.texture_scale = settings.texture_scale % 4 + 1;
+            changed = true;
+        }
+        ImGui::EndDisabled();
+        if (settings.render_scale <= 1)
+            ImGui::TextWrapped("Texture upscaling needs a resolution above 1x.");
+        break;
     }
-    int controls = settings.controls;
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Controls");
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton("Tank (original)", &controls, CONTROLS_TANK);
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton("Modern (camera-relative)", &controls, CONTROLS_MODERN);
-    ImGui::SameLine();
-    ImGui::TextDisabled("(experimental)");
-    settings.controls = static_cast<ControlScheme>(controls);
-    changed |= ImGui::Checkbox("Mouse / right stick camera", &settings.mouse_camera);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Look around with the mouse or the right stick. The camera returns\n"
-                          "behind the player after a moment. Esc releases the mouse.");
     }
-    if (settings.mouse_camera) {
-        changed |= ImGui::SliderInt("Mouse sensitivity", &settings.mouse_sensitivity, 1, 100);
-    }
-    if (ImGui::Button("Button mapping...")) {
-        *open_bindings = true;
-    }
-
-    ImGui::SeparatorText("Audio");
-    changed |= ImGui::SliderInt("Master volume", &settings.volume_master, 0, 100, "%d%%");
-    changed |= ImGui::SliderInt("Music volume", &settings.volume_music, 0, 100, "%d%%");
-    changed |= ImGui::SliderInt("Effects volume", &settings.volume_sfx, 0, 100, "%d%%");
-
-    ImGui::SeparatorText("Video");
-    changed |= ImGui::Checkbox("Fullscreen", &settings.fullscreen);
-    changed |= ImGui::Checkbox("Widescreen (16:9)", &settings.widescreen);
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Widens the 3D view to 16:9. The HUD and menus keep their proportions;\n"
-                          "movies stay 4:3.");
-    }
-    int filter = settings.filter;
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Screen filtering");
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton("Sharp", &filter, FILTER_NEAREST);
-    ImGui::SameLine();
-    changed |= ImGui::RadioButton("Smooth", &filter, FILTER_BILINEAR);
-    settings.filter = static_cast<TextureFilter>(filter);
-    changed |= ImGui::SliderInt("Resolution", &settings.render_scale, 1, 8, "%dx native");
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Internal rendering resolution. Higher values are smoother but cost\n"
-                          "more CPU (the current renderer is software-based).");
-    }
-    if (settings.render_scale > 3) {
-        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
-                           "Above 3x the game may slow down on this renderer.");
-    }
-    static const char *texture_modes[] = {"Off", "xBRZ 2x", "xBRZ 3x", "xBRZ 4x"};
-    int tex_mode = settings.texture_scale - 1;
-    ImGui::BeginDisabled(settings.render_scale <= 1);
-    if (ImGui::Combo("Texture upscaling", &tex_mode, texture_modes, 4)) {
-        settings.texture_scale = tex_mode + 1;
-        changed = true;
-    }
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip(settings.render_scale <= 1
-                              ? "Needs a resolution above 1x."
-                              : "Smooths the game's pixel-art textures with the xBRZ scaler.\n"
-                                "Textures are upscaled the first time they appear, which can\n"
-                                "cause a brief stutter when entering a new area.");
-    }
-    changed |= ImGui::Checkbox("Show FPS", &settings.show_fps);
-
-    ImGui::PopItemWidth();
-    ImGui::Spacing();
-    if (wide_button("Back") || ImGui::IsKeyPressed(ImGuiKey_Escape) ||
-        ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight)) {
-        *back = true;
-    }
+    ImGui::EndChild();
+    *back = wide_button("Back") || back_pressed();
     if (changed) {
         menu_apply_settings();
         settings_save();
@@ -495,7 +588,11 @@ extern "C" void menu_init(SDL_Window *window, SDL_Renderer *renderer) {
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
     io.IniFilename = nullptr;
-    apply_style();
+    ImFontConfig font;
+    font.FontDataOwnedByAtlas = false;
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char *>(menu_font), sizeof menu_font, 18,
+                                   &font);
+    apply_style(ui_scale);
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 }
@@ -514,6 +611,7 @@ extern "C" void menu_apply_settings(void) {
     spu_set_gains(settings.volume_master * 256 / 100, settings.volume_music * 256 / 100,
                   settings.volume_sfx * 256 / 100);
     SDL_SetWindowFullscreen(g_window, settings.fullscreen);
+#ifndef __ANDROID__
     /* Reshape a windowed game to the chosen aspect ratio (keeping its height). */
     static int applied_widescreen = -1;
     if (applied_widescreen != (int)settings.widescreen) {
@@ -524,6 +622,7 @@ extern "C" void menu_apply_settings(void) {
             SDL_SetWindowSize(g_window, settings.widescreen ? h * 16 / 9 : h * 4 / 3, h);
         }
     }
+#endif
 }
 
 /* Menus need the cursor: leave free-look's relative mouse mode. */
@@ -557,34 +656,38 @@ extern "C" MenuResult menu_run_start(void) {
         }
 
         begin_frame();
-        if (begin_panel("##start", page == Page::Main ? 0.45f : 0.7f)) {
-            title("NIGHTMARE CREATURES");
+        if (begin_panel("##start", page)) {
             if (page == Page::Main) {
+                heading("Nightmare Creatures", false);
                 ImGui::TextWrapped("%s", disc_status_text(check));
                 if (check != DISC_OK && settings.disc_path[0] != '\0') {
-                    ImGui::TextDisabled("%s", settings.disc_path);
+                    ImGui::TextWrapped("%s", settings.disc_path);
                 }
                 ImGui::Spacing();
-                ImGui::BeginDisabled(check != DISC_OK);
-                if (check == DISC_OK) {
-                    ImGui::SetItemDefaultFocus();
-                }
-                bool start = wide_button("Start Game");
+                bool ready = check == DISC_OK;
+                ImGui::PushStyleColor(ImGuiCol_Button, wine);
+                ImGui::BeginDisabled(dialog_open);
+                bool primary = wide_button(ready ? "Start Game" : "Choose Disc");
+                ImGui::SetItemDefaultFocus();
                 ImGui::EndDisabled();
-                if (start) {
+                ImGui::PopStyleColor();
+                if (ready && primary) {
                     ImGui::End();
                     ImGui::EndFrame();
                     return MENU_START;
                 }
-                if (wide_button("Settings")) {
-                    page = Page::Settings;
+                bool pick_disc = !ready && primary;
+                if (ready) {
+                    ImGui::BeginDisabled(dialog_open);
+                    pick_disc = wide_button("Change Disc");
+                    ImGui::EndDisabled();
                 }
-                ImGui::BeginDisabled(dialog_open);
-                if (wide_button(check == DISC_OK ? "Change Disc..." : "Choose Disc...")) {
+                if (pick_disc) {
                     dialog_open = true;
                     open_disc_dialog();
                 }
-                ImGui::EndDisabled();
+                if (wide_button("Settings"))
+                    page = Page::Settings;
                 if (wide_button("Quit")) {
                     ImGui::End();
                     ImGui::EndFrame();
@@ -624,15 +727,15 @@ extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
             return MENU_QUIT;
         }
         begin_frame();
-        if (begin_panel("##pause", page == Page::Main ? 0.35f : 0.7f)) {
-            title("PAUSED");
+        if (begin_panel("##pause", page)) {
             if (page == Page::Main) {
-                if (first) {
-                    ImGui::SetItemDefaultFocus();
-                }
+                heading("Paused", true);
                 bool resume = wide_button("Resume");
+                if (first)
+                    ImGui::SetItemDefaultFocus();
                 /* Esc closes the menu, but not on the frame that opened it. */
                 if (!first && (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+                               ImGui::IsKeyPressed(ImGuiKey_AppBack, false) ||
                                ImGui::IsKeyPressed(ImGuiKey_GamepadBack, false))) {
                     resume = true;
                 }
@@ -646,12 +749,19 @@ extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
                 ImGui::SeparatorText("Save state");
                 for (int i = 0; i < SAVESTATE_SLOTS - 1; i++) {
                     char label[32];
-                    std::snprintf(label, sizeof label, savestate_exists(i) ? "%d" : "%d (empty)",
-                                  i + 1);
-                    if (i > 0) {
+                    std::snprintf(label, sizeof label,
+                                  savestate_exists(i) ? "Slot %d" : "Slot %d (empty)", i + 1);
+                    if (i % 2)
                         ImGui::SameLine();
-                    }
-                    ImGui::RadioButton(label, &slot, i);
+                    float w =
+                        (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+                    if (slot == i)
+                        ImGui::PushStyleColor(ImGuiCol_Button, wine);
+                    bool clicked = ImGui::Button(label, ImVec2(i % 2 ? -FLT_MIN : w, 0));
+                    if (slot == i)
+                        ImGui::PopStyleColor();
+                    if (clicked)
+                        slot = i;
                 }
                 float half =
                     (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;

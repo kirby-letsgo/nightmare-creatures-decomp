@@ -100,7 +100,12 @@ add_library(nc_runtime STATIC
     src/port/settings.c
     src/port/ui/menu.cpp
 )
-target_include_directories(nc_runtime PUBLIC src)
+# Embed the menu typeface from the pinned ImGui checkout so single-file packages can use it.
+file(READ "${imgui_SOURCE_DIR}/misc/fonts/Karla-Regular.ttf" karla_hex HEX)
+string(REGEX REPLACE "(..)" "0x\\1," karla_bytes "${karla_hex}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/menu_font.h"
+     CONTENT "static const unsigned char menu_font[] = {@karla_bytes@};" @ONLY)
+target_include_directories(nc_runtime PUBLIC src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 # xBRZ texture upscaler (GPLv3, third_party/xbrz).
 add_library(xbrz STATIC third_party/xbrz/xbrz.cpp)
