@@ -164,7 +164,7 @@ if(WIN32)
 endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
-    add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c)
+    add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c src/decomp/damage.c)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -206,6 +206,12 @@ add_executable(test_adrenaline tests/adrenaline.c src/decomp/adrenaline.c src/po
 target_link_libraries(test_adrenaline PRIVATE nc_runtime)
 add_test(NAME adrenaline COMMAND test_adrenaline "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(adrenaline PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_damage tests/damage.c src/decomp/damage.c src/port/no_gen.c)
+target_link_libraries(test_damage PRIVATE nc_runtime)
+add_test(NAME damage_rules COMMAND test_damage)
+add_test(NAME damage_disc COMMAND test_damage "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(damage_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
 add_test(NAME continue_game COMMAND Python3::Interpreter "${CMAKE_SOURCE_DIR}/tools/test_continue.py"
     $<TARGET_FILE:nightmare> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")

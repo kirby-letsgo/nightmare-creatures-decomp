@@ -244,6 +244,19 @@ registers, RAM and remaining cycles, and exercises the movement replay with adre
 disabled. To compare both gameplay builds directly, add `--no-adrenaline` to
 `tools/test_first_level.py ... --compare ...`.
 
+### Native hit damage
+
+In the recompiled build, `src/decomp/damage.c` calculates the target's remaining health
+once a hit has landed and the base damage has been selected. The entry at `0x8004EB6C`
+subtracts base damage directly. The entry at `0x8004EB30` doubles it when bit
+`0x08000000` in the rules word at offset 4 and bits `0x30` in the first word are all clear.
+Both paths resume at the original health store at `0x8004EB78`, where the combat replay
+counts hits. The original routine handles hit detection, base damage selection and death
+reactions. Near a scheduled interrupt, the recompiled build executes the instruction-timed path.
+
+`ctest -R damage` checks the arithmetic, scratch registers and cycle counts. With the US
+disc present it also compares both entries against the interpreter, including guest RAM.
+
 ### Disc format verification
 
 Playback accepts CHD, a complete 2352-byte-sector BIN, and CUE sheets with one or more
