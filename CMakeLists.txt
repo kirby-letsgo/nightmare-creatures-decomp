@@ -89,6 +89,7 @@ add_library(nc_runtime STATIC
     src/port/memory.c
     src/port/patches.c
     src/port/platform.c
+    src/port/replay.c
     src/port/savestate.c
     src/port/settings.c
     src/port/ui/menu.cpp
@@ -163,3 +164,7 @@ endif()
 # Smoke test for CI (no disc available there): the executable starts and reports its version.
 enable_testing()
 add_test(NAME version COMMAND nightmare --version)
+
+add_test(NAME first_level COMMAND Python3::Interpreter
+    ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare>)
+set_tests_properties(first_level PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")

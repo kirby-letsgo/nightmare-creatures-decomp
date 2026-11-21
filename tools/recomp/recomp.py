@@ -25,18 +25,6 @@ sys.path.insert(0, str(ROOT / "tools"))
 from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 
 FUNCS_PER_FILE = 120
-POLL_COST = 16  # cycles charged per function entry / loop iteration (coarse timing model)
-LOAD_PENALTY = 4  # extra cycles per load from main RAM
-
-# Psy-Q functions that busy-wait with an iteration-count timeout tuned for real hardware. Their
-# loops are charged at realistic cost; everything else stays cheap, which effectively runs the
-# game on a faster CPU (no slowdown) while keeping these timeouts from firing early.
-BUSY_WAIT_FUNCS = {
-    "v_wait", "VSync", "DrawSync", "_sync", "CD_sync", "CD_ready", "CD_cw", "CD_datasync",
-    "CdSync", "CdReady", "CdDataSync", "DecDCTinSync", "DecDCToutSync", "MDEC_in_sync",
-    "MDEC_out_sync", "SpuIsTransferCompleted",
-}  # fmt: skip
-
 LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
@@ -128,7 +116,6 @@ class Module:
     # calls (Psy-Q's interrupt handler is entered by "longjmp"-ing to one), and code addresses
     # taken as pointers that splat did not split into their own function (callbacks).
     resumes: dict[int, Func] = field(default_factory=dict)
-    busy_wait: set[int] = field(default_factory=set)  # addresses of BUSY_WAIT_FUNCS
 
     def cname(self, addr: int) -> str:
         return f"{self.name}_{addr:08X}"
@@ -188,10 +175,6 @@ def load_module(name: str, exe: str) -> Module:
             for i in f.insns:
                 if i.op == 3 and i.jump_target() == setjmp and i.addr + 8 < f.end:
                     mod.resumes[i.addr + 8] = f
-    for fname in BUSY_WAIT_FUNCS:
-        addr = symbol_addr(name, fname)
-        if addr is not None:
-            mod.busy_wait.add(addr)
     for addr in pointer_targets(mod):
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
@@ -445,17 +428,22 @@ class Emitter:
                 return f"gte_write_ctrl(c, {i.rd}, {r(i.rt)});"
         return f"nc_unimplemented(c, 0x{i.addr:08X}, 0x{i.word:08X});"
 
-    def loop_cost(self, f: Func, target: int, branch: int) -> int:
-        """Approximate R3000A cycles for one iteration of the loop [target, branch + delay]:
-        one per instruction plus a RAM access penalty per load. Busy-wait loops with iteration
-        timeouts (e.g. Psy-Q's v_wait) depend on this being close to hardware."""
-        if f.addr not in self.mod.busy_wait:
-            return POLL_COST
-        cycles = 0
-        for i in f.insns:
-            if target <= i.addr <= branch + 4:
-                cycles += 1 + (LOAD_PENALTY if 0x20 <= i.op <= 0x26 or i.op == 0x32 else 0)
-        return max(cycles, 1)
+    def timed_simple(self, i: Insn, *, delay_slot: bool = False) -> str:
+        """Execute an instruction, then poll. A branch and its slot retire together."""
+        stmt = self.simple(i)
+        cost = "NC_LOAD_CYCLES" if 0x20 <= i.op <= 0x26 or i.op == 0x32 else "NC_INSN_CYCLES"
+        flag = self.patches.get(i.addr)
+        if flag and cost != "NC_INSN_CYCLES":
+            cost = f"(nc_flag_{flag} ? NC_INSN_CYCLES : {cost})"
+        if delay_slot:
+            cost = f"NC_INSN_CYCLES + {cost}"
+        hook = self.hooks.get(i.addr)
+        parts = [
+            f"nc_hook_{hook}(c);" if hook else "",
+            self.guarded(i.addr, stmt),
+            f"NC_POLL(c, {cost});",
+        ]
+        return " ".join(part for part in parts if part)
 
     def cond(self, i: Insn) -> str:
         rs, rt = r(i.rs), r(i.rt)
@@ -505,7 +493,6 @@ class Emitter:
         out = [
             f"void {name}(CPUState *c) {{",
             f"    NC_FN_ENTER(c, 0x{f.addr:08X}u);",
-            f"    NC_POLL(c, {POLL_COST});",
         ]
         if entry is not None:
             out.append(f"    goto L_{entry:08X};")
@@ -514,16 +501,17 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
-            if i.addr in self.hooks:
-                out.append(f"    nc_hook_{self.hooks[i.addr]}(c);")
             if not i.has_delay():
-                stmt = self.guarded(i.addr, self.simple(i))
-                if stmt:
-                    out.append(f"    {stmt}")
+                out.append(f"    {self.timed_simple(i)}")
                 k += 1
                 continue
 
-            delay = self.guarded(insns[k + 1].addr, self.simple(insns[k + 1])) if k + 1 < n else ""
+            if i.addr in self.hooks:
+                out.append(f"    nc_hook_{self.hooks[i.addr]}(c);")
+            slot = (
+                insns[k + 1] if k + 1 < n else Insn(i.addr + 4, word_at(self.mod, i.addr + 4) or 0)
+            )
+            delay = self.timed_simple(slot, delay_slot=True)
             control = self.control(f, i, delay, table_cases)
             flag = self.patches.get(i.addr)
             if flag is not None:
@@ -534,14 +522,15 @@ class Emitter:
             else:
                 out.extend(control)
             if k + 1 < n and insns[k + 1].addr in slot_targets:
-                slot = insns[k + 1].addr
-                out.append(f"    goto L_{slot + 4:08X};")
-                out.append(f"L_{slot:08X}:;")
-                if delay:
-                    out.append(f"    {delay}")
+                out.append(f"    goto L_{slot.addr + 4:08X};")
+                out.append(f"L_{slot.addr:08X}:;")
+                out.append(f"    {self.timed_simple(slot)}")
             k += 2
-        # Falling off the end means execution continues into the next function.
-        out.append(f"    {self.call(f.end)}")
+        # A final branch may have consumed its delay slot across a function boundary.
+        fallthrough = f.end + 4 if k > n else f.end
+        if f.end in targets:
+            out.append(f"L_{f.end:08X}:;")
+        out.append(f"    {self.call(fallthrough)}")
         out.append("}")
         return out
 
@@ -560,8 +549,7 @@ class Emitter:
                 lines.append(f"    R(31) = 0x{i.addr + 8:08X}u;")
             lines.extend(emit(d))
             if f.addr <= tgt < f.end and not link:
-                poll = f" NC_POLL(c, {self.loop_cost(f, tgt, i.addr)});" if tgt <= i.addr else ""
-                lines.append(f"    if (bc) {{{poll} goto L_{tgt:08X}; }} }}")
+                lines.append(f"    if (bc) {{ goto L_{tgt:08X}; }} }}")
             elif link:
                 lines.append(f"    if (bc) {{ {self.call(tgt)} }} }}")
             else:
@@ -572,8 +560,7 @@ class Emitter:
             tgt = i.jump_target()
             lines.extend(emit(d))
             if f.addr <= tgt < f.end:
-                poll = f"NC_POLL(c, {self.loop_cost(f, tgt, i.addr)}); " if tgt <= i.addr else ""
-                lines.append(f"    {poll}goto L_{tgt:08X};")
+                lines.append(f"    goto L_{tgt:08X};")
             else:
                 lines.append(f"    {self.call(tgt)} return;")
             return lines

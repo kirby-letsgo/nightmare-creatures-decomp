@@ -22,8 +22,7 @@ enum { COP0_SR = 12, COP0_CAUSE = 13, COP0_EPC = 14 };
 /* Interrupts are taken when IEc (bit 0) and the hardware interrupt mask IM2 (bit 10) are set. */
 #define SR_INT_ENABLE 0x401u
 
-/* Recompiled code charges POLL_COST cycles (tools/recomp) at every function entry and backward
- * branch and calls nc_poll when its budget runs out; this is the budget handed out each time. */
+/* Maximum cycles between hardware polls. Both execution paths debit the same instruction costs. */
 #define POLL_BUDGET 4096
 
 static u64 next_vblank = PSX_CYCLES_PER_FRAME;
