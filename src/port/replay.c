@@ -20,18 +20,32 @@ typedef struct InputScript {
 static InputScript boot, level;
 static unsigned level_frame;
 static unsigned hits_dealt, hits_taken;
+static bool trace_damage;
+
+void nc_hook_replay_damage_select(CPUState *c) {
+    if (trace_damage && level_frame)
+        NC_LOG("damage-select frame=%u ra=%08x a0=%08x a1=%08x a2=%08x a3=%08x", level_frame + 1,
+               c->r[31], c->r[4], c->r[5], c->r[6], c->r[7]);
+}
 
 void nc_hook_replay_damage(CPUState *c) {
     if (!level_frame)
         return;
     u32 player = MEM_R32(ADDR_PLAYER_ACTOR);
     u32 recipient = c->r[17], attacker = c->r[19];
-    if ((s16)c->r[2] >= (s16)MEM_R16(recipient + ACTOR_HEALTH_OFFSET))
+    s16 before = (s16)MEM_R16(recipient + ACTOR_HEALTH_OFFSET), after = (s16)c->r[2];
+    if (after >= before)
         return;
     if (recipient == player && attacker && attacker != player)
         hits_taken++;
-    if (attacker == player && recipient != player)
+    else if (attacker == player && recipient != player)
         hits_dealt++;
+    else
+        return;
+    if (trace_damage)
+        NC_LOG("damage-hit frame=%u %s attacker=%08x recipient=%08x base=%08x hp=%d->%d",
+               level_frame + 1, recipient == player ? "taken" : "dealt", attacker, recipient,
+               c->r[20], before, after);
 }
 
 static void read_script(InputScript *script, const char *path) {
@@ -119,6 +133,7 @@ u16 replay_pad(u16 buttons) {
 }
 
 bool replay_init(const char *record, const char *play) {
+    trace_damage = getenv("NC_TRACE_DAMAGE") != NULL;
     if (record && play) {
         NC_LOG("Choose either --record-input or --play-input");
         return false;
