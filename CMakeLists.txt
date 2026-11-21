@@ -94,6 +94,7 @@ add_library(nc_runtime STATIC
     src/port/memory.c
     src/port/patches.c
     src/port/platform.c
+    src/port/raw_disc.c
     src/port/replay.c
     src/port/savestate.c
     src/port/settings.c
@@ -184,3 +185,10 @@ add_test(NAME version COMMAND nightmare --version)
 add_test(NAME first_level COMMAND Python3::Interpreter
     ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare>)
 set_tests_properties(first_level PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_disc_formats tests/disc_formats.c src/port/no_gen.c)
+target_link_libraries(test_disc_formats PRIVATE nc_runtime)
+add_test(NAME disc_formats COMMAND test_disc_formats
+    "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd"
+    "${CMAKE_SOURCE_DIR}/build/nc.cue" "${CMAKE_SOURCE_DIR}/build/nc.bin")
+set_tests_properties(disc_formats PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")

@@ -43,10 +43,15 @@ void SDLCALL on_file_chosen(void *, const char *const *files, int) {
 }
 
 void open_disc_dialog() {
-    static const SDL_DialogFileFilter filters[] = {{"CHD disc image", "chd"}};
     g_dialog_done = false;
+#ifdef __ANDROID__
+    // Providers assign different MIME types to CUE sheets and raw BIN files.
+    SDL_ShowOpenFileDialog(on_file_chosen, nullptr, g_window, nullptr, 0, nullptr, true);
+#else
+    static const SDL_DialogFileFilter filters[] = {{"Disc image or cue sheet", "chd;cue;bin"}};
     SDL_ShowOpenFileDialog(on_file_chosen, nullptr, g_window, filters, 1,
                            settings.disc_path[0] ? settings.disc_path : nullptr, false);
+#endif
 }
 
 void apply_style() {
@@ -463,8 +468,20 @@ const char *disc_status_text(DiscCheck check) {
         return "Disc verified: Nightmare Creatures (USA, SLUS-00582)";
     case DISC_WRONG_IMAGE:
         return "This image is not the supported disc (Nightmare Creatures USA, SLUS-00582).";
+    case DISC_BAD_CUE:
+        return "The CUE sheet or track sizes do not match the 26-track USA disc.";
+    case DISC_MISSING_TRACK:
+#ifdef __ANDROID__
+        return "Missing BIN track. Select the CUE and all its BIN files together.";
+#else
+        return "Missing BIN track. Check the filenames and paths listed in the CUE sheet.";
+#endif
     default:
-        return "No disc selected. Choose your Nightmare Creatures .chd image.";
+#ifdef __ANDROID__
+        return "Choose a CHD, a full-disc BIN, or select the CUE and all its BIN files together.";
+#else
+        return "Choose a CHD, a full-disc BIN, or a CUE sheet.";
+#endif
     }
 }
 

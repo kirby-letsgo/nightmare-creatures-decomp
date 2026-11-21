@@ -98,7 +98,7 @@ roms/*.chd ─► tools/extract.py ─► build/disc/ ─► splat ─► build/
 | `cpu.c`, `recomp.h` | CPU state, RAM, memory accessors, cycle budget and VBlank/interrupt scheduling |
 | `dispatch.c`, `interp.c` | Address → function dispatch; interpreter fallback |
 | `bios.c`, `exe.c` | High-level BIOS (events, files, memory card, Load/Exec, interrupts); EXE loading |
-| `disc.c` | CHD reading (libchdr), ISO9660, track table |
+| `disc.c`, `raw_disc.c` | CHD, raw BIN/CUE, ISO9660 and disc track layout |
 | `hw/` | GPU (software rasterizer, upscaling, xBRZ texture cache), GTE (`gte.c`), SPU (+ reverb, CD audio, XA), CD-ROM controller, MDEC, DMA, timers, IRQ, widescreen helpers |
 | `controls.c` | Modern controls and free-look camera (hooks) |
 | `savestate.c` | Whole-machine snapshots at the level-loop safe point |
@@ -208,6 +208,21 @@ fresh boot. The comparison reports the first differing frame, field and values a
 failure. The interpreter and recompiled build agree on all four fields for 401 level updates.
 The checkpoints around frames 11 and 376 catch the original timing regression in either build
 when running the single-executable CTest.
+
+### Disc format verification
+
+Playback accepts CHD, a complete 2352-byte-sector BIN, and CUE sheets with one or more
+BINARY files. The raw reader checks the 26-track US layout and the CRC32 of the full PSX2.EXE
+payload. It maps stored INDEX 00 pregaps and zero-filled PREGAP directives onto the same LBAs
+as the CHD reader. Development extraction with `make extract` still takes a CHD.
+
+After extraction, `ctest --test-dir build/cmake-interp -R disc_formats --output-on-failure`
+compares the track table and every raw data/audio sector in the merged CUE and bare BIN
+against the CHD. To verify additional layouts, pass their paths after the reference CHD:
+
+```sh
+build/cmake-interp/test_disc_formats 'roms/Nightmare Creatures.chd' 'path/to/split tracks.cue'
+```
 
 ### Finding a game variable
 

@@ -2,7 +2,7 @@ name: Build
 
 # Builds interpreter-only packages for macOS, Windows, Linux and Android. CI has no disc
 # image, so no recompiled code is involved: the packages contain only this project's code and
-# need the player's own Nightmare Creatures (USA) CHD to run. Pushes to main also refresh the
+# need the player's own Nightmare Creatures (USA) disc image to run. Pushes to main also refresh the
 # rolling "latest" pre-release.
 
 on:
@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - name: macos
-            os: macos-14
+            os: macos-15
             artifact: NightmareCreatures-macos.dmg
           - name: windows
             os: windows-latest
@@ -142,7 +142,7 @@ jobs:
           cat > notes.md <<EOF
           Automatic build of \`${GITHUB_SHA::7}\` from \`main\`.
 
-          **You need your own disc image:** Nightmare Creatures (USA, SLUS-00582) as a \`.chd\`.
+          **You need your own disc image:** Nightmare Creatures (USA, SLUS-00582) as a CHD, a complete BIN, or a CUE with its BIN tracks.
           The start screen asks for it on first launch. No game data is included.
 
           - **macOS** (Apple Silicon and Intel): open the \`.dmg\` and drag the app to Applications.
@@ -150,7 +150,7 @@ jobs:
           - **Windows**: run the \`.exe\`. SmartScreen may warn about an unknown publisher:
             choose **More info → Run anyway**.
           - **Linux**: \`chmod +x\` the \`.AppImage\` and run it.
-          - **Android** (arm64, Android 8+): install the APK and select your USA CHD using **Choose Disc**.
+          - **Android** (arm64, Android 8+): install the APK and tap **Choose Disc**. For a CUE sheet, select it and all its BIN files together.
           EOF
           gh release create latest dist/* --prerelease --title "Latest build" \
             --notes-file notes.md --target "$GITHUB_SHA"

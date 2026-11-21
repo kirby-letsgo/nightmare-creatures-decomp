@@ -1,4 +1,4 @@
-/* Read-only access to the user's disc image (CHD) and its ISO9660 filesystem. */
+/* Read-only access to the user's disc image (CHD or BIN/CUE) and its ISO9660 filesystem. */
 #ifndef NC_PORT_DISC_H
 #define NC_PORT_DISC_H
 
@@ -25,14 +25,16 @@ typedef struct DiscTrack {
 
 typedef enum DiscCheck {
     DISC_OK,
-    DISC_MISSING,     /* no file / not a CHD */
-    DISC_WRONG_IMAGE, /* a CHD, but not NTSC-U Nightmare Creatures (SLUS-00582) */
+    DISC_MISSING,     /* file could not be opened */
+    DISC_WRONG_IMAGE, /* not NTSC-U Nightmare Creatures (SLUS-00582) */
+    DISC_BAD_CUE,
+    DISC_MISSING_TRACK,
 } DiscCheck;
 
-/* Checks a disc image against the known dump (CHD header SHA1) without opening it for play. */
-DiscCheck disc_check(const char *chd_path);
+/* Checks a disc image against the US pressing without opening it for play. */
+DiscCheck disc_check(const char *path);
 
-bool disc_open(const char *chd_path);
+bool disc_open(const char *path);
 int disc_track_count(void);
 /* 1-based track number; NULL if out of range. */
 const DiscTrack *disc_track(int number);
