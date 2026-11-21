@@ -189,7 +189,9 @@ add_test(NAME version COMMAND nightmare --version)
 
 add_test(NAME first_level COMMAND Python3::Interpreter
     ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare>)
-set_tests_properties(first_level PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+add_test(NAME first_combat COMMAND Python3::Interpreter
+    ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare> --scenario first_combat)
+set_tests_properties(first_level first_combat PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
 add_executable(test_disc_formats tests/disc_formats.c src/port/no_gen.c)
 target_link_libraries(test_disc_formats PRIVATE nc_runtime)

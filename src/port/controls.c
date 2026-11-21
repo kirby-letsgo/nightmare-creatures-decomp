@@ -12,6 +12,7 @@
 #include "port/controls.h"
 
 #include "port/game_vars.h"
+#include "port/replay.h"
 #include "port/runtime.h"
 #include "port/settings.h"
 
@@ -181,6 +182,9 @@ void nc_hook_player_input(CPUState *c) {
     static bool latched;
     static s32 latched_camera; /* 65536 units */
 
+    /* Movies capture the original digital controller at each VBlank. */
+    if (replay_movie_active() || replay_level_enabled())
+        return;
     update_freelook();
     if (settings.controls != CONTROLS_MODERN) {
         return;

@@ -7,4 +7,7 @@
 #define ADDR_PLAYER_Z 0x800CB178u
 #define ADDR_ADRENALINE 0x800CC012u /* s16 countdown */
 
+#define ADDR_PLAYER_ACTOR 0x800CE9C4u
+#define ACTOR_HEALTH_OFFSET 0x35Au /* s16 */
+
 #endif

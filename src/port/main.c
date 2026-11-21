@@ -332,7 +332,7 @@ static void pause_menu(void) {
 static void on_frame(void) {
     if (replay_level_enabled()) {
         /* Advance guest audio even without a host device. Only the replay supplies input. */
-        bios_set_pad(replay_input());
+        bios_set_pad(replay_pad(replay_input()));
         output_audio();
         return;
     }
@@ -383,7 +383,7 @@ static void on_frame(void) {
     u16 touch = android_pad_read();
     buttons |= touch;
 #endif
-    bios_set_pad(buttons);
+    bios_set_pad(replay_pad(buttons));
     dump_ram();
     update_screen();
     draw_game();
@@ -404,10 +404,17 @@ static void on_frame(void) {
 /* --- startup ------------------------------------------------------------------------------ */
 
 int main(int argc, char **argv) {
-    const char *disc_arg = NULL;
+    const char *disc_arg = NULL, *record = NULL, *play = NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--disc") == 0 && i + 1 < argc) {
             disc_arg = argv[++i];
+        } else if (strcmp(argv[i], "--record-input") == 0 || strcmp(argv[i], "--play-input") == 0) {
+            const char **dest = strcmp(argv[i], "--record-input") == 0 ? &record : &play;
+            if (++i == argc) {
+                fprintf(stderr, "Missing input movie filename\n");
+                return 1;
+            }
+            *dest = argv[i];
         } else if (strcmp(argv[i], "--version") == 0) {
             printf("Nightmare Creatures PC port %s (SDL %d.%d.%d)\n", NC_VERSION,
                    SDL_VERSIONNUM_MAJOR(SDL_GetVersion()), SDL_VERSIONNUM_MINOR(SDL_GetVersion()),
@@ -480,7 +487,8 @@ int main(int argc, char **argv) {
     menu_init(window, renderer);
     menu_apply_settings();
 
-    replay_init();
+    if (!replay_init(record, play))
+        return 1;
     /* NC_SKIP_MENU=1 boots straight into the game (for scripted test runs). */
     bool skip_menu = (SDL_getenv("NC_SKIP_MENU") != NULL || headless) &&
                      disc_check(settings.disc_path) == DISC_OK;
