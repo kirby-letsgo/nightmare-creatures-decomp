@@ -1,0 +1,6 @@
+# Level-loop frames, starting at 1. Allow the character to settle after the intro.
+101 130 left
+151 180 right
+201 250 up
+# Idle through the first adrenaline decrement.
+251 400

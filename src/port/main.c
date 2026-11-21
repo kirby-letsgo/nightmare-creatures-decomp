@@ -6,6 +6,7 @@
 #include "port/input.h"
 #include "port/memcard.h"
 #include "port/platform.h"
+#include "port/replay.h"
 #include "port/runtime.h"
 #include "port/savestate.h"
 #include "port/settings.h"
@@ -40,65 +41,6 @@ static bool menu_requested;
 static bool headless; /* NC_HEADLESS=1: no window, no audio device, unpaced (automated runs) */
 
 /* --- input -------------------------------------------------------------------------------- */
-
-/* Testing aid: NC_INPUT=file plays a scripted input timeline. Each line is
- * "<first_frame> <last_frame> <buttons...>" with buttons from: up down left right cross circle
- * square triangle l1 r1 l2 r2 start select. Lines starting with '#' are comments. */
-typedef struct ScriptStep {
-    unsigned first, last;
-    u16 buttons;
-} ScriptStep;
-
-static u16 input_script(void) {
-    static ScriptStep steps[256];
-    static int count = -1;
-    static unsigned frame;
-    if (count < 0) {
-        count = 0;
-        const char *path = SDL_getenv("NC_INPUT");
-        FILE *f = path ? fopen(path, "r") : NULL;
-        char line[256];
-        while (f != NULL && fgets(line, sizeof line, f) != NULL && count < 256) {
-            static const struct {
-                const char *name;
-                u16 bit;
-            } names[] = {{"up", PAD_UP},         {"down", PAD_DOWN},
-                         {"left", PAD_LEFT},     {"right", PAD_RIGHT},
-                         {"cross", PAD_CROSS},   {"circle", PAD_CIRCLE},
-                         {"square", PAD_SQUARE}, {"triangle", PAD_TRIANGLE},
-                         {"l1", PAD_L1},         {"r1", PAD_R1},
-                         {"l2", PAD_L2},         {"r2", PAD_R2},
-                         {"start", PAD_START},   {"select", PAD_SELECT}};
-            ScriptStep st = {0};
-            char *tok = strtok(line, " \t\r\n");
-            if (tok == NULL || tok[0] == '#') {
-                continue;
-            }
-            st.first = (unsigned)atoi(tok);
-            tok = strtok(NULL, " \t\r\n");
-            st.last = tok ? (unsigned)atoi(tok) : st.first;
-            while ((tok = strtok(NULL, " \t\r\n")) != NULL) {
-                for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
-                    if (strcmp(tok, names[i].name) == 0) {
-                        st.buttons |= names[i].bit;
-                    }
-                }
-            }
-            steps[count++] = st;
-        }
-        if (f != NULL) {
-            fclose(f);
-        }
-    }
-    frame++;
-    u16 buttons = 0;
-    for (int i = 0; i < count; i++) {
-        if (frame >= steps[i].first && frame <= steps[i].last) {
-            buttons |= steps[i].buttons;
-        }
-    }
-    return buttons;
-}
 
 /* Testing aid: NC_PRESS_START=N taps Start for a few frames every N frames (skips movies,
  * advances menus) so later parts of the game can be reached unattended. */
@@ -385,6 +327,12 @@ static void pause_menu(void) {
 
 /* Called once per emulated VBlank: input, window events, video, audio and pacing. */
 static void on_frame(void) {
+    if (replay_level_enabled()) {
+        /* Advance guest audio even without a host device. Only the replay supplies input. */
+        bios_set_pad(replay_input());
+        output_audio();
+        return;
+    }
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
@@ -425,7 +373,7 @@ static void on_frame(void) {
             break;
         }
     }
-    bios_set_pad(input_read_keyboard() | input_read_gamepads() | scripted_input() | input_script());
+    bios_set_pad(input_read_keyboard() | input_read_gamepads() | scripted_input() | replay_input());
     dump_ram();
     update_screen();
     draw_game();
@@ -516,9 +464,14 @@ int main(int argc, char **argv) {
     menu_init(window, renderer);
     menu_apply_settings();
 
+    replay_init();
     /* NC_SKIP_MENU=1 boots straight into the game (for scripted test runs). */
     bool skip_menu = (SDL_getenv("NC_SKIP_MENU") != NULL || headless) &&
                      disc_check(settings.disc_path) == DISC_OK;
+    if (replay_level_enabled() && (!headless || !skip_menu)) {
+        NC_LOG("Level replay requires NC_HEADLESS and a valid USA disc image");
+        return 1;
+    }
     if (!skip_menu && menu_run_start() == MENU_QUIT) {
         quit_game();
     }

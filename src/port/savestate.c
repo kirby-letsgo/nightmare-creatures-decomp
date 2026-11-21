@@ -1,4 +1,5 @@
 #include "port/savestate.h"
+#include "port/replay.h"
 
 #include "port/controls.h"
 #include "port/runtime.h"
@@ -226,6 +227,7 @@ static void state_test(void) {
 
 void nc_hook_savestate_point(CPUState *c) {
     (void)c;
+    replay_level_frame();
     state_test();
     if (pending_save >= 0) {
         int slot = pending_save;

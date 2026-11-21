@@ -181,6 +181,35 @@ Watch build only (`make build-watch`):
 | `NC_COVERAGE=first,last,file` | Count guest function entries between two VBlanks |
 | `NC_COVERAGE_CALLERS=addr` | …counting calls to one function per call site instead |
 
+### First-level replay
+
+With the US CHD in `roms/`, run the gameplay check against either build:
+
+```sh
+ctest --test-dir build/cmake-interp -R first_level --output-on-failure
+ctest --test-dir build/cmake -R first_level --output-on-failure
+```
+
+Each run boots with a fresh temporary memory card, tank controls and adrenaline enabled.
+`tests/first_level_boot.input` taps Start by VBlank. At the first level-loop safe point,
+`NC_LEVEL_INPUT` switches playback to `tests/first_level.input`, timed in game updates.
+The test checks heading, X/Z position and adrenaline at six checkpoints covering level entry,
+both turns, the walk and the idle period. A missing disc skips the CTest. A stalled or
+incomplete replay fails.
+
+To compare every recorded update, build both flavours with `make recomp`, `make build` and
+`make build-interp`, then run:
+
+```sh
+python3 tools/test_first_level.py build/cmake-interp/nightmare --compare build/cmake/nightmare
+```
+
+Passing the interpreter as both executables checks repeatability. Each replay starts from a
+fresh boot. The comparison reports the first differing frame, field and values and returns a
+failure. On the initial baseline, both builds reach the same six checkpoints. The first
+difference between checkpoints is player Z at level frame 11 (2998240 interpreted, 2998272
+recompiled). The first adrenaline decrement occurs at frame 376 interpreted and 377 recompiled.
+
 ### Finding a game variable
 
 1. Write an input script for a controlled experiment (e.g. idle, then turn left for 40 frames).

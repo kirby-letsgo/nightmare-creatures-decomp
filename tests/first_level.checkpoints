@@ -1,0 +1,8 @@
+# Level frame, heading, X, Z, adrenaline. Sampled before this frame's input.
+# Level entry, end of each turn, start/end of the walk, then idle.
+1   48    4915200 2998272 256
+131 26495 4915200 2998009 256
+181 3128  4914944 2998016 256
+201 3128  4914944 2998016 256
+251 3128  4969594 3166933 256
+401 3128  4943380 3048870 255

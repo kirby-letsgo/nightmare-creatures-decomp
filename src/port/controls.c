@@ -11,6 +11,7 @@
  * is first pushed and kept until the stick returns to neutral. */
 #include "port/controls.h"
 
+#include "port/game_vars.h"
 #include "port/runtime.h"
 #include "port/settings.h"
 
@@ -19,11 +20,8 @@
 #include <stdlib.h>
 
 /* Game variables (PSX2.EXE), located by RAM diffing (see docs/analysis.md). */
-#define ADDR_PLAYER_HEADING 0x800CB1CCu /* u16, 65536 = full turn, turning left increases it */
-#define ADDR_CAMERA_YAW 0x800D763Au     /* u16, 4096 = full turn, eases towards the player */
-#define ADDR_PLAYER_X 0x800CB170u       /* s32, world units << 8 */
-#define ADDR_PLAYER_Z 0x800CB178u
-#define ADDR_CAMERA_X 0x800CB160u /* s32, world units */
+#define ADDR_CAMERA_YAW 0x800D763Au /* u16, 4096 = full turn, eases towards the player */
+#define ADDR_CAMERA_X 0x800CB160u   /* s32, world units */
 #define ADDR_CAMERA_Z 0x800CB168u
 #define CAMERA_RECORD_YAW 0xAu /* offset of the yaw in the camera record (func_80049838) */
 
