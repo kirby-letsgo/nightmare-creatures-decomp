@@ -231,6 +231,12 @@ Each hit counts a health decrease in the damage routine with the player as attac
 Run the fixture against both execution paths with
 `python3 tools/test_first_level.py build/cmake-interp/nightmare --compare build/cmake/nightmare --scenario first_combat`.
 
+Add `--trace-damage` to capture the caller and four argument registers at `0x8004E6DC`.
+Each player hit also reports the attacker, recipient, base damage entering the health
+calculation, and health before and after subtraction. The frame number identifies the
+next level checkpoint. With `--compare`, the runner checks the order and values of these
+events across both builds.
+
 ### Native adrenaline update
 
 The recompiled build calls `src/decomp/adrenaline.c` after the original HUD draw.

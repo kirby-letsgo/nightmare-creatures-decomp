@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+from itertools import zip_longest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -20,7 +21,7 @@ def checkpoints(scenario):
     return rows
 
 
-def replay(binary, disc, end, scenario, adrenaline=True):
+def replay(binary, disc, end, scenario, adrenaline=True, trace_damage=False):
     with TemporaryDirectory(prefix="nc-first-level-") as tmp:
         work = Path(tmp)
         (work / "settings.ini").write_text(
@@ -34,6 +35,8 @@ def replay(binary, disc, end, scenario, adrenaline=True):
             SDL_RENDER_DRIVER="software",
         )
         cmd = [binary, "--disc", disc]
+        if trace_damage:
+            env["NC_TRACE_DAMAGE"] = "1"
         if scenario == "first_combat":
             cmd.extend(["--play-input", FIXTURES / "first_combat.movie"])
         else:
@@ -61,7 +64,13 @@ def replay(binary, disc, end, scenario, adrenaline=True):
                 rows[frame] = values
         if len(rows) != end:
             raise ValueError(f"{binary}: reached {len(rows)} of {end} expected level frames")
-        return rows
+        damage = [line for line in lines if line.startswith(("damage-select ", "damage-hit "))]
+        if trace_damage and not (
+            any(line.startswith("damage-select ") for line in damage)
+            and any(line.startswith("damage-hit ") for line in damage)
+        ):
+            raise ValueError(f"{binary}: missing selector or hit records from combat replay")
+        return rows, damage
 
 
 def compare(expected, actual, binary):
@@ -86,7 +95,12 @@ def main():
     parser.add_argument(
         "--no-adrenaline", action="store_true", help="exercise the disabled countdown"
     )
+    parser.add_argument(
+        "--trace-damage", action="store_true", help="trace selector calls and player hits"
+    )
     args = parser.parse_args()
+    if args.trace_damage and args.scenario != "first_combat":
+        parser.error("--trace-damage requires --scenario first_combat")
     if not args.disc.exists():
         print(f"Skipping first-level replay: missing {args.disc}")
         return 77
@@ -97,16 +111,19 @@ def main():
         initial = expected[1][FIELDS.index("adrenaline")]
         for values in expected.values():
             values[FIELDS.index("adrenaline")] = initial
-    first = replay(
-        args.binary.resolve(), disc, max(expected), args.scenario, not args.no_adrenaline
-    )
+    settings = (disc, max(expected), args.scenario, not args.no_adrenaline, args.trace_damage)
+    first, hits = replay(args.binary.resolve(), *settings)
     compare(expected, first, args.binary)
+    if args.trace_damage:
+        print("\n".join(hits))
     print(f"{args.binary}: {len(expected)} {args.scenario} checkpoints passed", flush=True)
     if args.compare:
-        second = replay(
-            args.compare.resolve(), disc, max(expected), args.scenario, not args.no_adrenaline
-        )
+        second, other_hits = replay(args.compare.resolve(), *settings)
         compare(first, second, args.compare)
+        if args.trace_damage:
+            for index, (want, got) in enumerate(zip_longest(hits, other_hits), 1):
+                if want != got:
+                    raise ValueError(f"Damage event {index} differs:\n{want}\n{got}")
         print(f"Both builds agree on all {len(first)} level frames")
     return 0
 

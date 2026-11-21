@@ -20,3 +20,5 @@ psx2_exe 0x8006E50C savestate_paused_point  # paused
 
 # Damage applied to an actor: s1 is the recipient, s3 the attacker and v0 the new health.
 psx2_exe 0x8004EB78 replay_damage
+# Capture incoming argument registers before the base-damage selector runs.
+psx2_exe 0x8004E6DC replay_damage_select
