@@ -4,6 +4,7 @@
 #ifndef NC_PORT_SAVESTATE_H
 #define NC_PORT_SAVESTATE_H
 
+#include "port/exe.h"
 #include "port/recomp.h"
 
 #include <stdbool.h>
@@ -39,6 +40,10 @@ void savestate_init(const char *dir);
 void savestate_request_save(int slot);
 void savestate_request_load(int slot);
 bool savestate_exists(int slot);
+bool savestate_has_resume(void);
+bool savestate_can_save_quit(void);
+void savestate_request_save_quit(void);
+bool savestate_load_resume(u32 *pc, ExecStack *stack);
 /* Short status message for the on-screen display, or NULL when there is nothing to show. */
 const char *savestate_message(void);
 /* Called after a load has been applied (renderer scale, audio queue...). */

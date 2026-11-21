@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-typedef enum MenuResult { MENU_START, MENU_RESUME, MENU_QUIT } MenuResult;
+typedef enum MenuResult { MENU_START, MENU_CONTINUE, MENU_RESUME, MENU_SAVE_QUIT, MENU_QUIT } MenuResult;
 
 /* Draws the game's last frame behind the menu. */
 typedef void (*MenuDrawBackground)(void);

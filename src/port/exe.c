@@ -1,6 +1,7 @@
 #include "port/exe.h"
 
 #include "port/disc.h"
+#include "port/interp.h"
 #include "port/runtime.h"
 
 #include <stdlib.h>
@@ -82,6 +83,43 @@ void exe_read_info(u32 addr, ExecInfo *info) {
     info->s_size = MEM_R32(addr + 0x24);
 }
 
+typedef struct ExecCaller {
+    u32 saved[16]; /* BIOS restores r16 through r31 on return. */
+    struct ExecCaller *outer;
+} ExecCaller;
+static ExecCaller *caller;
+
+bool exe_capture_stack(ExecStack *stack) {
+    stack->count = 0;
+    for (ExecCaller *p = caller; p; p = p->outer) {
+        if (stack->count == sizeof stack->callers / sizeof stack->callers[0]) {
+            return false;
+        }
+        memcpy(stack->callers[stack->count++], p->saved, sizeof p->saved);
+    }
+    return stack->count != 0;
+}
+
+static void return_to_caller(CPUState *c) {
+    memcpy(&c->r[16], caller->saved, sizeof caller->saved);
+    caller = caller->outer;
+}
+
+void exe_resume(CPUState *c, u32 pc, const ExecStack *stack) {
+    ExecCaller frames[sizeof stack->callers / sizeof stack->callers[0]];
+    for (u32 i = stack->count; i-- > 0;) {
+        memcpy(frames[i].saved, stack->callers[i], sizeof frames[i].saved);
+        frames[i].outer = caller;
+        caller = &frames[i];
+    }
+    while (caller) {
+        interp_resume_exe(c, pc);
+        return_to_caller(c);
+        c->r[2] = 1; /* BIOS Exec succeeded */
+        pc = c->r[31];
+    }
+}
+
 u32 exe_exec(CPUState *c, const ExecInfo *info, u32 arg0, u32 arg1) {
     /* Clear BSS, then run the program's entry point with its own stack. When it returns,
      * restore the caller's callee-saved state, as the BIOS Exec() does. */
@@ -90,8 +128,9 @@ u32 exe_exec(CPUState *c, const ExecInfo *info, u32 arg0, u32 arg1) {
             MEM_W32(info->b_addr + i, 0);
         }
     }
-    u32 saved[32];
-    memcpy(saved, c->r, sizeof saved);
+    ExecCaller frame = {.outer = caller};
+    memcpy(frame.saved, &c->r[16], sizeof frame.saved);
+    caller = &frame;
 
     if (info->s_addr != 0) {
         c->r[29] = c->r[30] = info->s_addr + info->s_size;
@@ -102,8 +141,6 @@ u32 exe_exec(CPUState *c, const ExecInfo *info, u32 arg0, u32 arg1) {
     c->r[31] = 0; /* returning to 0 means "back to Exec" */
     nc_call(c, info->pc0);
 
-    for (int i = 16; i < 32; i++) {
-        c->r[i] = saved[i];
-    }
+    return_to_caller(c);
     return 1;
 }

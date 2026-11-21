@@ -299,8 +299,8 @@ static bool call_native(CPUState *c, u32 target) {
     return true;
 }
 
-void interp_call(CPUState *c, u32 addr) {
-    const u32 ret = c->r[31];
+static void run(CPUState *c, u32 addr, bool resume) {
+    const u32 ret = resume ? 0 : c->r[31];
     const u32 sp = c->r[29];
     u32 pc = addr;
 
@@ -310,7 +310,7 @@ void interp_call(CPUState *c, u32 addr) {
         }
         /* Returned to our caller (with its stack): done. Not checked on entry: the interrupt
          * handler is entered at a resume address that equals its own $ra. */
-        if (pc == ret && c->r[29] == sp && pc != addr) {
+        if (pc == ret && (resume || (c->r[29] == sp && pc != addr))) {
             return;
         }
         if (pc == 0xA0 || pc == 0xB0 || pc == 0xC0) {
@@ -398,4 +398,13 @@ void interp_call(CPUState *c, u32 addr) {
         }
         pc = target;
     }
+}
+
+void interp_call(CPUState *c, u32 addr) {
+    run(c, addr, false);
+}
+
+void interp_resume_exe(CPUState *c, u32 pc) {
+    /* Follow guest returns until this executable returns to BIOS. */
+    run(c, pc, true);
 }

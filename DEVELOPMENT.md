@@ -128,6 +128,13 @@ point where that stack always has the same shape: hooks in the level loop (`func
 `StateIO`; files are deflate-compressed (miniz). `NC_STATE_TEST` checks that a restored state
 replays byte-identically.
 
+**Cold Continue** uses its own atomically replaced file, `states/resume.state`, with the
+safe-point PC and the guest registers BIOS Exec must restore when each active executable
+returns. On a fresh launch, `--continue` or the start menu resumes at that PC. The
+interpreter reconstructs the guest return path and can still call recompiled functions.
+The four manual slots use the existing format. Run `ctest -R continue_game` to save in
+one process and compare the restored gameplay with an uninterrupted run in another.
+
 ## Game variables found so far
 
 Located by RAM diffing, watchpoints and coverage (see below). All in `PSX2.EXE`.

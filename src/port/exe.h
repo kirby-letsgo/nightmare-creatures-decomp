@@ -15,6 +15,15 @@ typedef struct ExecInfo {
     u32 s_addr, s_size;
 } ExecInfo;
 
+/* Only guest registers go in a cold-resume file. Normal BIOS Exec nesting is unbounded. */
+typedef struct ExecStack {
+    u32 count;
+    u32 callers[8][16];
+} ExecStack;
+
+bool exe_capture_stack(ExecStack *stack);
+void exe_resume(CPUState *c, u32 pc, const ExecStack *stack);
+
 /* Loads an executable from the disc into RAM and makes its overlay active. */
 bool exe_load(const char *path, ExecInfo *info);
 void exe_write_info(const ExecInfo *info, u32 addr);

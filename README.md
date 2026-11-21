@@ -112,6 +112,7 @@ Open **Settings** from the start screen or the in-game menu (Esc). Changes apply
 
 ## Save states
 
+- **Save & Quit** in the port pause menu saves a separate **Continue** session and exits once the save succeeds. On your next launch choose **Continue** to return to that spot. It is available during level gameplay, including the game’s own pause screen.
 - **Quick save / quick load** use slot 1 (Cmd+S / Cmd+R, or F5 / F9).
 - The **in-game menu** (Esc) has four slots, each showing whether it's empty, with Save and Load
   buttons.
@@ -133,7 +134,8 @@ Settings, memory cards, save states and the log live in one folder:
 |---|---|
 | `settings.ini` | All settings, including the disc location and button mapping |
 | `card1.mcd` | Memory card 1 (put a `card2.mcd` beside it to use memory card 2) |
-| `states/slot1.state` … | Save states |
+| `states/slot1.state` … | Manual save states |
+| `states/resume.state` | Session created by Save & Quit |
 | `nightmare.log` | Log of the last run |
 
 ## Reporting problems
