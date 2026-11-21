@@ -503,6 +503,9 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):
+                check_mode = "true" if i.addr == 0x8004EB30 else "false"
+                out.append(f"    if (nc_calculate_hit_health(c, {check_mode})) goto L_8004EB78;")
             if not i.has_delay():
                 out.append(f"    {self.timed_simple(i)}")
                 k += 1
@@ -600,6 +603,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
     if mod.name == "psx2_exe":
         header.append('#include "decomp/adrenaline.h"')
+        header.append('#include "decomp/damage.h"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)
