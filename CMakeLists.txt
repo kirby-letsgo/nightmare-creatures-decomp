@@ -206,3 +206,18 @@ add_executable(test_adrenaline tests/adrenaline.c src/decomp/adrenaline.c src/po
 target_link_libraries(test_adrenaline PRIVATE nc_runtime)
 add_test(NAME adrenaline COMMAND test_adrenaline "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(adrenaline PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_test(NAME continue_game COMMAND Python3::Interpreter "${CMAKE_SOURCE_DIR}/tools/test_continue.py"
+    $<TARGET_FILE:nightmare> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(continue_game PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_resume_exec tests/resume_exec.c src/port/no_gen.c)
+target_link_libraries(test_resume_exec PRIVATE nc_runtime)
+foreach(point playing paused)
+    set(resume_dir "${CMAKE_CURRENT_BINARY_DIR}/test-resume-${point}/")
+    file(MAKE_DIRECTORY "${resume_dir}")
+    add_test(NAME resume_save_${point} COMMAND test_resume_exec "${resume_dir}" save ${point})
+    add_test(NAME resume_load_${point} COMMAND test_resume_exec "${resume_dir}" load ${point})
+    set_tests_properties(resume_save_${point} PROPERTIES FIXTURES_SETUP saved_${point})
+    set_tests_properties(resume_load_${point} PROPERTIES FIXTURES_REQUIRED saved_${point})
+endforeach()

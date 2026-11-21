@@ -641,6 +641,7 @@ extern "C" MenuResult menu_run_start(void) {
     }
     DiscCheck check = disc_check(settings.disc_path);
     bool dialog_open = false;
+    bool has_resume = savestate_has_resume();
 
     for (;;) {
         if (!pump_events()) {
@@ -667,14 +668,15 @@ extern "C" MenuResult menu_run_start(void) {
                 bool ready = check == DISC_OK;
                 ImGui::PushStyleColor(ImGuiCol_Button, wine);
                 ImGui::BeginDisabled(dialog_open);
-                bool primary = wide_button(ready ? "Start Game" : "Choose Disc");
+                bool primary =
+                    wide_button(ready ? (has_resume ? "Continue" : "Start Game") : "Choose Disc");
                 ImGui::SetItemDefaultFocus();
                 ImGui::EndDisabled();
                 ImGui::PopStyleColor();
-                if (ready && primary) {
+                if (ready && (primary || (has_resume && wide_button("Start Game")))) {
                     ImGui::End();
                     ImGui::EndFrame();
-                    return MENU_START;
+                    return primary && has_resume ? MENU_CONTINUE : MENU_START;
                 }
                 bool pick_disc = !ready && primary;
                 if (ready) {
@@ -784,7 +786,12 @@ extern "C" MenuResult menu_run_pause(MenuDrawBackground draw_background) {
                 if (wide_button("Settings")) {
                     page = Page::Settings;
                 }
-                if (wide_button("Quit to Desktop")) {
+                if (savestate_can_save_quit() && wide_button("Save & Quit")) {
+                    ImGui::End();
+                    ImGui::EndFrame();
+                    return MENU_SAVE_QUIT;
+                }
+                if (wide_button("Quit")) {
                     ImGui::End();
                     ImGui::EndFrame();
                     return MENU_QUIT;

@@ -318,7 +318,11 @@ static void pause_menu(void) {
     if (audio != NULL) {
         SDL_PauseAudioStreamDevice(audio);
     }
-    if (menu_run_pause(draw_game) == MENU_QUIT) {
+    MenuResult choice = menu_run_pause(draw_game);
+    if (choice == MENU_SAVE_QUIT) {
+        savestate_request_save_quit();
+    }
+    if (choice == MENU_QUIT) {
         quit_game();
     }
     if (audio != NULL) {
@@ -404,6 +408,7 @@ static void on_frame(void) {
 /* --- startup ------------------------------------------------------------------------------ */
 
 int main(int argc, char **argv) {
+    bool resume = false;
     const char *disc_arg = NULL, *record = NULL, *play = NULL;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--disc") == 0 && i + 1 < argc) {
@@ -415,6 +420,8 @@ int main(int argc, char **argv) {
                 return 1;
             }
             *dest = argv[i];
+        } else if (strcmp(argv[i], "--continue") == 0) {
+            resume = true;
         } else if (strcmp(argv[i], "--version") == 0) {
             printf("Nightmare Creatures PC port %s (SDL %d.%d.%d)\n", NC_VERSION,
                    SDL_VERSIONNUM_MAJOR(SDL_GetVersion()), SDL_VERSIONNUM_MINOR(SDL_GetVersion()),
@@ -496,8 +503,12 @@ int main(int argc, char **argv) {
         NC_LOG("Level replay requires NC_HEADLESS and a valid USA disc image");
         return 1;
     }
-    if (!skip_menu && menu_run_start() == MENU_QUIT) {
-        quit_game();
+    if (!skip_menu && !resume) {
+        MenuResult choice = menu_run_start();
+        if (choice == MENU_QUIT) {
+            quit_game();
+        }
+        resume = choice == MENU_CONTINUE;
     }
     settings_save();
 
@@ -514,18 +525,32 @@ int main(int argc, char **argv) {
     nc_frame_hook = on_frame;
     last_frame_ns = SDL_GetTicksNS();
 
-    /* Boot like the BIOS does: load the executable named in SYSTEM.CNF and run it with
-     * interrupts enabled. */
-    ExecInfo boot;
-    if (!exe_load(BOOT_EXE, &boot)) {
-        SDL_Log("Could not load %s from the disc", BOOT_EXE);
-        return 1;
+    if (resume) {
+        u32 pc;
+        ExecStack stack;
+        if (!savestate_load_resume(&pc, &stack)) {
+            NC_LOG("Cannot Continue: %s", savestate_message());
+            if (!headless) {
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Continue",
+                                         "The saved session could not be opened. Choose Start Game to play.",
+                                         window);
+            }
+            return 1;
+        }
+        exe_resume(&nc_cpu, pc, &stack);
+    } else {
+        /* Boot like the BIOS does: load the executable named in SYSTEM.CNF and run it with
+         * interrupts enabled. */
+        ExecInfo boot;
+        if (!exe_load(BOOT_EXE, &boot)) {
+            SDL_Log("Could not load %s from the disc", BOOT_EXE);
+            return 1;
+        }
+        boot.s_addr = BOOT_STACK;
+        boot.s_size = 0;
+        nc_cpu.cop0[12] = 0x40000401u; /* COP2 usable, interrupts enabled */
+        exe_exec(&nc_cpu, &boot, 0, 0);
     }
-    boot.s_addr = BOOT_STACK;
-    boot.s_size = 0;
-    nc_cpu.cop0[12] = 0x40000401u; /* COP2 usable, interrupts enabled */
-    exe_exec(&nc_cpu, &boot, 0, 0);
-
     NC_LOG("boot executable returned");
     disc_close();
     menu_shutdown();

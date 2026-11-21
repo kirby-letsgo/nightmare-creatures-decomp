@@ -2,6 +2,7 @@
 #include "port/replay.h"
 
 #include "port/controls.h"
+#include "port/settings.h"
 #include "port/runtime.h"
 
 #include <SDL3/SDL.h>
@@ -13,6 +14,15 @@
 #define STATE_MAGIC 0x5453434Eu /* "NCST" */
 #define STATE_VERSION 1u
 #define MESSAGE_MS 2500
+#define RESUME_SLOT SAVESTATE_SLOTS
+#define RESUME_MAGIC 0x5253434Eu /* NCSR */
+enum { PLAYING_PC = 0x8006E7ECu, PAUSED_PC = 0x8006E50Cu };
+typedef struct ResumeContext {
+    u32 pc;
+    ExecStack stack;
+} ResumeContext;
+static bool save_quit_pending;
+static unsigned last_safe_frame;
 
 typedef struct StateHeader {
     u32 magic;
@@ -79,7 +89,7 @@ static void set_message(const char *fmt, int slot) {
 
 const char *savestate_message(void) {
     /* A request made outside gameplay waits for the next safe point: keep saying so. */
-    if (pending_save >= 0 || pending_load >= 0) {
+    if (pending_save >= 0 || pending_load >= 0 || save_quit_pending) {
         if (SDL_GetTicksNS() - message_ns > (Uint64)MESSAGE_MS * 1000000u) {
             return "Waiting for gameplay to save/load...";
         }
@@ -92,7 +102,11 @@ const char *savestate_message(void) {
 }
 
 static void slot_path(int slot, char *out, size_t cap) {
-    SDL_snprintf(out, cap, "%sslot%d.state", state_dir, slot + 1);
+    if (slot == RESUME_SLOT) {
+        SDL_snprintf(out, cap, "%sresume.state", state_dir);
+    } else {
+        SDL_snprintf(out, cap, "%sslot%d.state", state_dir, slot + 1);
+    }
 }
 
 void savestate_init(const char *dir) {
@@ -121,14 +135,31 @@ bool savestate_exists(int slot) {
     return SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_FILE;
 }
 
-static void do_save(int slot) {
+bool savestate_has_resume(void) {
+    return savestate_exists(RESUME_SLOT);
+}
+
+bool savestate_can_save_quit(void) {
+    return nc_active_module() == NC_MOD_PSX2 && last_safe_frame &&
+           nc_frame_count - last_safe_frame < 12;
+}
+
+void savestate_request_save_quit(void) {
+    save_quit_pending = true;
+    set_message("Saving before quit...", 0);
+}
+
+static bool do_save(int slot, ResumeContext *resume) {
     controls_unpatch_camera(); /* never store free-look's temporary camera values */
     StateIO io = {0};
+    if (resume) {
+        state_io(&io, resume, sizeof *resume);
+    }
     serialize_all(&io);
     if (io.error) {
         set_message("Save to slot %d failed (out of memory)", slot);
         free(io.buf);
-        return;
+        return false;
     }
     mz_ulong packed = mz_compressBound((mz_ulong)io.len);
     u8 *out = malloc(sizeof(StateHeader) + packed);
@@ -138,19 +169,31 @@ static void do_save(int slot) {
     if (rc != MZ_OK) {
         free(out);
         set_message("Save to slot %d failed (compression)", slot);
-        return;
+        return false;
     }
     extern unsigned nc_frame_count;
-    StateHeader hdr = {STATE_MAGIC, STATE_VERSION, (u32)io.len, nc_frame_count};
+    StateHeader hdr = {resume ? RESUME_MAGIC : STATE_MAGIC, STATE_VERSION, (u32)io.len,
+                       nc_frame_count};
     memcpy(out, &hdr, sizeof hdr);
     char path[1200];
     slot_path(slot, path, sizeof path);
-    bool ok = SDL_SaveFile(path, out, sizeof hdr + packed);
+    char temporary[1280];
+    SDL_snprintf(temporary, sizeof temporary, "%s.%llu.tmp", path,
+                 (unsigned long long)SDL_GetPerformanceCounter());
+    bool ok = SDL_SaveFile(temporary, out, sizeof hdr + packed) && SDL_RenamePath(temporary, path);
+    if (!ok) {
+        SDL_RemovePath(temporary);
+    }
     free(out);
-    set_message(ok ? "Saved state %d" : "Save to slot %d failed (disk)", slot);
+    if (resume) {
+        set_message(ok ? "Saved for Continue" : "Save failed. Game still running.", 0);
+    } else {
+        set_message(ok ? "Saved state %d" : "Save to slot %d failed (disk)", slot);
+    }
+    return ok;
 }
 
-static void do_load(int slot) {
+static bool do_load(int slot, ResumeContext *resume) {
     char path[1200];
     slot_path(slot, path, sizeof path);
     size_t size = 0;
@@ -159,15 +202,20 @@ static void do_load(int slot) {
     if (file == NULL || size < sizeof hdr) {
         SDL_free(file);
         set_message("Load of slot %d failed (unreadable)", slot);
-        return;
+        return false;
     }
     memcpy(&hdr, file, sizeof hdr);
-    if (hdr.magic != STATE_MAGIC || hdr.version != STATE_VERSION) {
+    if (hdr.magic != (resume ? RESUME_MAGIC : STATE_MAGIC) || hdr.version != STATE_VERSION) {
         SDL_free(file);
         set_message("Slot %d is from an incompatible version", slot);
-        return;
+        return false;
     }
     StateIO io = {.loading = true, .len = hdr.raw_size};
+    if (hdr.raw_size == 0 || hdr.raw_size > (128u << 20)) {
+        SDL_free(file);
+        set_message("Invalid state size in slot %d", slot);
+        return false;
+    }
     io.buf = malloc(hdr.raw_size);
     mz_ulong got = hdr.raw_size;
     int rc = io.buf ? mz_uncompress(io.buf, &got, file + sizeof hdr, (mz_ulong)(size - sizeof hdr))
@@ -176,7 +224,17 @@ static void do_load(int slot) {
     if (rc != MZ_OK || got != hdr.raw_size) {
         free(io.buf);
         set_message("Load of slot %d failed (corrupt)", slot);
-        return;
+        return false;
+    }
+    if (resume) {
+        state_io(&io, resume, sizeof *resume);
+        if (io.error || (resume->pc != PLAYING_PC && resume->pc != PAUSED_PC) ||
+            !resume->stack.count ||
+            resume->stack.count > sizeof resume->stack.callers / sizeof resume->stack.callers[0]) {
+            free(io.buf);
+            set_message("Invalid Continue state", 0);
+            return false;
+        }
     }
     controls_reset();
     serialize_all(&io);
@@ -191,7 +249,22 @@ static void do_load(int slot) {
     loads_applied++;
     extern unsigned nc_frame_count;
     NC_LOG("savestate: restored frame %u (saved at %u)", nc_frame_count, hdr.frame);
-    set_message("Loaded state %d", slot);
+    if (resume) {
+        set_message("Continued", 0);
+    } else {
+        set_message("Loaded state %d", slot);
+    }
+    return true;
+}
+
+bool savestate_load_resume(u32 *pc, ExecStack *stack) {
+    ResumeContext resume;
+    if (!do_load(RESUME_SLOT, &resume)) {
+        return false;
+    }
+    *pc = resume.pc;
+    *stack = resume.stack;
+    return true;
 }
 
 /* Testing aid: NC_STATE_TEST=S,L,D saves to slot 5 at VBlank S, loads it back once at VBlank L,
@@ -225,18 +298,48 @@ static void state_test(void) {
     }
 }
 
-void nc_hook_savestate_point(CPUState *c) {
-    (void)c;
+static void safe_point(u32 pc) {
+    static unsigned test_update, test_quit_at;
+    if (++test_update == 1) {
+        const char *test = getenv("NC_TEST_SAVE_QUIT_AT");
+        if (test) {
+            test_quit_at = (unsigned)strtoul(test, NULL, 10);
+        }
+    }
+    last_safe_frame = nc_frame_count;
+    if (test_quit_at && test_update == test_quit_at) {
+        savestate_request_save_quit();
+    }
     replay_level_frame();
     state_test();
     if (pending_save >= 0) {
         int slot = pending_save;
         pending_save = -1;
-        do_save(slot);
+        do_save(slot, NULL);
     }
     if (pending_load >= 0) {
         int slot = pending_load;
         pending_load = -1;
-        do_load(slot);
+        do_load(slot, NULL);
     }
+    if (save_quit_pending) {
+        save_quit_pending = false;
+        ResumeContext resume = {.pc = pc};
+        if (!exe_capture_stack(&resume.stack)) {
+            set_message("Cannot save this session for Continue", 0);
+        } else if (do_save(RESUME_SLOT, &resume)) {
+            settings_save();
+            exit(EXIT_SUCCESS);
+        }
+    }
+}
+
+void nc_hook_savestate_point(CPUState *c) {
+    (void)c;
+    safe_point(PLAYING_PC);
+}
+
+void nc_hook_savestate_paused_point(CPUState *c) {
+    (void)c;
+    safe_point(PAUSED_PC);
 }

@@ -16,7 +16,7 @@ psx2_exe 0x8002B348 camera_update_begin
 # Save states: safe point in the level loop (func_8006E38C), once per game frame, where the
 # native call stack always has the same shape.
 psx2_exe 0x8006E7EC savestate_point  # playing
-psx2_exe 0x8006E50C savestate_point  # paused
+psx2_exe 0x8006E50C savestate_paused_point  # paused
 
 # Damage applied to an actor: s1 is the recipient, s3 the attacker and v0 the new health.
 psx2_exe 0x8004EB78 replay_damage
