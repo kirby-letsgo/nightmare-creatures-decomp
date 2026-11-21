@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.nightmarecreatures.port">
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <application android:label="Nightmare Creatures" android:icon="@drawable/icon"
+        android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+        android:enableOnBackInvokedCallback="false" android:appCategory="game" android:extractNativeLibs="false">
+        <activity android:name="org.nightmarecreatures.port.NightmareActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|layoutDirection|locale|density"
+            android:screenOrientation="sensorLandscape" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

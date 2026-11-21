@@ -2,6 +2,7 @@
 
 #include "port/runtime.h"
 
+#include <SDL3/SDL.h>
 #include <libchdr/cdrom.h>
 #include <libchdr/chd.h>
 #include <stdio.h>
@@ -61,10 +62,51 @@ static bool load_toc(void) {
 static const u8 known_sha1[20] = {0x85, 0x92, 0xa0, 0x7f, 0x87, 0xdf, 0x44, 0x66, 0x01, 0x90,
                                   0x2a, 0x13, 0x7d, 0x69, 0x07, 0x5d, 0xde, 0x4c, 0xf2, 0x06};
 
+/* SDL opens both filesystem paths and Android document URIs. libchdr owns this stream
+ * once it receives the callbacks and closes it on both failure and success. */
+static uint64_t image_size(void *io) {
+    return (uint64_t)SDL_GetIOSize(io);
+}
+
+static size_t image_read(void *dst, size_t size, size_t count, void *io) {
+    if (!size || count > SIZE_MAX / size) {
+        return 0;
+    }
+    return SDL_ReadIO(io, dst, size * count) / size;
+}
+
+static int image_seek(void *io, int64_t offset, int whence) {
+    SDL_IOWhence origin;
+    switch (whence) {
+    case SEEK_SET:
+        origin = SDL_IO_SEEK_SET;
+        break;
+    case SEEK_CUR:
+        origin = SDL_IO_SEEK_CUR;
+        break;
+    case SEEK_END:
+        origin = SDL_IO_SEEK_END;
+        break;
+    default:
+        return -1;
+    }
+    return SDL_SeekIO(io, offset, origin) < 0 ? -1 : 0;
+}
+
+static int image_close(void *io) {
+    return SDL_CloseIO(io) ? 0 : -1;
+}
+
+static bool open_image(const char *path, chd_file **out) {
+    static const core_file_callbacks callbacks = {image_size, image_read, image_close, image_seek};
+    SDL_IOStream *io = SDL_IOFromFile(path, "rb");
+    return io &&
+           chd_open_core_file_callbacks(&callbacks, io, CHD_OPEN_READ, NULL, out) == CHDERR_NONE;
+}
+
 DiscCheck disc_check(const char *chd_path) {
     chd_file *file = NULL;
-    if (chd_path == NULL || chd_path[0] == '\0' ||
-        chd_open(chd_path, CHD_OPEN_READ, NULL, &file) != CHDERR_NONE) {
+    if (chd_path == NULL || chd_path[0] == '\0' || !open_image(chd_path, &file)) {
         return DISC_MISSING;
     }
     bool match = memcmp(chd_get_header(file)->sha1, known_sha1, sizeof known_sha1) == 0;
@@ -73,7 +115,7 @@ DiscCheck disc_check(const char *chd_path) {
 }
 
 bool disc_open(const char *chd_path) {
-    if (chd_open(chd_path, CHD_OPEN_READ, NULL, &chd) != CHDERR_NONE) {
+    if (!open_image(chd_path, &chd)) {
         NC_LOG("cannot open disc image %s", chd_path);
         return false;
     }

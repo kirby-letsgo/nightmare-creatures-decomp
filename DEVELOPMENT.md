@@ -237,7 +237,8 @@ Then `make recomp && make build` (the interpreter build picks both up automatica
 `.github/workflows/build.yml` builds the interpreter-only executable on macOS (universal), Windows
 (MSVC, static runtime) and Linux (Ubuntu 22.04) with a statically linked SDL3, runs the smoke test
 (`ctest`: `nightmare --version`), and packages a `.dmg`, an `.exe` and an AppImage
-(`packaging/`). Every push to `main` replaces the `latest` pre-release with these builds.
+(`packaging/`). The Android job builds an arm64 APK with the SDK and NDK (see below). Every push to `main`
+refreshes the `latest` pre-release when all platform jobs succeed.
 
 To reproduce a release build locally:
 
@@ -246,6 +247,31 @@ cmake -S . -B build/cmake-release -DCMAKE_BUILD_TYPE=Release -DNC_INTERPRETER_ON
 cmake --build build/cmake-release
 sh packaging/package_macos.sh build/cmake-release dev build/NightmareCreatures-macos.dmg
 ```
+
+## Android APK
+
+The Android package targets arm64 devices running Android 8.0 or newer. The build uses JDK 17,
+Python 3, Git, `zip` and the Android SDK. With `ANDROID_HOME` pointing at the SDK and the JDK
+on `PATH`, run:
+
+```sh
+sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.31.6"
+bash packaging/package_android.sh
+adb install -r build/android/NightmareCreatures-android-arm64.apk
+```
+
+The packager compiles the interpreter, the pinned SDL native library and its matching Java
+activity, then signs and verifies the APK. Development builds use package
+`org.nightmarecreatures.port.test` and keep a local development signing key in `build/android/`.
+For a production build, set `NC_ANDROID_KEYSTORE`, `NC_ANDROID_STORE_PASSWORD` and
+`NC_ANDROID_KEY_ALIAS` (also `NC_ANDROID_KEY_PASSWORD` if the key has its own password).
+That build uses `org.nightmarecreatures.port`. Android requires a matching certificate and a
+nondecreasing version code to update an installed app.
+
+The Android CI job uploads the APK alongside the desktop packages. Main-branch pushes use the
+repository secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`
+when configured. Without a release key, CI produces the test package with a runner-local key.
+Configure a stable release key for updates that preserve installed saves across rolling releases.
 
 ## Roadmap
 

@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#if defined(__APPLE__) || defined(__linux__)
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
 #include <execinfo.h>
 #define NC_HAVE_BACKTRACE 1
 #endif

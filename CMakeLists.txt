@@ -15,9 +15,14 @@ set(NC_VERSION "dev" CACHE STRING "Version string shown by --version and in the 
 # SDL3: the system package for development; NC_VENDOR_SDL builds a pinned release statically.
 option(NC_VENDOR_SDL "Build SDL3 from source and link it statically" OFF)
 include(FetchContent)
-if(NC_VENDOR_SDL)
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+if(ANDROID OR NC_VENDOR_SDL)
+    if(ANDROID)
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    else()
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    endif()
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -124,6 +129,17 @@ add_custom_command(
     COMMENT "Generating interpreter patch table"
 )
 target_sources(nc_runtime PRIVATE ${NC_PATCH_TABLE})
+
+if(ANDROID)
+    add_library(nightmare SHARED src/port/main.c src/port/android_pad.c src/port/no_gen.c)
+    set_target_properties(nightmare PROPERTIES OUTPUT_NAME main)
+    target_compile_definitions(nightmare PRIVATE NC_VERSION="${NC_VERSION}")
+    target_link_libraries(nightmare PRIVATE nc_runtime)
+    # Compile the Android activity against the Java glue from the same SDL checkout.
+    file(WRITE "${CMAKE_BINARY_DIR}/sdl-java-dir.txt"
+        "${sdl3_SOURCE_DIR}/android-project/app/src/main/java")
+    return()
+endif()
 
 # Recompiled code is generated from the user's disc by `make recomp` into gen/. Without it (and
 # always with NC_INTERPRETER_ONLY, as in release builds) the game code is interpreted from the
