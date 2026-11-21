@@ -105,11 +105,10 @@ roms/*.chd ─► tools/extract.py ─► build/disc/ ─► splat ─► build/
 | `input.c`, `settings.c`, `memcard.c` | Bindings, `settings.ini`, `.mcd` memory cards |
 | `ui/menu.cpp` | Start screen, settings, button mapping, pause menu (Dear ImGui) |
 
-Interrupts are taken at safe points (every function entry and backward branch charges a cycle
-budget; when it runs out, `nc_poll` advances time, raises VBlank and runs the BIOS exception
-path). Psy-Q's busy-wait functions (`VSync`, `DrawSync`, CD/SPU sync) are charged realistic
-cycle costs so their iteration-count timeouts behave as on hardware. Frames are paced by the
-audio device's clock.
+Both the interpreter and recompiled C charge one guest cycle per instruction, or three for a
+load. Branches and their delay slots retire together before the target executes. When the
+cycle budget runs out, both paths call `nc_poll` to advance the hardware and deliver pending
+interrupts. Frames are paced by the audio device's clock.
 
 ### Texture upscaling
 
@@ -193,8 +192,8 @@ ctest --test-dir build/cmake -R first_level --output-on-failure
 Each run boots with a fresh temporary memory card, tank controls and adrenaline enabled.
 `tests/first_level_boot.input` taps Start by VBlank. At the first level-loop safe point,
 `NC_LEVEL_INPUT` switches playback to `tests/first_level.input`, timed in game updates.
-The test checks heading, X/Z position and adrenaline at six checkpoints covering level entry,
-both turns, the walk and the idle period. A missing disc skips the CTest. A stalled or
+The test checks heading, X/Z position and adrenaline at checkpoints covering level entry,
+the first position change, both turns, the walk and the first adrenaline decrement. A missing disc skips the CTest. A stalled or
 incomplete replay fails.
 
 To compare every recorded update, build both flavours with `make recomp`, `make build` and
@@ -206,9 +205,9 @@ python3 tools/test_first_level.py build/cmake-interp/nightmare --compare build/c
 
 Passing the interpreter as both executables checks repeatability. Each replay starts from a
 fresh boot. The comparison reports the first differing frame, field and values and returns a
-failure. On the initial baseline, both builds reach the same six checkpoints. The first
-difference between checkpoints is player Z at level frame 11 (2998240 interpreted, 2998272
-recompiled). The first adrenaline decrement occurs at frame 376 interpreted and 377 recompiled.
+failure. The interpreter and recompiled build agree on all four fields for 401 level updates.
+The checkpoints around frames 11 and 376 catch the original timing regression in either build
+when running the single-executable CTest.
 
 ### Finding a game variable
 

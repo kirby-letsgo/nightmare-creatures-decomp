@@ -11,11 +11,6 @@
 
 #include <string.h>
 
-/* Cycles charged per instruction (plus an extra cost for loads from RAM), approximating the
- * R3000A so iteration-count timeouts in the libraries behave as on hardware. */
-#define INSN_CYCLES 1
-#define LOAD_CYCLES 2
-
 /* --- patches and hooks -------------------------------------------------------------------- */
 
 /* One bit per RAM word: set when a patch or hook applies at that address for the resident code
@@ -100,7 +95,7 @@ static int exec_simple(CPUState *c, u32 pc, u32 w) {
     u32 ea = a + (u32)simm;
 
     if (w == 0) {
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     }
     if (op == 0) {
         u32 sa = (w >> 6) & 31;
@@ -182,31 +177,31 @@ static int exec_simple(CPUState *c, u32 pc, u32 w) {
         default:
             nc_unimplemented(c, pc, w);
         }
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     }
     switch (op) {
     case 0x08:
     case 0x09:
         SET(rt, a + (u32)simm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0A:
         SET(rt, (s32)a < simm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0B:
         SET(rt, a < (u32)simm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0C:
         SET(rt, a & imm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0D:
         SET(rt, a | imm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0E:
         SET(rt, a ^ imm);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x0F:
         SET(rt, imm << 16);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x10: /* COP0 */
         if (rs == 0x00) {
             SET(rt, nc_mfc0(c, (int)rd));
@@ -217,7 +212,7 @@ static int exec_simple(CPUState *c, u32 pc, u32 w) {
         } else {
             nc_unimplemented(c, pc, w);
         }
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x12: /* COP2 (GTE) */
         if (rs & 0x10) {
             gte_command(c, w & 0x1FFFFFF);
@@ -232,52 +227,52 @@ static int exec_simple(CPUState *c, u32 pc, u32 w) {
         } else {
             nc_unimplemented(c, pc, w);
         }
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x20:
         SET(rt, (u32)(s32)(s8)MEM_R8(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x21:
         SET(rt, (u32)(s32)(s16)MEM_R16(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x22:
         SET(rt, nc_lwl(c, ea, b));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x23:
         SET(rt, MEM_R32(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x24:
         SET(rt, MEM_R8(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x25:
         SET(rt, MEM_R16(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x26:
         SET(rt, nc_lwr(c, ea, b));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x28:
         MEM_W8(ea, (u8)b);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x29:
         MEM_W16(ea, (u16)b);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x2A:
         nc_swl(c, ea, b);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x2B:
         MEM_W32(ea, b);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x2E:
         nc_swr(c, ea, b);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     case 0x32: /* lwc2 */
         gte_write_data(c, (int)rt, MEM_R32(ea));
-        return INSN_CYCLES + LOAD_CYCLES;
+        return NC_LOAD_CYCLES;
     case 0x3A: /* swc2 */
         MEM_W32(ea, gte_read_data(c, (int)rt));
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     default:
         nc_unimplemented(c, pc, w);
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     }
 }
 
@@ -285,7 +280,7 @@ static int exec_simple(CPUState *c, u32 pc, u32 w) {
 static int exec_delay(CPUState *c, u32 pc) {
     u32 w = MEM_R32(pc);
     if (is_marked(pc) && apply_marks(c, pc)) {
-        return INSN_CYCLES;
+        return NC_INSN_CYCLES;
     }
     return exec_simple(c, pc, w);
 }
@@ -329,7 +324,7 @@ void interp_call(CPUState *c, u32 addr) {
         bool patched = is_marked(pc) && apply_marks(c, pc);
 
         if (!is_control(w)) {
-            int cost = patched ? INSN_CYCLES : exec_simple(c, pc, w);
+            int cost = patched ? NC_INSN_CYCLES : exec_simple(c, pc, w);
             pc += 4;
             NC_POLL(c, cost);
             continue;
@@ -338,7 +333,7 @@ void interp_call(CPUState *c, u32 addr) {
             /* A patched-out branch/jump: only its delay slot runs. */
             int cost = exec_delay(c, pc + 4);
             pc += 8;
-            NC_POLL(c, cost + INSN_CYCLES);
+            NC_POLL(c, cost + NC_INSN_CYCLES);
             continue;
         }
 
@@ -392,7 +387,7 @@ void interp_call(CPUState *c, u32 addr) {
             nc_unimplemented(c, pc, w);
         }
 
-        int cost = INSN_CYCLES + exec_delay(c, pc + 4);
+        int cost = NC_INSN_CYCLES + exec_delay(c, pc + 4);
         NC_POLL(c, cost);
 
         if (native_ok && target != ret && call_native(c, target)) {

@@ -231,6 +231,9 @@ void nc_fn_enter(u32 addr, u32 ra);
 #define NC_FN_ENTER(c, addr) ((void)0)
 #endif
 
+/* Guest timing shared with the code generator. A load costs three cycles in total. */
+enum { NC_INSN_CYCLES = 1, NC_LOAD_CYCLES = 3 };
+
 #define NC_POLL(c, cost)                                                                           \
     do {                                                                                           \
         if (((c)->budget -= (cost)) <= 0) {                                                        \
