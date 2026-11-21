@@ -224,6 +224,19 @@ Each hit counts a health decrease in the damage routine with the player as attac
 Run the fixture against both execution paths with
 `python3 tools/test_first_level.py build/cmake-interp/nightmare --compare build/cmake/nightmare --scenario first_combat`.
 
+### Native adrenaline update
+
+The recompiled build calls `src/decomp/adrenaline.c` after the original HUD draw.
+It updates the timer, applies the game-mode cadence, clamps an empty meter and drains
+health. The instruction-timed path handles guest death callbacks and any update close
+enough to a hardware event for an interrupt to arrive midway through it. The release
+interpreter continues to execute the disc code and provides the comparison reference.
+
+`ctest -R adrenaline` compares the native update against the disc instructions, including
+registers, RAM and remaining cycles, and exercises the movement replay with adrenaline
+disabled. To compare both gameplay builds directly, add `--no-adrenaline` to
+`tools/test_first_level.py ... --compare ...`.
+
 ### Disc format verification
 
 Playback accepts CHD, a complete 2352-byte-sector BIN, and CUE sheets with one or more

@@ -20,10 +20,12 @@ def checkpoints(scenario):
     return rows
 
 
-def replay(binary, disc, end, scenario):
+def replay(binary, disc, end, scenario, adrenaline=True):
     with TemporaryDirectory(prefix="nc-first-level-") as tmp:
         work = Path(tmp)
-        (work / "settings.ini").write_text("controls=tank\nadrenaline=on\nmouse_camera=off\n")
+        (work / "settings.ini").write_text(
+            f"controls=tank\nadrenaline={'on' if adrenaline else 'off'}\nmouse_camera=off\n"
+        )
         env = {k: v for k, v in os.environ.items() if not k.startswith("NC_")}
         env.update(
             NC_HEADLESS="1",
@@ -81,17 +83,29 @@ def main():
     parser.add_argument(
         "--scenario", choices=["first_level", "first_combat"], default="first_level"
     )
+    parser.add_argument(
+        "--no-adrenaline", action="store_true", help="exercise the disabled countdown"
+    )
     args = parser.parse_args()
     if not args.disc.exists():
         print(f"Skipping first-level replay: missing {args.disc}")
         return 77
     disc = args.disc.resolve()
     expected = checkpoints(args.scenario)
-    first = replay(args.binary.resolve(), disc, max(expected), args.scenario)
+    if args.no_adrenaline:
+        # Neither of these short routes starts with a depleted gauge.
+        initial = expected[1][FIELDS.index("adrenaline")]
+        for values in expected.values():
+            values[FIELDS.index("adrenaline")] = initial
+    first = replay(
+        args.binary.resolve(), disc, max(expected), args.scenario, not args.no_adrenaline
+    )
     compare(expected, first, args.binary)
     print(f"{args.binary}: {len(expected)} {args.scenario} checkpoints passed", flush=True)
     if args.compare:
-        second = replay(args.compare.resolve(), disc, max(expected), args.scenario)
+        second = replay(
+            args.compare.resolve(), disc, max(expected), args.scenario, not args.no_adrenaline
+        )
         compare(first, second, args.compare)
         print(f"Both builds agree on all {len(first)} level frames")
     return 0

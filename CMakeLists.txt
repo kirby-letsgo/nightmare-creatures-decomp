@@ -164,7 +164,7 @@ if(WIN32)
 endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
-    add_library(nc_gen STATIC ${NC_GEN_SOURCES})
+    add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -191,7 +191,9 @@ add_test(NAME first_level COMMAND Python3::Interpreter
     ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare>)
 add_test(NAME first_combat COMMAND Python3::Interpreter
     ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare> --scenario first_combat)
-set_tests_properties(first_level first_combat PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+add_test(NAME first_level_no_adrenaline COMMAND Python3::Interpreter
+    ${CMAKE_SOURCE_DIR}/tools/test_first_level.py $<TARGET_FILE:nightmare> --no-adrenaline)
+set_tests_properties(first_level first_combat first_level_no_adrenaline PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
 add_executable(test_disc_formats tests/disc_formats.c src/port/no_gen.c)
 target_link_libraries(test_disc_formats PRIVATE nc_runtime)
@@ -199,3 +201,8 @@ add_test(NAME disc_formats COMMAND test_disc_formats
     "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd"
     "${CMAKE_SOURCE_DIR}/build/nc.cue" "${CMAKE_SOURCE_DIR}/build/nc.bin")
 set_tests_properties(disc_formats PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_adrenaline tests/adrenaline.c src/decomp/adrenaline.c src/port/no_gen.c)
+target_link_libraries(test_adrenaline PRIVATE nc_runtime)
+add_test(NAME adrenaline COMMAND test_adrenaline "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(adrenaline PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
