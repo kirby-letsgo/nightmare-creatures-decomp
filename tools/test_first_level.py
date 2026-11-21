@@ -8,19 +8,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 FIXTURES = Path(__file__).resolve().parents[1] / "tests"
-FIELDS = ("heading", "X", "Z", "adrenaline")
+FIELDS = ("heading", "X", "Z", "adrenaline", "health", "hits dealt", "hits taken")
 
 
-def checkpoints():
+def checkpoints(scenario):
     rows = {}
-    for line in (FIXTURES / "first_level.checkpoints").read_text().splitlines():
+    for line in (FIXTURES / f"{scenario}.checkpoints").read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             frame, *values = map(int, line.split())
             rows[frame] = values
     return rows
 
 
-def replay(binary, disc, end):
+def replay(binary, disc, end, scenario):
     with TemporaryDirectory(prefix="nc-first-level-") as tmp:
         work = Path(tmp)
         (work / "settings.ini").write_text("controls=tank\nadrenaline=on\nmouse_camera=off\n")
@@ -28,15 +28,19 @@ def replay(binary, disc, end):
         env.update(
             NC_HEADLESS="1",
             NC_DATA_DIR=tmp + os.sep,
-            NC_INPUT=str(FIXTURES / "first_level_boot.input"),
-            NC_LEVEL_INPUT=str(FIXTURES / "first_level.input"),
             SDL_VIDEO_DRIVER="dummy",
             SDL_RENDER_DRIVER="software",
         )
-        try:
-            result = subprocess.run(
-                [binary, "--disc", disc], cwd=work, env=env, capture_output=True, timeout=240
+        cmd = [binary, "--disc", disc]
+        if scenario == "first_combat":
+            cmd.extend(["--play-input", FIXTURES / "first_combat.movie"])
+        else:
+            env.update(
+                NC_INPUT=str(FIXTURES / "first_level_boot.input"),
+                NC_LEVEL_INPUT=str(FIXTURES / "first_level.input"),
             )
+        try:
+            result = subprocess.run(cmd, cwd=work, env=env, capture_output=True, timeout=240)
         except subprocess.TimeoutExpired as exc:
             raise ValueError(
                 f"{binary}: timed out waiting for the end of the level replay"
@@ -74,17 +78,20 @@ def main():
     parser.add_argument(
         "--disc", type=Path, default=FIXTURES.parent / "roms/Nightmare Creatures.chd"
     )
+    parser.add_argument(
+        "--scenario", choices=["first_level", "first_combat"], default="first_level"
+    )
     args = parser.parse_args()
     if not args.disc.exists():
         print(f"Skipping first-level replay: missing {args.disc}")
         return 77
     disc = args.disc.resolve()
-    expected = checkpoints()
-    first = replay(args.binary.resolve(), disc, max(expected))
+    expected = checkpoints(args.scenario)
+    first = replay(args.binary.resolve(), disc, max(expected), args.scenario)
     compare(expected, first, args.binary)
-    print(f"{args.binary}: {len(expected)} first-level checkpoints passed", flush=True)
+    print(f"{args.binary}: {len(expected)} {args.scenario} checkpoints passed", flush=True)
     if args.compare:
-        second = replay(args.compare.resolve(), disc, max(expected))
+        second = replay(args.compare.resolve(), disc, max(expected), args.scenario)
         compare(first, second, args.compare)
         print(f"Both builds agree on all {len(first)} level frames")
     return 0

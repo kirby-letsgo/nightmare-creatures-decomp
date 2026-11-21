@@ -209,6 +209,21 @@ failure. The interpreter and recompiled build agree on all four fields for 401 l
 The checkpoints around frames 11 and 376 catch the original timing regression in either build
 when running the single-executable CTest.
 
+### Recording a combat replay
+
+Run `nightmare --record-input fight.movie` to capture the digital PS1 controller from boot
+through quit. The file must be new. Movies use the original tank controls and fixed camera,
+and do not encode changes to settings, memory cards or save-state loads. Use a fresh
+`NC_DATA_DIR` for recording and playback with the same settings. Replay with
+`NC_HEADLESS=1 nightmare --play-input fight.movie`. The text file stores runs of up to 120
+VBlanks with the same pad mask and ends with an explicit end marker.
+
+`tests/first_combat.movie` boots into the first level, takes a hit, and lands four attacks.
+At each level update the trace includes player health and cumulative hits dealt and taken.
+Each hit counts a health decrease in the damage routine with the player as attacker or target.
+Run the fixture against both execution paths with
+`python3 tools/test_first_level.py build/cmake-interp/nightmare --compare build/cmake/nightmare --scenario first_combat`.
+
 ### Disc format verification
 
 Playback accepts CHD, a complete 2352-byte-sector BIN, and CUE sheets with one or more
