@@ -1,12 +1,12 @@
 # Nightmare Creatures: PC port
 
-A native macOS, Windows and Linux version of **Nightmare Creatures** (Kalisto, 1997), the
+A native macOS, Windows, Linux and Android version of **Nightmare Creatures** (Kalisto, 1997), the
 PlayStation gothic action game, with the improvements it always needed: the adrenaline meter
 can be switched off, modern controls replace the tank controls if you want, and the game runs
 upscaled, in widescreen, with save states.
 
 **No game data is included.** You need your own copy of the game: the USA PlayStation disc
-(SLUS-00582) as a `.chd` disc image.
+(SLUS-00582) as a CHD, a complete raw BIN, or a CUE sheet with its BIN tracks.
 
 ## Download
 
@@ -19,21 +19,20 @@ Get the latest build for your system from the
 | macOS 11+ (Apple Silicon and Intel) | `NightmareCreatures-macos.dmg` | Drag the app to Applications. It isn't notarized, so the first time right-click it and choose **Open**. |
 | Windows 10/11 (64-bit) | `NightmareCreatures-windows-x64.exe` | Run it. If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**. |
 | Linux (x86-64) | `NightmareCreatures-linux-x86_64.AppImage` | `chmod +x` the file, then run it. |
+| Android 8+ (arm64) | `NightmareCreatures-android-arm64.apk` | Install the APK, open it, and tap **Choose Disc** to select your disc image. |
 
 Each is a single self-contained file; nothing else needs installing.
 
 ## Your disc image
 
-The first time you start the game, choose your disc image on the start screen. It is checked
-against the known good dump of the USA release and remembered for next time (**Change Disc...**
-picks another).
+On the start screen, open **Choose Disc**. The port checks for the USA release and remembers
+your selection.
 
-If your dump is a `.bin`/`.cue` pair rather than a `.chd`, convert it with `chdman` (part of MAME
-tools: `brew install rom-tools` on macOS, `apt install mame-tools` on Debian/Ubuntu):
-
-```sh
-chdman createcd -i "Nightmare Creatures.cue" -o "Nightmare Creatures.chd"
-```
+| Your dump | What to select |
+|---|---|
+| CHD | Select the `.chd` file. |
+| CUE with one or more BIN files | On desktop, select the `.cue` and keep its BIN files at the paths named in the sheet. On Android, put the files in one folder and select the CUE **and all its BINs together** in the system picker (long-press to start multi-select). |
+| One complete 26-track BIN | Select the `.bin` directly. A standalone data-track BIN is incomplete because the music lives on the other 25 tracks. |
 
 ## Features
 
@@ -85,6 +84,10 @@ chdman createcd -i "Nightmare Creatures.cue" -o "Nightmare Creatures.chd"
 
 Xbox, PlayStation and Switch controllers work out of the box. Buttons map by position (bottom
 = Cross, right = Circle, left = Square, top = Triangle), and the left stick works as the d-pad.
+
+### Android
+
+Play in landscape with the on-screen PlayStation buttons, or connect a gamepad to hide the touch controls. Android Back opens the in-game menu. Keep the selected disc files on your device so the game can reopen them next time.
 
 ### Other keys
 

@@ -98,7 +98,7 @@ roms/*.chd ─► tools/extract.py ─► build/disc/ ─► splat ─► build/
 | `cpu.c`, `recomp.h` | CPU state, RAM, memory accessors, cycle budget and VBlank/interrupt scheduling |
 | `dispatch.c`, `interp.c` | Address → function dispatch; interpreter fallback |
 | `bios.c`, `exe.c` | High-level BIOS (events, files, memory card, Load/Exec, interrupts); EXE loading |
-| `disc.c` | CHD reading (libchdr), ISO9660, track table |
+| `disc.c`, `raw_disc.c` | CHD, raw BIN/CUE, ISO9660 and disc track layout |
 | `hw/` | GPU (software rasterizer, upscaling, xBRZ texture cache), GTE (`gte.c`), SPU (+ reverb, CD audio, XA), CD-ROM controller, MDEC, DMA, timers, IRQ, widescreen helpers |
 | `controls.c` | Modern controls and free-look camera (hooks) |
 | `savestate.c` | Whole-machine snapshots at the level-loop safe point |
@@ -209,6 +209,21 @@ failure. The interpreter and recompiled build agree on all four fields for 401 l
 The checkpoints around frames 11 and 376 catch the original timing regression in either build
 when running the single-executable CTest.
 
+### Disc format verification
+
+Playback accepts CHD, a complete 2352-byte-sector BIN, and CUE sheets with one or more
+BINARY files. The raw reader checks the 26-track US layout and the CRC32 of the full PSX2.EXE
+payload. It maps stored INDEX 00 pregaps and zero-filled PREGAP directives onto the same LBAs
+as the CHD reader. Development extraction with `make extract` still takes a CHD.
+
+After extraction, `ctest --test-dir build/cmake-interp -R disc_formats --output-on-failure`
+compares the track table and every raw data/audio sector in the merged CUE and bare BIN
+against the CHD. To verify additional layouts, pass their paths after the reference CHD:
+
+```sh
+build/cmake-interp/test_disc_formats 'roms/Nightmare Creatures.chd' 'path/to/split tracks.cue'
+```
+
 ### Finding a game variable
 
 1. Write an input script for a controlled experiment (e.g. idle, then turn left for 40 frames).
@@ -237,7 +252,8 @@ Then `make recomp && make build` (the interpreter build picks both up automatica
 `.github/workflows/build.yml` builds the interpreter-only executable on macOS (universal), Windows
 (MSVC, static runtime) and Linux (Ubuntu 22.04) with a statically linked SDL3, runs the smoke test
 (`ctest`: `nightmare --version`), and packages a `.dmg`, an `.exe` and an AppImage
-(`packaging/`). Every push to `main` replaces the `latest` pre-release with these builds.
+(`packaging/`). The Android job builds an arm64 APK with the SDK and NDK (see below). Every push to `main`
+refreshes the `latest` pre-release when all platform jobs succeed.
 
 To reproduce a release build locally:
 
@@ -246,6 +262,31 @@ cmake -S . -B build/cmake-release -DCMAKE_BUILD_TYPE=Release -DNC_INTERPRETER_ON
 cmake --build build/cmake-release
 sh packaging/package_macos.sh build/cmake-release dev build/NightmareCreatures-macos.dmg
 ```
+
+## Android APK
+
+The Android package targets arm64 devices running Android 8.0 or newer. The build uses JDK 17,
+Python 3, Git, `zip` and the Android SDK. With `ANDROID_HOME` pointing at the SDK and the JDK
+on `PATH`, run:
+
+```sh
+sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.31.6"
+bash packaging/package_android.sh
+adb install -r build/android/NightmareCreatures-android-arm64.apk
+```
+
+The packager compiles the interpreter, the pinned SDL native library and its matching Java
+activity, then signs and verifies the APK. Development builds use package
+`org.nightmarecreatures.port.test` and keep a local development signing key in `build/android/`.
+For a production build, set `NC_ANDROID_KEYSTORE`, `NC_ANDROID_STORE_PASSWORD` and
+`NC_ANDROID_KEY_ALIAS` (also `NC_ANDROID_KEY_PASSWORD` if the key has its own password).
+That build uses `org.nightmarecreatures.port`. Android requires a matching certificate and a
+nondecreasing version code to update an installed app.
+
+The Android CI job uploads the APK alongside the desktop packages. Main-branch pushes use the
+repository secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`
+when configured. Without a release key, CI produces the test package with a runner-local key.
+Configure a stable release key for updates that preserve installed saves across rolling releases.
 
 ## Roadmap
 

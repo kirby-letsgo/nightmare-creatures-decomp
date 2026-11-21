@@ -1,3 +1,6 @@
+#ifdef __ANDROID__
+#include "port/android_pad.h"
+#endif
 #include "port/disc.h"
 #include "port/exe.h"
 #include "port/hw/gpu.h"
@@ -340,7 +343,9 @@ static void on_frame(void) {
             quit_game();
             break;
         case SDL_EVENT_KEY_DOWN:
-            if (event.key.scancode == SDL_SCANCODE_ESCAPE && !event.key.repeat) {
+            if ((event.key.scancode == SDL_SCANCODE_ESCAPE ||
+                 event.key.scancode == SDL_SCANCODE_AC_BACK) &&
+                !event.key.repeat) {
                 menu_requested = true;
             } else if (!event.key.repeat &&
                        (event.key.scancode == SDL_SCANCODE_F5 ||
@@ -373,10 +378,18 @@ static void on_frame(void) {
             break;
         }
     }
-    bios_set_pad(input_read_keyboard() | input_read_gamepads() | scripted_input() | replay_input());
+    u16 buttons = input_read_keyboard() | input_read_gamepads() | scripted_input() | replay_input();
+#ifdef __ANDROID__
+    u16 touch = android_pad_read();
+    buttons |= touch;
+#endif
+    bios_set_pad(buttons);
     dump_ram();
     update_screen();
     draw_game();
+#ifdef __ANDROID__
+    android_pad_draw(renderer, touch);
+#endif
     SDL_RenderPresent(renderer);
     output_audio();
     update_fps();
@@ -421,6 +434,9 @@ int main(int argc, char **argv) {
         /* Hidden window and no sound card: nothing to steal focus or to pace against. */
         SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
     }
+#ifdef __ANDROID__
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
