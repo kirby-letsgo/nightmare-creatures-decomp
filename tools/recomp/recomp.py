@@ -501,6 +501,8 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
+                out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if not i.has_delay():
                 out.append(f"    {self.timed_simple(i)}")
                 k += 1
@@ -596,6 +598,8 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     em = Emitter(mod, launcher)
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
+    if mod.name == "psx2_exe":
+        header.append('#include "decomp/adrenaline.h"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)
