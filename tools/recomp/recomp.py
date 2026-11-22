@@ -636,7 +636,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.update((0x80047254, 0x800472B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80042D9C:
-            targets.update((0x80042EF4, 0x80042F40))
+            targets.update((0x80042E18, 0x80042EF4, 0x80042F40))
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
             targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
@@ -694,6 +694,15 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800447B8, 0x800448D4):
                 held = "true" if i.addr == 0x800447B8 else "false"
                 out.append(f"    if (nc_player_l2_direction(c, {held})) goto L_800448E0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042DE4:
+                out.extend(
+                    [
+                        "    switch (nc_pad_playback_poll_gate(c)) {",
+                        "    case 0x80042E18: goto L_80042E18;",
+                        "    case 0x80042F54: goto L_80042F54;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80042E30, 0x80042E38):
                 check_end = "true" if i.addr == 0x80042E30 else "false"
                 out.append(f"    if (nc_pad_playback_interrupt(c, {check_end})) goto L_80042F54;")

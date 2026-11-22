@@ -179,6 +179,27 @@ static bool pad_start_edge(void) {
     return true;
 }
 
+static bool playback_poll_destination(CPUState *cpu) {
+    return nc_pad_playback_poll_gate(cpu) == cpu->r[31];
+}
+
+static bool playback_poll_gate(void) {
+    CPUState cpu = initial();
+    cpu.budget = 19;
+    if (nc_pad_playback_poll_gate(&cpu) != 0x80042de4)
+        return false;
+    cpu.budget = 20;
+    MEM_W32(gp + 0x244, config);
+    for (unsigned bits = 0; bits < 4; ++bits) {
+        MEM_W32(config, 0x80000020 | ((bits & 1) << 4));
+        MEM_W32(config + 4, 0x81000008 | ((bits & 2) << 24));
+        cpu.r[31] = bits ? 0x80042f54 : 0x80042e18;
+        if (!compare(cpu, 0x80042de4, playback_poll_destination, 19))
+            return false;
+    }
+    return true;
+}
+
 static bool playback_sequence_result(CPUState *cpu) {
     return nc_pad_playback_interrupt(cpu, true);
 }
@@ -748,10 +769,10 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = playback_interrupt() && pad_select_edge() && pad_start_edge() && pad_inactivity() &&
-              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+    bool ok = playback_poll_gate() && playback_interrupt() && pad_select_edge() &&
+              pad_start_edge() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+              sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
