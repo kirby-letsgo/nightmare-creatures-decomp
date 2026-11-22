@@ -796,6 +796,42 @@ bool nc_resume_scaled_part_walk(CPUState *c) {
     return true;
 }
 
+/* Save pending branches before reading the part index. An active mask
+ * selects matching parts; a zero mask selects parts with no group bits. */
+bool nc_filter_scaled_part(CPUState *c) {
+    if (c->budget <= 34)
+        return false;
+    const u32 part = R(10);
+    const u32 branch = MEM_R32(part + 12);
+    int cycles = 12;
+    if (branch) {
+        MEM_W32(R(18) + 4, branch);
+        MEM_W32(R(18), R(15));
+        R(18) += 8;
+        R(17) += 8;
+        ++R(19);
+        cycles += 5;
+    }
+    const u32 index = MEM_R8(part + 0x4c);
+    if (index) {
+        R(16) = MEM_R32(R(29) + 0xb0);
+        R(13) = (s32)(s16)MEM_R16(R(16) + 0x10a + 2 * index);
+        cycles += 10;
+    } else {
+        R(13) = 0;
+        ++cycles;
+    }
+    if (R(22)) {
+        R(2) = R(13) & R(22);
+        cycles += 4;
+    } else {
+        R(2) = R(13) & 0x1f00;
+        cycles += R(2) ? 7 : 5;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Start the part chain with an identity rotation and zero translation. */
 bool nc_init_part_transform(CPUState *c) {
     if (c->budget <= 55)
