@@ -47,6 +47,28 @@ bool nc_call_actor_coordinate_init(CPUState *c) {
     return true;
 }
 
+/* The null-actor branch also reaches this call with the shared record. */
+bool nc_call_placement_record_update(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = 0x800d7630;
+    R(31) = 0x8006e06c;
+    c->budget -= 4;
+    return true;
+}
+
+bool nc_finish_paired_point_placement(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    R(2) = 0;
+    R(31) = MEM_R32(R(29) + 48);
+    R(17) = MEM_R32(R(29) + 44);
+    R(16) = MEM_R32(R(29) + 40);
+    R(29) += 56;
+    c->budget -= 13;
+    return true;
+}
+
 /* Initialize the two coordinate triples in the actor-linked record. The actor
  * height is read after X and Z are stored, which matters for overlapping inputs. */
 bool nc_init_actor_coordinates(CPUState *c) {
