@@ -143,6 +143,36 @@ bool nc_player_l2_direction(CPUState *c, bool l2_held) {
     return true;
 }
 
+/* Save the caller's frame and select live input or playback. Playback
+ * can issue the guest call with argument 0x21 before checking the pad. */
+u32 nc_enter_pad_dispatch(CPUState *c) {
+    if (c->budget <= 24)
+        return 0x80042d9c;
+    R(4) = MEM_R32(R(28) + 0x244);
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x24, R(31));
+    MEM_W32(R(29) + 0x20, R(16));
+    R(3) = MEM_R32(R(4));
+    R(2) = R(3) & 0x8000;
+    c->budget -= 13;
+    if (!(R(3) & 0x30))
+        return 0x80042e7c;
+
+    R(3) = 0x40000;
+    c->budget -= 2;
+    if (!R(2)) {
+        R(2) = MEM_R32(R(4) + 4) & R(3);
+        c->budget -= 7;
+        if (!R(2)) {
+            R(4) = 0x21;
+            R(31) = 0x80042de4;
+            c->budget -= 2;
+            nc_call(c, 0x800632e0);
+        }
+    }
+    return 0x80042de4;
+}
+
 /* Playback skips the live pad read if either flag is set. The first
  * check leaves s0 untouched. The second sets the mask used after polling. */
 u32 nc_pad_playback_poll_gate(CPUState *c) {
