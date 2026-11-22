@@ -902,6 +902,8 @@ class Emitter:
                 out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80025FE4:
                 out.append("    if (nc_sample_part_rotation(c)) goto L_8002607C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002607C:
+                out.append("    if (nc_finish_part_rotation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8003433C:
                 out.append("    if (nc_init_part_transform(c)) goto L_800343D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800343D8:

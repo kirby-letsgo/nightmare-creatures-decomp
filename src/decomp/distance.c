@@ -539,6 +539,57 @@ bool nc_sample_part_rotation(CPUState *c) {
     return true;
 }
 
+/* The original takes the low product word before each Q12 shift. */
+static u32 shift_part_product(u32 product) {
+    return (s32)product >> 12;
+}
+
+bool nc_finish_part_rotation(CPUState *c) {
+    if (c->budget <= 97)
+        return false;
+    const u32 cx = R(21), cy = R(20), cz = R(17);
+    const u32 sx = R(18), sy = R(16), sz = (s32)(s16)R(2) >> 2;
+    const u32 matrix = R(19), frame = R(29);
+    const u32 cy_cz = cy * cz;
+    R(11) = cz * sy;
+    R(13) = cx * cz;
+    R(14) = sx * cz;
+    R(6) = shift_part_product(cx * cy);
+    R(12) = R(6) * sz;
+    R(4) = shift_part_product(sx * sy);
+    R(7) = shift_part_product(sx * cy);
+    R(9) = R(7) * sz;
+    R(5) = shift_part_product(cx * sy);
+    R(10) = R(5) * sz;
+    nc_mult(c, R(4), sz);
+
+    MEM_W32(matrix + 20, 0);
+    MEM_W32(matrix + 24, 0);
+    MEM_W32(matrix + 28, 0);
+    MEM_W16(matrix + 2, -sz);
+    MEM_W16(matrix, shift_part_product(cy_cz));
+    MEM_W16(matrix + 4, shift_part_product(-R(11)));
+    MEM_W16(matrix + 8, shift_part_product(R(13)));
+    MEM_W16(matrix + 14, shift_part_product(R(14)));
+    R(4) = shift_part_product(R(12)) - R(4);
+    R(5) += shift_part_product(R(9));
+    R(2) = -shift_part_product(R(10)) - R(7);
+    MEM_W16(matrix + 6, R(4));
+    MEM_W16(matrix + 12, R(5));
+    MEM_W16(matrix + 10, R(2));
+    R(8) = c->lo;
+    R(3) = shift_part_product(R(8));
+    R(6) -= R(3);
+    MEM_W16(matrix + 16, R(6));
+
+    R(31) = MEM_R32(frame + 40);
+    for (int reg = 21; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 16 + 4 * (reg - 16));
+    R(29) += 48;
+    c->budget -= 97;
+    return true;
+}
+
 /* After the two angle lookups, s0 holds the scaled cosine component.
  * Store projected X and prepare Z for the store in the heading call's delay slot. */
 bool nc_project_heading_offset(CPUState *c) {
