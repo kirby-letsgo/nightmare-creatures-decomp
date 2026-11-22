@@ -823,6 +823,27 @@ bool nc_credits_end_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_dump_palette(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    const u32 palette = (u16)R(4);
+    R(29) -= 24;
+    R(4) = 0x800183c0; /* diagnostic format string */
+    R(5) = (palette & 0x3f) << 4;
+    c->budget -= 8;
+    R(2) = MEM_R32(0x80024554);
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x8001b728;
+    R(6) = palette >> 6;
+    c->budget -= 3;
+    nc_call(c, R(2));
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_palette_id(CPUState *c) {
     if (c->budget <= 6)
         return false;

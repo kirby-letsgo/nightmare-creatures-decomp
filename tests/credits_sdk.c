@@ -342,6 +342,25 @@ static bool check_environment_reads(void) {
     return true;
 }
 
+static bool check_dump_palette(void) {
+    const u32 palettes[] = {0, 1, 0x3f, 0x40, 0xffc0, 0xffff, 0x12345678, 0xabcd0000};
+    const u32 callbacks[] = {0x8001935c, 0x80019a60};
+    const int budgets[] = {15, 18, 24, 4096};
+    u32 previous = MEM_R32(0x80024554);
+    for (unsigned i = 0; i < sizeof palettes / sizeof palettes[0]; i++)
+        for (unsigned j = 0; j < sizeof callbacks / sizeof callbacks[0]; j++)
+            for (unsigned k = 0; k < sizeof budgets / sizeof budgets[0]; k++) {
+                MEM_W32(0x80024554, callbacks[j]);
+                CPUState state = arguments(palettes[i], 0x1234, 0x5678, budgets[k]);
+                if (i & 1)
+                    state.r[29] = SCRATCH_BASE + 0x100;
+                if (!compare(state, 0x8001b6f8, nc_credits_dump_palette, 14))
+                    return false;
+            }
+    MEM_W32(0x80024554, previous);
+    return true;
+}
+
 static bool check_set_graph_debug(void) {
     const u32 levels[] = {0, 1, 2, 0x100, 0xffffff80, 0xffffffff};
     /* Exercise a callback that preserves the arguments and another that uses them. */
@@ -642,6 +661,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_offset();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
+    pass = pass && check_dump_palette();
     pass = pass && check_environment_reads();
     pass = pass && check_draw_area();
     pass = pass && check_draw_corners();
