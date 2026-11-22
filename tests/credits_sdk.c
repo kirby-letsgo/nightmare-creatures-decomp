@@ -39,6 +39,32 @@ static bool check_copy(void) {
     return true;
 }
 
+static bool check_put_string(void) {
+    const u32 ram = 0x80061001, column = 0x80024ce8;
+    const struct {
+        u32 address;
+        const char *string;
+        u32 final_column;
+    } cases[] = {
+        {0, NULL, 9}, {ram, "", 3}, {ram, "AB", 5},
+        {SCRATCH_BASE + 1, "A\tB", 9}, {0xa0061001, "A\nB", 1},
+    };
+    u32 saved_column = MEM_R32(column);
+    bool ok = true;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++) {
+        if (cases[i].address)
+            memcpy(nc_fast_ptr(cases[i].address), cases[i].string, strlen(cases[i].string) + 1);
+        for (unsigned tight = 0; tight < 2 && ok; tight++) {
+            MEM_W32(column, 3);
+            CPUState state = arguments(cases[i].address, 2, 3, tight ? 10 : 4096);
+            ok = compare(state, 0x8001a638, nc_credits_put_string, 9) &&
+                 MEM_R32(column) == cases[i].final_column;
+        }
+    }
+    MEM_W32(column, saved_column);
+    return ok;
+}
+
 static bool check_find_byte(void) {
     const u32 ram = 0x80061001;
     const u8 bytes[] = {0x12, 0, 0xfe, 0x12};
@@ -2324,6 +2350,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_put_string();
     pass = pass && check_find_byte();
     pass = pass && check_fill();
     pass = pass && check_length();
