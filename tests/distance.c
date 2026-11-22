@@ -204,6 +204,58 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool placement_vector_pairs(bool disc) {
+    static const struct {
+        u32 source, result;
+        s16 xyz[3];
+    } vectors[] = {{0xc8, 0xa8, {-32768, 0, 32767}},
+                   {0xd0, 0xb8, {0, -1, 0}},
+                   {0xf8, 0xd8, {0, 0, -256}},
+                   {0x100, 0xe8, {32767, -32768, 1}}};
+    const u32 record = SCRATCH_BASE, frame = record + 0x200;
+    CPUState input = initial();
+    input.r[16] = record;
+    input.r[29] = frame;
+    input.r[31] = 0x8002af68;
+    memset(nc_scratch, 0xa5, SCRATCH_SIZE);
+    for (unsigned i = 0; i < 9; ++i)
+        MEM_W16(frame + 0x10 + 2 * i, i % 4 == 0 ? 4096 : 0);
+    for (unsigned i = 0; i < 4; ++i)
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W16(record + vectors[i].source + 2 * axis, vectors[i].xyz[axis]);
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memcpy(before, nc_scratch, sizeof before);
+    CPUState native = input;
+    for (unsigned i = 0; i < 4; ++i) {
+        const u32 resume = 0x8002af38 + i * 0x10;
+        CPUState cutoff = native;
+        cutoff.budget = 4;
+        CPUState saved = cutoff;
+        memcpy(after, nc_scratch, sizeof after);
+        if (nc_prepare_placement_vector(&cutoff, vectors[i].source, vectors[i].result, resume) ||
+            memcmp(&cutoff, &saved, sizeof saved) || memcmp(nc_scratch, after, sizeof after))
+            return false;
+        const int budget = native.budget;
+        if (!nc_prepare_placement_vector(&native, vectors[i].source, vectors[i].result, resume) ||
+            native.budget != budget - 4 || native.r[31] != resume || native.r[4] != frame + 0x10 ||
+            native.r[5] != record + vectors[i].source || native.r[6] != record + vectors[i].result)
+            return false;
+        if (disc) {
+            interp_call(&native, 0x8007a320);
+            for (unsigned axis = 0; axis < 3; ++axis)
+                if ((s32)MEM_R32(native.r[6] + 4 * axis) != vectors[i].xyz[axis])
+                    return false;
+        }
+    }
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        interp_call(&input, 0x8002af28);
+        return !memcmp(&native, &input, sizeof input) && !memcmp(after, nc_scratch, sizeof after);
+    }
+    return true;
+}
+
 static bool placement_heading_calls(bool disc) {
     static const struct {
         u32 entry, callee;
@@ -3001,8 +3053,8 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
-        !placement_record_steps(disc))
+    if (!placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
+        !transposed_placement_scales(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
