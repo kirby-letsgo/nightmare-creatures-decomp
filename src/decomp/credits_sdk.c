@@ -1746,6 +1746,34 @@ bool nc_credits_cd_volume(CPUState *c) {
     return true;
 }
 
+/* ResetCallback and InterruptCallback dispatch through the active IRQ driver. */
+static bool interrupt_driver_call(CPUState *c, u32 offset, u32 resume) {
+    if (c->budget <= 12)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x800244a0);
+    R(29) -= 24;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    R(2) = MEM_R32(R(2) + offset);
+    R(31) = resume;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    nc_call(c, R(2));
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_reset_callback(CPUState *c) {
+    return interrupt_driver_call(c, 12, 0x8001a6b8);
+}
+
+bool nc_credits_interrupt_callback(CPUState *c) {
+    return interrupt_driver_call(c, 8, 0x8001a6e8);
+}
+
 /* Clear the CD callbacks and cached status, then install the IRQ 2 handler. */
 bool nc_credits_cd_init_interrupt(CPUState *c) {
     if (c->budget <= 12)
