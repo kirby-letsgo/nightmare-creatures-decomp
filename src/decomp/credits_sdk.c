@@ -245,3 +245,18 @@ bool nc_credits_init_primitive(CPUState *c, NcCreditsPrimitive primitive) {
     c->budget -= 2;
     return true;
 }
+
+/* SetSemiTrans and SetShadeTex change a single bit of the GP0 opcode. */
+bool nc_credits_packet_flag(CPUState *c, u8 mask) {
+    if (c->budget <= 9)
+        return false;
+    const bool enable = R(5) != 0;
+    c->budget -= 2;
+    u8 opcode = MEM_R8(R(4) + 7);
+    c->budget -= NC_LOAD_CYCLES;
+    R(2) = enable ? (opcode | mask) : (opcode & (u8)~mask);
+    c->budget -= 2;
+    MEM_W8(R(4) + 7, (u8)R(2));
+    c->budget -= 2;
+    return true;
+}
