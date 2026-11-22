@@ -2,6 +2,60 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+static void return_from_pad_driver(CPUState *c) {
+    R(31) = MEM_R32(R(29) + 0x10);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 0x18;
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+/* The SDK calls, in particular VSync, can service an event. Keep the
+ * original polling boundaries after each call and its delay slot. */
+static void pad_driver_call(CPUState *c, u32 target, u32 return_address) {
+    R(31) = return_address;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, target);
+}
+
+bool nc_start_pad_driver(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(4) = PAD_PACKET;
+    R(5) = PACKET_BYTES;
+    R(6) = PAD_PACKET + PACKET_BYTES;
+    R(7) = PACKET_BYTES;
+    R(31) = 0x8006fedc;
+    c->budget -= 8;
+    nc_call(c, 0x80073eb4);                     /* InitPAD */
+    pad_driver_call(c, 0x80073f1c, 0x8006fee4); /* StartPAD */
+    R(4) = 0;
+    pad_driver_call(c, 0x80073e3c, 0x8006feec); /* ChangeClearPad */
+    R(4) = 0;
+    pad_driver_call(c, 0x80073fd4, 0x8006fef4); /* VSync */
+    pad_driver_call(c, 0x8006ff34, 0x8006fefc); /* select from the refreshed packets */
+    return_from_pad_driver(c);
+    return true;
+}
+
+bool nc_stop_pad_driver(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(31) = 0x8006ff1c;
+    c->budget -= 4;
+    nc_call(c, 0x80073d7c); /* StopPAD */
+    MEM_W16(R(28) + PAD_MASK, 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W16(R(28) + PAD_INDEX, 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    return_from_pad_driver(c);
+    return true;
+}
+
 /* Both readers use port one's raw packet. At 800677CC the caller checks
  * for type 7 before asking for the stick bytes at 80067810. */
 bool nc_pad_packet_type(CPUState *c) {
