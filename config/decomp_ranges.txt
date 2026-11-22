@@ -111,7 +111,9 @@ psx2_exe     80062C28    80062CB0         pad.c
 psx2_exe     80062CB0    80062CC8         pad.c
 psx2_exe     80062CC8    80062D2C         pad.c
 psx2_exe     80062D2C    80062DE8         pad.c
-# PSX2 pad presence, packet decoding, and the second port's high button word.
+# PSX2 pad driver, port selection, and packet decoding.
+psx2_exe     8006FEBC    8006FF0C         pad.c
+psx2_exe     8006FF0C    8006FF34         pad.c
 psx2_exe     8006FF34    8007001C         pad.c
 psx2_exe     8007001C    8007002C         pad.c
 psx2_exe     8007002C    80070050         pad.c

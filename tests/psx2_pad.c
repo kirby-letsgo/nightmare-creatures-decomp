@@ -1,6 +1,7 @@
 #include "decomp/pad.h"
 #include "port/disc.h"
 #include "port/exe.h"
+#include "port/hw/hw.h"
 #include "port/interp.h"
 #include "port/runtime.h"
 
@@ -149,6 +150,52 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
 }
 #endif
 
+static bool pad_driver(void) {
+    CPUState cpu = initial();
+    bios_init();
+    /* Give the disc VSync stable status/timer words. At INT32_MAX its
+     * signed next-frame comparison completes without an external clock. */
+    MEM_W32(0x80088aa4, 0x80150000);
+    MEM_W32(0x80088aa8, 0x80150004);
+    MEM_W32(0x80089b78, 0x7fffffff);
+    MEM_W32(0x80088ab0, 0);
+    MEM_W32(packet, 0x12347300);
+    MEM_W32(packet + 34, 0x56784100);
+    MEM_W32(gp + 0x238, 0xaaaabbbb);
+    if (!compare(cpu, 0x8006febc, nc_start_pad_driver, 8) || MEM_R32(gp + 0x238) != 3)
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    if (!compare_generated(cpu, 0x8006febc, 8))
+        return false;
+#endif
+    /* Check the actual BIOS registrations with an interrupt after startup. */
+    if (!nc_start_pad_driver(&cpu))
+        return false;
+    bios_set_pad(0x4010);
+    irq_raise(IRQ_VBLANK);
+    bios_exception(&cpu);
+    irq_write(0, 0);
+    if (MEM_R32(packet) != 0xbfef4100 || MEM_R8(packet + 34) != 0xff)
+        return false;
+
+    cpu = initial();
+    MEM_W32(gp + 0x238, 0x00010002);
+    if (!compare(cpu, 0x8006ff0c, nc_stop_pad_driver, 4) || MEM_R32(gp + 0x238))
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    if (!compare_generated(cpu, 0x8006ff0c, 4))
+        return false;
+#endif
+    if (!nc_start_pad_driver(&cpu) || !nc_stop_pad_driver(&cpu))
+        return false;
+    bios_set_pad(0);
+    MEM_W8(packet + 34, 0);
+    irq_raise(IRQ_VBLANK);
+    bios_exception(&cpu);
+    irq_write(0, 0);
+    return MEM_R32(packet) == 0xbfef4100 && MEM_R8(packet + 34) == 0;
+}
+
 static bool packet_readers(void) {
     CPUState cpu = initial();
     /* A disconnected status and the second port's ID do not gate the raw read. */
@@ -288,7 +335,7 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = packet_readers() && sequences() && ports();
+    bool ok = pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

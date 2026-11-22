@@ -644,6 +644,10 @@ class Emitter:
                 out.append("    if (nc_pad_sequence_ended(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80062D2C:
                 out.append("    if (nc_read_pad_sequence(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006FEBC:
+                out.append("    if (nc_start_pad_driver(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006FF0C:
+                out.append("    if (nc_stop_pad_driver(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
                 out.append("    if (nc_select_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8007001C:
