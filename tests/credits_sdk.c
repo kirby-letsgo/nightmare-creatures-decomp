@@ -2658,6 +2658,33 @@ static bool check_cd_mix(void) {
     return true;
 }
 
+static bool check_cd_get_toc(void) {
+    const u32 driver = 0x800230d0;
+    const u32 buffers[] = {0x80062000, SCRATCH_BASE + 16};
+    const u32 results[] = {0, 12};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Record both the mode and the call site through the supplied buffer. */
+    MEM_W32(driver, 0xaca40000);      /* sw a0, 0(a1) */
+    MEM_W32(driver + 4, 0xacbf0004);  /* sw ra, 4(a1) */
+    MEM_W32(driver + 8, 0x03e00008);  /* jr ra */
+    MEM_W32(driver + 12, 0x00c01021); /* move v0, a2 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof buffers / sizeof buffers[0]; i++) {
+        CPUState state = arguments(buffers[i], 0x76543210, results[i], i ? 6 : 4096);
+        ok = compare(state, 0x800230ac, nc_credits_cd_get_toc, 5) &&
+             nc_cpu.r[2] == results[i] && MEM_R32(buffers[i]) == 1 &&
+             MEM_R32(buffers[i] + 4) == 0x800230c0;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_reset(void) {
     const u32 drivers[] = {0x8002169c, 0x800216ec, 0x800215a8};
     const u32 modes[] = {2, 1, 0, UINT32_MAX};
@@ -3146,6 +3173,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
+    pass = pass && check_cd_get_toc();
     pass = pass && check_cd_reset();
     pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();
