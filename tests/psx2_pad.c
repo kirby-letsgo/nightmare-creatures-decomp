@@ -1553,6 +1553,32 @@ static bool menu_record_37_action(void) {
     return true;
 }
 
+static bool menu_store_stick_calibration(void) {
+    const u8 samples[][2] = {{0, 255}, {255, 0}, {128, 128}, {127, 129}};
+    const u8 limits[][4] = {{0, 1, 254, 255}, {64, 63, 192, 193}, {255, 255, 0, 0}};
+    for (unsigned i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+        for (unsigned j = 0; j < sizeof limits / sizeof limits[0]; ++j) {
+            for (unsigned overlap = 0; overlap < 2; ++overlap) {
+                CPUState cpu = initial();
+                cpu.budget = 113;
+                cpu.r[31] = 0x800682d8;
+                MEM_W8(packet + 6, samples[i][0]);
+                MEM_W8(packet + 7, samples[i][1]);
+                MEM_W8(gp + 0x2f0, limits[j][0]);
+                MEM_W8(gp + 0x2f4, limits[j][1]);
+                MEM_W8(gp + 0x2fc, limits[j][2]);
+                MEM_W8(gp + 0x300, limits[j][3]);
+                /* Optionally let the first midpoint overwrite the saved Y sample. */
+                MEM_W32(gp + 0x244, overlap ? cpu.r[29] + 0x13 - 0x1a : config);
+                if (!compare(cpu, 0x800681ec, nc_menu_store_stick_calibration, 112))
+                    return false;
+            }
+        }
+    }
+    MEM_W32(gp + 0x244, config);
+    return true;
+}
+
 static bool menu_expand_stick_bounds(void) {
     const u8 minima[] = {0, 0x40, 0x41};
     const u8 maxima[] = {0xbf, 0xc0, 0xff};
@@ -2661,15 +2687,15 @@ int main(int argc, char **argv) {
         menu_mode_record_call() && menu_mode_record_selection() && menu_record_timeout() &&
         menu_record_29_gate() && menu_counter_updates() && menu_record_29_thresholds() &&
         menu_count_130() && menu_record_input_gate() && menu_record_24_dispatch() &&
-        menu_record_29_dispatch() && menu_expand_stick_bounds() && menu_stick_bounds() &&
-        menu_record_37_action() && menu_record_37_stick() && menu_record_37_types() &&
-        menu_record_26_left() && menu_record_26_right() && menu_input_return() &&
-        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
-        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        menu_record_29_dispatch() && menu_store_stick_calibration() && menu_expand_stick_bounds() &&
+        menu_stick_bounds() && menu_record_37_action() && menu_record_37_stick() &&
+        menu_record_37_types() && menu_record_26_left() && menu_record_26_right() &&
+        menu_input_return() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

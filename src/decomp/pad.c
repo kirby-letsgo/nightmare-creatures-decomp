@@ -1921,6 +1921,43 @@ bool nc_menu_expand_stick_bounds(CPUState *c) {
     return true;
 }
 
+/* Store four midpoints rounded toward the fresh stick sample, followed by
+ * the four sampled limits moved one unit inward. Reload the destination
+ * pointer for each byte, as the original does. */
+bool nc_menu_store_stick_calibration(CPUState *c) {
+    if (c->budget <= 112)
+        return false;
+    u32 gp = R(28);
+    u32 sample = R(29) + 0x12;
+    R(4) = sample;
+    R(5) = sample + 1;
+    R(31) = 0x800681f8;
+    c->budget -= 3;
+    nc_read_pad_stick(c);
+
+    const u32 offsets[] = {0x2f0, 0x2f4, 0x2fc, 0x300};
+    for (unsigned i = 0; i < 4; ++i) {
+        int center = MEM_R8(sample + (i & 1));
+        int limit = MEM_R8(gp + offsets[i]);
+        u32 midpoint = center + (limit - center) / 2;
+        R(3) = MEM_R32(gp + 0x244);
+        MEM_W8(R(3) + 0x1a + i, midpoint);
+        if (i == 2)
+            R(4) = midpoint;
+        if (i == 3)
+            R(5) = midpoint;
+    }
+    R(6) = 0x20;
+    for (unsigned i = 0; i < 4; ++i) {
+        int limit = MEM_R8(gp + offsets[i]);
+        R(2) = limit + (i < 2 ? 1 : -1);
+        R(3) = MEM_R32(gp + 0x244);
+        MEM_W8(R(3) + 0x1e + i, R(2));
+    }
+    c->budget -= 96;
+    return true;
+}
+
 /* The preceding delay slot tested Start in the current word (fp).
  * A new Start takes priority over Cross. Each exit leaves the next
  * button mask in v0, including when both buttons are pressed. */
