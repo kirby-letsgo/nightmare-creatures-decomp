@@ -1364,6 +1364,34 @@ u32 nc_menu_select_mode_record(CPUState *c) {
     return 0x8006745c;
 }
 
+bool nc_menu_call_selected_record(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80067464;
+    c->budget -= 2;
+    nc_call(c, 0x80063b70);
+    return true;
+}
+
+/* The guest subtracts the counters modulo 2^32, then compares the signed
+ * difference. Bit 0x10 stays set through elapsed tick 12000. */
+bool nc_menu_record_timeout(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    u32 now = MEM_R32(0x8008ef10);
+    R(3) = MEM_R32(0x800cc040);
+    R(2) = (s32)(now - R(3)) < 12001;
+    R(4) = ~0x10u;
+    c->budget -= 13;
+    if (!R(2)) {
+        R(2) = MEM_R32(R(28) + 0x244);
+        R(3) = MEM_R32(R(2) + 4) & R(4);
+        MEM_W32(R(2) + 4, R(3));
+        c->budget -= 10;
+    }
+    return true;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)

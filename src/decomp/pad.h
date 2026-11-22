@@ -58,6 +58,8 @@ u32 nc_menu_mode_down(CPUState *c);
 bool nc_menu_dispatch_face_button(CPUState *c);
 u32 nc_enter_menu_input(CPUState *c);
 u32 nc_menu_select_mode_record(CPUState *c);
+bool nc_menu_call_selected_record(CPUState *c);
+bool nc_menu_record_timeout(CPUState *c);
 bool nc_menu_mode_record_call(CPUState *c);
 bool nc_leave_menu_input(CPUState *c);
 bool nc_menu_mode_record_result(CPUState *c);
