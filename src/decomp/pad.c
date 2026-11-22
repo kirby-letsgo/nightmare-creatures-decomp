@@ -818,16 +818,21 @@ bool nc_menu_apply_record_select(CPUState *c) {
     return true;
 }
 
-static u32 repeat_menu_record_action(CPUState *c, u32 button, u32 action) {
+static bool menu_record_repeat_ready(CPUState *c, u32 button) {
     R(2) = increment_menu_repeat(c) < 6;
     R(4) = R(22);
     c->budget -= 9;
     if (R(2)) {
         R(2) = MEM_R32(R(28) + 0x18c) & button;
         c->budget -= 7;
-        if (R(2))
-            return 0x80068cf8;
+        return R(2) == 0;
     }
+    return true;
+}
+
+static u32 repeat_menu_record_action(CPUState *c, u32 button, u32 action) {
+    if (!menu_record_repeat_ready(c, button))
+        return 0x80068cf8;
     R(5) = 0x800883c0 + R(3);
     R(6) = action;
     c->budget -= 5;
@@ -901,6 +906,28 @@ u32 nc_menu_record_face_edges(CPUState *c) {
         }
     }
     return 0x80068bec;
+}
+
+/* Square and Circle reload the selected index before dispatch. */
+u32 nc_menu_record_face_repeat(CPUState *c) {
+    if (c->budget <= 31)
+        return 0x80068bec;
+    bool square = R(2) != 0;
+    c->budget -= 2;
+    if (!square) {
+        c->budget -= 2;
+        if (!(R(30) & 0x2000)) {
+            R(2) = R(30) & 8; /* Start mask from the delay slot */
+            return 0x80068ca4;
+        }
+    }
+    if (!menu_record_repeat_ready(c, square ? 0x8000 : 0x2000))
+        return 0x80068cf8;
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12u * MEM_R32(R(28) + 0x190);
+    R(6) = square ? 0x400 : 0x800;
+    c->budget -= 11;
+    return 0x80068ce0;
 }
 
 bool nc_menu_clear_repeat(CPUState *c) {
