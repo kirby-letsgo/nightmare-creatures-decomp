@@ -139,6 +139,7 @@ bool nc_credits_strcmp(CPUState *c);
 bool nc_credits_strncmp(CPUState *c);
 bool nc_credits_cd_names_equal(CPUState *c);
 bool nc_credits_cd_position_to_sector(CPUState *c);
+bool nc_credits_cd_set_test_parameter_count(CPUState *c);
 bool nc_credits_cd_last_position(CPUState *c);
 bool nc_credits_graph_status(CPUState *c, bool debug_level);
 bool nc_credits_default_draw(CPUState *c);
