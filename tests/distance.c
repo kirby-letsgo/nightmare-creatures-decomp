@@ -637,6 +637,58 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool heading_matrix_setup(bool disc) {
+    const s16 rotations[][9] = {{4096, 0, 0, 0, 4096, 0, 0, 0, 4096},
+                                {0, 0, -4096, 0, 4096, 0, 4096, 0, 0},
+                                {32767, -32768, 32767, -32768, 32767, -32768, 0, 1, -1}};
+    const s16 values[] = {4096, -32768, 32767, 1, -1, 0, 2048, -2048, 4096};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof rotations / sizeof rotations[0]; ++i)
+        for (unsigned alias = 0; alias < 2; ++alias) {
+            CPUState input = initial();
+            input.r[29] = SCRATCH_BASE + 512;
+            const u32 frame = input.r[29] - 88;
+            input.r[4] = alias ? frame + 14 : SCRATCH_BASE;
+            input.r[5] = SCRATCH_BASE + 704;
+            input.r[31] = 0x8007a1f0; /* stop at ScaleMatrixL */
+            memset(nc_scratch, 0xa5, sizeof before);
+            for (unsigned k = 0; k < 9; ++k) {
+                MEM_W16(0x800d7688 + 2 * k, rotations[i][k]);
+                MEM_W16(input.r[4] + 2 * k, values[k]);
+            }
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 119;
+            CPUState native = input;
+            if (nc_prepare_heading_matrix(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_prepare_heading_matrix(&native) || native.budget != 1 ||
+                native.r[4] != frame + 16 || native.r[5] != frame + 48 ||
+                native.r[19] != input.r[5] || native.r[31] != 0x8003475c)
+                return false;
+            if (!i && !alias)
+                for (unsigned k = 0; k < 9; ++k)
+                    if (MEM_R16(frame + 16 + 2 * k) != (u16)values[k])
+                        return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                /* Match the oracle's stack at the nested call. */
+                const u32 stub = 0x80120000;
+                MEM_W32(stub, 0x08000000u | ((0x80034610u >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bd0058); /* addiu sp, sp, 88 */
+                input.r[29] = frame;
+                input.budget += 2;
+                interp_call(&input, stub);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool matrix_planar_lengths(bool disc) {
     static const struct {
         s16 y, z;
@@ -1194,7 +1246,8 @@ int main(int argc, char **argv) {
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
-              actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc);
+              actor_point_placements(disc) && matrix_headings(disc) &&
+              matrix_planar_lengths(disc) && heading_matrix_setup(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
