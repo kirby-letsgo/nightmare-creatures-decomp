@@ -648,6 +648,50 @@ bool nc_init_part_transform(CPUState *c) {
     return true;
 }
 
+/* Collect the part and its parents in eight-byte stack slots. Each link
+ * gets a separate budget check so a long chain can resume mid-traversal. */
+bool nc_begin_part_chain(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(4) = R(5);
+    MEM_W32(R(29) + 0x1c, R(4));
+    R(2) = MEM_R32(R(4));
+    R(16) = 1;
+    if (R(2))
+        R(3) = R(29) + 0x20;
+    c->budget -= R(2) ? 9 : 8;
+    return true;
+}
+
+bool nc_append_part_parent(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(4) = MEM_R32(R(4));
+    ++R(16);
+    MEM_W32(R(3) + 4, R(4));
+    R(2) = MEM_R32(R(4));
+    R(3) += 8;
+    c->budget -= 11;
+    return true;
+}
+
+bool nc_prepare_part_chain_rotation(CPUState *c) {
+    const int cycles = R(16) ? 8 : 5;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = R(7);
+    MEM_W16(R(4) + 0x14, 0);
+    MEM_W16(R(4) + 0x12, 0);
+    MEM_W16(R(4) + 0x10, 0);
+    if (R(16)) {
+        R(19) = R(29) + 0x98;
+        R(18) = R(29) + 0xb8;
+        --R(16);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Transform the selected part's signed local offset into the accumulated
  * matrix translation before composing its rotation. */
 bool nc_transform_part_offset(CPUState *c) {
