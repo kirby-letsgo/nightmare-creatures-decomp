@@ -516,6 +516,37 @@ bool nc_credits_read_environment(CPUState *c, bool display) {
     return true;
 }
 
+bool nc_credits_graphics_status(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x8002462c); /* GPU status register address */
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R32(R(2));
+    c->budget -= NC_LOAD_CYCLES + 2;
+    return true;
+}
+
+bool nc_credits_display_field(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x80024550); /* active graphics driver */
+    R(29) -= 24;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    R(2) = MEM_R32(R(2) + 0x38);
+    R(31) = 0x8001d034;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    nc_call(c, R(2));
+    set_reg(c, 2, R(2) >> 31);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_display_x(CPUState *c) {
     if (c->budget <= 37)
         return false;

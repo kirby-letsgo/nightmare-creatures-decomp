@@ -115,6 +115,7 @@ CREDITS_ROUTINES = {
     0x8001C1E8: "nc_credits_draw_sync_callback(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",
     0x8001CFDC: "nc_credits_read_environment(c, true)",
+    0x8001D014: "nc_credits_display_field(c)",
     0x8001D048: "nc_credits_texture_window_packet(c)",
     0x8001D084: "nc_credits_draw_area_packet(c)",
     0x8001D108: "nc_credits_draw_offset_packet(c)",
@@ -126,6 +127,7 @@ CREDITS_ROUTINES = {
     0x8001D664: "nc_credits_draw_offset_word(c)",
     0x8001D6AC: "nc_credits_texture_window_word(c)",
     0x8001D730: "nc_credits_display_x(c)",
+    0x8001D7EC: "nc_credits_graphics_status(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
