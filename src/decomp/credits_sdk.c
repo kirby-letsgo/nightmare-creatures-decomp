@@ -536,6 +536,25 @@ bool nc_credits_gpu_parameter(CPUState *c) {
     return true;
 }
 
+bool nc_credits_queue_command(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    /* _addque2 takes (command, data, copy size, argument). A zero size
+     * keeps the caller's data pointer in the queue entry. */
+    R(7) = R(6);
+    R(31) = 0x8001e168;
+    R(6) = 0;
+    c->budget -= 4;
+    nc_call(c, 0x8001e178);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_gpu_command_chain(CPUState *c) {
     if (c->budget <= 27)
         return false;

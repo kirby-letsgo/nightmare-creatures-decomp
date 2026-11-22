@@ -539,6 +539,36 @@ static bool check_gpu_command_chain(void) {
     return true;
 }
 
+static bool check_queue_command(void) {
+    const u32 scratch = 0x80060c00, command = 0x8001935c;
+    const int budgets[] = {6, 11, 32, 4096};
+    /* Give the original queue code deterministic timer and interrupt registers.
+     * A busy DMA channel leaves the submitted item in the ring. */
+    MEM_W32(0x80023404, scratch);
+    MEM_W32(0x800244a8, scratch + 4);
+    MEM_W32(0x80024638, scratch + 8);
+    MEM_W32(0x800244a0, scratch + 16);
+    MEM_W32(scratch + 20, command);
+    for (unsigned queued = 0; queued < 2; queued++)
+        for (unsigned head = 0; head <= 63; head += 63)
+            for (unsigned i = 0; i < sizeof budgets / sizeof budgets[0]; i++) {
+                u32 data = i & 1 ? SCRATCH_BASE + 4 : scratch + 32;
+                u32 argument = 0xabcd0000 + i;
+                MEM_W32(scratch + 8, queued << 24);
+                MEM_W8(0x80024559, (u8)queued);
+                MEM_W32(0x8002465c, head);
+                MEM_W32(0x80024660, head);
+                CPUState state = arguments(command, data, argument, budgets[i]);
+                if (!compare(state, 0x8001e154, nc_credits_queue_command, 5))
+                    return false;
+                u32 record = queued ? 0x80027488 + head * 96 : 0x8002464c;
+                if (MEM_R32(record) != command || MEM_R32(record + 4) != data ||
+                    MEM_R32(record + 8) != argument || nc_cpu.r[2] != queued)
+                    return false;
+            }
+    return true;
+}
+
 static bool check_gpu_command_block(void) {
     const u32 source = 0x80060800, data_slot = 0x80024628, control_slot = 0x8002462c;
     const u32 data_port = MEM_R32(data_slot), control_port = MEM_R32(control_slot);
@@ -954,6 +984,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
+    pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
 }
