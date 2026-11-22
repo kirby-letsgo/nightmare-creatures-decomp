@@ -37,6 +37,7 @@ bool nc_credits_reset_music(CPUState *c);
 
 bool nc_credits_play_track(CPUState *c);
 
+bool nc_credits_entry(CPUState *c);
 bool nc_credits_empty_hook(CPUState *c);
 
 typedef enum { NC_WARN_CALLOC, NC_WARN_MALLOC, NC_WARN_REALLOC, NC_WARN_FREE } NcHeapWarning;

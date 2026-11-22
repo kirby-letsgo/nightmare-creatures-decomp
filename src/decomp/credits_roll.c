@@ -505,6 +505,32 @@ bool nc_credits_reset_music(CPUState *c) {
     return true;
 }
 
+/* The executable header enters here. Publish the heap bounds before entering the roll. */
+bool nc_credits_entry(CPUState *c) {
+    const u32 heap_start = 0x80028c94; /* first byte after BSS */
+    const int cycles = 24 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    if (c->budget <= cycles)
+        return false;
+
+    c->budget -= 5; /* address setup before the first load */
+    R(8) = MEM_R32(0x80024c44); /* configured memory size */
+    R(10) = heap_start & 0x1fffffffu;
+    c->budget -= NC_LOAD_CYCLES + 6;
+    R(9) = MEM_R32(0x80024c40); /* reserved stack size */
+    R(12) = 0x80000000;
+    R(11) = R(8) - R(9) - R(10);
+    R(1) = 0x80020000;
+    c->budget -= NC_LOAD_CYCLES + 5;
+    MEM_W32(0x80024c4c, R(11));
+    R(10) |= R(12);
+    c->budget -= 3;
+    MEM_W32(0x80024c48, R(10));
+    R(28) = 0x80024c68;
+    c->budget -= 5; /* store, gp setup, jump and delay slot */
+    nc_jump(c, 0x80018f94);
+    return true;
+}
+
 /* Both the display startup and the music player call an empty hook. */
 bool nc_credits_empty_hook(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
