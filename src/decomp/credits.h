@@ -146,6 +146,7 @@ bool nc_credits_vsync_callback(CPUState *c);
 bool nc_credits_vsync_callbacks(CPUState *c);
 bool nc_credits_stop_callback(CPUState *c);
 bool nc_credits_restart_callback(CPUState *c);
+bool nc_credits_clear_irq_words(CPUState *c);
 bool nc_credits_check_callback(CPUState *c);
 bool nc_credits_interrupt_mask(CPUState *c, bool write);
 bool nc_credits_cd_init_interrupt(CPUState *c);

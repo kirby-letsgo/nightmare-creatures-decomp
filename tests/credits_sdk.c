@@ -1322,6 +1322,30 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_clear_irq_words(void) {
+    const struct {
+        u32 address, count;
+    } cases[] = {
+        {0x80061004, 0}, {0x80061004, 1}, {0xa0061004, 5},
+        {SCRATCH_BASE + 4, 17}, {0x80061004, 0x41a},
+    };
+    const int budgets[] = {4, 13, 8192};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++)
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            u32 start = cases[i].address, bytes = 4 * cases[i].count;
+            memset(nc_fast_ptr(start - 4), 0xa5, bytes + 8);
+            CPUState state = arguments(start, cases[i].count, 3, budgets[j]);
+            if (!compare(state, 0x8001ad7c, nc_credits_clear_irq_words, 3) ||
+                nc_cpu.r[4] != start + bytes || MEM_R32(start - 4) != 0xa5a5a5a5 ||
+                MEM_R32(start + bytes) != 0xa5a5a5a5)
+                return false;
+            for (u32 offset = 0; offset < bytes; offset += 4)
+                if (MEM_R32(start + offset) != 0)
+                    return false;
+        }
+    return true;
+}
+
 static bool check_irq_accessors(void) {
     const u32 slot = 0x800244a8, original = MEM_R32(slot), flag = 0x8002341a;
     const u16 saved = MEM_R16(flag), old_mask = MEM_R16(original);
@@ -1929,6 +1953,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_clear_irq_words();
     pass = pass && check_irq_accessors();
     pass = pass && check_interrupt_driver_calls();
     pass = pass && check_cd_init_interrupt();
