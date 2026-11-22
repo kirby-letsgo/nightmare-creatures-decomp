@@ -12,6 +12,8 @@ typedef enum NcHitOutcome {
 
 NcHitOutcome nc_check_lethal_hit(CPUState *c);
 bool nc_clear_hit_reaction_flags(CPUState *c);
+bool nc_reset_hit_animation(CPUState *c);
+bool nc_prepare_hit_reaction(CPUState *c, bool *skip);
 bool nc_apply_lethal_reaction(CPUState *c, bool player);
 bool nc_set_actor_state(CPUState *c);
 bool nc_enter_death_state(CPUState *c);

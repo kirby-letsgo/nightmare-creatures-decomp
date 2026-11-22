@@ -135,6 +135,50 @@ static bool surviving_hit_flags(bool disc) {
     return true;
 }
 
+static bool prepare_or_skip(CPUState *c) {
+    const bool expected = c->r[31] == 0x8004f02c;
+    bool skip = !expected;
+    return nc_prepare_hit_reaction(c, &skip) && skip == expected;
+}
+
+static bool hit_preparation(void) {
+    const u8 actions[] = {0, 15, 16, 31, 32, 16, 255};
+    CPUState cpu = {0};
+    for (unsigned r = 1; r < 32; ++r)
+        cpu.r[r] = 0x12345u * r;
+    cpu.r[4] = cpu.r[17] = target;
+    cpu.r[28] = 0x80140000;
+    cpu.r[31] = 0x80010000;
+    cpu.budget = 15;
+    memset(nc_ram + (target & (RAM_SIZE - 1)), 0xa5, 0x400);
+    if (!compare(cpu, 0x80039964, nc_reset_hit_animation, 14))
+        return false;
+    const u32 attacker = 0x80150000;
+    MEM_W32(cpu.r[28] + 0x244, rules);
+    MEM_W32(0x8008ef10, 0xf1e2d3c4);
+    for (unsigned mode = 0; mode < 8; ++mode)
+        for (unsigned i = 0; i < sizeof actions; ++i) {
+            bool skip = mode == 3;
+            memset(nc_ram + (target & (RAM_SIZE - 1)), 0xa5, 0x400);
+            MEM_W32(rules, mode & 1 ? 0x04000000 : 0);
+            MEM_W8(target + 0x388, mode & 2 ? 18 : 17);
+            cpu.r[20] = mode & 4;
+            cpu.r[19] = i == 0 ? 0 : i == 5 ? target : attacker;
+            MEM_W8((cpu.r[19] ? cpu.r[19] : attacker) + 0x38a, actions[i]);
+            MEM_W8(target + 0x38c, 255);
+            MEM_W32(target + 0x320, 123);
+            cpu.r[31] = skip ? 0x8004f02c : 0x8004ee40;
+            cpu.budget = 56;
+            bool record =
+                !skip && cpu.r[19] && (cpu.r[19] == target || actions[i] < 16 || actions[i] >= 32);
+            if (!compare(cpu, 0x8004edcc, prepare_or_skip, 55) ||
+                MEM_R8(target + 0x38c) != (record ? 0 : 255) ||
+                MEM_R32(target + 0x320) != (record ? 0xf1e2d3c4u : 123))
+                return false;
+        }
+    return true;
+}
+
 static bool player_reaction(CPUState *c) {
     return nc_apply_lethal_reaction(c, true);
 }
@@ -265,7 +309,7 @@ int main(int argc, char **argv) {
     }
     if (!lethal_hits(compare_disc) || !surviving_hit_flags(compare_disc))
         return 1;
-    if (compare_disc && (!lethal_reactions() || !death_transitions())) {
+    if (compare_disc && (!hit_preparation() || !lethal_reactions() || !death_transitions())) {
         fprintf(stderr, "death transition comparison failed\n");
         return 1;
     }
