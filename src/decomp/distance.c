@@ -353,6 +353,56 @@ bool nc_apply_rotated_point_offset(CPUState *c, bool subtract_x) {
     return true;
 }
 
+/* The fifth argument supplies the point height. Convert actor X/Z from
+ * 24.8 and the requested bearing from a 4096-unit to a 65536-unit turn. */
+bool nc_begin_actor_point_placement(CPUState *c) {
+    if (c->budget <= 49)
+        return false;
+    const u32 frame = R(29) - 64;
+    R(29) = frame;
+    MEM_W32(frame + 32, R(18));
+    R(18) = R(4);
+    MEM_W32(frame + 28, R(17));
+    R(17) = R(5);
+    R(6) <<= 4;
+    MEM_W32(frame + 60, R(31));
+    MEM_W32(frame + 56, R(30));
+    for (int reg = 23; reg >= 19; --reg)
+        MEM_W32(frame + 24 + 4 * (reg - 16), R(reg));
+    MEM_W32(frame + 24, R(16));
+
+    const u32 pose = MEM_R32(R(18) + 0x20);
+    R(3) = MEM_R32(R(18) + 0x20);
+    R(19) = MEM_R32(frame + 80);
+    const u32 linked_pose = MEM_R32(pose + 4);
+    R(22) = MEM_R32(R(3) + 0x48);
+    R(2) = MEM_R32(linked_pose + 0x40);
+    R(23) = R(7);
+    MEM_W32(frame + 16, R(6));
+    R(20) = (u32)((s32)MEM_R32(R(18) + 0x27c) >> 8);
+    R(16) = (u32)((s32)MEM_R32(R(18) + 0x284) >> 8);
+    R(30) = MEM_R32(R(18) + 0x280);
+    R(22) += R(2);
+    R(4) = R(21) = R(22) - R(6);
+    R(31) = 0x8004701c;
+    c->budget -= 49;
+    return true;
+}
+
+bool nc_finish_actor_point_placement(CPUState *c) {
+    if (c->budget <= 34)
+        return false;
+    const u32 frame = R(29);
+    MEM_W16(R(17) + 10, R(2));
+    R(31) = MEM_R32(frame + 60);
+    R(30) = MEM_R32(frame + 56);
+    for (int reg = 23; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 24 + 4 * (reg - 16));
+    R(29) += 64;
+    c->budget -= 34;
+    return true;
+}
+
 /* Cosine is already in v0. Build both signed coordinate triples, then
  * pass the opposite relative angle to the projection call. */
 bool nc_place_actor_points(CPUState *c) {

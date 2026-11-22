@@ -521,6 +521,66 @@ static bool rotated_point_offsets(bool disc) {
     return true;
 }
 
+static bool actor_point_placements(bool disc) {
+    const u32 angles[] = {0, 1024, 2048, 3072, 4095, 0xffffffff};
+    const u32 actor = 0x80121000, pose = 0x80122000, linked = 0x80123000;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = actor;
+        input.r[5] = SCRATCH_BASE;
+        input.r[6] = angles[i];
+        input.r[7] = i & 1 ? (u32)-257 : 257;
+        input.r[29] = SCRATCH_BASE + 896;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(actor + 0x20, pose);
+        MEM_W32(pose + 4, linked);
+        MEM_W32(pose + 0x48, 0xffff8000);
+        MEM_W32(linked + 0x40, 0x4000);
+        MEM_W32(actor + 0x27c, (u32)-769);
+        MEM_W32(actor + 0x280, (u32)-7);
+        MEM_W32(actor + 0x284, 1023);
+        MEM_W32(input.r[29] + 16, 33);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState cutoff = input;
+        cutoff.budget = 49;
+        CPUState native = cutoff;
+        if (nc_begin_actor_point_placement(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget++;
+        if (!nc_begin_actor_point_placement(&native) || native.budget != 1 || native.r[19] != 33 ||
+            native.r[20] != (u32)-4 || native.r[16] != 3 ||
+            native.r[4] != 0xffffc000u - (angles[i] << 4) || native.r[31] != 0x8004701c)
+            return false;
+        native.budget = input.budget - 49;
+        if (!nc_heading_cosine(&native) || !nc_place_actor_points(&native))
+            return false;
+        if (disc)
+            interp_call(&native, 0x80047128);
+        cutoff = native;
+        cutoff.budget = 34;
+        CPUState finish = cutoff;
+        memcpy(after, nc_scratch, sizeof after);
+        if (nc_finish_actor_point_placement(&finish) || memcmp(&finish, &cutoff, sizeof cutoff) ||
+            memcmp(after, nc_scratch, sizeof after))
+            return false;
+        finish.budget++;
+        if (!nc_finish_actor_point_placement(&finish) || finish.budget != 1 ||
+            !nc_finish_actor_point_placement(&native) || native.r[29] != input.r[29] ||
+            native.r[31] != input.r[31] || MEM_R16(SCRATCH_BASE + 10) != (u16)native.r[2])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80046fa0);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placed_actor_points(bool disc) {
     const u32 record = SCRATCH_BASE + 128;
     const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
@@ -1051,7 +1111,8 @@ int main(int argc, char **argv) {
               record_projections(disc) && projected_heading_gaps(disc) &&
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-              rotated_vector_setup(disc) && placed_actor_points(disc);
+              rotated_vector_setup(disc) && placed_actor_points(disc) &&
+              actor_point_placements(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
