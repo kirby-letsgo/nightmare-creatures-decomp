@@ -158,6 +158,7 @@ CREDITS_ROUTINES = {
     0x8001C244: "nc_credits_set_display_mask(c)",
     0x8001C2E0: "nc_credits_draw_sync(c)",
     0x8001C5A4: "nc_credits_load_image(c)",
+    0x8001C608: "nc_credits_store_image(c)",
     0x8001C880: "nc_credits_draw_primitive(c)",
     0x8001C8E0: "nc_credits_draw_otag(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",
@@ -1457,6 +1458,8 @@ class Emitter:
                 out.append("    if (nc_prepare_selected_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_8001C27C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001C27C:
+                out.append("    if (nc_finish_selected_point_bearing(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001A71C:
                 out.append("    if (nc_prepare_reference_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")

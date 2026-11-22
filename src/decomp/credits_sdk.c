@@ -1559,8 +1559,8 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
-/* Validate the VRAM rectangle, then queue its eight bytes and the pixel source. */
-bool nc_credits_load_image(CPUState *c) {
+/* Validate the VRAM rectangle, then queue its eight bytes and the pixel buffer. */
+static bool queue_image_transfer(CPUState *c, bool store) {
     if (c->budget <= 10)
         return false;
     R(29) -= 32;
@@ -1570,10 +1570,10 @@ bool nc_credits_load_image(CPUState *c) {
     c->budget -= 2;
     MEM_W32(R(29) + 20, R(17));
     R(17) = R(5);
-    R(4) = 0x800185ac; /* "LoadImage" */
+    R(4) = store ? 0x800185b8 : 0x800185ac; /* name passed to checkRECT */
     c->budget -= 4;
     MEM_W32(R(29) + 24, R(31));
-    R(31) = 0x8001c5cc;
+    R(31) = store ? 0x8001c630 : 0x8001c5cc;
     R(5) = R(16);
     c->budget -= 3;
     nc_call(c, 0x8001c34c); /* checkRECT */
@@ -1582,11 +1582,11 @@ bool nc_credits_load_image(CPUState *c) {
     set_reg(c, 2, 0x80020000);
     load_word(c, 2, 0x80024550);
     set_reg(c, 6, 8);
-    load_word(c, 4, R(2) + 0x20);
+    load_word(c, 4, R(2) + (store ? 0x1c : 0x20));
     load_word(c, 2, R(2) + 8);
     NC_POLL(c, 1);
     u32 enqueue = R(2);
-    R(31) = 0x8001c5f0;
+    R(31) = store ? 0x8001c654 : 0x8001c5f0;
     R(7) = R(17);
     NC_POLL(c, 2);
     nc_call(c, enqueue);
@@ -1596,6 +1596,14 @@ bool nc_credits_load_image(CPUState *c) {
     set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
+}
+
+bool nc_credits_load_image(CPUState *c) {
+    return queue_image_transfer(c, false);
+}
+
+bool nc_credits_store_image(CPUState *c) {
+    return queue_image_transfer(c, true);
 }
 
 /* DrawPrim saves the packet length before synchronizing, then submits its payload. */
