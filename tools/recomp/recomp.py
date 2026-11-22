@@ -1382,6 +1382,8 @@ class Emitter:
                 out.append("    if (nc_menu_pad_type_flags(c)) goto L_800683D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800680EC:
                 out.append("    if (nc_menu_sample_stick_bounds(c)) goto L_80068154;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006818C:
+                out.append("    if (nc_menu_expand_stick_bounds(c)) goto L_800681EC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068154:
                 out.extend(
                     [

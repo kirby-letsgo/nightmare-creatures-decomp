@@ -1897,6 +1897,30 @@ bool nc_menu_sample_stick_bounds(CPUState *c) {
     return true;
 }
 
+/* Confirmation expands the sampled range to include [0x40, 0xc0] on both axes. */
+bool nc_menu_expand_stick_bounds(CPUState *c) {
+    if (c->budget <= 32)
+        return false;
+    u32 gp = R(28);
+    for (unsigned axis = 0; axis < 2; ++axis) {
+        u32 minimum = gp + 0x2f0 + 4 * axis;
+        if (MEM_R8(minimum) > 0x40) {
+            MEM_W8(minimum, 0x40);
+            --c->budget;
+        }
+    }
+    for (unsigned axis = 0; axis < 2; ++axis) {
+        u32 maximum = gp + 0x2fc + 4 * axis;
+        if (MEM_R8(maximum) < 0xc0) {
+            MEM_W8(maximum, 0xc0);
+            --c->budget;
+        }
+    }
+    R(2) = 0xc0;
+    c->budget -= 28;
+    return true;
+}
+
 /* The preceding delay slot tested Start in the current word (fp).
  * A new Start takes priority over Cross. Each exit leaves the next
  * button mask in v0, including when both buttons are pressed. */
