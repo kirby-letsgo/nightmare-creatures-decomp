@@ -3105,6 +3105,24 @@ bool nc_finish_actor_distance(CPUState *c, bool missing_target) {
     return true;
 }
 
+/* Each 20-byte row holds signed point identifiers. Its signed cursor
+ * selects an identifier, which indexes the 36-byte coordinate records. */
+bool nc_lookup_point_row_record(CPUState *c) {
+    if (c->budget <= 26)
+        return false;
+    const u32 row = R(18);
+    R(4) = 0x80081a08;
+    R(18) = 2 * row;
+    R(1) = 0x800d0000 + R(18);
+    const s16 cursor = (s16)MEM_R16(0x800d4ca2 + R(18));
+    const u32 entry = R(4) + 20 * row + 2 * cursor;
+    const s16 point = (s16)MEM_R16(entry);
+    R(2) = point * 36;
+    R(3) = MEM_R32(0x8008f0c8) + R(2);
+    c->budget -= 26;
+    return true;
+}
+
 /* The point record stores -X and Z in whole units. Convert each actor
  * coordinate before subtraction and pass the low-word sum to the root. */
 bool nc_prepare_point_distance_root(CPUState *c) {
