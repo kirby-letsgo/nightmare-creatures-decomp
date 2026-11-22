@@ -611,6 +611,23 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* Both transform paths return the matrix translation in quarter units. */
+bool nc_finish_part_translation(CPUState *c) {
+    if (c->budget <= 39)
+        return false;
+    for (unsigned offset = 0; offset < 12; offset += 4) {
+        R(2) = (s32)MEM_R32(R(17) + 0x14 + offset) >> 2;
+        MEM_W32(R(20) + offset, R(2));
+    }
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0xf4);
+    for (int reg = 20; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0xe0 + 4 * (reg - 16));
+    R(29) += 0xf8;
+    c->budget -= 39;
+    return true;
+}
+
 /* Rotate each column of the input matrix with the shared GTE rotation.
  * The input may overlap the frame, so each column is stored before the
  * next is read. The scaled result feeds the three-heading extraction. */
