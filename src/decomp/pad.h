@@ -37,6 +37,7 @@ bool nc_menu_apply_direction(CPUState *c);
 bool nc_menu_scan_and_save_buttons(CPUState *c);
 u32 nc_menu_record_shoulders(CPUState *c);
 bool nc_menu_record_button_pairs(CPUState *c);
+u32 nc_menu_record_triangle(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
 u32 nc_menu_direction_selection(CPUState *c, bool right);
 u32 nc_menu_horizontal_repeat(CPUState *c);

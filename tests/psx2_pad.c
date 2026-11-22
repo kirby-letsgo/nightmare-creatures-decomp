@@ -665,6 +665,33 @@ static bool menu_shoulder_destination(CPUState *cpu) {
     return nc_menu_record_shoulders(cpu) == cpu->r[31];
 }
 
+static bool menu_triangle_destination(CPUState *cpu) {
+    return nc_menu_record_triangle(cpu) == cpu->r[31];
+}
+
+static bool menu_record_triangle(void) {
+    const u32 buttons[] = {0, 0x1000, 0x8000, 0xb0009090};
+    const u32 actions[] = {0, 0x405};
+    for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
+        for (unsigned held = 0; held < 2; ++held) {
+            for (unsigned j = 0; j < sizeof actions / sizeof actions[0]; ++j) {
+                CPUState cpu = initial();
+                cpu.budget = 29;
+                cpu.r[2] = buttons[i] & 0x1000;
+                cpu.r[30] = buttons[i];
+                bool fresh = cpu.r[2] && !held;
+                cpu.r[31] = fresh || actions[j] ? 0x8006893c : 0x80068944;
+                MEM_W32(gp + 0x18c, held ? 0x3010 : 0x2000);
+                MEM_W32(gp + 0x190, j ? 0xffffffff : 7);
+                MEM_W32(cpu.r[29] + 0x18, actions[j]);
+                if (!compare(cpu, 0x800688ec, menu_triangle_destination, 28))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool menu_record_button_pairs(void) {
     const u32 bits[] = {0x10, 0x40, 0x80, 0x20, 0x8000, 0x2000};
     for (unsigned mask = 0; mask < 64; ++mask) {
@@ -1641,7 +1668,7 @@ int main(int argc, char **argv) {
               menu_sequence_matches() && menu_record_sequences() && menu_record_progress() &&
               menu_completed_sequence() && menu_enabled_records() && menu_scan_return() &&
               menu_navigation_history() && menu_scan_history() && menu_record_shoulders() &&
-              menu_record_button_pairs() && menu_direction_selections() &&
+              menu_record_button_pairs() && menu_record_triangle() && menu_direction_selections() &&
               menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
               menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
               menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&

@@ -732,6 +732,35 @@ bool nc_menu_record_button_pairs(CPUState *c) {
     return true;
 }
 
+/* A fresh Triangle press replaces the accumulated actions and saves the
+ * full button word. A held Triangle preserves the accumulated actions. */
+u32 nc_menu_record_triangle(CPUState *c) {
+    if (c->budget <= 28)
+        return 0x800688ec;
+    const u32 action_slot = R(29) + 0x18;
+    c->budget -= 2;
+    if (R(2)) {
+        R(2) = MEM_R32(R(28) + 0x18c) & 0x1000;
+        c->budget -= 7;
+        if (!R(2)) {
+            MEM_W32(action_slot, 0x20);
+            MEM_W32(R(28) + 0x18c, R(30));
+            c->budget -= 2;
+        }
+    }
+    R(10) = MEM_R32(action_slot);
+    R(4) = R(22);
+    c->budget -= 6;
+    if (!R(10))
+        return 0x80068944;
+
+    R(5) = MEM_R32(R(28) + 0x190) * 12u;
+    R(6) = R(10);
+    R(2) = 0x800883c0; /* added to the offset in the call delay slot */
+    c->budget -= 11;
+    return 0x8006893c;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
