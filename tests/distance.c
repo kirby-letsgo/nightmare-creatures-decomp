@@ -158,6 +158,52 @@ static bool spatial_frames(bool disc, bool actor) {
     return true;
 }
 
+static bool actor_level_selection(bool disc) {
+    static const struct {
+        bool flags_entry;
+        s32 distance;
+        u32 flags, secondary, state, stop;
+        NcActorLevelPath path;
+        int cycles;
+    } cases[] = {
+        {false, 2401, 0, 0, 0, 0x8006c880, NC_ACTOR_LEVEL_DISTANT, 3},
+        {false, 2400, 0x40000, 0, 0, 0x8006c848, NC_ACTOR_LEVEL_CHECK_FLAGS, 10},
+        {false, -1, 0, 0x800, 0, 0x8006c848, NC_ACTOR_LEVEL_CHECK_FLAGS, 17},
+        {false, 0, 0, 0x8010, 0, 0x8006c884, NC_ACTOR_LEVEL_DISTANT_RECORD_READY, 17},
+        {true, 0, 0x10080000, 0, 0, 0x8006c884, NC_ACTOR_LEVEL_DISTANT_RECORD_READY, 7},
+        {true, 0, 0x40000, 0, 0, 0x8006c89c, NC_ACTOR_LEVEL_SET, 11},
+        {true, 0, 0x80000, 0, 0x100, 0x8006c8a0, NC_ACTOR_LEVEL_CHANNEL_READY, 18},
+        {true, 0, 0x80000, 0, 0x10, 0x8006c880, NC_ACTOR_LEVEL_DISTANT, 18},
+        {true, 0, 0x80000, 0, 0x40000000, 0x8006c880, NC_ACTOR_LEVEL_DISTANT, 18},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[17] = cases[i].distance;
+        input.r[20] = SCRATCH_BASE;
+        input.r[31] = cases[i].stop;
+        MEM_W32(SCRATCH_BASE + 0x2c8, cases[i].flags);
+        MEM_W32(SCRATCH_BASE + 0x2cc, cases[i].secondary);
+        MEM_W32(SCRATCH_BASE + 0x330, cases[i].state);
+        NcActorLevelPath (*select_path)(CPUState *) =
+            cases[i].flags_entry ? nc_check_actor_level_flags : nc_check_actor_level_distance;
+        input.budget = cases[i].flags_entry ? 18 : 17;
+        CPUState native = input;
+        if (select_path(&native) != NC_ACTOR_LEVEL_FALLBACK ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (select_path(&native) != cases[i].path ||
+            native.budget != input.budget - cases[i].cycles)
+            return false;
+        if (disc) {
+            interp_call(&input, cases[i].flags_entry ? 0x8006c848 : 0x8006c814);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool actor_level_calls(bool disc) {
     const s32 components[] = {0, 0x7fff, 0x8000, -1, -32769};
     for (unsigned path = 0; path < 4; ++path) {
@@ -2647,9 +2693,9 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        spatial_frames(disc, true) && spatial_frames(disc, false) && actor_level_calls(disc) &&
-        point_level_selection(disc) && spatial_levels(disc, true) && spatial_levels(disc, false) &&
-        spatial_attenuation(disc) && spatial_distances(disc, true) &&
+        spatial_frames(disc, true) && spatial_frames(disc, false) && actor_level_selection(disc) &&
+        actor_level_calls(disc) && point_level_selection(disc) && spatial_levels(disc, true) &&
+        spatial_levels(disc, false) && spatial_attenuation(disc) && spatial_distances(disc, true) &&
         spatial_distances(disc, false) && spatial_bearings(disc, true) &&
         spatial_bearings(disc, false) && target_vertical_velocities(disc) &&
         target_displacements(disc) && planar_velocities(disc) && roots(disc) &&
