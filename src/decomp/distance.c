@@ -505,17 +505,23 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
-/* The transposed rotation samples the original angles. The other entry
- * adds two angle units before indexing the same Q14 tables. */
-bool nc_sample_part_rotation(CPUState *c, bool transposed) {
-    const int cycles = transposed ? 98 : 104;
+static u32 part_rotation_angle(u32 source, unsigned axis, NcRotationInput input) {
+    if (input == NC_ROTATION_PACKED)
+        return (s32)(s16)MEM_R16(source + 2 * axis);
+    return MEM_R32(source + 0x40 + 4 * axis) + (input == NC_ROTATION_PART ? 2 : 0);
+}
+
+/* All three entries use the same Q14 tables. Only the first adds two
+ * angle units before the lookup. */
+bool nc_sample_part_rotation(CPUState *c, NcRotationInput input) {
+    const bool biased = input == NC_ROTATION_PART;
+    const int cycles = biased ? 104 : 98;
     if (c->budget <= cycles)
         return false;
     const u32 part = R(4), frame = R(29) - 48;
     R(29) = frame;
-    const unsigned part_reg = transposed ? 17 : 16;
-    const unsigned cz_reg = transposed ? 16 : 17;
-    const u32 bias = transposed ? 0 : 2;
+    const unsigned part_reg = biased ? 16 : 17;
+    const unsigned cz_reg = biased ? 17 : 16;
     MEM_W32(frame + 16 + 4 * (part_reg - 16), R(part_reg));
     MEM_W32(frame + 40, R(31));
     for (int reg = 21; reg >= 18; --reg)
@@ -525,19 +531,20 @@ bool nc_sample_part_rotation(CPUState *c, bool transposed) {
 
     const unsigned cosine_regs[] = {21, 20, cz_reg};
     for (unsigned axis = 0; axis < 3; ++axis) {
-        R(4) = MEM_R32(part + 0x40 + 4 * axis) + bias;
+        R(4) = part_rotation_angle(part, axis, input);
         nc_heading_cosine(c);
         R(cosine_regs[axis]) = (s32)(s16)R(2) >> 2;
     }
-    R(4) = MEM_R32(part + 0x40) + bias;
+    R(4) = part_rotation_angle(part, 0, input);
     nc_heading_sine(c);
     R(18) = (s32)(s16)R(2) >> 2;
-    R(4) = MEM_R32(part + 0x44) + bias;
+    R(4) = part_rotation_angle(part, 1, input);
     nc_heading_sine(c);
     R(part_reg) = (s32)(s16)R(2) >> 2;
-    R(4) = MEM_R32(part + 0x48) + bias;
+    R(4) = part_rotation_angle(part, 2, input);
     nc_heading_sine(c);
-    R(31) = transposed ? 0x80026248 : 0x8002607c;
+    static const u32 continuation[] = {0x8002607c, 0x80026248, 0x80026414};
+    R(31) = continuation[input];
     c->budget -= cycles - 6 * 9; /* lookup helpers charged nine cycles each */
     return true;
 }
@@ -547,11 +554,12 @@ static u32 shift_part_product(u32 product) {
     return (s32)product >> 12;
 }
 
-bool nc_finish_part_rotation(CPUState *c, bool transposed) {
+bool nc_finish_part_rotation(CPUState *c, NcRotationInput input) {
     if (c->budget <= 97)
         return false;
-    const u32 cx = R(21), cy = R(20), cz = R(transposed ? 16 : 17);
-    const u32 sx = R(18), sy = R(transposed ? 17 : 16), sz = (s32)(s16)R(2) >> 2;
+    const bool transposed = input == NC_ROTATION_TRANSPOSED;
+    const u32 cx = R(21), cy = R(20), cz = R(input == NC_ROTATION_PART ? 17 : 16);
+    const u32 sx = R(18), sy = R(input == NC_ROTATION_PART ? 16 : 17), sz = (s32)(s16)R(2) >> 2;
     const u32 matrix = R(19), frame = R(29);
     const u32 cy_cz = cy * cz;
     R(11) = cz * sy;
