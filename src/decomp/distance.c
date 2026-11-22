@@ -552,6 +552,33 @@ bool nc_prepare_target_distance(CPUState *c) {
     return true;
 }
 
+/* The vertical component uses the actor Y word directly and biases the
+ * signed record height by -300. Keep the guest's wrapped numerator and
+ * signed quotient/remainder. The two break paths use the original code. */
+bool nc_store_target_vertical_velocity(CPUState *c) {
+    const u32 divisor = R(2) + 140;
+    const int cycles = divisor == UINT32_MAX ? 29 : 27;
+    if (c->budget <= cycles || !divisor)
+        return false;
+    const u32 actor = MEM_R32(0x800ce9c4);
+    const s32 height = (s16)MEM_R16(R(18) + 0x12);
+    const u32 delta = MEM_R32(actor + 0x280) - (u32)(height - 300);
+    const u32 numerator = delta * 40;
+    if (divisor == UINT32_MAX && numerator == 0x80000000u)
+        return false;
+    R(2) = divisor;
+    R(4) = delta;
+    nc_div(c, numerator, divisor);
+    R(1) = 0x80000000u;
+    R(3) = c->lo;
+    R(5) = 0x2fff;
+    R(6) = 2;
+    MEM_W16(R(18) + 0x38, 0);
+    MEM_W16(R(18) + 0x22, R(3));
+    c->budget -= cycles;
+    return true;
+}
+
 /* The record stores signed whole-unit X/Z, while the actor has eight
  * fractional bits. The bearing adds record X and subtracts record Z. */
 bool nc_prepare_planar_velocity(CPUState *c) {
