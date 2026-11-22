@@ -202,6 +202,33 @@ bool nc_select_projected_heading(CPUState *c, bool *reproject) {
     return true;
 }
 
+/* Convert the saved 4096-unit bearing back to the reflected 16-bit
+ * projection angle. Clear only bit zero in the call's delay slot. */
+bool nc_prepare_saved_bearing_projection(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const u32 record = R(16);
+    const s32 previous = (s16)MEM_R16(record + 0x0a);
+    R(4) = MEM_R32(record + 0x130);
+    R(5) = (u32)(4096 - previous) << 4;
+    R(2) = MEM_R16(record + 0x16c) & 0xfffe;
+    R(31) = 0x800475cc;
+    MEM_W16(record + 0x16c, R(2));
+    c->budget -= 15;
+    return true;
+}
+
+bool nc_finish_projected_point_update(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(31) = MEM_R32(R(29) + 32);
+    R(17) = MEM_R32(R(29) + 28);
+    R(16) = MEM_R32(R(29) + 24);
+    R(29) += 40;
+    c->budget -= 12;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */

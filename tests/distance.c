@@ -359,6 +359,66 @@ static bool record_projections(bool disc) {
     return true;
 }
 
+static bool saved_bearing_projections(bool disc) {
+    const s16 bearings[] = {-32768, -1, 0, 1024, 2048, 3072, 4095, 4096, 32767};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof bearings / sizeof bearings[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[6] = SCRATCH_BASE + 24;
+        input.r[31] = 0x80047128; /* stop the interpreter at the projection call */
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W16(SCRATCH_BASE + 10, bearings[i]);
+        MEM_W32(SCRATCH_BASE + 0x130, (u32)-257);
+        MEM_W16(SCRATCH_BASE + 0x16c, 0xabd0 | (i & 1));
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 15;
+        CPUState native = input;
+        if (nc_prepare_saved_bearing_projection(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_saved_bearing_projection(&native) || native.budget != 1 ||
+            native.r[4] != (u32)-257 || native.r[5] != (u32)(4096 - bearings[i]) * 16 ||
+            native.r[31] != 0x800475cc || MEM_R16(SCRATCH_BASE + 0x16c) != 0xabd0)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x800475a8);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    CPUState input = initial();
+    input.r[29] = SCRATCH_BASE + 512;
+    MEM_W32(input.r[29] + 32, input.r[31]);
+    MEM_W32(input.r[29] + 28, 0x12345678);
+    MEM_W32(input.r[29] + 24, 0x87654321);
+    input.budget = 12;
+    CPUState native = input;
+    if (nc_finish_projected_point_update(&native) || memcmp(&native, &input, sizeof input))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_finish_projected_point_update(&native) || native.budget != 1 ||
+        native.r[16] != 0x87654321 || native.r[17] != 0x12345678 ||
+        native.r[29] != input.r[29] + 40)
+        return false;
+    if (disc) {
+        /* Enter with the caller's stack so interp_call recognizes the return.
+         * The jump and its stack-allocation delay slot cost two cycles. */
+        const u32 stub = 0x80120000;
+        MEM_W32(stub, 0x08000000u | ((0x800475ccu >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bdffd8); /* addiu sp, sp, -40 */
+        input.r[29] += 40;
+        input.budget += 2;
+        interp_call(&input, stub);
+        if (memcmp(&native, &input, sizeof input))
+            return false;
+    }
+    return true;
+}
+
 static bool projected_heading_selection(bool disc) {
     static const struct {
         s32 gap;
@@ -725,7 +785,7 @@ int main(int argc, char **argv) {
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
               record_projections(disc) && projected_heading_gaps(disc) &&
-              projected_heading_selection(disc);
+              projected_heading_selection(disc) && saved_bearing_projections(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

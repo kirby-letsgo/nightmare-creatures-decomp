@@ -714,6 +714,12 @@ class Emitter:
                 out.append("        goto L_800473C0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800473C8:
                 out.append("    if (nc_store_projected_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800475A8:
+                out.append("    if (nc_prepare_saved_bearing_projection(c)) {")
+                out.append(f"        {self.call(0x80047128)}")
+                out.append("        goto L_800475CC; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800475CC:
+                out.append("    if (nc_finish_projected_point_update(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047564:
                 out.append(
                     "    { bool reproject; if (nc_select_projected_heading(c, &reproject)) {"
