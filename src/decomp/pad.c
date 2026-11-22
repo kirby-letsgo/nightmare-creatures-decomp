@@ -1336,6 +1336,34 @@ bool nc_menu_mode_record_call(CPUState *c) {
     return true;
 }
 
+/* With the secondary mode bit set, value 20 selects a table of record
+ * pointers. Other values select the ordinary 12-byte records. */
+u32 nc_menu_select_mode_record(CPUState *c) {
+    if (c->budget <= 21)
+        return 0x80067400;
+    bool enabled = R(2) != 0;
+    R(2) = 20;
+    c->budget -= 2;
+    if (!enabled)
+        return 0x800674a0;
+
+    R(3) = (s32)(s16)MEM_R16(0x800d7c20);
+    R(4) = R(22);
+    u32 index = MEM_R32(R(28) + 0x190);
+    R(6) = 2;
+    if (R(3) == 20) {
+        R(2) = index << 2;
+        R(1) = 0x800d0000 + R(2);
+        R(5) = MEM_R32(R(1) + 0x4d10);
+        c->budget -= 19;
+    } else {
+        R(2) = 0x800883c0;
+        R(5) = R(2) + 12 * index;
+        c->budget -= 17;
+    }
+    return 0x8006745c;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
