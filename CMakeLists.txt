@@ -252,3 +252,8 @@ add_executable(test_credits_volume tests/credits_volume.c src/decomp/credits.c s
 target_link_libraries(test_credits_volume PRIVATE nc_runtime)
 add_test(NAME credits_volume_disc COMMAND test_credits_volume "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(credits_volume_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_credits_heap tests/credits_heap.c src/decomp/credits.c src/port/no_gen.c)
+target_link_libraries(test_credits_heap PRIVATE nc_runtime)
+add_test(NAME credits_heap_disc COMMAND test_credits_heap "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(credits_heap_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")

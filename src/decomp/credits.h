@@ -7,4 +7,6 @@ bool nc_credits_skip_input(CPUState *c);
 
 bool nc_credits_set_cd_volume(CPUState *c);
 
+bool nc_credits_init_heap(CPUState *c);
+
 #endif
