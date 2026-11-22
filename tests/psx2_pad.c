@@ -135,6 +135,35 @@ static bool button_dispatch(void) {
     return true;
 }
 
+static bool l2_held(CPUState *c) {
+    return nc_player_l2_direction(c, true);
+}
+
+static bool l2_released(CPUState *c) {
+    return nc_player_l2_direction(c, false);
+}
+
+static bool l2_direction_edges(void) {
+    const u32 directions[] = {0, 0x20, 0x80, 0xa0};
+    CPUState cpu = initial();
+    cpu.r[31] = 0x800448e0;
+    for (unsigned now = 0; now < 4; ++now) {
+        for (unsigned prev = 0; prev < 4; ++prev) {
+            for (unsigned bits = 0; bits < 8; bits += 2) {
+                cpu.r[2] = 0x50;
+                cpu.r[3] = 0xf0000000 | directions[prev];
+                cpu.r[17] = 0x01004100 | directions[now];
+                MEM_W16(0x800cc002, 0xbeef);
+                MEM_W16(0x800cbff8, 0x8100 | bits);
+                MEM_W16(0x800cbffa, bits & 4 ? 0xffff : 7);
+                if (!compare(cpu, 0x800447b8, l2_held, 37) || MEM_R16(0x800cc002) != 0x50)
+                    return false;
+            }
+        }
+    }
+    return compare(cpu, 0x800448d4, l2_released, 3) && MEM_R16(0x800cc002) == 0x3c;
+}
+
 static bool ports(void) {
     const u8 types[] = {0xff, 0x41, 0x73, 0x53};
     for (unsigned a = 0; a < 4; ++a)
@@ -591,9 +620,9 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-              ports();
+    bool ok = l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
+              packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

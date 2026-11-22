@@ -131,6 +131,7 @@ credits_exe  8001B414    8001B4E4         credits_sdk.c
 psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    80044780         pad.c
 psx2_exe     80044784    800447B8         pad.c
+psx2_exe     800447B8    800448E0         pad.c
 psx2_exe     800451E8    80045208         pad.c
 # Four-byte input sequences: level setup, stop, end-marker check, and player-control read.
 psx2_exe     80062C28    80062CB0         pad.c
