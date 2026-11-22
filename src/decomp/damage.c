@@ -169,6 +169,68 @@ bool nc_clear_hit_reaction_flags(CPUState *c) {
     return true;
 }
 
+/* US 80039964. Restart the actor's reaction animation with three sentinel
+ * bytes at 127. The state setter used on death has different reset values. */
+bool nc_reset_hit_animation(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    const u32 actor = R(4);
+    MEM_W8(actor + 0x39c, 127);
+    MEM_W8(actor + 0x38e, 127);
+    MEM_W8(actor + 0x39a, 127);
+    R(2) = MEM_R32(actor + 0x330);
+    R(3) = ~8u;
+    MEM_W8(actor + 0x39b, 0);
+    MEM_W8(actor + 0x38a, 0);
+    MEM_W8(actor + 0x399, 0);
+    R(2) &= R(3);
+    MEM_W32(actor + 0x330, R(2));
+    c->budget -= 14;
+    return true;
+}
+
+/* A level rule lets actor type 18 ignore a zero-damage hit. Otherwise reset
+ * the recipient and record the hit unless the attacker is in actions 16..31. */
+bool nc_prepare_hit_reaction(CPUState *c, bool *skip) {
+    if (c->budget <= 55)
+        return false;
+    const u32 actor = R(17);
+    const u32 rules = MEM_R32(R(28) + 0x244);
+    R(3) = 0x04000000;
+    R(2) = 18;
+    c->budget -= 11;
+    *skip = false;
+    if (MEM_R32(rules) & R(3)) {
+        R(3) = MEM_R8(actor + 0x388);
+        c->budget -= 6;
+        if (R(3) == 18) {
+            c->budget -= 2;
+            if (!R(20)) {
+                *skip = true;
+                return true;
+            }
+        }
+    }
+    R(31) = 0x8004ee08;
+    R(4) = actor;
+    c->budget -= 2;
+    nc_call(c, 0x80039964);
+    c->budget -= 2;
+    if (!R(19))
+        return true;
+    const u32 action = MEM_R8(R(19) + 0x38a);
+    R(2) = action >= 16 && action < 32;
+    c->budget -= 8;
+    if (!R(2)) {
+        R(2) = MEM_R8(actor + 0x38c) + 1u;
+        R(3) = MEM_R32(0x8008ef10);
+        MEM_W32(actor + 0x320, R(3));
+        MEM_W8(actor + 0x38c, R(2));
+        c->budget -= 10;
+    }
+    return true;
+}
+
 /* Both lethal reactions enter state 15. The player first restores its part
  * links. The other reaction checks for an adrenaline reward after the change. */
 bool nc_apply_lethal_reaction(CPUState *c, bool player) {

@@ -652,6 +652,12 @@ class Emitter:
                 out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
                 out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80039964:
+                out.append("    if (nc_reset_hit_animation(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004EDCC:
+                out.append("    { bool skip; if (nc_prepare_hit_reaction(c, &skip)) {")
+                out.append("        if (skip) goto L_8004F02C;")
+                out.append("        goto L_8004EE40; } }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004ED2C, 0x8004ED8C):
                 out.append(f"    if (nc_clear_hit_reaction_flags(c)) goto L_{i.addr + 0x40:08X};")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004EC68:

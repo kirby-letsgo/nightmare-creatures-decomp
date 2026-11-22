@@ -22,6 +22,8 @@ psx2_exe     800422DC    80042360         contact.c
 psx2_exe     80042AA0    80042B24         contact.c
 psx2_exe     80042BF0    80042C14         contact.c
 psx2_exe     8004E510    8004E570         contact.c
+psx2_exe     80039964    80039994         damage.c
+psx2_exe     8004EDCC    8004EE40         damage.c
 psx2_exe     8004ED2C    8004ED6C         damage.c
 psx2_exe     8004ED8C    8004EDCC         damage.c
 psx2_exe     8004EC68    8004ECD0         damage.c
