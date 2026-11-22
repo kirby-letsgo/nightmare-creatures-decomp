@@ -441,6 +441,31 @@ static s32 increment_menu_repeat(CPUState *c) {
     return (s32)count;
 }
 
+/* Left is tested first. Once a direction is selected, a held press
+ * below the repeat threshold skips both actions. */
+u32 nc_menu_horizontal_repeat(CPUState *c) {
+    if (c->budget <= 20)
+        return 0x80068624;
+    bool left = R(2) != 0;
+    R(2) = R(30) & 0x20;
+    c->budget -= 2;
+    if (!left) {
+        c->budget -= 2;
+        if (!R(2))
+            return 0x800687c8;
+    }
+
+    R(2) = increment_menu_repeat(c) < 6;
+    c->budget -= 9;
+    if (R(2)) {
+        R(2) = MEM_R32(R(28) + 0x18c) & (left ? 0x80 : 0x20);
+        c->budget -= 7;
+        if (R(2))
+            return 0x800687cc;
+    }
+    return left ? 0x8006865c : 0x8006870c;
+}
+
 /* Start arrives in v0 from the Up check. A fresh Start takes priority
  * over Down and leaves the repeat counter untouched. */
 u32 nc_menu_start_down(CPUState *c) {

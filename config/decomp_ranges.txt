@@ -217,6 +217,9 @@ psx2_exe     800685D8    800685FC         pad.c
 psx2_exe     8006851C    80068578         pad.c
 # Vertical input after the menu face-button checks.
 psx2_exe     80068578    800685D8         pad.c
+# Menu Left and Right repeat checks.
+psx2_exe     80068624    8006865C         pad.c
+psx2_exe     800686D4    8006870C         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
