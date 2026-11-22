@@ -2156,6 +2156,30 @@ static bool check_cd_data_sync(void) {
     return ok && !saved.error;
 }
 
+static bool check_clear_otag(void) {
+    const u32 counts[] = {1, 2, 19};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0] && ok; i++) {
+        u32 table = i == 1 ? SCRATCH_BASE + 32 : 0xa0062000;
+        u32 last = table + 4 * (counts[i] - 1);
+        MEM_W8(0x8002455a, i ? 2 : 0);
+        MEM_W32(0x80024554, 0x8001935c); /* no-op diagnostic */
+        memset(nc_fast_ptr(table - 4), 0xcc, (counts[i] + 2) * 4);
+        CPUState state = arguments(table, counts[i], 3, i ? 13 : 4096);
+        ok = compare(state, 0x8001c730, nc_credits_clear_otag, 12) &&
+             nc_cpu.r[2] == last && MEM_R32(last) == 0x24614 &&
+             MEM_R32(table - 4) == 0xcccccccc && MEM_R32(last + 4) == 0xcccccccc;
+        for (u32 tag = table; tag < last && ok; tag += 4)
+            ok = MEM_R32(tag) == ((tag + 4) & 0xffffff);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_clear_otag_reverse(void) {
     const u32 counts[] = {1, 7};
     StateIO saved = {0};
@@ -2875,6 +2899,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_clear_otag();
     pass = pass && check_clear_otag_reverse();
     pass = pass && check_cd_get_sector();
     pass = pass && check_bios_a0_stub(0x80023364, 0x39, nc_credits_bios_init_heap);
