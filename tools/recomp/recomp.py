@@ -1565,6 +1565,8 @@ class Emitter:
                 out.append(f"    if (nc_check_point_proximity(c, {from_query})) {{")
                 out.append("        if (R(2)) goto L_8001AE40;")
                 out.append("        goto L_8001AE94; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001AE40:
+                out.append("    if (nc_advance_point_index(c)) goto L_8001AE94;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
                 out.append("    if (nc_begin_part_pose_heading(c)) {")
                 out.append("        if (R(2)) goto L_8001BE98;")

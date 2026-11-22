@@ -3224,6 +3224,31 @@ bool nc_check_point_proximity(CPUState *c, bool from_query) {
     return true;
 }
 
+/* The four actor states select 20-byte rows of signed point identifiers.
+ * A zero entry restarts the row at index zero. */
+bool nc_advance_point_index(CPUState *c) {
+    const u32 row = R(4);
+    if (c->budget <= 24 || row >= 4)
+        return false;
+    const u32 index_addr = 0x800d4ca2 + 2 * row;
+    const u16 next = MEM_R16(index_addr) + 1;
+    const u32 table = 0x80081a08;
+    const u32 entry = table + 20 * row + 2 * (s16)next;
+    const s16 point = MEM_R16(entry);
+    const int cycles = point ? 24 : 25;
+    if (c->budget <= cycles)
+        return false;
+    R(6) = index_addr;
+    R(5) = table;
+    R(3) = entry;
+    R(2) = point;
+    MEM_W16(index_addr, next);
+    if (!point)
+        MEM_W16(index_addr, 0);
+    c->budget -= cycles;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {

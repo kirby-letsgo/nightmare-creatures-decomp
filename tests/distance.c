@@ -2351,6 +2351,57 @@ static bool point_proximity(bool disc) {
     return true;
 }
 
+static bool point_index_advances(bool disc) {
+    static const struct {
+        u32 row;
+        u16 current;
+        s16 point;
+    } cases[] = {{0, 0, 7},      {1, 4, 0}, {2, 0xffff, -1}, {3, 0xfffe, INT16_MIN},
+                 {0, 0x7fff, 1}, {3, 8, 0}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        const u32 row = cases[i].row, indices = 0x800d4ca2;
+        const u16 next = cases[i].current + 1;
+        const u32 entry = 0x80081a08 + 20 * row + 2 * (s16)next;
+        const u16 saved = MEM_R16(entry);
+        MEM_W16(entry, cases[i].point);
+        u16 before[4], expected[4];
+        for (unsigned j = 0; j < 4; ++j) {
+            before[j] = j == row ? cases[i].current : 0xa500 + j;
+            expected[j] = j == row ? (cases[i].point ? next : 0) : before[j];
+            MEM_W16(indices + 2 * j, before[j]);
+        }
+        input.r[4] = row;
+        input.r[31] = 0x8001ae94;
+        input.budget = cases[i].point ? 24 : 25;
+        CPUState native = input;
+        if (nc_advance_point_index(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        for (unsigned j = 0; j < 4; ++j)
+            if (MEM_R16(indices + 2 * j) != before[j])
+                return false;
+        native.budget = ++input.budget;
+        if (!nc_advance_point_index(&native) || native.budget != 1 ||
+            (s32)native.r[2] != cases[i].point || native.r[3] != entry)
+            return false;
+        for (unsigned j = 0; j < 4; ++j) {
+            if (MEM_R16(indices + 2 * j) != expected[j])
+                return false;
+            MEM_W16(indices + 2 * j, before[j]);
+        }
+        if (disc) {
+            interp_call(&input, 0x8001ae40);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+            for (unsigned j = 0; j < 4; ++j)
+                if (MEM_R16(indices + 2 * j) != expected[j])
+                    return false;
+        }
+        MEM_W16(entry, saved);
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -4672,9 +4723,9 @@ int main(int argc, char **argv) {
         part_point_bearings(disc) && bearing_point_selection(disc) &&
         selected_point_returns(disc) && selected_point_bearings(disc) &&
         reference_bearing_gaps(disc) && actor_distances(disc) && point_pose_and_query(disc) &&
-        point_proximity(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        point_index_advances(disc) && point_proximity(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
