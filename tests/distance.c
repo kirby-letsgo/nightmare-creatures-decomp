@@ -521,6 +521,62 @@ static bool rotated_point_offsets(bool disc) {
     return true;
 }
 
+static bool placed_actor_points(bool disc) {
+    const u32 record = SCRATCH_BASE + 128;
+    const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
+    const s32 radii[] = {0, 257, -257, 0x40000001};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i)
+        for (unsigned j = 0; j < sizeof radii / sizeof radii[0]; ++j) {
+            CPUState input = initial();
+            const u32 offset = (angles[i] >> 4) * 2;
+            const u32 cosine = (u32)(s32)(s16)MEM_R16(0x80081be4 + offset);
+            const u32 sine = (u32)(s32)(s16)MEM_R16(0x80083be4 + offset);
+            const u32 actor = j == 2 ? record + 0x150 - 0x284 : 0x80120000;
+            input.r[2] = cosine | 0xaaaa0000;
+            input.r[16] = (u32)-31;
+            input.r[17] = record;
+            input.r[18] = actor;
+            input.r[19] = 16;
+            input.r[20] = (u32)-4;
+            input.r[21] = angles[i];
+            input.r[22] = 0xffff8000;
+            input.r[23] = radii[j];
+            input.r[29] = SCRATCH_BASE + 768;
+            input.r[30] = 37;
+            input.r[31] = 0x80047128;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(actor + 0x27c, (u32)-769);
+            MEM_W32(actor + 0x284, 1023);
+            MEM_W32(input.r[29] + 16, 0x1230);
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 51;
+            CPUState native = input;
+            if (nc_place_actor_points(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            const s32 dx = (s32)(sine * (u32)radii[j]) >> 14;
+            const s32 dz = (s32)(cosine * (u32)radii[j]) >> 14;
+            if (!nc_place_actor_points(&native) || native.budget != 1 ||
+                native.r[31] != 0x800470a4 || native.r[5] != 0x9230 ||
+                MEM_R16(record) != (u16)(-4 + dx) || MEM_R16(record + 4) != (u16)(31 - dz) ||
+                MEM_R16(record + 2) != (u16)-21 || MEM_R32(record + 0x160) != actor ||
+                memcmp(nc_scratch + 128, nc_scratch + 128 + 24, 6) ||
+                MEM_R32(record + 0x158) != (j == 2 ? (u32)-769 : 1023))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x8004701c);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool facing_offsets(bool disc) {
     const u32 record = SCRATCH_BASE + 0x80;
     const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
@@ -995,7 +1051,7 @@ int main(int argc, char **argv) {
               record_projections(disc) && projected_heading_gaps(disc) &&
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-              rotated_vector_setup(disc);
+              rotated_vector_setup(disc) && placed_actor_points(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

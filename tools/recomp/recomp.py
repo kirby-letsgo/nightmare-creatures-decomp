@@ -282,7 +282,16 @@ def load_module(name: str, exe: str) -> Module:
     if name == "psx2_exe":
         # Splat groups these independent routines after preceding returns.
         entries.update(
-            (0x80046E18, 0x80046EDC, 0x800471E0, 0x80047268, 0x80047300, 0x8004737C, 0x80047420)
+            (
+                0x80046E18,
+                0x80046EDC,
+                0x80046FA0,
+                0x800471E0,
+                0x80047268,
+                0x80047300,
+                0x8004737C,
+                0x80047420,
+            )
         )
     for addr in entries:
         owner = containing(funcs, addr)
@@ -625,7 +634,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x800473E8:
             targets.update((0x80047480, 0x80047518))
         if self.mod.name == "psx2_exe" and f.addr == 0x80046B1C:
-            targets.update((0x80046E68, 0x80046F2C))
+            targets.update((0x80046E68, 0x80046F2C, 0x800470A4))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -831,6 +840,10 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80046E68, 0x80046F2C):
                 subtract_x = "true" if i.addr == 0x80046E68 else "false"
                 out.append(f"    if (nc_apply_rotated_point_offset(c, {subtract_x})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004701C:
+                out.append("    if (nc_place_actor_points(c)) {")
+                out.append(f"        {self.call(0x80047128)}")
+                out.append("        goto L_800470A4; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800470DC:
                 out.append("    if (nc_init_actor_coordinates(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80052B80:
