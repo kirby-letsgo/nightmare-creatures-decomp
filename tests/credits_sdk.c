@@ -1491,6 +1491,49 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_dma_complete(void) {
+    const u32 spu = 0x80060000, callback = 0x80060400, trace = callback + 16;
+    const u32 event = 0x8001fcd8;
+    const int threshold = 4 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
+    StateIO saved = {0}, device = {0};
+    cpu_serialize(&saved);
+    spu_serialize(&device);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    MEM_W32(callback, 0x03e00008);
+    MEM_W32(callback + 4, 0xaf030000); /* sw v1, 0(t8): poll count */
+    MEM_W32(event, 0xaf040004);        /* sw a0, 4(t8): event class */
+    MEM_W32(event + 4, 0x03e00008);
+    MEM_W32(event + 8, 0xaf050008);    /* sw a1, 8(t8): event spec */
+    bool ok = !saved.error && !device.error;
+    for (unsigned i = 0; ok && i < 3; i++) {
+        bool stuck = i == 2;
+        /* SPUSTAT mirrors SPUCNT, so a write to the status port leaves the
+         * mode bits set and exercises the bounded polling path. */
+        if (stuck)
+            spu_write(0x1aa, 0x30);
+        MEM_W32(0x80024678, stuck ? 0x1f801c04u : spu);
+        MEM_W16(spu + 0x1aa, 0x8134);
+        MEM_W32(0x800246b0, i ? callback : 0);
+        MEM_W32(0x800246c8, i ? 1 : 0);
+        memset(nc_fast_ptr(trace), 0xff, 12);
+        CPUState state = arguments(0, 0, 0, i ? threshold + 1 : 4096);
+        state.r[24] = trace;
+        ok = compare(state, 0x8001f58c, nc_credits_spu_dma_complete, threshold) &&
+             (stuck || MEM_R16(spu + 0x1aa) == 0x8104) &&
+             MEM_R32(trace) == (stuck ? 0xf01u : i ? 0 : UINT32_MAX) &&
+             MEM_R32(trace + 4) == (i ? UINT32_MAX : 0xf0000009u) &&
+             MEM_R32(trace + 8) == (i ? UINT32_MAX : 0x20u);
+    }
+    device.loading = saved.loading = true;
+    spu_serialize(&device);
+    cpu_serialize(&saved);
+    free(device.buf);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !device.error && !saved.error;
+}
+
 static bool check_spu_read_blocks(void) {
     const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061000;
     const int threshold = 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
@@ -3328,6 +3371,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_dma_complete();
     pass = pass && check_spu_read_blocks();
     pass = pass && check_spu_transfer(true, false);
     pass = pass && check_spu_transfer(false, false);

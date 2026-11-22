@@ -150,6 +150,7 @@ bool nc_credits_draw_sync_callback(CPUState *c);
 bool nc_credits_set_graph_queue(CPUState *c);
 bool nc_credits_set_graph_debug(CPUState *c);
 bool nc_credits_tim_info(CPUState *c);
+bool nc_credits_spu_dma_complete(CPUState *c);
 bool nc_credits_spu_read_blocks(CPUState *c);
 bool nc_credits_spu_write(CPUState *c);
 bool nc_credits_spu_read(CPUState *c);
