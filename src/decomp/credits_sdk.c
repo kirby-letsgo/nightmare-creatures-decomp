@@ -536,6 +536,30 @@ bool nc_credits_gpu_parameter(CPUState *c) {
     return true;
 }
 
+bool nc_credits_set_queue_alarm(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x8001ea0c;
+    R(4) = 0xffffffff; /* VSync(-1) reads the current vertical blank count. */
+    c->budget -= 3;
+    nc_call(c, 0x8001a454);
+
+    set_reg(c, 2, R(2) + 240);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(R(1) + 0x4670, R(2)); /* queue deadline */
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(R(1) + 0x4674, 0); /* polls since the alarm was set */
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_queue_command(CPUState *c) {
     if (c->budget <= 5)
         return false;
