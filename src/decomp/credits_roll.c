@@ -269,3 +269,68 @@ bool nc_credits_load_tim(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Build the ISO path, find its directory entry, and read the file into a
+ * sector-aligned allocation. The result is the allocation even if the
+ * lower-level read fails. */
+bool nc_credits_load_file(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 0x68;
+    R(5) = R(4);
+    MEM_W32(R(29) + 0x60, R(16));
+    R(16) = R(29) + 0x38;
+    R(2) = MEM_R16(R(28)); /* root-directory prefix and terminator */
+    R(4) = R(16);
+    MEM_W32(R(29) + 0x64, R(31));
+    R(31) = 0x80018e4c;
+    MEM_W16(R(29) + 0x38, (u16)R(2));
+    c->budget -= 11;
+    nc_call(c, 0x80019988); /* strcat(filename) */
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, R(5) + 0x4c6c); /* ";1" */
+    R(4) = R(16);
+    call(c, 0x80019988, 0x80018e5c);
+
+    set_reg(c, 4, R(29) + 0x20);
+    bool retry;
+    do {
+        R(5) = R(29) + 0x38;
+        call(c, 0x80021c34, 0x80018e68); /* CdSearchFile */
+        retry = R(2) == 0;
+        R(4) = R(29) + 0x20;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } while (retry);
+
+    load_word(c, 2, R(29) + 0x24); /* byte length in CdlFILE */
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 4, R(2) + 2047);
+    const bool negative = (s32)R(4) < 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (negative)
+        set_reg(c, 4, R(2) + 4094);
+    set_reg(c, 4, (u32)((s32)R(4) >> 11));
+    R(4) <<= 11;
+    call(c, 0x80019680, 0x80018e94);
+
+    /* CdlFILE is passed by value: position and length in a2/a3, the
+     * directory name in four stack words. Load all four before storing. */
+    for (unsigned i = 0; i < 4; i++)
+        load_word(c, 3 + i, R(29) + 0x28 + 4 * i);
+    for (unsigned i = 0; i < 4; i++) {
+        MEM_W32(R(29) + 0x10 + 4 * i, R(3 + i));
+        NC_POLL(c, NC_INSN_CYCLES);
+    }
+    set_reg(c, 4, R(29) + 0x38);
+    set_reg(c, 16, R(2));
+    load_word(c, 6, R(29) + 0x20);
+    load_word(c, 7, R(29) + 0x24);
+    R(5) = R(16);
+    call(c, 0x80018d6c, 0x80018ecc);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 0x64);
+    load_word(c, 16, R(29) + 0x60);
+    set_reg(c, 29, R(29) + 0x68);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

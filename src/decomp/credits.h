@@ -15,4 +15,6 @@ bool nc_credits_run(CPUState *c);
 
 bool nc_credits_load_tim(CPUState *c);
 
+bool nc_credits_load_file(CPUState *c);
+
 #endif
