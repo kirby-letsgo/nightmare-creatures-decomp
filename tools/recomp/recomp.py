@@ -76,6 +76,7 @@ CREDITS_ROUTINES = {
     0x8001A7EC: "nc_credits_check_callback(c)",
     0x8001A7FC: "nc_credits_interrupt_mask(c, false)",
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
+    0x8001AC48: "nc_credits_stop_interrupts(c)",
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
