@@ -2264,6 +2264,51 @@ static bool actor_distances(bool disc) {
     return true;
 }
 
+static bool point_heading_turns(bool disc) {
+    const u32 headings = 0x800d4c9a;
+    const u16 gaps[] = {0, 7, 8, 0x7ffe, 0x7fff, 0x8000, 0xfff7, 0xffff};
+    for (unsigned i = 0; i < sizeof gaps / sizeof gaps[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = (i % 4) * 0x400;
+        input.r[20] = i % 4;
+        input.r[18] = input.r[20] * 2;
+        input.r[31] = 0x80035338;
+        const u16 gap = gaps[i];
+        u16 before[4] = {11, 22, 33, 44}, expected[4];
+        before[input.r[20]] = (input.r[2] << 4) - gap;
+        memcpy(expected, before, sizeof before);
+        const s32 turn = gap >= 0x7fff ? (s32)gap - 65536 : gap;
+        expected[input.r[20]] += turn >> 3;
+        for (unsigned j = 0; j < 4; ++j)
+            MEM_W16(headings + 2 * j, before[j]);
+        input.budget = 29 + (gap >= 0x7fff);
+        CPUState native = input;
+        if (nc_turn_toward_point(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        for (unsigned j = 0; j < 4; ++j)
+            if (MEM_R16(headings + 2 * j) != before[j])
+                return false;
+        native.budget = ++input.budget;
+        if (!nc_turn_toward_point(&native) || native.budget != 1 ||
+            (s32)native.r[4] != (s16)expected[input.r[20]])
+            return false;
+        for (unsigned j = 0; j < 4; ++j) {
+            if (MEM_R16(headings + 2 * j) != expected[j])
+                return false;
+            MEM_W16(headings + 2 * j, before[j]);
+        }
+        if (disc) {
+            interp_call(&input, 0x8001ad3c);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+            for (unsigned j = 0; j < 4; ++j)
+                if (MEM_R16(headings + 2 * j) != expected[j])
+                    return false;
+        }
+    }
+    return true;
+}
+
 static bool point_distance_bearings(bool disc) {
     const u32 point = SCRATCH_BASE, actor = 0x80121000;
     static const struct {
@@ -4492,19 +4537,19 @@ int main(int argc, char **argv) {
         part_search_exits(disc) && part_heading_windows(disc) && part_bearing_calls(disc) &&
         part_point_bearings(disc) && bearing_point_selection(disc) &&
         selected_point_returns(disc) && selected_point_bearings(disc) &&
-        reference_bearing_gaps(disc) && actor_distances(disc) && point_distance_bearings(disc) &&
-        displacements(disc) && headings(disc) && heading_samples(disc) && projected_points(disc) &&
-        part_positions(disc) && actor_coordinates(disc) && point_headings(disc, false) &&
-        point_headings(disc, true) && actor_headings(disc) && heading_projections(disc) &&
-        reference_distances(disc) && relative_headings(disc) && record_projections(disc) &&
-        projected_heading_gaps(disc) && projected_heading_selection(disc) &&
-        saved_bearing_projections(disc) && facing_offsets(disc) && projection_entries(disc) &&
-        rotated_point_offsets(disc) && rotated_vector_setup(disc) && placed_actor_points(disc) &&
-        actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc) &&
-        heading_matrix_setup(disc) && part_translation(disc) && part_transform_calls(disc) &&
-        node_transform_selection(disc) && node_matrix_installation(disc) &&
-        part_composition(disc) && node_continuations(disc, false) &&
-        node_continuations(disc, true) && node_rotations(disc) &&
+        reference_bearing_gaps(disc) && actor_distances(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
+        actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
+        relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
+        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
+        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
+        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
+        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
+        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
+        node_matrix_installation(disc) && part_composition(disc) &&
+        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         scaled_walk_continuations(disc) && traversal_rotation_composition(disc) &&
         traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&

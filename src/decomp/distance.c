@@ -3135,6 +3135,31 @@ bool nc_call_point_distance_bearing(CPUState *c) {
     return true;
 }
 
+/* The vector bearing is a 12-bit turn. The stored heading uses 16 bits,
+ * and the original wraps a gap of exactly 0x7fff in the negative direction. */
+bool nc_turn_toward_point(CPUState *c) {
+    const u32 headings = 0x800d4c9a;
+    if (c->budget <= 29)
+        return false;
+    const u16 target = (u16)(R(2) << 4);
+    const u16 gap = target - MEM_R16(headings + R(18));
+    const bool wrap = gap >= 0x7fff;
+    const int cycles = 29 + wrap;
+    if (c->budget <= cycles)
+        return false;
+    const s32 turn = wrap ? (s32)gap - 0x10000 : gap;
+    R(1) = 0x800d0000 + R(18);
+    R(17) = headings + (R(20) << 1);
+    R(3) = MEM_R16(R(17)) + (turn >> 3);
+    R(2) = R(3) << 16;
+    R(16) = (s16)R(3);
+    R(4) = R(16);
+    R(31) = 0x8001ada4;
+    MEM_W16(R(17), (u16)R(3));
+    c->budget -= cycles;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
