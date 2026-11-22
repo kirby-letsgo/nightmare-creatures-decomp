@@ -166,6 +166,7 @@ CREDITS_ROUTINES = {
     0x80021440: "nc_credits_cd_volume(c)",
     0x800214C8: "nc_credits_cd_flush_controller(c)",
     0x800215A8: "nc_credits_cd_init_volume(c)",
+    0x8002169C: "nc_credits_cd_init_interrupt(c)",
     0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
     0x80021F14: "nc_credits_cd_names_equal(c)",
     0x80022214: "nc_credits_cd_search_directory(c)",
