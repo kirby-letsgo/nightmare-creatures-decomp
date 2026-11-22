@@ -850,6 +850,8 @@ class Emitter:
                 out.append("        goto L_8004720C; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
                 out.append("    if (nc_return_point_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800345BC:
+                out.append("    if (nc_finish_part_translation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034610:
                 out.append("    if (nc_prepare_heading_matrix(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
