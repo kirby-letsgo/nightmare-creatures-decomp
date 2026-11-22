@@ -208,6 +208,7 @@ bool nc_credits_cd_data_sync(CPUState *c);
 bool nc_credits_cd_mix(CPUState *c);
 bool nc_credits_cd_flush_controller(CPUState *c);
 bool nc_credits_cd_get_toc(CPUState *c);
+bool nc_credits_cd_init(CPUState *c);
 bool nc_credits_cd_reset(CPUState *c);
 bool nc_credits_cd_flush(CPUState *c);
 bool nc_credits_cd_status(CPUState *c);

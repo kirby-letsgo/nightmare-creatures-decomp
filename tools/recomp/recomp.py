@@ -206,6 +206,7 @@ CREDITS_ROUTINES = {
     0x8001FC4C: "nc_credits_spu_set_delay(c, true)",
     0x8001FC78: "nc_credits_spu_wait(c)",
     0x8001FCD8: "nc_credits_deliver_event(c)",
+    0x8001FCE8: "nc_credits_cd_init(c)",
     0x8001FD78: "nc_credits_cd_default_sync(c)",
     0x8001FDA0: "nc_credits_cd_default_ready(c)",
     0x8001FDC8: "nc_credits_cd_default_read(c)",
@@ -757,7 +758,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
-            targets.update((0x8001AD2C, 0x8001AD3C, 0x8001ADA4, 0x8001ADCC, 0x8001ADFC, 0x8001AE20))
+            targets.update(
+                (0x8001AD2C, 0x8001AD3C, 0x8001ADA4, 0x8001ADCC, 0x8001ADFC, 0x8001AE20, 0x8001AE40)
+            )
         if self.mod.name == "psx2_exe" and f.addr == 0x8001BD08:
             targets.update(
                 (
@@ -1545,6 +1548,11 @@ class Emitter:
                 out.append("    if (nc_prepare_point_coordinate_query(c)) {")
                 out.append(f"        {self.call(0x80024B70)}")
                 out.append("        goto L_8001AE20; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8001AE20, 0x8001AE34):
+                from_query = "true" if i.addr == 0x8001AE20 else "false"
+                out.append(f"    if (nc_check_point_proximity(c, {from_query})) {{")
+                out.append("        if (R(2)) goto L_8001AE40;")
+                out.append("        goto L_8001AE94; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
                 out.append("    if (nc_begin_part_pose_heading(c)) {")
                 out.append("        if (R(2)) goto L_8001BE98;")
