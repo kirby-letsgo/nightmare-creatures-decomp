@@ -634,6 +634,8 @@ class Emitter:
                 out.append(f"    if (nc_transform_part_position(c, {quarter})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800470DC:
+                out.append("    if (nc_init_actor_coordinates(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80052B80:
                 out.append("    if (nc_refill_hit_adrenaline(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800562A0:
