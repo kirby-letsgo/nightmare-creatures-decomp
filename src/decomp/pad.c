@@ -1279,6 +1279,35 @@ bool nc_menu_mode_record_result(CPUState *c) {
     return true;
 }
 
+/* Save the menu frame and capture the incoming button word in fp. */
+u32 nc_enter_menu_input(CPUState *c) {
+    if (c->budget <= 31)
+        return 0x80067358;
+    R(29) -= 0x48;
+    u32 sp = R(29);
+    MEM_W32(sp + 0x38, R(22));
+    R(22) = R(4);
+    MEM_W32(sp + 0x40, R(30));
+    R(4) = MEM_R32(R(28) + 0x244);
+    MEM_W32(sp + 0x44, R(31));
+    MEM_W32(sp + 0x3c, R(23));
+    for (unsigned i = 0; i < 6; ++i)
+        MEM_W32(sp + 0x34 - 4 * i, R(21 - i));
+    MEM_W32(sp + 0x18, 0);
+
+    R(3) = 0xc0009840;
+    R(2) = MEM_R32(R(4)) & R(3);
+    R(30) = R(5);
+    c->budget -= 24;
+    if (R(2))
+        return 0x800673bc;
+
+    R(3) = MEM_R32(R(4) + 4);
+    R(2) = R(3) & 0x10;
+    c->budget -= 7;
+    return (R(3) & 0x40) ? 0x800673bc : 0x80067400;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
