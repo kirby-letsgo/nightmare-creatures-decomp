@@ -1109,6 +1109,30 @@ static bool check_spu_wait(void) {
     return true;
 }
 
+static bool check_tim_info(void) {
+    const u32 input = 0x80061000;
+    const u32 outputs[] = {SCRATCH_BASE + 0x100, input, input + 4, input - 8};
+    const u32 modes[] = {0, 2, 8, 9};
+    for (unsigned i = 0; i < sizeof modes / sizeof modes[0]; i++)
+        for (unsigned j = 0; j < sizeof outputs / sizeof outputs[0]; j++) {
+            memset(nc_fast_ptr(outputs[j]), 0xcc, 28);
+            for (unsigned n = 0; n < 64; n += 2)
+                MEM_W16(input + n, (u16)(0x8081 + 37 * n));
+            MEM_W32(input, modes[i]);
+            MEM_W32(input + 4, 19); /* next block uses the length rounded down to words */
+            CPUState state = arguments(input, outputs[j], 7, j ? 64 : 4096);
+            if (!compare(state, 0x8001ecb4, nc_credits_tim_info, 63))
+                return false;
+            if (j == 0) {
+                u32 pixels = input + ((modes[i] & 8) ? 24 : 8);
+                if (MEM_R32(outputs[j] + 12) != pixels + 8 ||
+                    MEM_R32(outputs[j] + 24) != ((modes[i] & 8) ? input + 16 : 0xcccccccc))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool check_spu_delays(void) {
     const u32 slot = 0x8002468c, original = MEM_R32(slot);
     const u32 addresses[] = {original, 0x80060000, SCRATCH_BASE + 4};
@@ -1419,6 +1443,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_read_address();
     pass = pass && check_spu_dma_priority();
     pass = pass && check_spu_wait();
+    pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();

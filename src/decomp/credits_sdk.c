@@ -1367,6 +1367,52 @@ bool nc_credits_set_graph_debug(CPUState *c) {
     return true;
 }
 
+/* Copy the VRAM rectangle and point the descriptor at the following TIM data.
+ * The original stores the pointer before the height, including for aliased buffers. */
+static u32 tim_rectangle(CPUState *c, u32 source, u32 dest) {
+    for (unsigned offset = 0; offset < 6; offset += 2) {
+        u16 field = MEM_R16(source + offset);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        MEM_W16(dest + offset, field);
+        c->budget--;
+    }
+    u16 height = MEM_R16(source + 6);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(dest + 8, source + 8);
+    c->budget--;
+    MEM_W16(dest + 6, height);
+    c->budget--;
+    return height;
+}
+
+bool nc_credits_tim_info(CPUState *c) {
+    if (c->budget <= 63)
+        return false;
+    u32 flags = MEM_R32(R(4));
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(5), flags);
+    c->budget -= 5;
+    if (flags & 8) {
+        u32 palette = R(4) + 4;
+        c->budget--;
+        u32 length = MEM_R32(palette);
+        u32 pixels = palette + (length & ~3u) + 4;
+        c->budget -= NC_LOAD_CYCLES + 5;
+        tim_rectangle(c, palette + 4, R(5) + 16);
+        R(4) = palette + 12;
+        R(3) = tim_rectangle(c, pixels, R(5) + 4);
+        R(2) = pixels + 8;
+        c->budget--; /* jump with the height store in its delay slot */
+    } else {
+        u32 pixels = R(4) + 8;
+        c->budget--;
+        R(2) = tim_rectangle(c, pixels, R(5) + 4);
+        R(4) = pixels + 8;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */
 bool nc_credits_spu_write_register(CPUState *c) {
     if (c->budget <= 15)
