@@ -1879,6 +1879,30 @@ static bool check_interrupt_start(bool dma) {
     return ok;
 }
 
+static bool check_cd_data_callback(void) {
+    const u32 table = MEM_R32(0x800244a0), slot = 0x800244ec, control = 0x80061000;
+    const u32 handler = 0x8001935c;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W32(table + 4, 0x8001b184); /* DMA registration method installed by the SDK */
+    MEM_W32(0x800244dc, control);
+    bool ok = !saved.error;
+    for (unsigned install = 0; install < 2 && ok; install++) {
+        u32 previous = install ? 0 : handler;
+        u32 replacement = install ? handler : 0;
+        MEM_W32(slot, previous);
+        MEM_W32(control, install ? 0 : 0x00880000);
+        CPUState state = arguments(replacement, 1, 2, install ? 6 : 4096);
+        ok = compare(state, 0x8002039c, nc_credits_cd_data_callback, 5) &&
+             nc_cpu.r[2] == previous && MEM_R32(slot) == replacement &&
+             MEM_R32(control) == (install ? 0x00880000u : 0x00800000u);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_dma_slot(void) {
     const u32 dicr = 0x1f8010f4, ram = 0x80061000, initial_control = 0x00410012;
     const struct {
@@ -2628,6 +2652,7 @@ int main(int argc, char **argv) {
     pass = pass && check_save_irq_context();
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);
+    pass = pass && check_cd_data_callback();
     pass = pass && check_dma_slot();
     pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();
