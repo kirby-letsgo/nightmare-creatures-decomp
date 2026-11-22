@@ -6,5 +6,8 @@
 bool nc_actor_distance_terms(CPUState *c);
 bool nc_distance_root(CPUState *c);
 bool nc_vector_heading(CPUState *c);
+bool nc_heading_cosine(CPUState *c);
+bool nc_heading_sine(CPUState *c);
+bool nc_project_heading_offset(CPUState *c);
 
 #endif

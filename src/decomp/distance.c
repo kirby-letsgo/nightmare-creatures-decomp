@@ -1,6 +1,44 @@
 #include "decomp/distance.h"
 #include <limits.h>
 
+/* The low 16 angle bits represent a full turn. The game disc supplies
+ * 4096 signed Q14 samples per table, indexed by the upper 12 angle bits. */
+static bool heading_sample(CPUState *c, u32 table) {
+    if (c->budget <= 9)
+        return false;
+    const u32 offset = (R(4) >> 3) & 0x1ffe;
+    R(4) = offset;
+    R(1) = 0x80080000u + offset;
+    R(2) = (u32)(s32)(s16)MEM_R16(table + offset);
+    c->budget -= 9;
+    return true;
+}
+
+bool nc_heading_cosine(CPUState *c) {
+    return heading_sample(c, 0x80081BE4);
+}
+
+bool nc_heading_sine(CPUState *c) {
+    return heading_sample(c, 0x80083BE4);
+}
+
+/* After the two angle lookups, s0 holds the scaled cosine component.
+ * Store projected X and prepare Z for the store in the heading call's delay slot. */
+bool nc_project_heading_offset(CPUState *c) {
+    if (c->budget <= 20)
+        return false;
+    nc_mult(c, (u32)(s32)(s16)R(2), R(17));
+    R(7) = c->lo;
+    R(4) = (u32)((s32)c->lo >> 14);
+    const s32 origin_x = (s32)MEM_R32(0x800D7780) >> 8;
+    MEM_W16(R(18), (u32)origin_x + R(4));
+    const s32 origin_z = (s32)MEM_R32(0x800D7788) >> 8;
+    R(5) = R(16);
+    R(2) = R(16) - (u32)origin_z;
+    c->budget -= 20;
+    return true;
+}
+
 /* Convert an X/Z displacement to the game's 4096-unit turn. The table
  * supplies one octant; the sign and dominant axis determine its reflection. */
 bool nc_vector_heading(CPUState *c) {

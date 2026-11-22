@@ -111,6 +111,68 @@ static bool headings(bool disc) {
     return compare(c, 0x80047684, nc_vector_heading, disc, &result) && result.r[2] == 512;
 }
 
+static bool heading_samples(bool disc) {
+    const s16 cardinal[] = {0, 16384, 0, -16384};
+    CPUState c = initial(), result;
+    for (unsigned table = 0; table < 2; table++) {
+        bool (*sample)(CPUState *) = table ? nc_heading_sine : nc_heading_cosine;
+        u32 address = table ? 0x80083be4 : 0x80081be4;
+        u32 pc = table ? 0x80035338 : 0x8003531c;
+        for (unsigned i = 0; i < 4096; i++) {
+            if (!disc) {
+                s16 value = i % 1024 ? (s16)(i * 31) : cardinal[(i / 1024 + !table) % 4];
+                MEM_W16(address + 2 * i, value);
+            }
+            c.r[4] = 0xfffe0000u + i * 16 + i % 16;
+            if (!compare(c, pc, sample, disc, &result) ||
+                result.r[2] != (u32)(s32)(s16)MEM_R16(address + 2 * i))
+                return false;
+            if (i % 1024 == 0 && (s32)result.r[2] != cardinal[(i / 1024 + !table) % 4])
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool projected_points(bool disc) {
+    const u32 samples[] = {0, 1, 0x4000, 0xffffc000, 0x7fff, 0x8000, 0xffffffff};
+    for (unsigned i = 0; i < sizeof samples / sizeof samples[0]; i++)
+        for (unsigned j = 0; j < sizeof samples / sizeof samples[0]; j++) {
+            CPUState c = initial();
+            c.r[31] = 0x800471AC;
+            c.r[2] = samples[i];
+            c.r[16] = samples[i] * 0x10001u;
+            c.r[17] = samples[j] * 0x12345u;
+            c.r[18] = SCRATCH_BASE + 0x140;
+            MEM_W32(0x800D7780, 0xfffffcff);
+            MEM_W32(0x800D7788, 0x000154ff);
+            MEM_W32(c.r[18], 0x11002200);
+            CPUState native = c;
+            if (!nc_project_heading_offset(&native))
+                return false;
+            u32 output = MEM_R32(c.r[18]);
+            u32 product = (u32)(s32)(s16)samples[i] * c.r[17];
+            u16 x = (u16)(((s32)product >> 14) - 4);
+            if (output != (0x11000000u | x) || native.r[2] != c.r[16] - 0x154 ||
+                native.budget != c.budget - 20)
+                return false;
+            MEM_W32(c.r[18], 0x11002200);
+            CPUState cutoff = c;
+            cutoff.budget = 20;
+            CPUState before = cutoff;
+            if (nc_project_heading_offset(&cutoff) || memcmp(&cutoff, &before, sizeof before) ||
+                MEM_R32(c.r[18]) != 0x11002200)
+                return false;
+            if (disc) {
+                CPUState guest = c;
+                interp_call(&guest, 0x8004716C);
+                if (memcmp(&guest, &native, sizeof guest) || MEM_R32(c.r[18]) != output)
+                    return false;
+            }
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -124,7 +186,8 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    bool ok = roots(disc) && displacements(disc) && headings(disc);
+    bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
+              projected_points(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
