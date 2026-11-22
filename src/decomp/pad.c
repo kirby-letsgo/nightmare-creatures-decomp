@@ -347,6 +347,33 @@ u32 nc_pad_select_edge(CPUState *c) {
     return (previous & 1) ? 0x80042f54 : 0x80042f40;
 }
 
+/* The preceding delay slot tested Start in the current word (fp).
+ * A new Start takes priority over Cross. Each exit leaves the next
+ * button mask in v0, including when both buttons are pressed. */
+u32 nc_menu_confirm_edge(CPUState *c) {
+    if (c->budget <= 18)
+        return 0x80068154;
+
+    bool start = R(2) != 0;
+    R(2) = R(30) & 0x4000;
+    c->budget -= 2;
+    if (start) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 8))
+            return 0x8006818c;
+    }
+
+    bool cross = R(2) != 0;
+    R(2) = R(30) & 0x1000;
+    c->budget -= 2;
+    if (cross) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 0x4000))
+            return 0x8006818c;
+    }
+    return 0x80068304;
+}
+
 /* The decoder returns both ports in v0. Any set bit resets the countdown
  * before the state check, including on a frame that also decrements it. */
 bool nc_pad_inactivity(CPUState *c) {

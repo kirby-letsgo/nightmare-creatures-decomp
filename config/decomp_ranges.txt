@@ -186,6 +186,8 @@ psx2_exe     80062C28    80062CB0         pad.c
 psx2_exe     80062CB0    80062CC8         pad.c
 psx2_exe     80062CC8    80062D2C         pad.c
 psx2_exe     80062D2C    80062DE8         pad.c
+# Menu Start and Cross press edges.
+psx2_exe     80068154    8006818C         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
