@@ -536,6 +536,30 @@ bool nc_credits_gpu_parameter(CPUState *c) {
     return true;
 }
 
+/* The graphics reset path uses this counted byte fill to clear its buffers. */
+bool nc_credits_gpu_fill_bytes(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 8;
+    bool filling = R(6) != 0;
+    R(2) = R(6) - 1;
+    c->budget -= 3;
+    if (filling) {
+        set_reg(c, 3, UINT32_MAX);
+        do {
+            MEM_W8(R(4), (u8)R(5));
+            NC_POLL(c, NC_INSN_CYCLES);
+            set_reg(c, 2, R(2) - 1);
+            filling = R(2) != R(3);
+            R(4)++;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+        } while (filling);
+    }
+    set_reg(c, 29, R(29) + 8);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_set_queue_alarm(CPUState *c) {
     if (c->budget <= 4)
         return false;
