@@ -1475,6 +1475,24 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+/* CdSearchFile uses _cmp to compare the first twelve bytes of two names. */
+bool nc_credits_cd_names_equal(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x80021f24;
+    R(6) = 12;
+    c->budget -= 3;
+    nc_call(c, 0x80022664); /* strncmp */
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* CdPosToInt converts a packed BCD minute:second:frame position to an LBA. */
 bool nc_credits_cd_position_to_sector(CPUState *c) {
     if (c->budget <= 38)

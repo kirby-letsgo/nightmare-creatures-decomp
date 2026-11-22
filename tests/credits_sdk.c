@@ -986,6 +986,36 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_cd_names_equal(void) {
+    const u32 left = 0x80060001, right = SCRATCH_BASE + 5;
+    const struct {
+        const char *left, *right;
+        bool equal;
+    } cases[] = {
+        {"", "", true}, {"A", "AB", false}, {"END.TIM;1", "END.TIM;1", true},
+        {"ABCDEFGHIJK1", "ABCDEFGHIJK2", false},
+        {"ABCDEFGHIJKL1", "ABCDEFGHIJKL2", true},
+        {NULL, NULL, true}, {NULL, "A", false}, {"A", NULL, false},
+    };
+    const int budgets[] = {5, 14, 4096};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        if (cases[i].left)
+            memcpy(nc_fast_ptr(left), cases[i].left, strlen(cases[i].left) + 1);
+        if (cases[i].right)
+            memcpy(nc_fast_ptr(right), cases[i].right, strlen(cases[i].right) + 1);
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            CPUState state = arguments(cases[i].left ? left : 0, cases[i].right ? right : 0,
+                                       0xfeed, budgets[j]);
+            if (j == 1)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            if (!compare(state, 0x80021f14, nc_credits_cd_names_equal, 4) ||
+                nc_cpu.r[2] != cases[i].equal)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_cd_position_to_sector(void) {
     const struct {
         u8 minute, second, frame;
@@ -1131,6 +1161,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_cd_names_equal();
     pass = pass && check_cd_position_to_sector();
     pass = pass && check_cd_state();
     pass = pass && check_graph_status();
