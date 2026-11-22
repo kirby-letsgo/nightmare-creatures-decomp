@@ -2,6 +2,18 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* The PSX2 BIOS stubs tail-jump to B0, setting t1 in the delay slot.
+ * With three cycles or less, the generated path polls at each boundary. */
+bool nc_pad_bios_call(CPUState *c, NcPadBiosService service) {
+    if (c->budget <= 3)
+        return false;
+    R(10) = 0xb0;
+    R(9) = service;
+    c->budget -= 3;
+    nc_jump(c, R(10));
+    return true;
+}
+
 static void return_from_pad_driver(CPUState *c) {
     R(31) = MEM_R32(R(29) + 0x10);
     NC_POLL(c, NC_LOAD_CYCLES);
