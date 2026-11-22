@@ -111,6 +111,7 @@ bool nc_prepare_heading_projection(CPUState *c);
 bool nc_finish_heading_projection(CPUState *c);
 bool nc_project_heading_offset(CPUState *c);
 bool nc_step_record_angle(CPUState *c);
+bool nc_step_placement_record(CPUState *c);
 bool nc_step_record_angle_pair(CPUState *c);
 bool nc_prepare_paired_point_bearing(CPUState *c);
 bool nc_place_paired_point_actor(CPUState *c, bool store_heading);
