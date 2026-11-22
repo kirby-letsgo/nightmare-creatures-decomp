@@ -556,6 +556,47 @@ bool nc_scale_spatial_level(CPUState *c, bool actor) {
     return true;
 }
 
+/* The signed cutoff precedes all actor reads. Either of the first two
+ * actor flags can admit a nearby source to the remaining checks. */
+NcActorLevelPath nc_check_actor_level_distance(CPUState *c) {
+    if (c->budget <= 17)
+        return NC_ACTOR_LEVEL_FALLBACK;
+    R(2) = (s32)R(17) <= 2400;
+    R(3) = 0x40000;
+    c->budget -= 3;
+    if (!R(2))
+        return NC_ACTOR_LEVEL_DISTANT;
+    R(2) = MEM_R32(R(20) + 0x2c8) & R(3);
+    c->budget -= 7;
+    if (R(2))
+        return NC_ACTOR_LEVEL_CHECK_FLAGS;
+    R(2) = MEM_R32(R(20) + 0x2cc) & 0x800;
+    R(4) = R(18);
+    c->budget -= 7;
+    return R(2) ? NC_ACTOR_LEVEL_CHECK_FLAGS : NC_ACTOR_LEVEL_DISTANT_RECORD_READY;
+}
+
+NcActorLevelPath nc_check_actor_level_flags(CPUState *c) {
+    if (c->budget <= 18)
+        return NC_ACTOR_LEVEL_FALLBACK;
+    R(3) = MEM_R32(R(20) + 0x2c8);
+    R(2) = R(3) & 0x10000000;
+    R(4) = R(18);
+    c->budget -= 7;
+    if (R(2))
+        return NC_ACTOR_LEVEL_DISTANT_RECORD_READY;
+    R(2) = R(3) & 0x80000;
+    R(3) = 0x40000000;
+    c->budget -= 4;
+    if (!R(2))
+        return NC_ACTOR_LEVEL_SET;
+    R(3) |= 0x10;
+    R(2) = MEM_R32(R(20) + 0x330) & R(3);
+    R(4) = R(21) << 16;
+    c->budget -= 7;
+    return R(2) ? NC_ACTOR_LEVEL_DISTANT : NC_ACTOR_LEVEL_CHANNEL_READY;
+}
+
 /* Some incoming branches supply a0 in their delay slot and enter one
  * instruction later. Keep the argument supplied by that path. */
 bool nc_call_distant_actor(CPUState *c, bool load_record) {
