@@ -314,6 +314,30 @@ bool nc_credits_link_packets(CPUState *c) {
     return true;
 }
 
+bool nc_credits_merge_primitives(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+
+    u32 first_words = MEM_R8(R(4) + 3);
+    c->budget -= NC_LOAD_CYCLES;
+    u32 second_words = MEM_R8(R(5) + 3);
+    /* The second tag becomes a word in the combined packet. */
+    R(3) = first_words + 1 + second_words;
+    R(2) = 0;
+    c->budget -= NC_LOAD_CYCLES + 6;
+    if (R(3) <= 16) {
+        MEM_W8(R(4) + 3, (u8)R(3));
+        c->budget--;
+        MEM_W32(R(5), 0);
+        c->budget -= 2;
+    } else {
+        R(2) = (u32)-1;
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_end_packet(CPUState *c) {
     if (c->budget <= 8)
         return false;
