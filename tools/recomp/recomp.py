@@ -727,7 +727,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B22C:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B3D0:
-            targets.update((0x8002B40C, 0x8002B5E8))
+            targets.update((0x8002B40C, 0x8002B4E8, 0x8002B5E8))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.update(
                 (
@@ -1724,6 +1724,13 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_call(c, R(16), 0x{resume:X})) {{")
                 out.append(f"        {self.call(callee)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B4B0:
+                out.append("    switch (nc_check_placement_counter(c)) {")
+                out.append("    case NC_PLACEMENT_COUNTER_ZERO: goto L_8002B5B8;")
+                out.append("    case NC_PLACEMENT_CHECK_TARGET: goto L_8002B56C;")
+                out.append("    case NC_PLACEMENT_UPDATE_MODE: goto L_8002B5D8;")
+                out.append("    case NC_PLACEMENT_APPLY_PRESET: goto L_8002B4E8;")
+                out.append("    case NC_PLACEMENT_COUNTER_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B4E8:
                 out.append("    if (nc_apply_placement_preset(c)) goto L_8002B56C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
