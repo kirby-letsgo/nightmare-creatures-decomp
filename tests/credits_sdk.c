@@ -2395,6 +2395,44 @@ static bool check_clear_otag(void) {
     return ok && !saved.error;
 }
 
+static bool check_clear_ot_dma(void) {
+    const u32 regs = 0x80061000, table = 0xa0062000, control = regs + 8;
+    const u32 start = 0x8001e9fc, poll = 0x8001ea30;
+    const int threshold = 9 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(0x8002463c + 4 * i, regs + 4 * i);
+    /* Capture CHCR at alarm setup, then simulate completion or a busy channel.
+     * Each later poll clears CHCR and supplies the selected alarm result. */
+    MEM_W32(start, 0x8d0b0000);      /* lw t3, 0(t0) */
+    MEM_W32(start + 4, 0x03e00008);
+    MEM_W32(start + 8, 0xad090000);  /* sw t1, 0(t0) */
+    MEM_W32(poll, 0xad000000);       /* sw zero, 0(t0) */
+    MEM_W32(poll + 4, 0x03e00008);
+    MEM_W32(poll + 8, 0x01401021);   /* move v0, t2 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < 3; i++) {
+        u32 count = i ? 7 : 1;
+        MEM_W32(regs + 12, 0x1234567);
+        CPUState state = arguments(table, count, 0, i ? threshold + 1 : 4096);
+        state.r[8] = control;
+        state.r[9] = i ? 1u << 24 : 0;
+        state.r[10] = i == 2;
+        ok = compare(state, 0x8001d804, nc_credits_clear_ot_dma, threshold) &&
+             nc_cpu.r[2] == (i == 2 ? UINT32_MAX : count) && nc_cpu.r[11] == 0x11000002 &&
+             MEM_R32(regs) == table + count * 4 - 4 && MEM_R32(regs + 4) == count &&
+             MEM_R32(control) == 0 && MEM_R32(regs + 12) == 0x09234567;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_clear_otag_reverse(void) {
     const u32 counts[] = {1, 7};
     StateIO saved = {0};
@@ -3566,6 +3604,7 @@ int main(int argc, char **argv) {
         return 1;
     bool pass = check_copy();
     pass = pass && check_clear_otag();
+    pass = pass && check_clear_ot_dma();
     pass = pass && check_clear_otag_reverse();
     pass = pass && check_cd_get_sector();
     pass = pass && check_bios_a0_stub(0x80023364, 0x39, nc_credits_bios_init_heap);
