@@ -2402,6 +2402,50 @@ static bool point_index_advances(bool disc) {
     return true;
 }
 
+static bool point_update_returns(bool disc) {
+    const s32 states[] = {INT32_MIN, -1, 0, INT32_MAX};
+    const u32 actor = SCRATCH_BASE, frame = SCRATCH_BASE + 0x80;
+    for (unsigned i = 0; i < sizeof states / sizeof states[0]; ++i) {
+        CPUState input = initial(), native;
+        const bool call = states[i] >= 0;
+        input.r[19] = actor;
+        input.r[31] = call ? 0x80053f38 : 0x8001aeac;
+        MEM_W32(actor + 0x2cc, states[i]);
+        if (!compare(input, 0x8001ae94, nc_finish_point_update, disc, &native) ||
+            native.r[2] != (u32)states[i] || native.r[4] != actor ||
+            native.r[5] != (call ? 5 : input.r[5]) ||
+            native.budget != input.budget - (call ? 8 : 6))
+            return false;
+    }
+    CPUState input = initial();
+    input.r[29] = frame;
+    MEM_W32(frame + 0x40, input.r[31]);
+    for (unsigned reg = 16; reg <= 21; ++reg)
+        MEM_W32(frame + 0x28 + 4 * (reg - 16), 0xabc00000 + reg);
+    input.budget = 24;
+    CPUState native = input;
+    if (nc_restore_point_update_frame(&native) || memcmp(&input, &native, sizeof input))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_restore_point_update_frame(&native) || native.budget != 1 ||
+        native.r[29] != frame + 0x48)
+        return false;
+    for (unsigned reg = 16; reg <= 21; ++reg)
+        if (native.r[reg] != 0xabc00000 + reg)
+            return false;
+    if (disc) {
+        /* Enter with the caller's stack pointer so interp_call recognizes the return. */
+        const u32 stub = 0x80120000;
+        MEM_W32(stub, 0x08000000u | ((0x8001aeacu >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bdffb8);
+        input.r[29] += 0x48;
+        input.budget += 2;
+        interp_call(&input, stub);
+        return !memcmp(&input, &native, sizeof input);
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -4723,19 +4767,20 @@ int main(int argc, char **argv) {
         part_point_bearings(disc) && bearing_point_selection(disc) &&
         selected_point_returns(disc) && selected_point_bearings(disc) &&
         reference_bearing_gaps(disc) && actor_distances(disc) && point_pose_and_query(disc) &&
-        point_index_advances(disc) && point_proximity(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
-        actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
-        actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
-        relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
-        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
-        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
-        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
-        node_matrix_installation(disc) && part_composition(disc) &&
-        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
+        point_index_advances(disc) && point_update_returns(disc) && point_proximity(disc) &&
+        point_strides(disc) && point_heading_turns(disc) && point_distance_bearings(disc) &&
+        displacements(disc) && headings(disc) && heading_samples(disc) && projected_points(disc) &&
+        part_positions(disc) && actor_coordinates(disc) && point_headings(disc, false) &&
+        point_headings(disc, true) && actor_headings(disc) && heading_projections(disc) &&
+        reference_distances(disc) && relative_headings(disc) && record_projections(disc) &&
+        projected_heading_gaps(disc) && projected_heading_selection(disc) &&
+        saved_bearing_projections(disc) && facing_offsets(disc) && projection_entries(disc) &&
+        rotated_point_offsets(disc) && rotated_vector_setup(disc) && placed_actor_points(disc) &&
+        actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc) &&
+        heading_matrix_setup(disc) && part_translation(disc) && part_transform_calls(disc) &&
+        node_transform_selection(disc) && node_matrix_installation(disc) &&
+        part_composition(disc) && node_continuations(disc, false) &&
+        node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         scaled_walk_continuations(disc) && traversal_rotation_composition(disc) &&
         traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&

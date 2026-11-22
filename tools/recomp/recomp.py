@@ -171,6 +171,7 @@ CREDITS_ROUTINES = {
     0x8001C7E8: "nc_credits_clear_otag_reverse(c)",
     0x8001C880: "nc_credits_draw_primitive(c)",
     0x8001C8E0: "nc_credits_draw_otag(c)",
+    0x8001C954: "nc_credits_put_draw_env(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",
     0x8001CFDC: "nc_credits_read_environment(c, true)",
     0x8001D014: "nc_credits_display_field(c)",
@@ -1567,6 +1568,12 @@ class Emitter:
                 out.append("        goto L_8001AE94; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001AE40:
                 out.append("    if (nc_advance_point_index(c)) goto L_8001AE94;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001AE94:
+                out.append("    if (nc_finish_point_update(c)) {")
+                out.append(f"        if ((s32)R(2) >= 0) {{ {self.call(0x80053F38)} }}")
+                out.append("        goto L_8001AEAC; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001AEAC:
+                out.append("    if (nc_restore_point_update_frame(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
                 out.append("    if (nc_begin_part_pose_heading(c)) {")
                 out.append("        if (R(2)) goto L_8001BE98;")
