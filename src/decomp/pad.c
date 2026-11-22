@@ -1097,6 +1097,47 @@ bool nc_menu_record_cross(CPUState *c) {
     return true;
 }
 
+/* Following Cross dispatch, record 102 changes the mode bits and clears
+ * the saved buttons. Reload the record for the comparison at 0x80068e50. */
+bool nc_menu_check_record_102(CPUState *c) {
+    if (c->budget <= 22)
+        return false;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 103;
+    c->budget -= 6;
+    if (R(3) == 102) {
+        u32 config = MEM_R32(R(28) + 0x244);
+        u32 flags = MEM_R32(config);
+        R(4) = ~0x800u;
+        MEM_W32(R(28) + 0x18c, 0);
+        MEM_W32(config, (flags | 0x2000) & R(4));
+        R(3) = MEM_R32(R(28) + 0x190);
+        c->budget -= 16;
+    }
+    return true;
+}
+
+/* Record 103 also clears the high mode bit, then exits with v0 = 2. */
+u32 nc_menu_check_record_103(CPUState *c) {
+    if (c->budget <= 17)
+        return 0x80068e50;
+    R(6) = 0x7fff0000;
+    c->budget -= 2;
+    if (R(3) != R(2))
+        return 0x80068e84;
+
+    R(6) = 0x7fffffff;
+    R(5) = MEM_R32(R(28) + 0x244);
+    R(2) = 2;
+    R(3) = MEM_R32(R(5));
+    R(4) = ~0x1000u;
+    MEM_W32(R(28) + 0x18c, 0);
+    R(3) = (R(3) | 0x2000) & R(4) & R(6);
+    MEM_W32(R(5), R(3));
+    c->budget -= 15;
+    return 0x80068fe4;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;

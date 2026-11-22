@@ -324,6 +324,9 @@ psx2_exe     80068D60    80068DBC         pad.c
 # Timed record 4 dispatch, followed by fresh Cross dispatch and history.
 psx2_exe     80068DBC    80068DD4         pad.c
 psx2_exe     80068DD4    80068E18         pad.c
+# Mode and saved-button updates for menu records 102 and 103.
+psx2_exe     80068E18    80068E50         pad.c
+psx2_exe     80068E50    80068E84         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
