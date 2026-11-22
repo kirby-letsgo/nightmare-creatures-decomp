@@ -1278,6 +1278,45 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_cd_mix(void) {
+    const u32 slots = 0x80024a20, ports = SCRATCH_BASE + 0x40, mix = 0x80061000;
+    u8 saved[16];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    for (unsigned alias = 0; alias < 2; alias++)
+        for (unsigned wrapper = 0; wrapper < 2; wrapper++)
+            for (unsigned low = 0; low < 2; low++) {
+                u32 input = alias ? ports : mix;
+                for (unsigned i = 0; i < 4; i++)
+                    MEM_W32(slots + 4 * i, ports + i);
+                MEM_W32(ports, 0);
+                MEM_W32(input, 0x81234567);
+                CPUState state = arguments(input, 2, 3, low ? (wrapper ? 5 : 57) : 4096);
+                if (!compare(state, wrapper ? 0x80020354 : 0x80021440,
+                             wrapper ? nc_credits_cd_mix : nc_credits_cd_volume, wrapper ? 4 : 56) ||
+                    nc_cpu.r[2] != wrapper ||
+                    MEM_R32(ports) != (alias ? 0x20450203 : 0x20812303))
+                    return false;
+            }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
+    /* The emulated CD controller implements the bank select. */
+    u32 index = MEM_R32(slots);
+    u8 bank = MEM_R8(index) & 3;
+    for (unsigned native = 0; native < 2; native++) {
+        MEM_W8(index, 0);
+        nc_cpu = arguments(mix, 2, 3, 57);
+        if (native) {
+            if (!nc_credits_cd_volume(&nc_cpu))
+                return false;
+        } else {
+            interp_call(&nc_cpu, 0x80021440);
+        }
+        if ((MEM_R8(index) & 3) != 3)
+            return false;
+    }
+    MEM_W8(index, bank);
+    return true;
+}
+
 static bool check_cd_flush(void) {
     const u32 slots = 0x80024a20, ram = 0x80061000;
     u8 saved[0x40];
@@ -1673,6 +1712,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_cd_mix();
     pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
