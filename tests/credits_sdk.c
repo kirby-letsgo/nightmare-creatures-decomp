@@ -607,20 +607,51 @@ static bool check_draw_primitive(void) {
     return ok;
 }
 
-static bool check_draw_otag(void) {
-    const u32 scratch = 0x80060c00, diagnostic = scratch + 32, alternate = scratch + 64;
-    const u32 slot = 0x80024550, driver = MEM_R32(slot), ot = 0x80062000;
-    const u32 noop = 0x8001935c, record = 0x80027488;
-    StateIO saved = {0};
-    cpu_serialize(&saved);
+static void defer_graphics_queue(u32 scratch) {
     /* Keep DMA busy so the original driver records the submission in queue slot zero. */
     MEM_W32(0x80023404, scratch);
     MEM_W32(0x800244a8, scratch + 4);
     MEM_W32(0x80024638, scratch + 8);
     MEM_W32(scratch + 8, 1u << 24);
     MEM_W32(0x800244a0, scratch + 16);
-    MEM_W32(scratch + 20, noop);
+    MEM_W32(scratch + 20, 0x8001935c);
     MEM_W8(0x80024559, 1);
+}
+
+static bool check_load_image(void) {
+    const u32 scratch = 0x80060c00, rect = scratch + 32, pixels = 0x80062000;
+    const u32 record = 0x80027488, driver = MEM_R32(0x80024550);
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    defer_graphics_queue(scratch);
+    MEM_W32(0x80024554, 0x8001935c); /* no-op diagnostic */
+    MEM_W32(rect, 0x00100020);
+    MEM_W32(rect + 4, 0x00020004);
+    bool ok = !saved.error;
+    for (unsigned verbose = 0; verbose < 2 && ok; verbose++) {
+        MEM_W8(0x8002455a, verbose ? 2 : 0);
+        MEM_W32(0x8002465c, 0);
+        MEM_W32(0x80024660, 0);
+        memset(nc_fast_ptr(record), 0xcc, 96);
+        CPUState state = arguments(rect, pixels, 3, verbose ? 11 : 4096);
+        ok = compare(state, 0x8001c5a4, nc_credits_load_image, 10) &&
+             MEM_R32(record) == MEM_R32(driver + 0x20) && MEM_R32(record + 4) == record + 12 &&
+             MEM_R32(record + 8) == pixels && !memcmp(nc_fast_ptr(record + 12), nc_fast_ptr(rect), 8) &&
+             MEM_R8(record + 20) == 0xcc;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
+static bool check_draw_otag(void) {
+    const u32 scratch = 0x80060c00, diagnostic = scratch + 32, alternate = scratch + 64;
+    const u32 slot = 0x80024550, driver = MEM_R32(slot), ot = 0x80062000;
+    const u32 noop = 0x8001935c, record = 0x80027488;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    defer_graphics_queue(scratch);
     MEM_W32(0x80024554, diagnostic);
     MEM_W32(diagnostic, 0xad440000);      /* sw a0, 0(t2) */
     MEM_W32(diagnostic + 4, 0x03e00008);  /* jr ra */
@@ -2770,6 +2801,7 @@ int main(int argc, char **argv) {
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
+    pass = pass && check_load_image();
     pass = pass && check_draw_otag();
     pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
