@@ -94,4 +94,6 @@ bool nc_credits_palette_id(CPUState *c);
 
 bool nc_credits_video_mode(CPUState *c, bool replace);
 
+bool nc_credits_default_display(CPUState *c);
+
 #endif

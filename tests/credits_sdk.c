@@ -285,6 +285,21 @@ static bool check_video_mode(void) {
     return true;
 }
 
+static bool check_default_display(void) {
+    const u32 dest[] = {0x80060104, 0xa0060112, SCRATCH_BASE + 4, 0x801fef10};
+    const u32 values[] = {0, 320, 0x80017fff, 0xffffffff};
+    for (unsigned i = 0; i < 4; i++)
+        for (unsigned j = 0; j < 4; j++) {
+            CPUState state = arguments(dest[i], values[j], values[(j + 1) % 4], 18);
+            state.r[7] = values[(j + 2) % 4];
+            memset(nc_fast_ptr(dest[i]), 0xab, 24);
+            MEM_W32(state.r[29] + 0x10, values[(j + 3) % 4]);
+            if (!compare(state, 0x8001b4e4, nc_credits_default_display, 17))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -309,6 +324,7 @@ int main(int argc, char **argv) {
     pass = pass && check_terminator();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
+    pass = pass && check_default_display();
     disc_close();
     return pass ? 0 : 1;
 }
