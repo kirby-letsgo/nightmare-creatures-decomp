@@ -2137,6 +2137,44 @@ static void graphics_diagnostic(CPUState *c, u32 format, u32 return_pc, unsigned
     }
 }
 
+static void build_draw_env_packet(CPUState *c, u32 resume) {
+    set_reg(c, 16, R(17) + 28); /* embedded packet */
+    set_reg(c, 4, R(16));
+    R(31) = resume;
+    R(5) = R(17);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001d1cc); /* SetDrawEnv */
+
+    set_reg(c, 4, 0x00ff0000);
+    set_reg(c, 4, 0x00ffffff);
+    set_reg(c, 5, R(16));
+    set_reg(c, 6, 64); /* packet bytes copied by the queue */
+}
+
+/* Merge the link address into the packet header, enqueue it and cache the DRAWENV. */
+static void submit_draw_env(CPUState *c, unsigned debug_reg, u32 queue_resume, u32 copy_resume) {
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024550);
+    set_reg(c, 2, R(2) | R(4));
+    MEM_W32(R(17) + 28, R(2));
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 4, R(3) + 0x18);
+    load_word(c, 2, R(3) + 8);
+    NC_POLL(c, NC_INSN_CYCLES);
+    u32 enqueue = R(2);
+    R(31) = queue_resume;
+    R(7) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, enqueue);
+
+    set_reg(c, 4, R(debug_reg) + 14);
+    set_reg(c, 5, R(17));
+    R(31) = copy_resume;
+    R(6) = 92; /* full DRAWENV, including the packet */
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x80019928); /* memcpy */
+}
+
 /* Build the embedded draw packet, submit it and save the active DRAWENV. */
 bool nc_credits_put_draw_env(CPUState *c) {
     if (c->budget <= 11 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
@@ -2157,44 +2195,65 @@ bool nc_credits_put_draw_env(CPUState *c) {
     c->budget -= NC_LOAD_CYCLES + 4;
     graphics_diagnostic(c, 0x80018614, 0x8001c9a0, 17);
 
-    set_reg(c, 16, R(17) + 28); /* embedded packet */
-    set_reg(c, 4, R(16));
-    R(31) = 0x8001c9b0;
-    R(5) = R(17);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001d1cc); /* SetDrawEnv */
-
-    set_reg(c, 4, 0x00ff0000);
-    set_reg(c, 4, 0x00ffffff);
-    set_reg(c, 5, R(16));
-    set_reg(c, 6, 64); /* packet bytes copied by the queue */
+    build_draw_env_packet(c, 0x8001c9b0);
     load_word(c, 2, R(17) + 28);
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x80024550);
-    set_reg(c, 2, R(2) | R(4)); /* terminate the DMA chain */
-    MEM_W32(R(17) + 28, R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_word(c, 4, R(3) + 0x18);
-    load_word(c, 2, R(3) + 8);
-    NC_POLL(c, NC_INSN_CYCLES);
-    u32 enqueue = R(2);
-    R(31) = 0x8001c9e8;
-    R(7) = 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, enqueue);
-
-    set_reg(c, 4, R(18) + 14);
-    set_reg(c, 5, R(17));
-    R(31) = 0x8001c9f8;
-    R(6) = 92; /* full DRAWENV, including the packet */
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x80019928); /* memcpy */
+    submit_draw_env(c, 18, 0x8001c9e8, 0x8001c9f8);
     set_reg(c, 2, R(17));
     load_word(c, 31, R(29) + 28);
     load_word(c, 18, R(29) + 24);
     load_word(c, 17, R(29) + 20);
     load_word(c, 16, R(29) + 16);
     set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
+/* Prepend the draw environment packet to the supplied ordering table. */
+bool nc_credits_draw_otag_env(CPUState *c) {
+    if (c->budget <= 13 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(4); /* ordering table */
+    c->budget -= 2;
+    MEM_W32(R(29) + 28, R(19));
+    R(19) = 0x8002455a;
+    c->budget -= 3;
+    MEM_W32(R(29) + 32, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    R(2) = MEM_R8(R(19)) < 2;
+    R(17) = R(5); /* environment */
+    c->budget -= NC_LOAD_CYCLES + 4;
+    if (!R(2)) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x8001862c);
+        set_reg(c, 5, R(18));
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        NC_POLL(c, NC_INSN_CYCLES);
+        u32 diagnostic = R(2);
+        R(31) = 0x8001ca70;
+        R(6) = R(17);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, diagnostic);
+    }
+    build_draw_env_packet(c, 0x8001ca80);
+    set_reg(c, 3, 0xff000000);
+    load_word(c, 2, R(17) + 28);
+    set_reg(c, 4, R(18) & R(4)); /* 24-bit ordering table address */
+    set_reg(c, 2, R(2) & R(3)); /* retain the packet length */
+    submit_draw_env(c, 19, 0x8001cac4, 0x8001cad4);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 19, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }

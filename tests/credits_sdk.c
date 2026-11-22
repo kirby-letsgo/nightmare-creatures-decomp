@@ -753,9 +753,10 @@ static bool check_image_queue(u32 entry, bool (*routine)(CPUState *), u32 method
     return ok && !saved.error;
 }
 
-static bool check_put_draw_env(void) {
+static bool check_draw_env_submission(bool linked) {
     const u32 env = 0x80062000, cached = 0x80024568, record = 0x80027488;
-    const int threshold = 11 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
+    const u32 ot = 0xa0068000;
+    const int threshold = (linked ? 13 : 11) * NC_INSN_CYCLES + NC_LOAD_CYCLES;
     StateIO saved = {0};
     cpu_serialize(&saved);
     defer_graphics_queue(0x80060c00);
@@ -771,9 +772,11 @@ static bool check_put_draw_env(void) {
         MEM_W32(0x8002465c, 0);
         MEM_W32(0x80024660, 0);
         MEM_W8(0x8002455a, background ? 2 : 0);
-        CPUState state = arguments(env, 2, 3, background ? threshold + 1 : 4096);
-        ok = compare(state, 0x8001c954, nc_credits_put_draw_env, threshold) &&
-             nc_cpu.r[2] == env && (MEM_R32(env + 28) & 0xffffff) == 0xffffff &&
+        CPUState state = arguments(linked ? ot : env, linked ? env : 2, 3, background ? threshold + 1 : 4096);
+        ok = compare(state, linked ? 0x8001ca18 : 0x8001c954,
+                     linked ? nc_credits_draw_otag_env : nc_credits_put_draw_env, threshold) &&
+             nc_cpu.r[2] == (linked ? cached : env) &&
+             (MEM_R32(env + 28) & 0xffffff) == (linked ? ot & 0xffffff : 0xffffff) &&
              MEM_R32(record) == MEM_R32(MEM_R32(0x80024550) + 0x18) &&
              MEM_R32(record + 4) == record + 12 && MEM_R32(record + 8) == 0 &&
              !memcmp(nc_fast_ptr(record + 12), nc_fast_ptr(env + 28), 64) &&
@@ -3275,7 +3278,8 @@ int main(int argc, char **argv) {
     pass = pass && check_image_queue(0x8001c508, nc_credits_clear_image2, 0x0c);
     pass = pass && check_image_queue(0x8001c5a4, nc_credits_load_image, 0x20);
     pass = pass && check_image_queue(0x8001c608, nc_credits_store_image, 0x1c);
-    pass = pass && check_put_draw_env();
+    pass = pass && check_draw_env_submission(false);
+    pass = pass && check_draw_env_submission(true);
     pass = pass && check_draw_otag();
     pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
