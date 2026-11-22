@@ -16,6 +16,7 @@ bool nc_player_attack_kind(CPUState *c);
 bool nc_attack_part(CPUState *c);
 bool nc_finish_attack_part(CPUState *c, bool primary);
 bool nc_mark_actor_noninteractive(CPUState *c);
+NcContactResult nc_target_state_allows_contact(CPUState *c);
 NcContactResult nc_target_accepts_contact(CPUState *c);
 
 #endif
