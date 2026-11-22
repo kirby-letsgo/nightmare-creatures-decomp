@@ -45,6 +45,8 @@ u32 nc_menu_record_direction_repeat(CPUState *c);
 u32 nc_menu_record_shoulder_repeat(CPUState *c);
 u32 nc_menu_record_face_edges(CPUState *c);
 u32 nc_menu_record_face_repeat(CPUState *c);
+u32 nc_menu_record_start(CPUState *c);
+bool nc_menu_dispatch_and_save_buttons(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
 u32 nc_menu_direction_selection(CPUState *c, bool right);
 u32 nc_menu_horizontal_repeat(CPUState *c);
