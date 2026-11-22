@@ -79,6 +79,16 @@ typedef enum {
     NC_POINT_LEVEL_SET,
     NC_POINT_LEVEL_DISTANT
 } NcPointLevelAction;
+typedef enum {
+    NC_ACTOR_LEVEL_FALLBACK,
+    NC_ACTOR_LEVEL_CHECK_FLAGS,
+    NC_ACTOR_LEVEL_DISTANT,
+    NC_ACTOR_LEVEL_DISTANT_RECORD_READY,
+    NC_ACTOR_LEVEL_SET,
+    NC_ACTOR_LEVEL_CHANNEL_READY
+} NcActorLevelPath;
+NcActorLevelPath nc_check_actor_level_distance(CPUState *c);
+NcActorLevelPath nc_check_actor_level_flags(CPUState *c);
 bool nc_call_distant_actor(CPUState *c, bool load_record);
 bool nc_set_actor_levels(CPUState *c, bool load_channel);
 NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged);

@@ -1415,6 +1415,19 @@ class Emitter:
                 out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C8E4:
                 out.append("    if (nc_begin_spatial_point(c)) goto L_8006C904;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006C814:
+                out.append("    switch (nc_check_actor_level_distance(c)) {")
+                out.append("    case NC_ACTOR_LEVEL_CHECK_FLAGS: goto L_8006C848;")
+                out.append("    case NC_ACTOR_LEVEL_DISTANT: goto L_8006C880;")
+                out.append("    case NC_ACTOR_LEVEL_DISTANT_RECORD_READY: goto L_8006C884;")
+                out.append("    default: break; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006C848:
+                out.append("    switch (nc_check_actor_level_flags(c)) {")
+                out.append("    case NC_ACTOR_LEVEL_SET: goto L_8006C89C;")
+                out.append("    case NC_ACTOR_LEVEL_CHANNEL_READY: goto L_8006C8A0;")
+                out.append("    case NC_ACTOR_LEVEL_DISTANT: goto L_8006C880;")
+                out.append("    case NC_ACTOR_LEVEL_DISTANT_RECORD_READY: goto L_8006C884;")
+                out.append("    default: break; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C880, 0x8006C884):
                 load_record = "true" if i.addr == 0x8006C880 else "false"
                 out.append(f"    if (nc_call_distant_actor(c, {load_record})) {{")
