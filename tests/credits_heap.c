@@ -36,6 +36,23 @@ static bool compare(CPUState start, u32 entry, bool (*routine)(CPUState *), int 
     return ok;
 }
 
+static NcHeapWarning warning_case;
+static bool warn(CPUState *c) {
+    return nc_credits_heap_warning(c, warning_case);
+}
+
+static bool check_warning(NcHeapWarning warning, u32 entry, int budget) {
+    CPUState start = {0};
+    for (unsigned i = 1; i < 32; i++)
+        start.r[i] = i * 0x12583u;
+    start.r[28] = 0x80024c68;
+    start.r[29] = 0x801fef00;
+    start.r[31] = 0x80010000;
+    start.budget = budget;
+    warning_case = warning;
+    return compare(start, entry, warn, 6);
+}
+
 static bool check_init(u32 base, u32 size, u32 globals) {
     CPUState start = {0};
     for (unsigned i = 1; i < 32; i++)
@@ -222,6 +239,11 @@ int main(int argc, char **argv) {
             fprintf(stderr, "resize timing mismatch at budget %d\n", budget);
             return 1;
         }
+    const u32 warning_entries[] = {0x800193b4, 0x800193dc, 0x80019404, 0x8001942c};
+    for (unsigned i = 0; i < 4; i++)
+        if (!check_warning((NcHeapWarning)i, warning_entries[i], 7) ||
+            !check_warning((NcHeapWarning)i, warning_entries[i], 4096))
+            return 1;
     disc_close();
     return 0;
 }
