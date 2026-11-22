@@ -342,6 +342,26 @@ static bool check_environment_reads(void) {
     return true;
 }
 
+static bool check_dump_texture_page(void) {
+    const u8 types[] = {0, 1, 2, 255};
+    const u32 pages[] = {0, 0x10, 0x60, 0x780, 0x800, 0x0123ffff, 0xfedc0123};
+    const u32 callbacks[] = {0x8001935c, 0x80019a60};
+    const int budgets[] = {45, 53, 4096};
+    u32 previous = MEM_R32(0x80024554);
+    for (unsigned g = 0; g < sizeof types; g++)
+        for (unsigned p = 0; p < sizeof pages / sizeof pages[0]; p++)
+            for (unsigned cb = 0; cb < sizeof callbacks / sizeof callbacks[0]; cb++)
+                for (unsigned b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
+                    MEM_W8(0x80024558, types[g]);
+                    MEM_W32(0x80024554, callbacks[cb]);
+                    CPUState state = arguments(pages[p], 0x1234, 0x5678, budgets[b]);
+                    if (!compare(state, 0x8001b628, nc_credits_dump_texture_page, 44))
+                        return false;
+                }
+    MEM_W32(0x80024554, previous);
+    return true;
+}
+
 static bool check_dump_palette(void) {
     const u32 palettes[] = {0, 1, 0x3f, 0x40, 0xffc0, 0xffff, 0x12345678, 0xabcd0000};
     const u32 callbacks[] = {0x8001935c, 0x80019a60};
@@ -662,6 +682,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_dump_palette();
+    pass = pass && check_dump_texture_page();
     pass = pass && check_environment_reads();
     pass = pass && check_draw_area();
     pass = pass && check_draw_corners();
