@@ -231,6 +231,69 @@ bool nc_prepare_hit_reaction(CPUState *c, bool *skip) {
     return true;
 }
 
+/* Choose among the normal action selector, state 13, and the player's
+ * immediate action 10. The signed comparison uses the incoming s0 value. */
+NcReactionRoute nc_route_hit_reaction(CPUState *c) {
+    if (c->budget <= 27)
+        return NC_REACTION_TIMED;
+    const u32 actor = R(17), kind = R(18);
+    bool player = (MEM_R32(actor + 0x2c8) & 1) != 0;
+    R(2) = 41;
+    c->budget -= 7;
+    if (player) {
+        c->budget -= 2;
+        if (kind == 41)
+            return NC_REACTION_STATE_13;
+        const unsigned hits = MEM_R8(actor + 0x38c);
+        R(2) = (s32)R(16) < 0x4001;
+        c->budget -= 7;
+        if (hits < 2)
+            return NC_REACTION_SELECT_ACTION;
+        bool use_action_10 = R(2) != 0;
+        R(2) = 10;
+        c->budget -= 2;
+        if (!use_action_10)
+            return NC_REACTION_STATE_13;
+        MEM_W8(actor + 0x38a, 10);
+        R(2) = MEM_R32(actor + 0x330);
+        R(3) = ~0x18u;
+        MEM_W8(actor + 0x38c, 0);
+        MEM_W8(actor + 0x38e, 0);
+        MEM_W8(actor + 0x39b, 0);
+        c->budget -= 9;
+        return NC_REACTION_APPLY_FLAGS;
+    }
+
+    R(2) = 5;
+    c->budget -= 2;
+    if (kind != 41) {
+        R(3) = MEM_R8(actor + 0x38c);
+        c->budget -= 6;
+        if (R(3) != 5)
+            return NC_REACTION_SELECT_ACTION;
+    }
+    R(3) = 0x04000000;
+    R(2) = MEM_R32(MEM_R32(R(28) + 0x244)) & R(3);
+    c->budget -= 11;
+    return R(2) ? NC_REACTION_SELECT_ACTION : NC_REACTION_STATE_13;
+}
+
+/* The entry at EFD0 preserves the hit count. Its neighbour clears it first. */
+bool nc_enter_hit_state_13(CPUState *c, bool clear_hits) {
+    const int cycles = clear_hits ? 20 : 19;
+    if (c->budget <= cycles)
+        return false;
+    if (clear_hits)
+        MEM_W8(R(17) + 0x38c, 0);
+    R(4) = R(17);
+    R(31) = 0x8004efdc;
+    R(5) = 13;
+    c->budget -= clear_hits ? 4 : 3;
+    nc_call(c, 0x8004d1a0);
+    c->budget -= 2;
+    return true;
+}
+
 /* Both lethal reactions enter state 15. The player first restores its part
  * links. The other reaction checks for an adrenaline reward after the change. */
 bool nc_apply_lethal_reaction(CPUState *c, bool player) {
