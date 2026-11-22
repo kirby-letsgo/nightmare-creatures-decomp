@@ -2491,6 +2491,89 @@ bool nc_credits_tim_info(CPUState *c) {
     return true;
 }
 
+/* Read the two DMA mode bits from SPUCNT. */
+static void read_spu_dma_mode(CPUState *c) {
+    R(2) = MEM_R16(R(4) + 0x1aa);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, R(2) & 0x30);
+}
+
+bool nc_credits_spu_dma_complete(CPUState *c) {
+    if (c->budget <= 4 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x800246c8);
+    R(29) -= 24;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget -= 2;
+    if (!R(2)) {
+        /* A write transfer needs three settling delays before clearing SPUCNT. */
+        for (u32 resume = 0x8001f5a8; resume <= 0x8001f5b8; resume += 8) {
+            R(31) = resume;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x8001fc78);
+        }
+    }
+    set_reg(c, 4, 0x80020000);
+    load_word(c, 4, 0x80024678);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = MEM_R16(R(4) + 0x1aa);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, R(2) & 0xffcf);
+    MEM_W16(R(4) + 0x1aa, (u16)R(2));
+    NC_POLL(c, NC_INSN_CYCLES);
+    read_spu_dma_mode(c);
+    bool busy = R(2) != 0;
+    R(3) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (busy) {
+        set_reg(c, 3, R(3) + 1);
+        do {
+            set_reg(c, 2, R(3) < 0xf01);
+            const bool exhausted = !R(2);
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (exhausted)
+                break;
+            read_spu_dma_mode(c);
+            busy = R(2) != 0;
+            R(3)++;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (!busy)
+                set_reg(c, 3, R(3) - 1);
+        } while (busy);
+    }
+
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800246b0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    const bool has_callback = R(2) != 0;
+    R(4) = 0xf0000000;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (has_callback) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x800246b0);
+        NC_POLL(c, NC_INSN_CYCLES);
+        u32 callback = R(2);
+        R(31) = 0x8001f638;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, callback);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } else {
+        set_reg(c, 4, R(4) | 9);
+        R(31) = 0x8001f64c;
+        R(5) = 0x20;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001fcd8); /* DeliverEvent */
+    }
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* _spu_r_ starts a DMA read using an SPU address and a count of 16-word blocks. */
 bool nc_credits_spu_read_blocks(CPUState *c) {
     if (c->budget <= 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
