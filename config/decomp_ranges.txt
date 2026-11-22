@@ -412,6 +412,8 @@ psx2_exe     800677E0    80067804         pad.c
 psx2_exe     8006780C    80067830         pad.c
 # Track both stick axes before testing Start.
 psx2_exe     800680EC    80068154         pad.c
+# Expand the confirmed stick bounds on both axes.
+psx2_exe     8006818C    800681EC         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
