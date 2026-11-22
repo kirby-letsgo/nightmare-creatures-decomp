@@ -637,6 +637,47 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool part_offsets(bool disc) {
+    const u32 frame = SCRATCH_BASE, part = frame + 512;
+    const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof points / sizeof points[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = i;
+        input.r[29] = frame;
+        input.r[31] = 0x80025fe4;
+        for (unsigned reg = 0; reg < 5; ++reg)
+            gte_write_ctrl(&input, reg, (reg % 2 == 0) ? 4096 : 0);
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(frame + 0x1c + 8 * i, part);
+        for (unsigned axis = 0; axis < 3; ++axis) {
+            gte_write_ctrl(&input, 5 + axis, axis + 1);
+            MEM_W16(part + 0x10 + 2 * axis, points[i][axis]);
+        }
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 26;
+        CPUState native = input;
+        if (nc_transform_part_offset(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_transform_part_offset(&native) || native.budget != 1 || native.r[4] != part ||
+            native.r[5] != input.r[18] || native.r[31] != 0x80034480)
+            return false;
+        for (unsigned axis = 0; axis < 3; ++axis)
+            if (MEM_R32(frame + 0xac + 4 * axis) != (u32)points[i][axis] + axis + 1)
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80034430);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_translation(bool disc) {
     const u32 matrix = SCRATCH_BASE, frame = SCRATCH_BASE + 256;
     const u32 outputs[] = {SCRATCH_BASE + 64, matrix + 0x18, frame + 0xe0};
@@ -1289,7 +1330,8 @@ int main(int argc, char **argv) {
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
-              matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc);
+              matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
+              part_offsets(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

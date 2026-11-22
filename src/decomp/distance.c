@@ -611,6 +611,27 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* Transform the selected part's signed local offset into the accumulated
+ * matrix translation before composing its rotation. */
+bool nc_transform_part_offset(CPUState *c) {
+    if (c->budget <= 26)
+        return false;
+    const u32 frame = R(29);
+    R(4) = MEM_R32(frame + 0x1c + 8 * R(16));
+    gte_write_data(c, 0, MEM_R32(R(4) + 0x10));
+    gte_write_data(c, 1, MEM_R32(R(4) + 0x14));
+    gte_command(c, 0x0480012); /* MVMVA, rotation matrix, V0, translation */
+    for (unsigned axis = 0; axis < 3; ++axis)
+        MEM_W32(frame + 0xac + 4 * axis, gte_read_data(c, 25 + axis));
+    R(2) = frame + 0xd8;
+    R(12) = gte_read_ctrl(c, 31);
+    MEM_W32(R(2), R(12));
+    R(5) = R(18);
+    R(31) = 0x80034480;
+    c->budget -= 26;
+    return true;
+}
+
 /* Both transform paths return the matrix translation in quarter units. */
 bool nc_finish_part_translation(CPUState *c) {
     if (c->budget <= 39)

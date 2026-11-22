@@ -1,6 +1,7 @@
 # Verified handwritten coverage. One original instruction per aligned address.
 # Module     Start       End (exclusive)  Handwritten implementation
 psx2_exe     800475E4    80047684         distance.c
+psx2_exe     80034430    80034480         distance.c
 psx2_exe     800345BC    80034610         distance.c
 psx2_exe     80034610    80034828         distance.c
 psx2_exe     80034828    800349C4         distance.c
