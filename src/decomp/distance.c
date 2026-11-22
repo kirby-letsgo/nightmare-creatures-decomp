@@ -57,6 +57,19 @@ bool nc_prepare_placement_heading_vector(CPUState *c) {
     return true;
 }
 
+/* Each packed pair of signed XYZ vectors is transformed into a pair of
+ * word-sized vectors with the same scaled yaw matrix. */
+bool nc_prepare_placement_vector(CPUState *c, u32 source_offset, u32 result_offset, u32 resume) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = R(29) + 0x10;
+    R(5) = R(16) + source_offset;
+    R(31) = resume;
+    R(6) = R(16) + result_offset;
+    c->budget -= 4;
+    return true;
+}
+
 /* After TransposeMatrix, quarter the selected XYZ scale in place. The
  * ScaleMatrixL call stores Y in its delay slot, after the X and Z writes. */
 bool nc_prepare_transposed_placement_scale(CPUState *c) {
