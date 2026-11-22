@@ -441,6 +441,36 @@ static s32 increment_menu_repeat(CPUState *c) {
     return (s32)count;
 }
 
+/* The menu scan requires a Select or shoulder button, then checks the
+ * entire button word for a new press, including buttons outside that mask. */
+u32 nc_menu_button_scan_entry(CPUState *c) {
+    if (c->budget <= 25)
+        return 0x80067130;
+
+    R(29) -= 0x38;
+    for (unsigned i = 0; i < 8; ++i)
+        MEM_W32(R(29) + 0x10 + 4 * i, R(16 + i));
+    MEM_W32(R(29) + 0x30, R(31));
+    R(20) = R(4);
+    R(2) = R(20) & 0xf01;
+    c->budget -= 13;
+    if (!R(2))
+        return 0x80067308;
+
+    R(2) = MEM_R32(R(28) + 0x18c) & R(20);
+    R(19) = 0;
+    c->budget -= 7;
+    if (R(2) == R(20))
+        return 0x80067308;
+
+    R(23) = 0x02000000;
+    R(22) = 0x80088596;
+    R(21) = R(22) - 2;
+    R(2) = 0;
+    c->budget -= 5;
+    return 0x8006718c;
+}
+
 /* Ordinary menu records process the direction before saving the button word. */
 bool nc_menu_apply_direction(CPUState *c) {
     if (c->budget <= 2)
