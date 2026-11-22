@@ -2280,6 +2280,7 @@ static bool check_cd_setters(void) {
         {0x8001febc, 0x80024768, nc_credits_cd_set_debug},
         {0x8001ff7c, 0x8002475c, nc_credits_cd_sync_callback},
         {0x8001ff94, 0x80024760, nc_credits_cd_ready_callback},
+        {0x80022cb4, 0x80024a70, nc_credits_cd_read_callback},
     };
     const u32 values[] = {0, 1, 0x8002292c, 0xffffffff};
     for (unsigned i = 0; i < sizeof setters / sizeof setters[0]; i++) {

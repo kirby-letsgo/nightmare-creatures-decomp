@@ -192,6 +192,7 @@ bool nc_credits_cd_last_command(CPUState *c);
 bool nc_credits_cd_set_debug(CPUState *c);
 bool nc_credits_cd_sync_callback(CPUState *c);
 bool nc_credits_cd_ready_callback(CPUState *c);
+bool nc_credits_cd_read_callback(CPUState *c);
 bool nc_credits_cd_command_name(CPUState *c);
 bool nc_credits_cd_interrupt_name(CPUState *c);
 bool nc_credits_cd_sector_to_position(CPUState *c);
