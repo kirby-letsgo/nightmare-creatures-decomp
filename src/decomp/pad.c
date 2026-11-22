@@ -1022,6 +1022,39 @@ u32 nc_menu_check_record_101(CPUState *c) {
     return 0x80068fe4;
 }
 
+/* Record 4 delays the Cross check until 600 elapsed ticks. After 24000,
+ * the original code takes a separate action before checking Cross. */
+u32 nc_menu_record_four_timing(CPUState *c) {
+    if (c->budget <= 33)
+        return 0x80068d60;
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(3) = 0x80001800;
+    R(2) = 4;
+    c->budget -= 11;
+    if (!(MEM_R32(config) & R(3)))
+        return 0x80068e84;
+
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = R(30) & 0x4000;
+    c->budget -= 6;
+    if (R(3) != 4)
+        return 0x80068dd4;
+
+    R(3) = MEM_R32(0x8008ef10) - MEM_R32(R(28) + 0x3e8);
+    s32 elapsed = (s32)R(3);
+    R(2) = elapsed < 600;
+    c->budget -= 12;
+    if (elapsed > 24000)
+        return 0x80068dbc;
+    R(2) = R(30) & 0x4000;
+    c->budget -= 2;
+    if (elapsed >= 600)
+        return 0x80068dd4;
+    R(2) = 0;
+    c->budget -= 2;
+    return 0x80068fe4;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;

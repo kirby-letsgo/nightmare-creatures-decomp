@@ -314,6 +314,8 @@ psx2_exe     80068CA4    80068CF8         pad.c
 psx2_exe     80068CF8    80068D30         pad.c
 # History reset calls for menu records 100 and 101, including the early exit.
 psx2_exe     80068D30    80068D60         pad.c
+# Menu mode and record 4 timing gate before Cross input.
+psx2_exe     80068D60    80068DBC         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
