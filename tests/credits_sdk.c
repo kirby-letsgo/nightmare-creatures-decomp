@@ -1330,6 +1330,8 @@ static bool check_pad_setup(void) {
         u32 initial_irq_bits, expected_irq_bits;
         bool (*routine)(CPUState *);
     } cases[] = {
+        {0x8001a2bc, 11, 1, 0x401, 0x401, nc_credits_legacy_pad_init},
+        {0x8001a3d4, 3, 1, 0, 0x401, nc_credits_bios_pad_init_and_start},
         {0x8001a324, 11, 1, 0x401, 0, nc_credits_sdk_init_pad},
         {0x8001a3b4, 3, 1, 0x401, 0x401, nc_credits_bios_init_pad},
         {0x8001a38c, 4, 0, 0, 0x401, nc_credits_start_pad},

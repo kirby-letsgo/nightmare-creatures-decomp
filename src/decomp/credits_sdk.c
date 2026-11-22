@@ -1680,7 +1680,7 @@ bool nc_credits_bios_init_pad(CPUState *c) {
 }
 
 /* Preserve both buffer/size pairs across the SDK patch and ChangeClearPad. */
-bool nc_credits_sdk_init_pad(CPUState *c) {
+static bool sdk_pad_init(CPUState *c, u32 entry, u32 bios_stub) {
     if (c->budget <= 11)
         return false;
     R(29) -= 40;
@@ -1693,26 +1693,38 @@ bool nc_credits_sdk_init_pad(CPUState *c) {
     MEM_W32(R(29) + 28, R(19));
     c->budget--;
     MEM_W32(R(29) + 32, R(31));
-    R(31) = 0x8001a350;
+    R(31) = entry + 0x2c;
     R(19) = R(7);
     c->budget -= 3;
     nc_call(c, 0x8001a3e4); /* _patch_pad */
-    R(31) = 0x8001a358;
+    R(31) = entry + 0x34;
     R(4) = 0;
     NC_POLL(c, 2);
     nc_call(c, 0x8001a2ac); /* ChangeClearPad */
     for (unsigned i = 0; i < 3; i++)
         set_reg(c, 4 + i, R(16 + i));
-    R(31) = 0x8001a36c;
+    R(31) = entry + 0x48;
     R(7) = R(19);
     NC_POLL(c, 2);
-    nc_call(c, 0x8001a3b4); /* BIOS InitPAD */
+    nc_call(c, bios_stub);
     load_word(c, 31, R(29) + 32);
     for (int i = 3; i >= 0; i--)
         load_word(c, 16 + i, R(29) + 16 + 4 * i);
     set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2);
     return true;
+}
+
+bool nc_credits_sdk_init_pad(CPUState *c) {
+    return sdk_pad_init(c, 0x8001a324, 0x8001a3b4); /* BIOS InitPAD */
+}
+
+bool nc_credits_legacy_pad_init(CPUState *c) {
+    return sdk_pad_init(c, 0x8001a2bc, 0x8001a3d4); /* OutdatedPadInitAndStart */
+}
+
+bool nc_credits_bios_pad_init_and_start(CPUState *c) {
+    return bios_service(c, 0xb0, 0x15);
 }
 
 bool nc_credits_bios_start_pad(CPUState *c) {
