@@ -930,6 +930,42 @@ u32 nc_menu_record_face_repeat(CPUState *c) {
     return 0x80068ce0;
 }
 
+/* Only record 1 turns a fresh Start press into action 0x20. */
+u32 nc_menu_record_start(CPUState *c) {
+    if (c->budget <= 19)
+        return 0x80068ca4;
+    c->budget -= 2;
+    if (!R(2))
+        return 0x80068cf4;
+    u32 previous = MEM_R32(R(28) + 0x18c);
+    R(2) = 1;
+    c->budget -= 7;
+    if (previous & 8)
+        return 0x80068cf4;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 100;
+    c->budget -= 6;
+    if (R(3) != 1)
+        return 0x80068d00;
+    R(4) = R(22);
+    R(5) = 0x800883cc;
+    R(6) = 0x20;
+    c->budget -= 4;
+    return 0x80068ce0;
+}
+
+bool nc_menu_dispatch_and_save_buttons(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80068ce8;
+    c->budget -= 2;
+    nc_call(c, 0x80063b70);
+    MEM_W32(R(28) + 0x18c, R(30));
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
