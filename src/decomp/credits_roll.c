@@ -334,3 +334,76 @@ bool nc_credits_load_file(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* The credits reader sets the CD location, retries a rejected read up to
+ * ten times, then polls completion even if all eleven attempts failed. */
+bool nc_credits_read_sectors(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(5); /* destination */
+    R(4) = 2;     /* CdlSetloc */
+    R(5) = R(29) + 0x30;
+    MEM_W32(R(29) + 0x30, R(6));
+    R(6) = 0;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(7); /* byte length */
+    MEM_W32(R(29) + 0x24, R(31));
+    MEM_W32(R(29) + 0x20, R(20));
+    MEM_W32(R(29) + 0x18, R(18));
+    MEM_W32(R(29) + 0x10, R(16));
+    R(31) = 0x80018da8;
+    MEM_W32(R(29) + 0x34, R(7));
+    c->budget -= 15;
+    nc_call(c, 0x80020210); /* CdControlB */
+
+    const bool positioned = R(2) != 0;
+    R(4) = R(17) + 2047;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (positioned) {
+        const bool negative = (s32)R(4) < 0;
+        R(18) = (u32)((s32)R(4) >> 11);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (negative) {
+            set_reg(c, 4, R(17) + 4094);
+            set_reg(c, 18, (u32)((s32)R(4) >> 11));
+        }
+        set_reg(c, 20, 0x80);
+        set_reg(c, 16, 10);
+        bool retry;
+        do {
+            set_reg(c, 4, R(18));
+            set_reg(c, 5, R(19));
+            R(6) = R(20);
+            call(c, 0x80022ae0, 0x80018de0); /* CdRead */
+            bool accepted = R(2) != 0;
+            R(4) = 1;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (accepted)
+                break;
+            retry = R(16) != 0;
+            R(16)--;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+        } while (retry);
+        bool busy;
+        do {
+            R(5) = 0;
+            call(c, 0x80022be8, 0x80018df8); /* CdReadSync */
+            busy = (s32)R(2) > 0;
+            R(4) = 1;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+        } while (busy);
+        set_reg(c, 2, R(17));
+    } else {
+        R(2) = 0;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+
+    load_word(c, 31, R(29) + 0x24);
+    for (int reg = 20; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 0x10 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 0x28);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

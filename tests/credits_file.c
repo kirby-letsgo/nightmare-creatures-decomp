@@ -45,9 +45,38 @@ static void read_sectors(CPUState *c) {
     R(2) = 0;
 }
 
-const NcFuncEntry credits_exe_table[] = {
-    {0x80018d6c, read_sectors}, {0x80019680, allocate}, {0x80021c34, search}};
-const unsigned credits_exe_table_len = 3;
+typedef struct SectorTrace {
+    CPUState position, attempts[11], polls[3];
+    unsigned reads, syncs;
+    u32 location;
+} SectorTrace;
+static SectorTrace sectors;
+static unsigned rejects, busy_polls;
+static bool seek_ok;
+static u32 sync_result;
+
+static void set_location(CPUState *c) {
+    sectors.position = *c;
+    sectors.location = MEM_R32(R(5));
+    R(2) = seek_ok;
+}
+
+static void cd_read(CPUState *c) {
+    if (sectors.reads < 11)
+        sectors.attempts[sectors.reads] = *c;
+    R(2) = ++sectors.reads > rejects;
+}
+
+static void cd_sync(CPUState *c) {
+    if (sectors.syncs < 3)
+        sectors.polls[sectors.syncs] = *c;
+    R(2) = ++sectors.syncs <= busy_polls ? 1 : sync_result;
+}
+
+const NcFuncEntry credits_exe_table[] = {{0x80018d6c, read_sectors}, {0x80019680, allocate},
+                                         {0x80020210, set_location}, {0x80021c34, search},
+                                         {0x80022ae0, cd_read},      {0x80022be8, cd_sync}};
+const unsigned credits_exe_table_len = sizeof credits_exe_table / sizeof credits_exe_table[0];
 
 static bool check(u32 bytes, unsigned retries) {
     length = bytes;
@@ -82,6 +111,43 @@ static bool check(u32 bytes, unsigned retries) {
            !memcmp(result_ram, nc_ram, sizeof result_ram);
 }
 
+static bool check_read(u32 size, unsigned failures, unsigned waits, bool positioned) {
+    rejects = failures;
+    busy_polls = waits;
+    seek_ok = positioned;
+    sync_result = (waits & 1) ? 0xffffffff : 0;
+    CPUState initial = {0};
+    for (unsigned i = 1; i < 32; i++)
+        initial.r[i] = i * 0x11359u;
+    initial.r[5] = 0x80080000;
+    initial.r[6] = 0x123456;
+    initial.r[7] = size;
+    initial.r[29] = 0x801fef00;
+    initial.r[31] = 0x80010000;
+    initial.budget = 15;
+    CPUState native = initial;
+    memcpy(initial_ram, nc_ram, sizeof initial_ram);
+    if (nc_credits_read_sectors(&native) || memcmp(&native, &initial, sizeof initial) ||
+        memcmp(initial_ram, nc_ram, sizeof initial_ram))
+        return false;
+    initial.budget = 4096;
+    native = initial;
+    sectors = (SectorTrace){0};
+    if (!nc_credits_read_sectors(&native) || sectors.location != initial.r[6] ||
+        native.r[2] != (positioned ? size : 0) ||
+        sectors.reads != (positioned ? (failures < 11 ? failures + 1 : 11) : 0) ||
+        sectors.syncs != (positioned ? waits + 1 : 0))
+        return false;
+    SectorTrace expected = sectors;
+    memcpy(result_ram, nc_ram, sizeof result_ram);
+    memcpy(nc_ram, initial_ram, sizeof initial_ram);
+    sectors = (SectorTrace){0};
+    CPUState guest = initial;
+    interp_call(&guest, 0x80018d6c);
+    return !memcmp(&sectors, &expected, sizeof expected) &&
+           !memcmp(&native, &guest, sizeof guest) && !memcmp(nc_ram, result_ram, sizeof result_ram);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -101,6 +167,18 @@ int main(int argc, char **argv) {
                         retry);
                 return 1;
             }
+    const unsigned failures[] = {0, 1, 10, 11};
+    for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0]; i++) {
+        if (!check_read(sizes[i], 0, 0, false))
+            return 1;
+        for (unsigned j = 0; j < sizeof failures / sizeof failures[0]; j++)
+            for (unsigned waits = 0; waits <= 2; waits++)
+                if (!check_read(sizes[i], failures[j], waits, true)) {
+                    fprintf(stderr, "sector read mismatch for size %08x, rejects %u, waits %u\n",
+                            sizes[i], failures[j], waits);
+                    return 1;
+                }
+    }
     disc_close();
     return 0;
 }
