@@ -539,6 +539,27 @@ static bool check_gpu_command_chain(void) {
     return true;
 }
 
+static bool check_gpu_fill_bytes(void) {
+    const u32 bases[] = {0x80060000, SCRATCH_BASE, 0xa0060000};
+    const u32 counts[] = {0, 1, 7, 256};
+    const int budgets[] = {4, 7, 9, 4096};
+    for (unsigned i = 0; i < sizeof bases / sizeof bases[0]; i++)
+        for (unsigned j = 0; j < sizeof counts / sizeof counts[0]; j++)
+            for (unsigned k = 0; k < sizeof budgets / sizeof budgets[0]; k++) {
+                u32 count = counts[j], base = bases[i];
+                memset(nc_fast_ptr(base), 0x55, count + 2);
+                CPUState state = arguments(base + 1, 0x123456ab, count, budgets[k]);
+                if (!compare(state, 0x8001ec78, nc_credits_gpu_fill_bytes, 3))
+                    return false;
+                if (MEM_R8(base) != 0x55 || MEM_R8(base + count + 1) != 0x55)
+                    return false;
+                for (u32 n = 0; n < count; n++)
+                    if (MEM_R8(base + 1 + n) != 0xab)
+                        return false;
+            }
+    return true;
+}
+
 static bool check_set_queue_alarm(void) {
     const u32 frames[] = {0, 1, 0x7fffffff, 0xffffff0f, 0xffffff10, 0xffffffff};
     const int budgets[] = {5, 15, 32, 4096};
@@ -1006,6 +1027,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
+    pass = pass && check_gpu_fill_bytes();
     pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_command();
     disc_close();
