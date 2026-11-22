@@ -113,6 +113,56 @@ static bool spatial_attenuation(bool disc) {
     return true;
 }
 
+static bool spatial_levels(bool disc, bool actor) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 32;
+    const s32 levels[] = {0, 0x2fff, 0x8001, 0x10001, -4097};
+    const u32 entry = actor ? 0x8006c7c8 : 0x8006c9b0;
+    const u32 resume = actor ? 0x8006c7dc : 0x8006c9c4;
+    MEM_W32(record, descriptor);
+    for (unsigned i = 0; i < sizeof levels / sizeof levels[0]; ++i) {
+        CPUState input = initial();
+        const bool flagged = (i & 1) != 0;
+        MEM_W16(descriptor + 8, flagged ? 0x82 : 0x80);
+        input.r[actor ? 18 : 19] = record;
+        input.r[31] = 0x8006c63c;
+        input.r[2] = 2400 + i;
+        input.budget = 9;
+        CPUState native = input;
+        if (nc_call_spatial_attenuation(&native, actor) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_spatial_attenuation(&native, actor) || native.budget != 1 ||
+            native.r[31] != resume)
+            return false;
+        if (disc) {
+            interp_call(&input, entry);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+
+        input = native;
+        input.r[2] = levels[i];
+        input.r[16] = 2049;
+        input.r[31] =
+            actor ? (flagged ? 0x8006c814 : 0x8006c89c) : (flagged ? 0x8006c9f8 : 0x8006ca3c);
+        const s32 product = 2049 * (actor ? (s16)levels[i] : levels[i]);
+        input.budget = (actor ? 17 : 16) + (product < 0);
+        native = input;
+        if (nc_scale_spatial_level(&native, actor) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_scale_spatial_level(&native, actor) || native.budget != 1 ||
+            native.r[2] != (flagged ? 2u : 0u))
+            return false;
+        if (disc) {
+            interp_call(&input, resume);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool spatial_distances(bool disc, bool actor) {
     const u16 offsets[] = {0, 1, 2046, 2047, 2048, 2049, 4095};
     const u16 gaps[] = {0, 1, 2046, 2049, 2048, 2047, 1};
@@ -2483,22 +2533,22 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        spatial_attenuation(disc) && spatial_distances(disc, true) &&
-        spatial_distances(disc, false) && spatial_bearings(disc, true) &&
-        spatial_bearings(disc, false) && target_vertical_velocities(disc) &&
-        target_displacements(disc) && planar_velocities(disc) && roots(disc) &&
-        displacements(disc) && headings(disc) && heading_samples(disc) && projected_points(disc) &&
-        part_positions(disc) && actor_coordinates(disc) && point_headings(disc, false) &&
-        point_headings(disc, true) && actor_headings(disc) && heading_projections(disc) &&
-        reference_distances(disc) && relative_headings(disc) && record_projections(disc) &&
-        projected_heading_gaps(disc) && projected_heading_selection(disc) &&
-        saved_bearing_projections(disc) && facing_offsets(disc) && projection_entries(disc) &&
-        rotated_point_offsets(disc) && rotated_vector_setup(disc) && placed_actor_points(disc) &&
-        actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc) &&
-        heading_matrix_setup(disc) && part_translation(disc) && part_transform_calls(disc) &&
-        node_transform_selection(disc) && node_matrix_installation(disc) &&
-        part_composition(disc) && node_continuations(disc, false) &&
-        node_continuations(disc, true) && node_rotations(disc) &&
+        spatial_levels(disc, true) && spatial_levels(disc, false) && spatial_attenuation(disc) &&
+        spatial_distances(disc, true) && spatial_distances(disc, false) &&
+        spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
+        target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
+        roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
+        projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
+        point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
+        heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
+        record_projections(disc) && projected_heading_gaps(disc) &&
+        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
+        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
+        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
+        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
+        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
+        node_matrix_installation(disc) && part_composition(disc) &&
+        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         scaled_walk_continuations(disc) && traversal_rotation_composition(disc) &&
         traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&

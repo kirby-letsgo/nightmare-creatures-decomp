@@ -73,6 +73,8 @@ typedef enum { NC_ROTATION_PART, NC_ROTATION_TRANSPOSED, NC_ROTATION_PACKED } Nc
 bool nc_finish_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_sample_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_store_target_vertical_velocity(CPUState *c);
+bool nc_call_spatial_attenuation(CPUState *c, bool actor);
+bool nc_scale_spatial_level(CPUState *c, bool actor);
 bool nc_spatial_attenuation(CPUState *c);
 bool nc_prepare_spatial_actor_bearing(CPUState *c);
 bool nc_prepare_spatial_point_bearing(CPUState *c);
