@@ -3192,6 +3192,37 @@ bool nc_expand_record_point_bearing(CPUState *c) {
     return true;
 }
 
+/* Convert the signed point angle to 16-bit turn units, add half a turn,
+ * then subtract the record angle. The linked node stores the full word. */
+bool nc_set_linked_heading_offset(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    const u32 node = R(5);
+    MEM_W8(node + 0x4d, MEM_R8(node + 0x4d) | 1);
+    const s16 point_angle = (s16)MEM_R16(R(17) + 0xa);
+    R(4) = (s16)MEM_R16(R(16) + 0x24);
+    R(2) = point_angle * 16 + 0x8000;
+    R(3) = R(2) - R(4);
+    MEM_W32(node + 0x40, R(3));
+    c->budget -= 16;
+    return true;
+}
+
+bool nc_apply_linked_heading_offset(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 flag = MEM_R32(R(16) + 0x2c) & 0x200;
+    const int cycles = flag ? 8 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = flag;
+    R(6) += R(3);
+    if (flag)
+        MEM_W32(R(5) + 0x44, R(6));
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each 20-byte row holds signed point identifiers. Its signed cursor
  * selects an identifier, which indexes the 36-byte coordinate records. */
 bool nc_lookup_point_row_record(CPUState *c) {
