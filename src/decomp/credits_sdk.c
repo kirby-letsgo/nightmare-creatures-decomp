@@ -1559,6 +1559,49 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
+/* DrawPrim saves the packet length before synchronizing, then submits its payload. */
+bool nc_credits_draw_primitive(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = 0x80020000;
+    c->budget -= 3;
+    R(2) = MEM_R32(0x80024550);
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    R(2) = MEM_R32(R(2) + 0x3c);
+    c->budget -= NC_LOAD_CYCLES;
+    R(17) = MEM_R8(R(16) + 3);
+    u32 sync = R(2);
+    R(31) = 0x8001c8ac;
+    R(4) = 0;
+    c->budget -= NC_LOAD_CYCLES + 2;
+    nc_call(c, sync);
+
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    set_reg(c, 4, R(16) + 4);
+    load_word(c, 2, R(2) + 0x14);
+    NC_POLL(c, 1);
+    u32 write_commands = R(2);
+    R(31) = 0x8001c8c8;
+    R(5) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, write_commands);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Both DrawSync entries save a0 in s0 and check the graphics debug level. */
 static void draw_sync_prologue(CPUState *c) {
     c->budget--;
