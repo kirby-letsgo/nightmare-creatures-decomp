@@ -204,6 +204,9 @@ psx2_exe     800683D0    80068424         pad.c
 psx2_exe     80068438    80068480         pad.c
 # Menu Up press and hold-repeat decision.
 psx2_exe     8006848C    800684D0         pad.c
+# Menu Start press, Down counter and Down repeat decision.
+psx2_exe     800684D0    8006851C         pad.c
+psx2_exe     800685D8    800685FC         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.

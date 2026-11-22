@@ -402,6 +402,52 @@ u32 nc_menu_right_input(CPUState *c) {
     return 0x80068480;
 }
 
+/* Start arrives in v0 from the Up check. A fresh Start takes priority
+ * over Down and leaves the repeat counter untouched. */
+u32 nc_menu_start_down(CPUState *c) {
+    if (c->budget <= 19)
+        return 0x800684d0;
+    bool start = R(2) != 0;
+    R(2) = R(30) & 0x40;
+    c->budget -= 2;
+    if (start) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 8)) {
+            R(4) = R(22);
+            R(2) = MEM_R32(R(28) + 0x190);
+            R(6) = 0x10;
+            c->budget -= 6;
+            return 0x800685fc;
+        }
+    }
+
+    c->budget -= 2;
+    if (!R(2))
+        return 0x8006851c;
+    u32 count = MEM_R32(R(28) + 0x194) + 1u;
+    MEM_W32(R(28) + 0x194, count);
+    R(2) = (s32)count < 11;
+    c->budget -= 8;
+    return 0x800685d8;
+}
+
+u32 nc_menu_down_repeat(CPUState *c) {
+    if (c->budget <= 13)
+        return 0x800685d8;
+    R(4) = R(22);
+    c->budget -= 2;
+    if (R(2)) {
+        R(2) = MEM_R32(R(28) + 0x18c) & 0x40;
+        c->budget -= 7;
+        if (R(2))
+            return 0x800687cc;
+    }
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 8;
+    c->budget -= 4;
+    return 0x800685fc;
+}
+
 /* v0 carries the Up mask from the preceding path. A held Up starts
  * repeating when the incremented signed counter reaches 11. */
 u32 nc_menu_up_repeat(CPUState *c) {
