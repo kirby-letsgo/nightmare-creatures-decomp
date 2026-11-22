@@ -360,6 +360,8 @@ psx2_exe     80068F34    80068F88         pad.c
 # Mode 0x8000 face-button dispatch, saved buttons and record result.
 psx2_exe     80068F88    80068FA8         pad.c
 psx2_exe     80068FA8    80068FE4         pad.c
+# Shared menu input return, including the jr delay slot.
+psx2_exe     80068FE4    80069018         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
