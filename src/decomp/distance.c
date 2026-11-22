@@ -136,6 +136,16 @@ bool nc_prepare_record_projection(CPUState *c) {
     return true;
 }
 
+/* After projection, s1 points to the signed X/Z point in the record. */
+bool nc_call_projected_point_heading(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800473c8;
+    R(4) = R(17);
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_store_projected_heading(CPUState *c) {
     if (c->budget <= 14)
         return false;
@@ -218,14 +228,17 @@ bool nc_prepare_saved_bearing_projection(CPUState *c) {
     return true;
 }
 
-bool nc_finish_projected_point_update(CPUState *c) {
-    if (c->budget <= 12)
+bool nc_finish_projected_point_update(CPUState *c, bool store_heading) {
+    const int cycles = store_heading ? 14 : 12;
+    if (c->budget <= cycles)
         return false;
+    if (store_heading)
+        MEM_W16(R(16) + 0x12, R(2));
     R(31) = MEM_R32(R(29) + 32);
     R(17) = MEM_R32(R(29) + 28);
     R(16) = MEM_R32(R(29) + 24);
     R(29) += 40;
-    c->budget -= 12;
+    c->budget -= cycles;
     return true;
 }
 

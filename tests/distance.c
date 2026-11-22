@@ -326,9 +326,12 @@ static bool record_projections(bool disc) {
             native.budget = input.budget - 29;
             if (disc) {
                 interp_call(&native, 0x80047128);
-                native.r[31] = 0x800473c8;
-                native.r[4] = native.r[17];
-                native.budget -= 2;
+                cutoff = native;
+                cutoff.budget = 2;
+                CPUState call = cutoff;
+                if (nc_call_projected_point_heading(&call) || memcmp(&cutoff, &call, sizeof call) ||
+                    !nc_call_projected_point_heading(&native))
+                    return false;
                 interp_call(&native, 0x80047220);
             } else {
                 native.r[2] = angles[i];
@@ -1834,31 +1837,42 @@ static bool saved_bearing_projections(bool disc) {
                 return false;
         }
     }
-    CPUState input = initial();
-    input.r[29] = SCRATCH_BASE + 512;
-    MEM_W32(input.r[29] + 32, input.r[31]);
-    MEM_W32(input.r[29] + 28, 0x12345678);
-    MEM_W32(input.r[29] + 24, 0x87654321);
-    input.budget = 12;
-    CPUState native = input;
-    if (nc_finish_projected_point_update(&native) || memcmp(&native, &input, sizeof input))
-        return false;
-    native.budget = ++input.budget;
-    if (!nc_finish_projected_point_update(&native) || native.budget != 1 ||
-        native.r[16] != 0x87654321 || native.r[17] != 0x12345678 ||
-        native.r[29] != input.r[29] + 40)
-        return false;
-    if (disc) {
-        /* Enter with the caller's stack so interp_call recognizes the return.
-         * The jump and its stack-allocation delay slot cost two cycles. */
-        const u32 stub = 0x80120000;
-        MEM_W32(stub, 0x08000000u | ((0x800475ccu >> 2) & 0x03ffffffu));
-        MEM_W32(stub + 4, 0x27bdffd8); /* addiu sp, sp, -40 */
-        input.r[29] += 40;
-        input.budget += 2;
-        interp_call(&input, stub);
-        if (memcmp(&native, &input, sizeof input))
+    for (unsigned store = 0; store < 2; ++store) {
+        CPUState input = initial();
+        input.r[29] = SCRATCH_BASE + 512;
+        MEM_W32(input.r[29] + 32, input.r[31]);
+        MEM_W32(input.r[29] + 28, 0x12345678);
+        MEM_W32(input.r[29] + 24, 0x87654321);
+        input.r[16] = SCRATCH_BASE;
+        input.r[2] = 0xfffffc00;
+        MEM_W16(SCRATCH_BASE + 0x12, 0x1234);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = store ? 14 : 12;
+        CPUState native = input;
+        if (nc_finish_projected_point_update(&native, store) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
             return false;
+        native.budget = ++input.budget;
+        if (!nc_finish_projected_point_update(&native, store) || native.budget != 1 ||
+            native.r[16] != 0x87654321 || native.r[17] != 0x12345678 ||
+            native.r[29] != input.r[29] + 40 ||
+            MEM_R16(SCRATCH_BASE + 0x12) != (store ? 0xfc00 : 0x1234))
+            return false;
+        if (disc) {
+            /* Enter with the caller's stack so interp_call recognizes the return.
+             * The jump and its stack-allocation delay slot cost two cycles. */
+            const u32 stub = 0x80120000;
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            const u32 entry = store ? 0x80047480 : 0x800475cc;
+            MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffd8); /* addiu sp, sp, -40 */
+            input.r[29] += 40;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
     }
     return true;
 }

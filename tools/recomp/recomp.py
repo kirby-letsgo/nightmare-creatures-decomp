@@ -684,7 +684,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
             targets.add(0x800700C8)
         if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
-            targets.update((0x80047328, 0x800473C0))
+            targets.update((0x80047328, 0x800473C0, 0x800473C8))
         if self.mod.name == "psx2_exe" and f.addr == 0x800473E8:
             targets.update((0x80047480, 0x80047518))
         if self.mod.name == "psx2_exe" and f.addr == 0x80046B1C:
@@ -1077,14 +1077,19 @@ class Emitter:
                 out.append("    if (nc_prepare_record_projection(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_800473C0; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800473C0:
+                out.append("    if (nc_call_projected_point_heading(c)) {")
+                out.append(f"        {self.call(0x80047220)}")
+                out.append("        goto L_800473C8; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800473C8:
                 out.append("    if (nc_store_projected_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475A8:
                 out.append("    if (nc_prepare_saved_bearing_projection(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_800475CC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800475CC:
-                out.append("    if (nc_finish_projected_point_update(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80047480, 0x800475CC):
+                store_heading = "true" if i.addr == 0x80047480 else "false"
+                out.append(f"    if (nc_finish_projected_point_update(c, {store_heading})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047564:
                 out.append(
                     "    { bool reproject; if (nc_select_projected_heading(c, &reproject)) {"
