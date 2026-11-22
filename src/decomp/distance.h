@@ -10,6 +10,8 @@ bool nc_prepare_point_distance_root(CPUState *c);
 bool nc_store_point_pose_heading(CPUState *c);
 bool nc_prepare_point_coordinate_query(CPUState *c);
 bool nc_advance_point_index(CPUState *c);
+bool nc_finish_point_update(CPUState *c);
+bool nc_restore_point_update_frame(CPUState *c);
 bool nc_check_point_proximity(CPUState *c, bool from_query);
 bool nc_step_point_x(CPUState *c);
 bool nc_step_point_z(CPUState *c);
