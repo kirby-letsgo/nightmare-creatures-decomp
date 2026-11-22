@@ -2,6 +2,8 @@
 # Module     Start       End (exclusive)  Handwritten implementation
 psx2_exe     800475E4    80047684         distance.c
 psx2_exe     80034828    800349C4         distance.c
+psx2_exe     800362F8    80036358         contact.c
+psx2_exe     80036368    800363F0         contact.c
 psx2_exe     80034D2C    80034D68         contact.c
 psx2_exe     8003531C    80035354         distance.c
 psx2_exe     8004716C    800471AC         distance.c
