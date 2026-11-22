@@ -1812,6 +1812,28 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 24, 0x8001a7dc);
 }
 
+/* startIntr uses setjmp to build the BIOS interrupt entry context. */
+bool nc_credits_save_irq_context(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    u32 buffer = R(4);
+    MEM_W32(buffer, R(31));
+    c->budget--;
+    MEM_W32(buffer + 44, R(28));
+    c->budget--;
+    MEM_W32(buffer + 4, R(29));
+    c->budget--;
+    MEM_W32(buffer + 8, R(30));
+    c->budget--;
+    for (unsigned i = 0; i < 8; i++) {
+        MEM_W32(buffer + 12 + 4 * i, R(16 + i));
+        c->budget--;
+    }
+    R(2) = 0;
+    c->budget -= 3;
+    return true;
+}
+
 /* setIntrVSync returns the previous callback, including when it skips the store. */
 bool nc_credits_set_vsync_slot(CPUState *c) {
     if (c->budget <= NC_LOAD_CYCLES + 10)
