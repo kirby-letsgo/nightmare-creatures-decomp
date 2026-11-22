@@ -663,7 +663,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
             targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067358:
-            targets.update((0x80068424, 0x80068480))
+            targets.update((0x80068424, 0x80068480, 0x80068698, 0x8006874C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
             targets.add(0x800700C8)
         if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
@@ -783,6 +783,18 @@ class Emitter:
                         "    case 0x80042EF4: goto L_80042EF4;",
                         "    case 0x80042F18: goto L_80042F18;",
                         "    case 0x80042EFC: goto L_80042EFC;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006865C, 0x8006870C):
+                right = i.addr == 0x8006870C
+                change, ordinary = (0x8006874C, 0x8006879C) if right else (0x80068698, 0x800686B8)
+                out.extend(
+                    [
+                        f"    switch (nc_menu_direction_selection(c, {str(right).lower()})) {{",
+                        f"    case 0x{change:X}: goto L_{change:X};",
+                        f"    case 0x{ordinary:X}: goto L_{ordinary:X};",
+                        "    case 0x800687CC: goto L_800687CC;",
                         "    }",
                     ]
                 )
