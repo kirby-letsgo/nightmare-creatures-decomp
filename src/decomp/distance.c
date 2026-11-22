@@ -3192,6 +3192,32 @@ bool nc_check_record_projection_limit(CPUState *c) {
     return true;
 }
 
+/* The pose stores (-X, Y, Z) as halfwords. Reload the pose pointer
+ * between stores in the same order as the guest. */
+bool nc_place_record_pose(CPUState *c) {
+    const u32 heading_flag = R(18) & 2;
+    const int cycles = heading_flag ? 35 : 33;
+    if (c->budget <= cycles)
+        return false;
+    const u32 record = R(16);
+    MEM_W32(record + 0x2c, MEM_R32(record + 0x2c) | 0x80000000u);
+    const u16 x = MEM_R16(record + 0x18);
+    u32 pose = MEM_R32(record + 4);
+    MEM_W16(pose + 0x10, (u16)-x);
+    pose = MEM_R32(record + 4);
+    MEM_W16(pose + 0x12, MEM_R16(record + 0x1a));
+    R(3) = MEM_R32(record + 4);
+    MEM_W16(R(3) + 0x14, MEM_R16(record + 0x1c));
+    R(2) = heading_flag;
+    R(4) = record;
+    if (heading_flag) {
+        R(31) = 0x80029364;
+        R(5) = R(19);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_begin_record_point_heading(CPUState *c) {
     if (c->budget <= 12)
         return false;
