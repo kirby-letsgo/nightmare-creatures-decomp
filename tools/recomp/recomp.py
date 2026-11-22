@@ -1015,6 +1015,15 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800676C4:
+                out.extend(
+                    [
+                        "    switch (nc_menu_dispatch_record_24(c)) {",
+                        "    case 0x800676E4: goto L_800676E4;",
+                        "    case 0x80068FE4: goto L_80068FE4;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x8006767C, 0x80067698):
                 check_primary = "true" if i.addr == 0x8006767C else "false"
                 out.extend(
