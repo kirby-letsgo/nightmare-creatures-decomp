@@ -2676,6 +2676,51 @@ static bool linked_heading_traversal(bool disc) {
     return true;
 }
 
+static bool unlinked_pose_headings(bool disc) {
+    const u32 record = SCRATCH_BASE, point = record + 0x80, pose = record + 0x100;
+    const s16 angles[] = {0, -0x800, INT16_MIN, INT16_MAX};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < 4; ++i) {
+        CPUState input = initial();
+        input.r[3] = pose;
+        input.r[16] = record;
+        input.r[17] = point;
+        input.r[6] = i * 0x4000;
+        const u32 heading = angles[i] * 16 + 0x8000;
+        const u32 adjusted = input.r[6] + heading;
+        memset(nc_scratch, 0xaa, sizeof before);
+        MEM_W16(point + 0xa, angles[i]);
+        MEM_W32(record + 4, pose);
+        MEM_W32(record + 0x2c, i & 1 ? 0x201 : 1);
+        for (unsigned apply = 0; apply <= 1; ++apply) {
+            bool (*step)(CPUState *) =
+                apply ? nc_apply_unlinked_pose_bearing : nc_set_unlinked_pose_heading;
+            input.r[31] = apply ? 0x800296d0 : 0x800296b0;
+            input.budget = apply ? (i & 1 ? 12 : 7) : 16;
+            CPUState native = input;
+            memcpy(before, nc_scratch, sizeof before);
+            if (step(&native) || memcmp(&input, &native, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!step(&native) || native.budget != 1 || MEM_R32(pose + 0x48) != heading ||
+                MEM_R8(pose + 0x4d) != 0xab || native.r[6] != (apply ? adjusted : input.r[6]) ||
+                MEM_R32(pose + 0x44) != (apply && (i & 1) ? adjusted : 0xaaaaaaaau))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, apply ? 0x800296b0 : 0x80029688);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+            input = native;
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -4999,9 +5044,10 @@ int main(int argc, char **argv) {
         reference_bearing_gaps(disc) && actor_distances(disc) && point_pose_and_query(disc) &&
         point_index_advances(disc) && point_update_returns(disc) && point_proximity(disc) &&
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
-        linked_heading_offsets(disc) && linked_heading_traversal(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
+        unlinked_pose_headings(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

@@ -3263,6 +3263,39 @@ bool nc_copy_linked_bearing(CPUState *c) {
     return true;
 }
 
+/* Without a linked node, the pose takes the signed point angle plus half
+ * a turn directly. Both heading fields retain the full 32-bit result. */
+bool nc_set_unlinked_pose_heading(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    const u32 pose = R(3);
+    MEM_W8(pose + 0x4d, MEM_R8(pose + 0x4d) | 1);
+    const s16 angle = (s16)MEM_R16(R(17) + 0xa);
+    R(4) = MEM_R32(R(16) + 4);
+    R(2) = angle * 16;
+    R(3) = R(2) + 0x8000;
+    MEM_W32(R(4) + 0x48, R(3));
+    c->budget -= 16;
+    return true;
+}
+
+bool nc_apply_unlinked_pose_bearing(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 flag = MEM_R32(R(16) + 0x2c) & 0x200;
+    const int cycles = flag ? 12 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = flag;
+    R(6) += R(3);
+    if (flag) {
+        R(2) = MEM_R32(R(16) + 4);
+        MEM_W32(R(2) + 0x44, R(6));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each 20-byte row holds signed point identifiers. Its signed cursor
  * selects an identifier, which indexes the 36-byte coordinate records. */
 bool nc_lookup_point_row_record(CPUState *c) {
