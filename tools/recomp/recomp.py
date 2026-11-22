@@ -205,6 +205,7 @@ CREDITS_ROUTINES = {
     0x8001FF7C: "nc_credits_cd_sync_callback(c)",
     0x8001FF94: "nc_credits_cd_ready_callback(c)",
     0x80020354: "nc_credits_cd_mix(c)",
+    0x8002039C: "nc_credits_cd_data_callback(c)",
     0x800203E0: "nc_credits_cd_sector_to_position(c)",
     0x800204E4: "nc_credits_cd_position_to_sector(c)",
     0x80021440: "nc_credits_cd_volume(c)",
@@ -730,7 +731,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B22C:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B3D0:
-            targets.update((0x8002B40C, 0x8002B4E8, 0x8002B588, 0x8002B5E8))
+            targets.update((0x8002B40C, 0x8002B4B0, 0x8002B4E8, 0x8002B588, 0x8002B5C0, 0x8002B5E8))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.update(
                 (
@@ -1753,6 +1754,17 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_call(c, R(16), 0x{resume:X})) {{")
                 out.append(f"        {self.call(callee)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B43C:
+                out.append("    { bool active = R(2) != 0;")
+                out.append("      if (nc_update_placement_clock(c)) {")
+                out.append("        if (active) goto L_8002B4B0;")
+                out.append("        goto L_8002B5D8; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B5B8:
+                out.append("    if (nc_call_placement_reset(c)) {")
+                out.append(f"        {self.call(0x8006070C)}")
+                out.append("        goto L_8002B5C0; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B5C0:
+                out.append("    if (nc_finish_placement_reset(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B4B0:
                 out.append("    switch (nc_check_placement_counter(c)) {")
                 out.append("    case NC_PLACEMENT_COUNTER_ZERO: goto L_8002B5B8;")
