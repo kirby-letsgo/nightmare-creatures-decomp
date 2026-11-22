@@ -3165,6 +3165,33 @@ bool nc_select_point_update_row(CPUState *c) {
     return true;
 }
 
+/* X uses record minus point. The point's Z has the opposite sign convention,
+ * so the vector-heading call receives the sum of the signed Z halfwords. */
+bool nc_call_record_point_bearing(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const u32 record = R(16), point = R(17);
+    R(3) = (s16)MEM_R16(record + 0x18);
+    const s16 point_x = (s16)MEM_R16(point);
+    R(2) = (s16)MEM_R16(record + 0x1c);
+    const s16 point_z = (s16)MEM_R16(point + 4);
+    R(4) = R(3) - point_x;
+    R(5) = R(2) + point_z;
+    R(31) = 0x800295e0;
+    c->budget -= 15;
+    return true;
+}
+
+bool nc_expand_record_point_bearing(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(3) = MEM_R32(R(16) + 4);
+    R(5) = MEM_R32(R(3) + 4);
+    R(6) = R(2) << 4;
+    c->budget -= 10;
+    return true;
+}
+
 /* Each 20-byte row holds signed point identifiers. Its signed cursor
  * selects an identifier, which indexes the 36-byte coordinate records. */
 bool nc_lookup_point_row_record(CPUState *c) {
