@@ -888,6 +888,45 @@ bool nc_credits_priority_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_set_graph_debug(CPUState *c) {
+    if (c->budget <= 31)
+        return false;
+    R(29) -= 24;
+    R(3) = 0x8002455a;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    R(16) = MEM_R8(R(3));
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W8(R(3), (u8)R(4));
+    R(4) &= 0xff;
+    R(2) = R(16);
+    c->budget -= 4;
+    if (R(4)) {
+        /* Report the new level, graphics type, and reverse-display flag. */
+        c->budget--;
+        R(2) = MEM_R32(0x80024554);
+        c->budget -= NC_LOAD_CYCLES;
+        R(5) = MEM_R8(R(3));
+        c->budget -= NC_LOAD_CYCLES + 1;
+        R(6) = MEM_R8(0x80024558);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        R(7) = MEM_R8(0x8002455b);
+        R(4) = 0x800184f8;
+        R(31) = 0x8001c104;
+        c->budget -= NC_LOAD_CYCLES + 4;
+        nc_call(c, R(2));
+        set_reg(c, 2, R(16));
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_graph_status(CPUState *c, bool debug_level) {
     if (c->budget <= 6)
         return false;
