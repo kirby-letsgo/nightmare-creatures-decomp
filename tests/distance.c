@@ -316,6 +316,45 @@ static bool placement_matrix_scales(bool disc) {
     return true;
 }
 
+static bool placement_presets(bool disc) {
+    const s16 indices[] = {-1, 0, 2};
+    const u16 words[] = {0x8000, 0, 0x7fff, 0xabcd, 0, 1024, 4095, 0xef01, 0x1234, 0x5678};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
+        const u32 record = SCRATCH_BASE + (i % 2) * 2;
+        const u32 source = 0x800d00c0u + 20 * indices[i];
+        for (unsigned j = 0; j < 10; ++j)
+            MEM_W16(source + 2 * j, words[j]);
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W16(record + 0x16e, indices[i]);
+        MEM_W16(record + 0x16c, 0x4010);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState input = initial();
+        input.r[16] = record;
+        input.r[31] = 0x8002b56c;
+        input.budget = 55;
+        CPUState native = input;
+        if (nc_apply_placement_preset(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_apply_placement_preset(&native) || native.budget != 1 ||
+            MEM_R16(record + 0x16c) != 0x4018 || MEM_R16(record + 16) != 0xa5a5)
+            return false;
+        for (unsigned j = 0; j < 8; ++j)
+            if (MEM_R16(record + 2 * j) != words[j])
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x8002b4e8);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_update_entry(bool disc) {
     const u16 flags[] = {0, 4, 0x10, 0x40, 0xff54};
     const u32 record = SCRATCH_BASE, frame = record + 0x200;
@@ -3511,7 +3550,7 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_update_entry(disc) || !placement_mode_entry(disc) ||
+    if (!placement_presets(disc) || !placement_update_entry(disc) || !placement_mode_entry(disc) ||
         !placement_step_selection(disc) || !actor_placement_paths(disc) ||
         !actor_placement_targets(disc) || !placement_matrix_return(disc) ||
         !placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||

@@ -132,6 +132,7 @@ bool nc_begin_actor_placement_target(CPUState *c, bool *has_pose);
 bool nc_finish_actor_placement_target(CPUState *c, bool has_pose);
 bool nc_prepare_actor_placement_target(CPUState *c);
 bool nc_begin_placement_update(CPUState *c);
+bool nc_apply_placement_preset(CPUState *c);
 bool nc_begin_placement_mode(CPUState *c, bool *update_actor);
 bool nc_select_placement_step(CPUState *c, bool *step);
 bool nc_restore_placement_frame(CPUState *c);
