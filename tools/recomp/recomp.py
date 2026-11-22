@@ -155,6 +155,7 @@ CREDITS_ROUTINES = {
     0x8001BC14: "nc_credits_dump_draw(c)",
     0x8001BD94: "nc_credits_dump_display(c)",
     0x8001C0B0: "nc_credits_set_graph_debug(c)",
+    0x8001C11C: "nc_credits_set_graph_queue(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
     0x8001C1D8: "nc_credits_graph_status(c, true)",
     0x8001C1E8: "nc_credits_draw_sync_callback(c)",
@@ -751,7 +752,18 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8001BD08:
-            targets.update((0x8001BD48, 0x8001BD84, 0x8001BF98, 0x8001BFD0, 0x8001BFEC, 0x8001C01C))
+            targets.update(
+                (
+                    0x8001BD48,
+                    0x8001BD84,
+                    0x8001BD90,
+                    0x8001BE6C,
+                    0x8001BF98,
+                    0x8001BFD0,
+                    0x8001BFEC,
+                    0x8001C01C,
+                )
+            )
         if self.mod.name == "psx2_exe" and f.addr == 0x8001C19C:
             targets.update((0x8001C234, 0x8001C27C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001A71C:
@@ -1502,6 +1514,16 @@ class Emitter:
                 out.append("    if (nc_check_part_heading_turn(c)) {")
                 out.append("        if (R(2)) goto L_8001BD84;")
                 out.append("        goto L_8001BEA8; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BD84:
+                out.append("    if (nc_reset_part_pose_heading(c)) {")
+                out.append(f"        {self.call(0x80053F38)}")
+                out.append("        goto L_8001BD90; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BD90:
+                out.append("    switch (nc_check_turn_parts(c)) {")
+                out.append("    case NC_PART_FLAGS_FIRST: goto L_8001BEA8;")
+                out.append("    case NC_PART_FLAGS_LATER: goto L_8001BEAC;")
+                out.append("    case NC_PART_FLAGS_CLEAR: goto L_8001BE6C;")
+                out.append("    case NC_PART_FLAGS_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BEAC:
                 out.append("    { bool search; if (nc_advance_part_pose_heading(c, &search)) {")
                 out.append("        if (search) goto L_8001BF18;")

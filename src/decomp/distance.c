@@ -961,6 +961,34 @@ bool nc_check_part_heading_turn(CPUState *c) {
     return true;
 }
 
+bool nc_reset_part_pose_heading(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(2) = MEM_R32(R(17) + 0x20);
+    R(31) = 0x8001bd90;
+    MEM_W32(R(2) + 0x48, 0);
+    c->budget -= 5;
+    return true;
+}
+
+/* Each of the five part tests takes 17 cycles. The first branch sets s2
+ * in its delay slot; the other four leave twice the step in v0. */
+NcPartFlagPath nc_check_turn_parts(CPUState *c) {
+    if (c->budget <= 85)
+        return NC_PART_FLAGS_FALLBACK;
+    for (unsigned i = 0; i < 5; ++i) {
+        const u32 index = MEM_R8(R(28) + 0x108 + i);
+        const u32 part = MEM_R32(R(17) + 0x4c + 4 * index);
+        const u32 flag = MEM_R8(part + 0x4d) & 8;
+        R(18) = 1;
+        R(2) = i == 0 ? flag : 2 * R(16);
+        c->budget -= 17;
+        if (flag)
+            return i == 0 ? NC_PART_FLAGS_FIRST : NC_PART_FLAGS_LATER;
+    }
+    return NC_PART_FLAGS_CLEAR;
+}
+
 /* Every entry at 0x8001BEAC has v0 = 2*s0. The shift/add sequence
  * advances the pose heading by 364 units per step in a 65536-unit turn. */
 bool nc_advance_part_pose_heading(CPUState *c, bool *search) {
