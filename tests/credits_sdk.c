@@ -1192,6 +1192,21 @@ static bool check_cd_default_callbacks(void) {
             if (!event.r[2])
                 return false;
         }
+        /* Exercise the BIOS stub directly with a matching and a different event. */
+        for (unsigned j = 0; j < 2; j++) {
+            CPUState state = arguments(0xf0000003, cases[i].spec + j, 0, j ? 4096 : 4);
+            event.r[9] = 11;
+            nc_cpu = state;
+            if (!nc_credits_deliver_event(&nc_cpu))
+                return false;
+            bios_call(&event, 0xb0);
+            if (event.r[2] != (j == 0) ||
+                !compare(state, 0x8001fcd8, nc_credits_deliver_event, 3))
+                return false;
+            bios_call(&event, 0xb0);
+            if (event.r[2] != (j == 0))
+                return false;
+        }
         event.r[9] = 9; /* CloseEvent */
         bios_call(&event, 0xb0);
     }
