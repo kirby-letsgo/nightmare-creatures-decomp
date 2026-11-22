@@ -149,3 +149,36 @@ bool nc_distance_root(CPUState *c) {
     c->budget -= cycles;
     return true;
 }
+
+/* Transform the part's three coordinates by the shared GTE rotation matrix.
+ * The two entry points differ only in how they scale the input vector. */
+bool nc_transform_part_position(CPUState *c, bool quarter_scale) {
+    const int cycles = quarter_scale ? 85 : 82;
+    if (c->budget <= cycles)
+        return false;
+    const u32 frame = R(29) - 24;
+    for (unsigned axis = 0; axis < 3; ++axis) {
+        s32 value = (s32)MEM_R32(R(4) + 0x2c + 4 * axis);
+        MEM_W16(frame + 2 * axis, (u16)(quarter_scale ? value >> 2 : value));
+    }
+    R(6) = 0x800d7688;
+    for (unsigned reg = 0; reg < 5; ++reg) {
+        u32 value = MEM_R32(R(6) + 4 * reg);
+        gte_write_ctrl(c, reg, value);
+        if (reg >= 2)
+            R(10 + reg) = value;
+    }
+    gte_write_data(c, 0, MEM_R32(frame));
+    gte_write_data(c, 1, MEM_R32(frame + 4));
+    gte_command(c, 0x0486012); /* MVMVA, rotation matrix, V0, no translation */
+    for (unsigned axis = 0; axis < 3; ++axis)
+        MEM_W32(frame + 8 + 4 * axis, gte_read_data(c, 25 + axis));
+    for (unsigned axis = 0; axis < 3; ++axis) {
+        s32 coord = (s32)MEM_R32(frame + 8 + 4 * axis);
+        R(3) = MEM_R16(0x800d7630 + 2 * axis);
+        R(2) = (u32)(coord >> 1) - R(3);
+        MEM_W16(R(5) + 2 * axis, (u16)R(2));
+    }
+    c->budget -= cycles;
+    return true;
+}
