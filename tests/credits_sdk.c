@@ -1322,6 +1322,22 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_interrupt_auto_clear(void) {
+    for (u32 flag = 0; flag <= 1; flag++) {
+        CPUState pad = arguments(flag, 0x12345678, 3, 4);
+        if (!compare(pad, 0x8001a2ac, nc_credits_change_clear_pad, 3) ||
+            nc_cpu.r[2] != 0 || nc_cpu.r[9] != 0x5b || nc_cpu.r[10] != 0xb0)
+            return false;
+        for (u32 counter = 0; counter < 4; counter++) {
+            CPUState state = arguments(counter, flag, 3, 4);
+            if (!compare(state, 0x8001a688, nc_credits_change_clear_counter, 3) ||
+                nc_cpu.r[2] != 1 || nc_cpu.r[9] != 0x0a || nc_cpu.r[10] != 0xc0)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_irq_entry_hooks(void) {
     const struct {
         u32 entry, service, buffer;
@@ -2252,6 +2268,7 @@ int main(int argc, char **argv) {
     pass = pass && check_callback_controls();
     pass = pass && check_interrupt_driver_control(false);
     pass = pass && check_interrupt_driver_control(true);
+    pass = pass && check_interrupt_auto_clear();
     pass = pass && check_irq_entry_hooks();
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();

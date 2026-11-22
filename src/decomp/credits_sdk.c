@@ -1659,38 +1659,40 @@ bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     return true;
 }
 
-/* GPU_cw passes the GP0 command word in a0 to BIOS A0 service 0x49. */
-bool nc_credits_bios_gpu_command(CPUState *c) {
+/* The guest selects the BIOS service in the tail jump's delay slot. */
+static bool bios_service(CPUState *c, u32 table, u32 service) {
     if (c->budget <= 3)
         return false;
-    R(10) = 0xa0;
-    R(9) = 0x49;
-    c->budget -= 3;
-    nc_jump(c, R(10));
-    return true;
-}
-
-/* These Psy-Q stubs select the B0 service in the tail jump's delay slot. */
-static bool bios_b0_service(CPUState *c, u32 service) {
-    if (c->budget <= 3)
-        return false;
-    R(10) = 0xb0;
+    R(10) = table;
     R(9) = service;
     c->budget -= 3;
     nc_jump(c, R(10));
     return true;
 }
 
+/* GPU_cw passes the GP0 command word in a0 to BIOS A0 service 0x49. */
+bool nc_credits_bios_gpu_command(CPUState *c) {
+    return bios_service(c, 0xa0, 0x49);
+}
+
+bool nc_credits_change_clear_pad(CPUState *c) {
+    return bios_service(c, 0xb0, 0x5b);
+}
+
+bool nc_credits_change_clear_counter(CPUState *c) {
+    return bios_service(c, 0xc0, 0x0a);
+}
+
 bool nc_credits_deliver_event(CPUState *c) {
-    return bios_b0_service(c, 7);
+    return bios_service(c, 0xb0, 7);
 }
 
 bool nc_credits_reset_irq_entry(CPUState *c) {
-    return bios_b0_service(c, 0x18);
+    return bios_service(c, 0xb0, 0x18);
 }
 
 bool nc_credits_hook_irq_entry(CPUState *c) {
-    return bios_b0_service(c, 0x19);
+    return bios_service(c, 0xb0, 0x19);
 }
 
 /* The default callbacks notify the BIOS CD event class through DeliverEvent. */
