@@ -269,7 +269,7 @@ if(TARGET nc_gen)
     target_link_libraries(test_credits_roll_native PRIVATE nc_runtime nc_gen)
     add_executable(test_credits_roll_original tests/credits_roll.c src/port/no_gen.c)
     target_link_libraries(test_credits_roll_original PRIVATE nc_runtime)
-    foreach(scenario skip full)
+    foreach(scenario skip full exception_return)
         add_test(NAME credits_roll_${scenario} COMMAND Python3::Interpreter
             "${CMAKE_SOURCE_DIR}/tools/test_credits_roll.py" $<TARGET_FILE:test_credits_roll_native>
             $<TARGET_FILE:test_credits_roll_original> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd" ${scenario})
