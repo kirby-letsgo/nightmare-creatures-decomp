@@ -764,6 +764,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
             targets.update(
                 (
+                    0x8001AC4C,
                     0x8001ACF0,
                     0x8001AD2C,
                     0x8001AD3C,
@@ -1546,6 +1547,12 @@ class Emitter:
                 out.append("    case NC_PART_SEARCH_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001C04C:
                 out.append("    if (nc_restore_part_search_frame(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001AC28:
+                out.append("    if (nc_save_point_update_frame(c)) goto L_8001AC4C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001AC4C:
+                out.append("    if (nc_select_point_update_row(c)) {")
+                out.append("        if (R(3) >= 2 && R(3) <= 5) goto L_8001ACA0;")
+                out.append("        goto L_8001AEAC; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001ACA0:
                 out.append("    if (nc_lookup_point_row_record(c)) goto L_8001ACF0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001ACF0:

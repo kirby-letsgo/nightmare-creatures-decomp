@@ -74,6 +74,7 @@ psx2_exe     80046EDC    80046FA0         distance.c
 psx2_exe     80046FA0    800470DC         distance.c
 psx2_exe     800470DC    80047128         distance.c
 psx2_exe     8001A71C    8001A7B8         distance.c
+psx2_exe     8001AC28    8001ACA0         distance.c
 psx2_exe     8001ACA0    8001ACF0         distance.c
 psx2_exe     8001ACF0    8001AD3C         distance.c
 psx2_exe     8001AD3C    8001ADA4         distance.c
