@@ -1278,6 +1278,60 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_cd_init_interrupt(void) {
+    const u32 flag = 0x80023418, handler = 0x80023424, enabled = 0x80023448;
+    const u32 mask_slot = 0x800244a8, mask = 0x80061000;
+    const u32 cleared[] = {0x80024760, 0x8002475c, 0x80024770, 0x8002476c};
+    const u32 previous[] = {0, 0x8001935c, 0x80021b54};
+    u32 saved_words[4], saved_mask = MEM_R32(mask_slot), saved_handler = MEM_R32(handler);
+    u16 saved_flag = MEM_R16(flag), saved_enabled = MEM_R16(enabled);
+    for (unsigned i = 0; i < 4; i++)
+        saved_words[i] = MEM_R32(cleared[i]);
+    MEM_W16(flag, 1); /* callback subsystem already started */
+    MEM_W32(mask_slot, mask);
+    for (unsigned i = 0; i < sizeof previous / sizeof previous[0]; i++)
+        for (unsigned j = 0; j < 2; j++) {
+            MEM_W32(handler, previous[i]);
+            MEM_W16(mask, 0x41);
+            MEM_W16(enabled, 0x20);
+            for (unsigned k = 0; k < 4; k++)
+                MEM_W32(cleared[k], UINT32_MAX);
+            CPUState state = arguments(7, 2, 3, j ? 13 : 4096);
+            if (j)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            if (!compare(state, 0x8002169c, nc_credits_cd_init_interrupt, 12) ||
+                nc_cpu.r[2] != previous[i] || MEM_R32(handler) != 0x80021b54 ||
+                MEM_R16(mask) != (previous[i] == 0x80021b54 ? 0x41 : 0x45))
+                return false;
+            for (unsigned k = 0; k < 4; k++)
+                if (MEM_R32(cleared[k]) != 0)
+                    return false;
+        }
+    MEM_W32(mask_slot, saved_mask);
+    u16 irq_mask = MEM_R16(saved_mask);
+    for (unsigned native = 0; native < 2; native++) {
+        MEM_W16(saved_mask, 0x41);
+        MEM_W32(handler, 0);
+        MEM_W16(enabled, 0);
+        nc_cpu = arguments(7, 2, 3, 4096);
+        if (native) {
+            if (!nc_credits_cd_init_interrupt(&nc_cpu))
+                return false;
+        } else {
+            interp_call(&nc_cpu, 0x8002169c);
+        }
+        if (MEM_R16(saved_mask) != 0x45 || MEM_R16(enabled) != 4)
+            return false;
+    }
+    MEM_W16(saved_mask, irq_mask);
+    MEM_W32(handler, saved_handler);
+    MEM_W16(enabled, saved_enabled);
+    MEM_W16(flag, saved_flag);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(cleared[i], saved_words[i]);
+    return true;
+}
+
 static bool check_cd_init_volume(void) {
     const u32 slots = 0x80024a20, spu = 0x80061000, ports = SCRATCH_BASE + 0x40;
     u8 saved[24];
@@ -1760,6 +1814,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
     pass = pass && check_cd_flush();
