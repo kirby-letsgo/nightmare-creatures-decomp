@@ -44,6 +44,7 @@ bool nc_prepare_part_translation(CPUState *c);
 bool nc_select_part_rotation(CPUState *c);
 bool nc_select_node_transform(CPUState *c);
 bool nc_prepare_node_rotation(CPUState *c);
+bool nc_start_scaled_part_position(CPUState *c);
 bool nc_transform_part_offset(CPUState *c);
 bool nc_compose_part_matrix(CPUState *c);
 bool nc_finish_part_translation(CPUState *c);
