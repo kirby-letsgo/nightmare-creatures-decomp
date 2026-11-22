@@ -31,4 +31,6 @@ bool nc_credits_allocation_size(CPUState *c);
 
 bool nc_credits_resize(CPUState *c);
 
+bool nc_credits_init_shared_record(CPUState *c);
+
 #endif
