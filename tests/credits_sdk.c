@@ -1879,6 +1879,57 @@ static bool check_interrupt_start(bool dma) {
     return ok;
 }
 
+static void cd_transfer_state(StateIO *io) {
+    interrupt_start_state(io);
+    cdrom_serialize(io);
+}
+
+static bool check_cd_get_sector(void) {
+    const u32 dest = 0x80062000;
+    u8 sector[DISC_DATA_SECTOR];
+    if (!disc_read_data(16, sector))
+        return false;
+    StateIO saved = {0};
+    cd_transfer_state(&saved);
+    bool ok = !saved.error;
+    const unsigned counts[] = {1, DISC_DATA_SECTOR / 4};
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0] && ok; i++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; run < 2 && ok; run++) {
+            /* Read the ISO volume descriptor at 00:02:16 (BCD), then let the SDK request its FIFO. */
+            cdrom_tick(0);
+            cdrom_write(0, 0);
+            cdrom_write(2, 0);
+            cdrom_write(2, 2);
+            cdrom_write(2, 0x16);
+            cdrom_write(1, 2); /* Setloc */
+            cdrom_write(1, 6); /* ReadN */
+            cdrom_tick(150000 + PSX_CPU_HZ / 75);
+            memset(nc_fast_ptr(dest - 1), 0xa5, sizeof sector + 2);
+            nc_cpu = arguments(dest, counts[i], 3, 4);
+            if (!run && nc_credits_cd_get_sector(&nc_cpu))
+                ok = false;
+            nc_cpu.budget = i ? 5 : 4096;
+            if (run)
+                interp_call(&nc_cpu, 0x80020378);
+            else
+                ok = nc_credits_cd_get_sector(&nc_cpu) && ok;
+            ok = ok && nc_cpu.r[2] == 1 && !memcmp(nc_fast_ptr(dest), sector, 4 * counts[i]) &&
+                 MEM_R8(dest - 1) == 0xa5 && MEM_R8(dest + 4 * counts[i]) == 0xa5;
+            cd_transfer_state(run ? &guest : &native);
+            saved.loading = true;
+            saved.pos = 0;
+            cd_transfer_state(&saved);
+        }
+        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_cd_data_callback(void) {
     const u32 table = MEM_R32(0x800244a0), slot = 0x800244ec, control = 0x80061000;
     const u32 handler = 0x8001935c;
@@ -2608,6 +2659,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_cd_get_sector();
     pass = pass && check_bios_write();
     pass = pass && check_put_char();
     pass = pass && check_put_string();

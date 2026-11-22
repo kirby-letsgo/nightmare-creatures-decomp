@@ -2753,6 +2753,23 @@ bool nc_credits_cd_mix(CPUState *c) {
     return true;
 }
 
+/* Read the requested number of words and convert the driver's zero result to success. */
+bool nc_credits_cd_get_sector(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x80020388;
+    c->budget -= 3;
+    nc_call(c, 0x80021a44); /* CD_getsector */
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Register the CD data handler on DMA channel 3 and return its predecessor. */
 bool nc_credits_cd_data_callback(CPUState *c) {
     if (c->budget <= 5)
