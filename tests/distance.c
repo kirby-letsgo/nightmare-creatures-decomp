@@ -1094,6 +1094,47 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool traversal_matrices(bool disc) {
+    const s32 samples[][6] = {{4096, 4096, 4096, 0, 0, 0},
+                              {0, 4096, 0, -4096, 0, 4096},
+                              {-3123, 2751, -4095, 173, -2231, -2001}};
+    const u32 frame = SCRATCH_BASE;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+        CPUState input = initial();
+        input.r[11] = samples[i][0];
+        input.r[7] = samples[i][1];
+        input.r[6] = samples[i][2];
+        input.r[9] = samples[i][3];
+        input.r[4] = samples[i][4];
+        input.r[8] = samples[i][5];
+        input.r[29] = frame;
+        input.r[31] = 0x80026cdc;
+        input.budget = 75;
+        CPUState native = input;
+        memset(nc_scratch, 0xa5, sizeof before);
+        memcpy(before, nc_scratch, sizeof before);
+        if (nc_build_traversal_matrix(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_build_traversal_matrix(&native) || native.budget != 1)
+            return false;
+        if (i == 0)
+            for (unsigned k = 0; k < 9; ++k)
+                if (MEM_R16(frame + 0x80 + 2 * k) != (k % 4 == 0 ? 4096 : 0))
+                    return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80026bb8);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool traversal_angle_samples(bool disc, bool shared) {
     const u32 angles[][3] = {{0, 0x4000, 0x8000}, {-18, -2, -1}, {0xfffe, 0x7ffe, 0xbfff}};
     const u32 cosine = 0x80140000, sine = cosine + 0x4000;
@@ -2096,9 +2137,10 @@ int main(int argc, char **argv) {
         node_matrix_installation(disc) && part_composition(disc) &&
         node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
-        part_heading_sources(disc) && child_positions(disc) && scaled_part_filters(disc) &&
-        scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
-        part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);
+        traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&
+        scaled_part_filters(disc) && scaled_part_walk(disc) && scaled_part_positions(disc) &&
+        part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
+        part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)

@@ -794,6 +794,51 @@ bool nc_sample_traversal_angles(CPUState *c, bool shared) {
     return true;
 }
 
+/* Build the Q12 rotation at sp+0x80 of the traversal frame. The guest
+ * spills one intermediate and clears the matrix translation. */
+bool nc_build_traversal_matrix(CPUState *c) {
+    if (c->budget <= 75)
+        return false;
+    const u32 frame = R(29), matrix = frame + 0x80;
+    const u32 cx = R(11), cy = R(7), cz = R(6);
+    const u32 sx = R(9), sy = R(4), sz = R(8);
+    R(12) = cy * cz;
+    R(14) = cz * sy;
+    R(24) = cx * cz;
+    R(25) = sx * cz;
+    R(5) = shift_part_product(cx * cy);
+    R(16) = R(5) * sz;
+    R(3) = shift_part_product(sx * sy);
+    R(6) = shift_part_product(sx * cy);
+    R(9) = R(6) * sz;
+    R(4) = shift_part_product(cx * sy);
+    R(11) = R(4) * sz;
+
+    MEM_W32(matrix + 20, 0);
+    MEM_W32(matrix + 24, 0);
+    MEM_W32(matrix + 28, 0);
+    MEM_W32(frame + 0xc0, R(16));
+    R(16) = MEM_R32(frame + 0xc0);
+    MEM_W16(matrix + 2, -sz);
+    MEM_W16(matrix, shift_part_product(R(12)));
+    MEM_W16(matrix + 4, shift_part_product(-R(14)));
+    MEM_W16(matrix + 8, shift_part_product(R(24)));
+    nc_mult(c, R(3), sz);
+    MEM_W16(matrix + 14, shift_part_product(R(25)));
+    R(3) = shift_part_product(R(16)) - R(3);
+    R(4) += shift_part_product(R(9));
+    R(2) = -shift_part_product(R(11)) - R(6);
+    MEM_W16(matrix + 6, R(3));
+    MEM_W16(matrix + 12, R(4));
+    MEM_W16(matrix + 10, R(2));
+    R(8) = c->lo;
+    R(7) = shift_part_product(R(8));
+    R(5) -= R(7);
+    MEM_W16(matrix + 16, R(5));
+    c->budget -= 75;
+    return true;
+}
+
 /* Linked parts always sample angles. A leaf needs flag 0x80. The
  * delay slots leave bit 3 in v0 even when the leaf skips sampling. */
 NcHeadingSource nc_select_part_heading_source(CPUState *c) {
