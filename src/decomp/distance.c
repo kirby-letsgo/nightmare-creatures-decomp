@@ -518,6 +518,40 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+/* Both spatial callers scale their planar distance against 2400. Bit 1
+ * squares the remaining distance first, with a separate truncated divide.
+ * Keep each low-word product and the final reciprocal multiply's HI/LO. */
+bool nc_spatial_attenuation(CPUState *c) {
+    if (c->budget <= 31)
+        return false;
+    const u32 maximum = 0x2fff, reciprocal = 0x1b4e81b5;
+    const bool quadratic = (R(4) & 2) != 0;
+    u32 distance = R(5);
+    if (quadratic) {
+        const u32 remaining = 2400 - distance;
+        distance = (s32)(remaining * remaining) / 2400;
+    }
+    const u32 numerator = distance * maximum;
+    nc_mult(c, numerator, reciprocal);
+    R(6) = c->hi;
+    R(4) = quadratic ? reciprocal : 0;
+    const s32 quotient = (s32)numerator / 2400;
+    const s32 level = quadratic ? quotient : (s32)maximum - quotient;
+    int cycles = quadratic ? 29 : 22;
+    if (level < 0) {
+        R(3) = 0;
+        cycles += 2;
+    } else if (level > (s32)maximum) {
+        R(3) = maximum;
+        ++cycles;
+    } else {
+        R(3) = level;
+    }
+    R(2) = R(3);
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both spatial bearing calls subtract reference X and add reference Z.
  * An actor supplies fixed-point words; a point supplies signed halfwords. */
 bool nc_prepare_spatial_actor_bearing(CPUState *c) {

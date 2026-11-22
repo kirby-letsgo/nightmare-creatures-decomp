@@ -87,6 +87,32 @@ static bool target_vertical_velocities(bool disc) {
     return true;
 }
 
+static bool spatial_attenuation(bool disc) {
+    const s32 distances[] = {-1, 0, 1, 1200, 2399, 2400, 2401, 4801, 65536, INT32_MIN, INT32_MAX};
+    for (unsigned mode = 0; mode < 2; ++mode) {
+        for (unsigned i = 0; i < sizeof distances / sizeof distances[0]; ++i) {
+            CPUState input = initial();
+            input.r[4] = 0x80 | (mode << 1);
+            input.r[5] = distances[i];
+            input.budget = 31;
+            CPUState native = input;
+            if (nc_spatial_attenuation(&native) || memcmp(&input, &native, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_spatial_attenuation(&native) || native.r[2] > 0x2fff ||
+                (distances[i] == 0 && native.r[2] != 0x2fff) ||
+                (distances[i] == 2400 && native.r[2] != 0))
+                return false;
+            if (disc) {
+                interp_call(&input, 0x8006c63c);
+                if (memcmp(&input, &native, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool spatial_distances(bool disc, bool actor) {
     const u16 offsets[] = {0, 1, 2046, 2047, 2048, 2049, 4095};
     const u16 gaps[] = {0, 1, 2046, 2049, 2048, 2047, 1};
@@ -2457,21 +2483,22 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        spatial_distances(disc, true) && spatial_distances(disc, false) &&
-        spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
-        target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
-        roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-        projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-        point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-        heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-        record_projections(disc) && projected_heading_gaps(disc) &&
-        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
-        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
-        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
-        node_matrix_installation(disc) && part_composition(disc) &&
-        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
+        spatial_attenuation(disc) && spatial_distances(disc, true) &&
+        spatial_distances(disc, false) && spatial_bearings(disc, true) &&
+        spatial_bearings(disc, false) && target_vertical_velocities(disc) &&
+        target_displacements(disc) && planar_velocities(disc) && roots(disc) &&
+        displacements(disc) && headings(disc) && heading_samples(disc) && projected_points(disc) &&
+        part_positions(disc) && actor_coordinates(disc) && point_headings(disc, false) &&
+        point_headings(disc, true) && actor_headings(disc) && heading_projections(disc) &&
+        reference_distances(disc) && relative_headings(disc) && record_projections(disc) &&
+        projected_heading_gaps(disc) && projected_heading_selection(disc) &&
+        saved_bearing_projections(disc) && facing_offsets(disc) && projection_entries(disc) &&
+        rotated_point_offsets(disc) && rotated_vector_setup(disc) && placed_actor_points(disc) &&
+        actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc) &&
+        heading_matrix_setup(disc) && part_translation(disc) && part_transform_calls(disc) &&
+        node_transform_selection(disc) && node_matrix_installation(disc) &&
+        part_composition(disc) && node_continuations(disc, false) &&
+        node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         scaled_walk_continuations(disc) && traversal_rotation_composition(disc) &&
         traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&
