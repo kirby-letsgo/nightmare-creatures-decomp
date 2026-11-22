@@ -39,6 +39,30 @@ static bool check_copy(void) {
     return true;
 }
 
+static bool check_find_byte(void) {
+    const u32 ram = 0x80061001;
+    const u8 bytes[] = {0x12, 0, 0xfe, 0x12};
+    const struct {
+        u32 address, key, count, result;
+    } cases[] = {
+        {0, 0, 4, 0}, {ram, 0x12, 0, 0}, {ram, 0x12, 0x80000000, 0},
+        {ram, 0xabcd0012, 4, ram}, {ram, 0, 2, ram + 1}, {ram, 0xfe, 2, 0},
+        {0xa0061001, 0xffff00fe, 3, 0xa0061003},
+        {SCRATCH_BASE + 1, 0xff, 4, 0},
+    };
+    memcpy(nc_fast_ptr(ram), bytes, sizeof bytes);
+    memcpy(nc_fast_ptr(SCRATCH_BASE + 1), bytes, sizeof bytes);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++)
+        for (unsigned tight = 0; tight < 2; tight++) {
+            CPUState state = arguments(cases[i].address, cases[i].key, cases[i].count,
+                                       tight ? 10 : 4096);
+            if (!compare(state, 0x8001a188, nc_credits_find_byte, 9) ||
+                nc_cpu.r[2] != cases[i].result)
+                return false;
+        }
+    return true;
+}
+
 static bool check_fill(void) {
     const u32 dest[] = {0, 0x80060005, SCRATCH_BASE + 3, 0xa0060008};
     const u32 counts[] = {0, 1, 4, 19, 0x80000000, 0xffffffff};
@@ -2300,6 +2324,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_find_byte();
     pass = pass && check_fill();
     pass = pass && check_length();
     pass = pass && check_append();
