@@ -9,6 +9,7 @@ typedef enum NcContactResult {
     NC_CONTACT_PASS,
 } NcContactResult;
 
+NcContactResult nc_player_can_attack(CPUState *c);
 NcContactResult nc_attack_bounds(CPUState *c);
 bool nc_prepare_attack_box(CPUState *c, bool outgoing);
 bool nc_player_attack_kind(CPUState *c);

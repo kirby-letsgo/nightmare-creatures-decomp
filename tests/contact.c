@@ -11,6 +11,7 @@ typedef struct Region {
     NcContactResult (*native)(CPUState *);
 } Region;
 
+static const Region player_gate = {0x800426E8, 0x80042734, 0x80042D68, 25, nc_player_can_attack};
 static const Region incoming = {0x800422DC, 0x80042360, 0x800424AC, 49, nc_attack_bounds};
 static const Region outgoing = {0x80042AA0, 0x80042B24, 0x80042D10, 49, nc_attack_bounds};
 static const Region state_check = {0x8004E510, 0x8004E570, 0x8004E6AC, 25,
@@ -223,6 +224,46 @@ static bool check_attack_kinds(bool disc) {
     return true;
 }
 
+static bool check_player_gate(bool disc) {
+    const u32 flags = 0x80121000, actor = 0x80120000;
+    for (unsigned state = 0; state < 256; ++state)
+        for (unsigned bits = 0; bits < 4; ++bits) {
+            CPUState c = initial_cpu();
+            c.r[3] = flags;
+            c.r[11] = actor;
+            c.r[29] = SCRATCH_BASE;
+            c.budget = player_gate.max_cycles;
+            MEM_W32(flags, bits & 1 ? 0xffffffff : 0xffff7fff);
+            MEM_W32(flags + 4, bits & 2 ? 0xffffffff : 0xfdffffff);
+            MEM_W8(actor + 0x39b, state);
+            MEM_W32(c.r[29] + 0xc0, 0);
+            CPUState native = c;
+            if (nc_player_can_attack(&native) != NC_CONTACT_TIMED || MEM_R32(c.r[29] + 0xc0) != 0 ||
+                memcmp(&native, &c, sizeof c))
+                return false;
+            c.budget += 3;
+            native = c;
+            const bool skip = bits || state == 13 || state == 14 || state == 24;
+            NcContactResult want = skip ? NC_CONTACT_REJECT : NC_CONTACT_PASS;
+            if (nc_player_can_attack(&native) != want || MEM_R32(c.r[29] + 0xc0) != actor)
+                return false;
+            if (disc) {
+                MEM_W32(c.r[29] + 0xc0, 0);
+                interp_call(&c, player_gate.start);
+                if (c.r[26] != (u32)want || MEM_R32(c.r[29] + 0xc0) != actor)
+                    return false;
+                c.r[26] = native.r[26];
+                c.budget += 2;
+                if (memcmp(&native, &c, sizeof c)) {
+                    fprintf(stderr, "outgoing gate state %u, flags %u: budget %d/%d\n", state, bits,
+                            c.budget, native.budget);
+                    return false;
+                }
+            }
+        }
+    return true;
+}
+
 static bool check_attack_parts(bool disc) {
     const u32 actor = 0x80120000;
     for (unsigned present = 0; present < 4; present++) {
@@ -300,14 +341,14 @@ int main(int argc, char **argv) {
         ExecInfo exe;
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
-        const Region *regions[] = {&incoming, &outgoing, &state_check};
+        const Region *regions[] = {&incoming, &outgoing, &state_check, &player_gate};
         for (unsigned i = 0; i < sizeof regions / sizeof regions[0]; ++i) {
             mark_exit(regions[i]->passed, NC_CONTACT_PASS);
             mark_exit(regions[i]->rejected, NC_CONTACT_REJECT);
         }
     }
     bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
-              check_attack_kinds(disc) && check_attack_parts(disc);
+              check_attack_kinds(disc) && check_attack_parts(disc) && check_player_gate(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

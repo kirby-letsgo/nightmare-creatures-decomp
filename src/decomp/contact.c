@@ -61,6 +61,34 @@ bool nc_finish_attack_part(CPUState *c, bool primary) {
     return true;
 }
 
+/* Outgoing contact is disabled by either game flag and in actor states 13, 14 and 24. */
+NcContactResult nc_player_can_attack(CPUState *c) {
+    if (c->budget <= 25)
+        return NC_CONTACT_TIMED;
+    const u32 flags = R(3), actor = R(11);
+    R(2) = MEM_R32(flags) & 0x8000;
+    R(8) = 0;
+    MEM_W32(R(29) + 0xc0, actor);
+    c->budget -= 7;
+    if (R(2))
+        return NC_CONTACT_REJECT;
+
+    R(3) = 0x02000000;
+    R(2) = MEM_R32(flags + 4) & R(3);
+    c->budget -= 7;
+    if (R(2))
+        return NC_CONTACT_REJECT;
+
+    R(3) = MEM_R8(actor + 0x39b);
+    R(2) = R(3) == 13 || R(3) == 14;
+    c->budget -= 8;
+    if (R(2))
+        return NC_CONTACT_REJECT;
+    R(2) = 24;
+    c->budget -= 3;
+    return R(3) == 24 ? NC_CONTACT_REJECT : NC_CONTACT_PASS;
+}
+
 /* The caller has copied 24 primary (state, kind) pairs and two secondary
  * pairs to its stack. A zero result skips outgoing contact detection. */
 bool nc_player_attack_kind(CPUState *c) {
