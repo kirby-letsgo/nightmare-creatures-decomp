@@ -237,6 +237,7 @@ credits_exe  80022214    800222BC         credits_sdk.c
 credits_exe  800225CC    80022600         credits_sdk.c
 credits_exe  80022600    80022664         credits_sdk.c
 credits_exe  80022664    800226E4         credits_sdk.c
+credits_exe  80022CB4    80022CCC         credits_sdk.c
 credits_exe  8001D7EC    8001D804         credits_sdk.c
 credits_exe  8001D048    8001D084         credits_sdk.c
 credits_exe  8001D6AC    8001D730         credits_sdk.c

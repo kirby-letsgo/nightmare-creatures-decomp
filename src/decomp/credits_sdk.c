@@ -2888,6 +2888,10 @@ bool nc_credits_cd_ready_callback(CPUState *c) {
     return exchange_cd_word(c, 0x80024760);
 }
 
+bool nc_credits_cd_read_callback(CPUState *c) {
+    return exchange_cd_word(c, 0x80024a70);
+}
+
 /* CdComstr and CdIntstr return guest pointers into the CD diagnostic strings. */
 static bool cd_lookup_name(CPUState *c, u32 table, u32 count) {
     if (c->budget <= 13)
