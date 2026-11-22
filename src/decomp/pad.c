@@ -143,6 +143,44 @@ bool nc_player_l2_direction(CPUState *c, bool l2_held) {
     return true;
 }
 
+/* The decoder returns both ports in v0. Any set bit resets the countdown
+ * before the state check, including on a frame that also decrements it. */
+bool nc_pad_inactivity(CPUState *c) {
+    if (c->budget <= 29)
+        return false;
+
+    int cycles = 4;
+    if (R(2)) {
+        R(19) = 1250;
+        ++cycles;
+    }
+    R(2) = 11;
+    if (R(19)) {
+        R(3) = MEM_R32(0x8008ef30);
+        cycles += 9;
+        if (R(3) == 11) {
+            --R(19);
+            ++cycles;
+        }
+    }
+    if (!R(19)) {
+        R(4) = MEM_R32(R(28) + 0x244);
+        R(3) = MEM_R32(R(4) + 4);
+        R(13) = 0x02000000;
+        R(2) = R(3) | R(13); /* branch delay slot */
+        cycles += 11;
+        if (!(R(3) & R(13))) {
+            MEM_W32(R(4) + 4, R(2));
+            R(2) = 30;
+            R(1) = 0x800d0000;
+            MEM_W16(0x800d7c30, R(2));
+            cycles += 4;
+        }
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The PSX2 BIOS stubs tail-jump to B0, setting t1 in the delay slot.
  * With three cycles or less, the generated path polls at each boundary. */
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service) {

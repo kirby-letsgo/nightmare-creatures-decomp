@@ -135,6 +135,30 @@ static bool button_dispatch(void) {
     return true;
 }
 
+static bool pad_inactivity(void) {
+    const u32 buttons[] = {0, 1, 0x00400000, 0x80804010};
+    CPUState cpu = initial();
+    cpu.r[31] = 0x8006d5a8;
+    cpu.budget = 30;
+    MEM_W32(gp + 0x244, config);
+    for (unsigned i = 0; i < 4; ++i) {
+        cpu.r[2] = buttons[i];
+        for (unsigned count = 0; count <= 2; ++count) {
+            cpu.r[19] = count;
+            for (unsigned state = 10; state <= 11; ++state) {
+                MEM_W32(0x8008ef30, state);
+                for (unsigned set = 0; set < 2; ++set) {
+                    MEM_W32(config + 4, 0x81345678 | (set << 25));
+                    MEM_W32(0x800d7c30, 0xabcd4321);
+                    if (!compare(cpu, 0x8006d548, nc_pad_inactivity, 29))
+                        return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 static bool l2_held(CPUState *c) {
     return nc_player_l2_direction(c, true);
 }
@@ -620,9 +644,9 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+    bool ok = pad_inactivity() && l2_direction_edges() && button_dispatch() && sdk_pad_patch() &&
+              pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
+              pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
