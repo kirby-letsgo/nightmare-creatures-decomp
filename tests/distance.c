@@ -678,6 +678,52 @@ static bool part_offsets(bool disc) {
     return true;
 }
 
+static bool part_matrix_composition(bool disc) {
+    const u32 frame = SCRATCH_BASE, parent = frame + 512;
+    const s16 rotations[][9] = {{4096, 0, 0, 0, 4096, 0, 0, 0, 4096},
+                                {0, 0, -4096, 0, 4096, 0, 4096, 0, 0}};
+    const s16 part[] = {-32768, 0, 32767, 0, 4096, 0, -1, 0, 1};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < 2; ++i)
+        for (unsigned overlap = 0; overlap < 2; ++overlap) {
+            CPUState input = initial();
+            input.r[16] = i;
+            input.r[17] = parent;
+            input.r[18] = frame + 0xb8;
+            input.r[19] = overlap ? frame + 0xbc : frame + 0x98;
+            input.r[29] = frame;
+            input.r[31] = i ? 0x80034430 : 0x800345bc;
+            memset(nc_scratch, 0xa5, sizeof before);
+            for (unsigned k = 0; k < 9; ++k) {
+                MEM_W16(parent + 2 * k, rotations[i][k]);
+                MEM_W16(frame + 0xb8 + 2 * k, part[k]);
+            }
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = i ? 122 : 123;
+            CPUState native = input;
+            if (nc_compose_part_matrix(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_compose_part_matrix(&native) || native.budget != 1 ||
+                native.r[17] != input.r[19] || native.r[16] != 0)
+                return false;
+            if (!i && !overlap)
+                for (unsigned k = 0; k < 9; ++k)
+                    if (MEM_R16(frame + 0x98 + 2 * k) != (u16)part[k])
+                        return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x80034480);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool part_translation(bool disc) {
     const u32 matrix = SCRATCH_BASE, frame = SCRATCH_BASE + 256;
     const u32 outputs[] = {SCRATCH_BASE + 64, matrix + 0x18, frame + 0xe0};
@@ -1331,7 +1377,7 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              part_offsets(disc);
+              part_offsets(disc) && part_matrix_composition(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

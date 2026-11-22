@@ -632,6 +632,42 @@ bool nc_transform_part_offset(CPUState *c) {
     return true;
 }
 
+static void rotate_matrix_column(CPUState *c, u32 input, u32 output) {
+    for (unsigned row = 0; row < 3; ++row)
+        gte_write_data(c, 9 + row, MEM_R16(input + 6 * row));
+    gte_command(c, 0x049e012); /* MVMVA, rotation matrix, IR vector, no translation */
+    for (unsigned row = 0; row < 3; ++row) {
+        R(12 + row) = gte_read_data(c, 9 + row);
+        MEM_W16(output + 6 * row, R(12 + row));
+    }
+}
+
+/* Compose this part's rotation, then install the resulting transform for
+ * the next part. Only the first column uses the saved matrix pointers. */
+bool nc_compose_part_matrix(CPUState *c) {
+    const int cycles = R(16) ? 122 : 123;
+    if (c->budget <= cycles)
+        return false;
+    const u32 frame = R(29);
+    for (unsigned reg = 0; reg < 5; ++reg)
+        gte_write_ctrl(c, reg, MEM_R32(R(17) + 4 * reg));
+    rotate_matrix_column(c, R(18), R(19));
+    rotate_matrix_column(c, frame + 0xba, frame + 0x9a);
+    rotate_matrix_column(c, frame + 0xbc, frame + 0x9c);
+    R(2) = frame + 0x9c;
+    R(17) = R(19);
+    for (unsigned reg = 0; reg < 8; ++reg) {
+        const u32 word = MEM_R32(R(17) + 4 * reg);
+        gte_write_ctrl(c, reg, word);
+        if (reg >= 5)
+            R(12 + reg - 5) = word;
+    }
+    if (R(16))
+        --R(16);
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both transform paths return the matrix translation in quarter units. */
 bool nc_finish_part_translation(CPUState *c) {
     if (c->budget <= 39)
@@ -675,16 +711,8 @@ bool nc_prepare_heading_matrix(CPUState *c) {
         gte_write_ctrl(c, reg, MEM_R32(R(6) + 4 * reg));
 
     const u32 matrix = frame + 16;
-    for (unsigned column = 0; column < 3; ++column) {
-        const u32 offset = 2 * column;
-        for (unsigned row = 0; row < 3; ++row)
-            gte_write_data(c, 9 + row, MEM_R16(input + offset + 6 * row));
-        gte_command(c, 0x049e012); /* MVMVA, rotation matrix, IR vector, no translation */
-        for (unsigned row = 0; row < 3; ++row) {
-            R(12 + row) = gte_read_data(c, 9 + row);
-            MEM_W16(matrix + offset + 6 * row, R(12 + row));
-        }
-    }
+    for (unsigned column = 0; column < 3; ++column)
+        rotate_matrix_column(c, input + 2 * column, matrix + 2 * column);
     R(2) = matrix + 4;
     R(3) = R(4) = matrix;
     R(31) = 0x8003475c;
