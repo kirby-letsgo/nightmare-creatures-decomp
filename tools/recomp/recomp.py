@@ -1664,6 +1664,8 @@ class Emitter:
                 out.append("        goto L_8002AC94; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AC94:
                 out.append("    if (nc_finish_placement_defaults(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AE1C:
+                out.append("    if (nc_store_placement_axes(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AD3C:
                 out.append("    if (nc_init_placement_pose(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:

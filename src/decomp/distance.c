@@ -62,6 +62,34 @@ bool nc_finish_placement_defaults(CPUState *c) {
     return true;
 }
 
+/* Each angle supplies two X/Z vectors with opposite X components.
+ * The first three signed table samples have already been shifted by six. */
+bool nc_store_placement_axes(CPUState *c) {
+    if (c->budget <= 35)
+        return false;
+    const u32 record = R(19);
+    R(17) = 0u - R(17);
+    R(3) = 0u - R(18);
+    R(16) = 0u - R(16);
+    R(2) = (s16)R(2) >> 6;
+    MEM_W16(record + 0xc8, (u16)R(3));
+    R(3) = 0u - R(2);
+    MEM_W16(record + 0xd4, (u16)R(17));
+    MEM_W16(record + 0xcc, (u16)R(17));
+    MEM_W16(record + 0xd0, (u16)R(18));
+    MEM_W16(record + 0x104, (u16)R(16));
+    MEM_W16(record + 0xfc, (u16)R(16));
+    MEM_W16(record + 0xf8, (u16)R(3));
+    MEM_W16(record + 0x100, (u16)R(2));
+
+    R(31) = MEM_R32(R(29) + 0x24);
+    for (unsigned reg = 20; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 0x10 + 4 * (reg - 16));
+    R(29) += 0x28;
+    c->budget -= 35;
+    return true;
+}
+
 /* The callers pass angles in 4096-unit turns and whole-world X, Y, -Z.
  * Both placement poses start at the supplied position and orientation. */
 bool nc_init_placement_pose(CPUState *c) {
