@@ -65,6 +65,7 @@ CREDITS_ROUTINES = {
     0x80019A60: "nc_credits_printf(c)",
     0x8001A128: "nc_credits_change_case(c, true)",
     0x8001A158: "nc_credits_change_case(c, false)",
+    0x8001A444: "nc_credits_enter_critical_section(c)",
     0x8001A698: "nc_credits_reset_callback(c)",
     0x8001A6C8: "nc_credits_interrupt_callback(c)",
     0x8001A6F8: "nc_credits_dma_callback(c)",
@@ -77,6 +78,7 @@ CREDITS_ROUTINES = {
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
+    0x8001AE78: "nc_credits_exit_critical_section(c)",
     0x8001AF58: "nc_credits_set_vsync_slot(c)",
     0x8001AF84: "nc_credits_clear_irq_words(c)",
     0x8001B22C: "nc_credits_clear_irq_words(c)",
@@ -689,7 +691,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
-            targets.update((0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
+            targets.update((0x8006C714, 0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
             targets.update((0x8006C904, 0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
@@ -1408,9 +1410,17 @@ class Emitter:
                 out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C8E4:
                 out.append("    if (nc_begin_spatial_point(c)) goto L_8006C904;")
-            if self.mod.name == "psx2_exe" and i.addr in (0x8006CA34, 0x8006CA60):
-                distant = "true" if i.addr == 0x8006CA34 else "false"
-                out.append(f"    if (nc_finish_spatial_point(c, {distant})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006C6F0:
+                out.append("    if (nc_begin_spatial_actor(c)) goto L_8006C714;")
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x8006C894,
+                0x8006C8BC,
+                0x8006CA34,
+                0x8006CA60,
+            ):
+                actor = "true" if i.addr in (0x8006C894, 0x8006C8BC) else "false"
+                distant = "true" if i.addr in (0x8006C894, 0x8006CA34) else "false"
+                out.append(f"    if (nc_finish_spatial_frame(c, {actor}, {distant})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
                 out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):

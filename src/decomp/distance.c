@@ -641,6 +641,21 @@ bool nc_prepare_spatial_actor_bearing(CPUState *c) {
     return true;
 }
 
+bool nc_begin_spatial_actor(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 48;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(4);
+    MEM_W32(R(29) + 40, R(31));
+    for (int reg = 21; reg >= 19; --reg)
+        MEM_W32(R(29) + 16 + 4 * (reg - 16), R(reg));
+    MEM_W32(R(29) + 20, R(17));
+    MEM_W32(R(29) + 16, R(16));
+    c->budget -= 9;
+    return true;
+}
+
 bool nc_begin_spatial_point(CPUState *c) {
     if (c->budget <= 8)
         return false;
@@ -656,14 +671,14 @@ bool nc_begin_spatial_point(CPUState *c) {
 }
 
 /* The distant call returns to a jump and delay slot before the shared epilogue. */
-bool nc_finish_spatial_point(CPUState *c, bool distant) {
-    const int cycles = distant ? 23 : 21;
+bool nc_finish_spatial_frame(CPUState *c, bool actor, bool distant) {
+    const int cycles = (actor ? 24 : 21) + (distant ? 2 : 0);
     if (c->budget <= cycles)
         return false;
-    R(31) = MEM_R32(R(29) + 36);
-    for (int reg = 20; reg >= 16; --reg)
+    R(31) = MEM_R32(R(29) + (actor ? 40 : 36));
+    for (int reg = actor ? 21 : 20; reg >= 16; --reg)
         R(reg) = MEM_R32(R(29) + 16 + 4 * (reg - 16));
-    R(29) += 40;
+    R(29) += actor ? 48 : 40;
     c->budget -= cycles;
     return true;
 }

@@ -1322,6 +1322,24 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_critical_sections(void) {
+    const u32 enable_bits[] = {0, 1, 0x400, 0x401};
+    for (unsigned i = 0; i < sizeof enable_bits / sizeof enable_bits[0]; i++) {
+        CPUState state = arguments(0x12345678, 0, 0, 5);
+        u32 status = 0x20001000 | enable_bits[i];
+        state.cop0[12] = status;
+        if (!compare(state, 0x8001a444, nc_credits_enter_critical_section, 4) ||
+            nc_cpu.r[4] != 1 || nc_cpu.r[2] != (enable_bits[i] == 0x401) ||
+            nc_cpu.cop0[12] != (status & ~0x401u))
+            return false;
+        if (!compare(state, 0x8001ae78, nc_credits_exit_critical_section, 4) ||
+            nc_cpu.r[4] != 2 || nc_cpu.r[2] != state.r[2] ||
+            nc_cpu.cop0[12] != (status | 0x401u))
+            return false;
+    }
+    return true;
+}
+
 static bool check_save_irq_context(void) {
     const u32 buffers[] = {0x80061004, 0xa0061004, SCRATCH_BASE + 4};
     const unsigned registers[] = {31, 29, 30, 16, 17, 18, 19, 20, 21, 22, 23, 28};
@@ -1994,6 +2012,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
