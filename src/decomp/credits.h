@@ -11,4 +11,6 @@ bool nc_credits_init_heap(CPUState *c);
 
 bool nc_credits_find_allocation(CPUState *c);
 
+bool nc_credits_run(CPUState *c);
+
 #endif

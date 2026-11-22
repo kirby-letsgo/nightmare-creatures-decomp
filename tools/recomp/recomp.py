@@ -30,6 +30,7 @@ LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
 CREDITS_ROUTINES = {
     0x80018C8C: "nc_credits_skip_input",
+    0x80018F94: "nc_credits_run",
     0x800192E4: "nc_credits_set_cd_volume",
     0x80019454: "nc_credits_init_heap",
     0x800198B0: "nc_credits_find_allocation",

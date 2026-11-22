@@ -166,7 +166,7 @@ target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
     add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c src/decomp/damage.c
         src/decomp/contact.c src/decomp/distance.c)
-    target_sources(nc_gen PRIVATE src/decomp/credits.c)
+    target_sources(nc_gen PRIVATE src/decomp/credits.c src/decomp/credits_roll.c)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -263,3 +263,16 @@ add_executable(test_credits_heap tests/credits_heap.c src/decomp/credits.c src/p
 target_link_libraries(test_credits_heap PRIVATE nc_runtime)
 add_test(NAME credits_heap_disc COMMAND test_credits_heap "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(credits_heap_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+if(TARGET nc_gen)
+    add_executable(test_credits_roll_native tests/credits_roll.c)
+    target_link_libraries(test_credits_roll_native PRIVATE nc_runtime nc_gen)
+    add_executable(test_credits_roll_original tests/credits_roll.c src/port/no_gen.c)
+    target_link_libraries(test_credits_roll_original PRIVATE nc_runtime)
+    foreach(scenario skip full)
+        add_test(NAME credits_roll_${scenario} COMMAND Python3::Interpreter
+            "${CMAKE_SOURCE_DIR}/tools/test_credits_roll.py" $<TARGET_FILE:test_credits_roll_native>
+            $<TARGET_FILE:test_credits_roll_original> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd" ${scenario})
+        set_tests_properties(credits_roll_${scenario} PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+    endforeach()
+endif()
