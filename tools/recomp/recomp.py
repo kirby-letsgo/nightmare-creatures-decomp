@@ -670,7 +670,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80042D9C:
             targets.update((0x80042E18, 0x80042E30, 0x80042E8C, 0x80042EF4, 0x80042F40))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067130:
-            targets.add(0x800672B4)
+            targets.update((0x800672B4, 0x800672BC))
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
             targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067358:
@@ -830,6 +830,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800672B4:
+                out.append("    if (nc_menu_apply_sequence(c)) goto L_800672BC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800672BC:
+                out.append("    if (nc_menu_reset_sequences(c)) goto L_800672F8;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800672E0, 0x800672EC):
                 matched = "true" if i.addr == 0x800672E0 else "false"
                 out.append(f"    if (nc_menu_store_progress(c, {matched})) goto L_800672F8;")

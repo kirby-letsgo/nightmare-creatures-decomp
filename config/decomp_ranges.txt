@@ -240,6 +240,8 @@ psx2_exe     80067130    8006718C         pad.c
 psx2_exe     8006718C    80067200         pad.c
 # Descriptor flag and sequence check for other menu records.
 psx2_exe     8006725C    800672B4         pad.c
+# Completed menu sequence action call and reset of all eleven progress bytes.
+psx2_exe     800672B4    800672E0         pad.c
 # Menu sequence progress writes and record loop boundary.
 psx2_exe     800672E0    80067308         pad.c
 # Menu button scan register restore and return.
