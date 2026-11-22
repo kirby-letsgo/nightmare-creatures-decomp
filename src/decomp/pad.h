@@ -25,6 +25,7 @@ u32 nc_pad_select_edge(CPUState *c);
 u32 nc_pad_start_edge(CPUState *c);
 u32 nc_menu_button_scan_entry(CPUState *c);
 u32 nc_menu_sequence_match(CPUState *c);
+u32 nc_menu_record_sequence(CPUState *c);
 bool nc_menu_apply_direction(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
 u32 nc_menu_direction_selection(CPUState *c, bool right);
