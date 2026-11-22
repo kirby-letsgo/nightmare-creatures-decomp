@@ -985,6 +985,34 @@ static bool menu_record_cross(void) {
     return true;
 }
 
+static bool menu_record_103_destination(CPUState *cpu) {
+    return nc_menu_check_record_103(cpu) == cpu->r[31];
+}
+
+static bool menu_record_modes(void) {
+    const u32 flags[] = {0, 0x80001800, 0xa5a5ffff};
+    for (unsigned record = 101; record <= 104; ++record) {
+        for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+            CPUState cpu = initial();
+            MEM_W32(gp + 0x244, config);
+            MEM_W32(config, flags[i]);
+            MEM_W32(gp + 0x18c, 0xabcd4010);
+            MEM_W32(gp + 0x190, record);
+            cpu.r[31] = 0x80068e50;
+            cpu.budget = 23;
+            if (!compare(cpu, 0x80068e18, nc_menu_check_record_102, 22))
+                return false;
+            cpu.r[3] = record;
+            cpu.r[2] = 103;
+            cpu.r[31] = record == 103 ? 0x80068fe4 : 0x80068e84;
+            cpu.budget = 18;
+            if (!compare(cpu, 0x80068e50, menu_record_103_destination, 17))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool menu_record_triangle(void) {
     const u32 buttons[] = {0, 0x1000, 0x8000, 0xb0009090};
     const u32 actions[] = {0, 0x405};
@@ -1990,12 +2018,12 @@ int main(int argc, char **argv) {
         menu_record_face_edges() && menu_record_face_repeats() &&
         menu_record_start_and_dispatch() && menu_record_button_history() &&
         menu_record_history_resets() && menu_record_four_timing() && menu_record_cross() &&
-        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
-        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        menu_record_modes() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
