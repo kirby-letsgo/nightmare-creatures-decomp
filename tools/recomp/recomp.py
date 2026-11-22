@@ -1681,6 +1681,11 @@ class Emitter:
                 out.append("    if (nc_prepare_actor_placement_target(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_8002B304; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B348:
+                out.append("    { bool update_actor;")
+                out.append("      if (nc_begin_placement_mode(c, &update_actor)) {")
+                out.append(f"        if (update_actor) {{ {self.call(0x80047948)} }}")
+                out.append("        goto L_8002B384; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B384:
                 out.append("    { bool step;")
                 out.append("      if (nc_select_placement_step(c, &step)) {")

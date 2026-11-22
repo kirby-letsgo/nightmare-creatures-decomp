@@ -31,6 +31,7 @@ psx2_exe     8002B200    8002B22C         distance.c
 psx2_exe     8002B22C    8002B260         distance.c
 psx2_exe     8002B260    8002B304         distance.c
 psx2_exe     8002B304    8002B348         distance.c
+psx2_exe     8002B348    8002B384         distance.c
 psx2_exe     8002B384    8002B3D0         distance.c
 psx2_exe     8002B40C    8002B43C         distance.c
 psx2_exe     8006DFE8    8006E088         distance.c

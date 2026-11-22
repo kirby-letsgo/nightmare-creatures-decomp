@@ -327,6 +327,33 @@ bool nc_prepare_actor_placement_target(CPUState *c) {
     return true;
 }
 
+/* Mode 1 passes the placement record and the linked actor's unsigned
+ * byte at 0x398 to the update at 0x80047948. */
+bool nc_begin_placement_mode(CPUState *c, bool *update_actor) {
+    if (c->budget <= 21)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    R(3) = (s32)(s16)MEM_R16(0x800d7c28);
+    R(2) = 1;
+    MEM_W32(R(29) + 0x14, R(31));
+    *update_actor = false;
+    int cycles = 10;
+    if (R(3) == 1) {
+        R(2) = MEM_R32(R(16) + 0x160);
+        cycles += 6;
+        if (R(2)) {
+            R(5) = MEM_R8(R(2) + 0x398);
+            R(31) = 0x8002b384;
+            *update_actor = true;
+            cycles += 5;
+        }
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The dispatcher reads the current mode only when flag bit 1 is set.
  * Mode 3 advances both the signed XYZ coordinates and the record angles. */
 bool nc_select_placement_step(CPUState *c, bool *step) {
