@@ -179,6 +179,28 @@ static bool pad_start_edge(void) {
     return true;
 }
 
+static bool dispatch_read(CPUState *cpu) {
+    return nc_call_live_pad(cpu, 0x80042e8c);
+}
+
+static bool live_pad_dispatch(void) {
+    CPUState cpu = initial();
+    cpu.r[31] = 0x80042e8c;
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(config, 0x8000); /* suppress the disconnect action when neither port responds */
+    MEM_W32(config + 4, 0);
+    const u32 words[] = {0, 1, 0x00080000, 0x00404008};
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
+        MEM_W32(packet, (~words[i] << 16) | 0x4100);
+        MEM_W32(packet + 34, (~words[i] & 0xffff0000) | 0x4100);
+        if (!compare(cpu, 0x80042e7c, dispatch_read, 4))
+            return false;
+    }
+    MEM_W8(packet, 0xff);
+    MEM_W8(packet + 34, 0xff);
+    return compare(cpu, 0x80042e7c, dispatch_read, 4);
+}
+
 static bool playback_read_destination(CPUState *cpu) {
     u32 expected = cpu->r[31];
     return nc_poll_playback_input(cpu) == expected;
@@ -845,11 +867,11 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_dispatch_entry() && playback_read() && playback_poll_gate() &&
-              playback_interrupt() && pad_select_edge() && pad_start_edge() && pad_inactivity() &&
-              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+    bool ok = live_pad_dispatch() && pad_dispatch_entry() && playback_read() &&
+              playback_poll_gate() && playback_interrupt() && pad_select_edge() &&
+              pad_start_edge() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+              sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
