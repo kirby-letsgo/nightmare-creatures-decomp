@@ -80,6 +80,7 @@ CREDITS_ROUTINES = {
     0x8001ADA8: "nc_credits_save_irq_context(c)",
     0x8001AE78: "nc_credits_exit_critical_section(c)",
     0x8001AE88: "nc_credits_start_vsync(c)",
+    0x8001AEE0: "nc_credits_dispatch_vblank(c)",
     0x8001AF58: "nc_credits_set_vsync_slot(c)",
     0x8001AF84: "nc_credits_clear_irq_words(c)",
     0x8001B22C: "nc_credits_clear_irq_words(c)",

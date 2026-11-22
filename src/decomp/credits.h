@@ -150,6 +150,7 @@ bool nc_credits_enter_critical_section(CPUState *c);
 bool nc_credits_exit_critical_section(CPUState *c);
 bool nc_credits_save_irq_context(CPUState *c);
 bool nc_credits_start_vsync(CPUState *c);
+bool nc_credits_dispatch_vblank(CPUState *c);
 bool nc_credits_set_vsync_slot(CPUState *c);
 bool nc_credits_clear_irq_words(CPUState *c);
 bool nc_credits_check_callback(CPUState *c);

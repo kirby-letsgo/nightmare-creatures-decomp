@@ -1405,6 +1405,32 @@ static bool check_start_vsync(void) {
     return ok;
 }
 
+static bool check_vblank_dispatch(void) {
+    const u32 slots = 0x800244b4, counter = slots + 32, noop = 0x8001935c;
+    u8 saved[36];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    bool ok = true;
+    for (unsigned pattern = 0; pattern < 3 && ok; pattern++) {
+        for (unsigned j = 0; j < 2 && ok; j++) {
+            memset(nc_fast_ptr(slots), 0, 32);
+            if (pattern == 1) {
+                for (unsigned i = 0; i < 8; i++)
+                    MEM_W32(slots + i * 4, noop);
+            } else if (pattern == 2) {
+                MEM_W32(slots, 0x8001af58); /* install a callback in slot seven */
+            }
+            u32 count = pattern == 2 ? UINT32_MAX : 17;
+            MEM_W32(counter, count);
+            CPUState state = arguments(7, noop, 0, j ? 4096 : 19);
+            ok = compare(state, 0x8001aee0, nc_credits_dispatch_vblank, 18) &&
+                 MEM_R32(counter) == count + 1 && nc_cpu.r[2] == 0 &&
+                 MEM_R32(slots + 28) == (pattern ? noop : 0);
+        }
+    }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
+    return ok;
+}
+
 static bool check_vsync_slot(void) {
     const struct {
         u32 index, previous, replacement;
@@ -2062,6 +2088,7 @@ int main(int argc, char **argv) {
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();
     pass = pass && check_start_vsync();
+    pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
     pass = pass && check_clear_irq_words(0x8001af84);
