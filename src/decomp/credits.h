@@ -33,4 +33,6 @@ bool nc_credits_resize(CPUState *c);
 
 bool nc_credits_init_shared_record(CPUState *c);
 
+bool nc_credits_play_track(CPUState *c);
+
 #endif
