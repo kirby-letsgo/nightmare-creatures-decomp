@@ -1094,6 +1094,50 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool scaled_part_walk(bool disc) {
+    const u32 frame = SCRATCH_BASE, actor = frame + 256, part = frame + 768;
+    const u32 matrix = frame + 64;
+    const u32 words[] = {0x80001000, 0x7fff0000, 0x0001f000, 0xffff0800,
+                         0x1000,     (u32)-17,   0,          32767};
+    u8 before[SCRATCH_SIZE];
+    for (unsigned path = 0; path < 3; ++path) {
+        const bool resume = path == 2;
+        CPUState input = initial();
+        input.r[10] = part;
+        input.r[17] = frame + 16;
+        input.r[19] = resume ? 3 : 0;
+        input.r[22] = 0;
+        input.r[29] = frame;
+        input.r[31] = 0x800269b4;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(frame + 0xb0, actor);
+        MEM_W32(actor + 0x20, path == 0 ? part : part + 80);
+        MEM_W8(part + 0x4c, 7);
+        MEM_W16(actor + 0x10a + 14, 0xf5ff);
+        MEM_W32(frame + 16, matrix);
+        MEM_W32(frame + 20, part + 80);
+        for (unsigned reg = 0; reg < 8; ++reg)
+            MEM_W32(matrix + 4 * reg, words[reg]);
+        memcpy(before, nc_scratch, sizeof before);
+        bool (*run)(CPUState *) = resume ? nc_resume_scaled_part_walk : nc_begin_scaled_part_walk;
+        input.budget = resume ? 42 : 31;
+        CPUState native = input;
+        if (run(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!run(&native) || native.budget != (path == 0 ? 12 : 1) ||
+            native.r[22] != (path == 1 ? 0x1500u : 0) || native.r[18] != frame + (resume ? 16 : 0))
+            return false;
+        if (disc) {
+            interp_call(&input, resume ? 0x8002695c : 0x80026908);
+            if (memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool scaled_part_positions(bool disc) {
     const u32 frame = SCRATCH_BASE, matrix = frame + 512;
     const s16 points[][3] = {{-32768, 0, 32767}, {0, -1, 0}, {32767, -32768, 0}};
@@ -1887,8 +1931,8 @@ int main(int argc, char **argv) {
         part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
         node_matrix_installation(disc) && part_composition(disc) &&
         node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
-        scaled_part_positions(disc) && part_offsets(disc) && part_matrix_composition(disc) &&
-        part_transform_setup(disc) && part_chain_traversal(disc);
+        scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
+        part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)

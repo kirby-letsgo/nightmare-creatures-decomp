@@ -759,6 +759,43 @@ bool nc_start_scaled_part_position(CPUState *c) {
     return true;
 }
 
+static void locate_scaled_part_stack_slot(CPUState *c) {
+    R(2) = R(19) << 3;
+    R(18) = R(29) + R(2);
+}
+
+/* On initial entry, non-root parts select a mask from the actor's table.
+ * The branch-resume entry keeps the mask and restores the saved transform. */
+bool nc_begin_scaled_part_walk(CPUState *c) {
+    if (c->budget <= 31)
+        return false;
+    R(16) = MEM_R32(R(29) + 0xb0);
+    if (MEM_R32(R(16) + 0x20) != R(10)) {
+        const u32 index = MEM_R8(R(10) + 0x4c);
+        R(22) = MEM_R16(R(16) + 0x10a + 2 * index) & 0x1f00;
+        c->budget -= 11;
+    }
+    R(23) = 0x8009b2a8;
+    R(21) = 0x80081be4;
+    R(20) = 0x80083be4;
+    R(17) = R(29);
+    locate_scaled_part_stack_slot(c);
+    c->budget -= 20;
+    return true;
+}
+
+bool nc_resume_scaled_part_walk(CPUState *c) {
+    if (c->budget <= 42)
+        return false;
+    --R(19);
+    R(15) = MEM_R32(R(17));
+    load_part_transform(c, R(15));
+    R(10) = MEM_R32(R(17) + 4);
+    locate_scaled_part_stack_slot(c);
+    c->budget -= 42;
+    return true;
+}
+
 /* Start the part chain with an identity rotation and zero translation. */
 bool nc_init_part_transform(CPUState *c) {
     if (c->budget <= 55)
