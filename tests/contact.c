@@ -329,6 +329,47 @@ static bool check_attack_parts(bool disc) {
     return true;
 }
 
+static bool check_actor_noninteractive(bool disc) {
+    const u32 actor = 0x80120000;
+    const u32 cases[] = {
+        0, 0x4000, 0x02000000, 0x02004000, 0x00200000, 0x02204000, 0xffffffff, 0x80004001,
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState initial = initial_cpu();
+        initial.r[4] = actor;
+        initial.r[29] = SCRATCH_BASE + 0x300;
+        initial.r[31] = 0;
+        MEM_W32(actor + 0x2c8, cases[i]);
+
+        initial.budget = 17;
+        CPUState native = initial;
+        if (nc_mark_actor_noninteractive(&native) || memcmp(&native, &initial, sizeof native) ||
+            MEM_R32(actor + 0x2c8) != cases[i])
+            return false;
+
+        initial.budget++;
+        native = initial;
+        const bool protected = (cases[i] & 0x4000) && !(cases[i] & 0x02000000);
+        const u32 expected_flags = protected ? cases[i] : cases[i] | 0x00200000;
+        const int cycles = protected ? 14 : (cases[i] & 0x4000) ? 17 : 13;
+        if (!nc_mark_actor_noninteractive(&native) || MEM_R32(actor + 0x2c8) != expected_flags ||
+            native.r[2] != (protected ? 0 : expected_flags) || native.r[3] != cases[i] ||
+            native.r[29] != initial.r[29] || native.budget != initial.budget - cycles)
+            return false;
+
+        if (disc) {
+            MEM_W32(actor + 0x2c8, cases[i]);
+            CPUState guest = initial;
+            interp_call(&guest, 0x80034D2C);
+            if (memcmp(&guest, &native, sizeof guest) || MEM_R32(actor + 0x2c8) != expected_flags) {
+                fprintf(stderr, "actor flag mismatch: input %08x\n", cases[i]);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -348,7 +389,8 @@ int main(int argc, char **argv) {
         }
     }
     bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
-              check_attack_kinds(disc) && check_attack_parts(disc) && check_player_gate(disc);
+              check_attack_kinds(disc) && check_attack_parts(disc) && check_player_gate(disc) &&
+              check_actor_noninteractive(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

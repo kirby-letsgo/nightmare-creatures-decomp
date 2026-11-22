@@ -1,5 +1,33 @@
 #include "decomp/contact.h"
 
+/* Mark an actor as non-interactive unless its protected-state combination is active.
+ * func_80034D2C uses bit 0x4000 as the guard and bit 0x02000000 as its override. */
+bool nc_mark_actor_noninteractive(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+
+    const u32 actor = R(4);
+    R(3) = MEM_R32(actor + 0x2c8);
+    R(2) = R(3) & 0x4000;
+    R(29) -= 24;
+    if (!R(2)) {
+        R(2) = R(3) | 0x00200000;
+        MEM_W32(actor + 0x2c8, R(2));
+        c->budget -= 13;
+    } else {
+        R(2) = R(3) & 0x02000000;
+        if (R(2)) {
+            R(2) = R(3) | 0x00200000;
+            MEM_W32(actor + 0x2c8, R(2));
+            c->budget -= 17;
+        } else {
+            c->budget -= 14;
+        }
+    }
+    R(29) += 24;
+    return true;
+}
+
 /* Resolve the part requested by either of the player's attack slots.
  * The contact loop supplies a default part when this lookup returns zero. */
 bool nc_attack_part(CPUState *c) {
