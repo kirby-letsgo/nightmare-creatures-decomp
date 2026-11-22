@@ -487,6 +487,47 @@ bool nc_credits_draw_area_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_display_x(CPUState *c) {
+    if (c->budget <= 37)
+        return false;
+    const u32 rect = R(4);
+    c->budget -= 2;
+    R(3) = MEM_R8(0x80024558);
+    c->budget -= NC_LOAD_CYCLES + 5;
+    bool half_width = R(3) == 2;
+    if (R(3) != 1)
+        c->budget -= 2;
+
+    bool reverse = false;
+    if (R(3) == 1 || half_width) {
+        c->budget--;
+        reverse = MEM_R8(0x8002455b) != 0;
+        c->budget -= NC_LOAD_CYCLES + 3;
+    } else {
+        c->budget -= 2;
+    }
+
+    if (reverse) {
+        s32 width = (s16)MEM_R16(rect + 4);
+        c->budget -= NC_LOAD_CYCLES;
+        R(4) = (u32)(s32)(s16)MEM_R16(rect);
+        R(3) = (u32)(half_width ? width / 2 : width);
+        R(2) = 1024u - R(3) - R(4);
+        c->budget -= NC_LOAD_CYCLES + (half_width ? 10 : 3);
+    } else {
+        s32 x = (s16)MEM_R16(rect);
+        R(2) = (u32)(half_width ? x / 2 : x);
+        if (half_width) {
+            /* The guest leaves the rounding adjustment in v1. */
+            R(3) = (u32)(x + (x < 0));
+            c->budget -= 7;
+        }
+        c->budget -= NC_LOAD_CYCLES;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_draw_offset_word(CPUState *c) {
     if (c->budget <= 18)
         return false;
