@@ -966,6 +966,32 @@ bool nc_menu_dispatch_and_save_buttons(CPUState *c) {
     return true;
 }
 
+/* Some paths arrive with the record comparison already in v1 and v0.
+ * Record 100 replaces the actor's button word when an actor is present. */
+u32 nc_menu_save_record_buttons(CPUState *c, bool load_record) {
+    if (c->budget <= (load_record ? 20 : 16))
+        return load_record ? 0x80068cf8 : 0x80068d00;
+    if (load_record) {
+        R(3) = MEM_R32(R(28) + 0x190);
+        R(2) = 100;
+        c->budget -= 4;
+    }
+    MEM_W32(R(28) + 0x18c, R(30));
+    c->budget -= 3;
+    if (R(3) != R(2))
+        return 0x80068d3c;
+
+    u32 actor = MEM_R32(0x800ce9c4);
+    R(2) = 0xfffffcff;
+    c->budget -= 7;
+    if (actor) {
+        R(3) = actor;
+        MEM_W32(actor + 0x2f8, R(2));
+        c->budget -= 6;
+    }
+    return 0x80068d30;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
