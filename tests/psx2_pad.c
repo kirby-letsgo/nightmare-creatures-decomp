@@ -150,6 +150,42 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
 }
 #endif
 
+static bool sdk_pad(u32 first_size, u32 second_size) {
+    CPUState cpu = initial();
+    const u32 first = 0x80140100, second = 0x80141004;
+    bios_init();
+    cpu.r[4] = first;
+    cpu.r[5] = first_size;
+    cpu.r[6] = second;
+    cpu.r[7] = second_size;
+    cpu.cop0[12] = 0x405;
+    if (!compare(cpu, 0x80073eb4, nc_sdk_init_pad, 11))
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    if (!compare_generated(cpu, 0x80073eb4, 11))
+        return false;
+#endif
+    if (!nc_sdk_init_pad(&cpu) || (cpu.cop0[12] & 0x401))
+        return false;
+    if (!compare(cpu, 0x80073f1c, nc_sdk_start_pad, 4))
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    if (!compare_generated(cpu, 0x80073f1c, 4))
+        return false;
+#endif
+    if (!nc_sdk_start_pad(&cpu) || cpu.cop0[12] != 0x405)
+        return false;
+    /* A VBlank exposes which addresses and lengths the SDK passed to BIOS. */
+    MEM_W32(first, 0x12345678);
+    MEM_W32(second, 0x87654321);
+    bios_set_pad(0x6010);
+    irq_raise(IRQ_VBLANK);
+    bios_exception(&cpu);
+    irq_write(0, 0);
+    return MEM_R32(first) == (first_size >= 4 ? 0x9fef4100u : 0x12345678u) &&
+           MEM_R32(second) == (second_size >= 4 ? 0x876543ffu : 0x87654321u);
+}
+
 static bool pad_driver(void) {
     CPUState cpu = initial();
     bios_init();
@@ -335,7 +371,8 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
+              packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
