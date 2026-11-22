@@ -1090,6 +1090,25 @@ static bool check_spu_dma_priority(void) {
     return true;
 }
 
+static bool check_spu_wait(void) {
+    const u32 stacks[] = {0x80061000, 0xa0061000, SCRATCH_BASE + 0x100};
+    const int budgets[] = {7, 13, 512, 5536, 5537};
+    u32 product = 13;
+    for (unsigned i = 0; i < 240; i++)
+        product *= 3;
+    for (unsigned i = 0; i < sizeof stacks / sizeof stacks[0]; i++)
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            CPUState state = arguments(1, 2, 3, budgets[j]);
+            state.r[29] = stacks[i];
+            MEM_W32(stacks[i] - 8, UINT32_MAX);
+            MEM_W32(stacks[i] - 4, 0);
+            if (!compare(state, 0x8001fc78, nc_credits_spu_wait, 6) ||
+                MEM_R32(stacks[i] - 8) != 240 || MEM_R32(stacks[i] - 4) != product)
+                return false;
+        }
+    return true;
+}
+
 static bool check_spu_delays(void) {
     const u32 slot = 0x8002468c, original = MEM_R32(slot);
     const u32 addresses[] = {original, 0x80060000, SCRATCH_BASE + 4};
@@ -1399,6 +1418,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_set_address();
     pass = pass && check_spu_read_address();
     pass = pass && check_spu_dma_priority();
+    pass = pass && check_spu_wait();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();

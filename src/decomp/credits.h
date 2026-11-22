@@ -130,6 +130,7 @@ bool nc_credits_spu_write_register(CPUState *c);
 bool nc_credits_spu_set_address(CPUState *c);
 bool nc_credits_spu_read_address(CPUState *c);
 bool nc_credits_spu_set_dma_priority(CPUState *c);
+bool nc_credits_spu_wait(CPUState *c);
 bool nc_credits_spu_set_delay(CPUState *c, bool reading);
 bool nc_credits_cd_status(CPUState *c);
 bool nc_credits_cd_mode(CPUState *c);
