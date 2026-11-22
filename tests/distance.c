@@ -990,10 +990,13 @@ static bool node_matrix_installation(bool disc) {
         bool (*run)(CPUState *);
         u32 entry, stop;
         int cycles;
-    } paths[] = {{nc_start_node_traversal, 0x80026560, 0x800265cc, 60},
-                 {nc_restore_node_branch, 0x800265ac, 0x800265cc, 48},
-                 {nc_apply_node_matrix, 0x800266a4, 0x800266b4, 40},
-                 {nc_apply_part_matrix, 0x800267dc, 0x800267ec, 40}};
+        u32 frame_size;
+    } paths[] = {{nc_start_node_traversal, 0x80026560, 0x800265cc, 60, 224},
+                 {nc_restore_node_branch, 0x800265ac, 0x800265cc, 48, 0},
+                 {nc_apply_node_matrix, 0x800266a4, 0x800266b4, 40, 0},
+                 {nc_apply_part_matrix, 0x800267dc, 0x800267ec, 40, 0},
+                 {nc_start_part_traversal, 0x800266f4, 0x80026754, 53, 208},
+                 {nc_restore_part_branch, 0x80026738, 0x80026754, 47, 0}};
     const u32 words[] = {0x80001000, 0x7fff0000, 0x0001f000, 0xffff0800,
                          0x1000,     (u32)-17,   0,          32767};
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -1003,10 +1006,12 @@ static bool node_matrix_installation(bool disc) {
         input.r[5] = matrix;
         if (paths[i].run == nc_apply_part_matrix)
             input.r[16] = matrix;
+        else if (paths[i].run == nc_restore_part_branch)
+            input.r[18] = frame + 16;
         else
             input.r[18] = matrix;
         input.r[19] = frame + 16;
-        input.r[29] = i ? frame : frame + 224;
+        input.r[29] = frame + paths[i].frame_size;
         input.r[31] = paths[i].stop;
         memset(nc_scratch, 0xa5, sizeof before);
         MEM_W32(node + 4, node + 128);
@@ -1031,10 +1036,10 @@ static bool node_matrix_installation(bool disc) {
             memcpy(after, nc_scratch, sizeof after);
             memcpy(nc_scratch, before, sizeof before);
             u32 entry = paths[i].entry;
-            if (!i) {
+            if (paths[i].frame_size) {
                 const u32 stub = 0x80120000;
                 MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
-                MEM_W32(stub + 4, 0x27bd00e0); /* addiu sp, sp, 224 */
+                MEM_W32(stub + 4, 0x27bd0000u | paths[i].frame_size); /* addiu sp, sp, frame_size */
                 input.r[29] = frame;
                 input.budget += 2;
                 entry = stub;

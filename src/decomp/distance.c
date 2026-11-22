@@ -800,6 +800,40 @@ static void install_node_matrix(CPUState *c, u32 matrix, u32 continuation) {
     R(31) = continuation;
 }
 
+/* The part traversal keeps its pending branches and temporary rotation
+ * matrix at sp+16 and sp+144 in a 208-byte guest frame. */
+bool nc_start_part_traversal(CPUState *c) {
+    if (c->budget <= 53)
+        return false;
+    const u32 frame = R(29) - 208;
+    R(29) = frame;
+    MEM_W32(frame + 0xbc, R(17));
+    R(17) = R(4);
+    MEM_W32(frame + 0xc4, R(19));
+    R(19) = 0;
+    MEM_W32(frame + 0xb8, R(16));
+    R(16) = R(5);
+    MEM_W32(frame + 0xcc, R(31));
+    MEM_W32(frame + 0xc8, R(20));
+    MEM_W32(frame + 0xc0, R(18));
+    install_node_matrix(c, R(16), 0x8002672c);
+    R(18) = frame + 0x10;
+    R(20) = frame + 0x90;
+    c->budget -= 53;
+    return true;
+}
+
+bool nc_restore_part_branch(CPUState *c) {
+    if (c->budget <= 47)
+        return false;
+    R(16) = MEM_R32(R(18));
+    --R(19);
+    install_node_matrix(c, R(16), 0x80026750);
+    R(17) = MEM_R32(R(18) + 4);
+    c->budget -= 47;
+    return true;
+}
+
 bool nc_start_node_traversal(CPUState *c) {
     if (c->budget <= 60)
         return false;
