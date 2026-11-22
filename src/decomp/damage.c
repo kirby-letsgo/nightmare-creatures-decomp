@@ -142,6 +142,33 @@ NcHitOutcome nc_check_lethal_hit(CPUState *c) {
     return R(2) ? NC_HIT_PLAYER_DEATH : NC_HIT_OTHER_DEATH;
 }
 
+/* The two surviving-hit branches have identical flag cleanup. Both enter
+ * with v0 set to the mask that clears bit 8 in the recipient. */
+bool nc_clear_hit_reaction_flags(CPUState *c) {
+    if (c->budget <= 22)
+        return false;
+    const u32 target = R(17);
+    R(3) = MEM_R32(target + 0x2c8);
+    R(5) = R(3) & R(2);
+    MEM_W32(target + 0x2c8, R(5));
+    c->budget -= 7;
+    if (!R(5))
+        return true;
+    R(2) = R(3) & 0x200;
+    R(4) = 0xfffb0000;
+    c->budget -= 3;
+    if (!R(2))
+        return true;
+
+    R(3) = MEM_R32(target + 4);
+    MEM_W32(target + 0x2c8, R(5) & ~0x320u);
+    R(4) |= 0xffff;
+    R(2) = MEM_R32(R(3) + 0x2d0) & R(4);
+    MEM_W32(R(3) + 0x2d0, R(2));
+    c->budget -= 12;
+    return true;
+}
+
 /* Both lethal reactions enter state 15. The player first restores its part
  * links. The other reaction checks for an adrenaline reward after the change. */
 bool nc_apply_lethal_reaction(CPUState *c, bool player) {

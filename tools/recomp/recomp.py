@@ -652,6 +652,8 @@ class Emitter:
                 out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
                 out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8004ED2C, 0x8004ED8C):
+                out.append(f"    if (nc_clear_hit_reaction_flags(c)) goto L_{i.addr + 0x40:08X};")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004EC68:
                 out.extend(
                     [

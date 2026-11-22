@@ -101,6 +101,40 @@ static bool lethal_hits(bool disc) {
     return true;
 }
 
+static bool surviving_hit_flags(bool disc) {
+    const u32 entries[] = {0x8004ed2c, 0x8004ed8c};
+    const u32 flags[] = {0, 0x100, 0x20, 0x120, 0x200, 0x320, 0x80000321, ~0u};
+    const u32 linked_flags = 0xf234abcd;
+    for (unsigned e = 0; e < 2; ++e)
+        for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+            CPUState cpu = {0};
+            for (unsigned r = 1; r < 32; ++r)
+                cpu.r[r] = r * 0x12345u;
+            cpu.r[2] = ~0x100u;
+            cpu.r[17] = target;
+            cpu.r[31] = entries[e] + 0x40;
+            cpu.budget = 23;
+            /* Include links back to the target itself. */
+            const u32 linked = i & 1 ? target : rules;
+            MEM_W32(target + 4, linked);
+            MEM_W32(target + 0x2c8, flags[i]);
+            MEM_W32(linked + 0x2d0, linked_flags);
+            const int cycles = !(flags[i] & ~0x100u) ? 7 : flags[i] & 0x200 ? 22 : 10;
+            if (disc) {
+                if (!compare(cpu, entries[e], nc_clear_hit_reaction_flags, 22))
+                    return false;
+            } else if (!nc_clear_hit_reaction_flags(&cpu) || cpu.budget != 23 - cycles) {
+                return false;
+            }
+            u32 target_mask = flags[i] & 0x200 ? 0x320 : 0x100;
+            u32 linked_mask = flags[i] & 0x200 ? 0x40000 : 0;
+            if (MEM_R32(target + 0x2c8) != (flags[i] & ~target_mask) ||
+                MEM_R32(linked + 0x2d0) != (linked_flags & ~linked_mask))
+                return false;
+        }
+    return true;
+}
+
 static bool player_reaction(CPUState *c) {
     return nc_apply_lethal_reaction(c, true);
 }
@@ -229,7 +263,7 @@ int main(int argc, char **argv) {
             }
         }
     }
-    if (!lethal_hits(compare_disc))
+    if (!lethal_hits(compare_disc) || !surviving_hit_flags(compare_disc))
         return 1;
     if (compare_disc && (!lethal_reactions() || !death_transitions())) {
         fprintf(stderr, "death transition comparison failed\n");
