@@ -139,6 +139,8 @@ typedef enum {
     NC_PLACEMENT_UPDATE_MODE,
     NC_PLACEMENT_APPLY_PRESET,
 } NcPlacementCounterPath;
+bool nc_begin_placement_refresh(CPUState *c, bool *refresh);
+bool nc_finish_placement_refresh(CPUState *c);
 NcPlacementCounterPath nc_check_placement_counter(CPUState *c);
 bool nc_apply_placement_preset(CPUState *c);
 bool nc_begin_placement_mode(CPUState *c, bool *update_actor);
