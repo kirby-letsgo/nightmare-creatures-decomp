@@ -143,6 +143,33 @@ bool nc_player_l2_direction(CPUState *c, bool l2_held) {
     return true;
 }
 
+/* Live input goes straight to the flag check. With idle pads, the caller
+ * tests the sequence-end result first. Both paths return 1 in v0. */
+bool nc_pad_playback_interrupt(CPUState *c, bool check_sequence_end) {
+    if (c->budget <= (check_sequence_end ? 23 : 21))
+        return false;
+    if (check_sequence_end) {
+        bool ended = R(2) != 0;
+        R(2) = 1;
+        c->budget -= 2;
+        if (!ended)
+            return true;
+    }
+
+    R(4) = MEM_R32(R(28) + 0x244);
+    R(3) = MEM_R32(R(4) + 4);
+    if (!(R(3) & R(16))) {
+        MEM_W32(R(4) + 4, R(3) | R(16));
+        MEM_W16(0x800d7c30, 30);
+        R(1) = 0x80090000;
+        MEM_W32(0x8008f164, 5);
+        c->budget -= 10;
+    }
+    R(2) = 1;
+    c->budget -= 11;
+    return true;
+}
+
 /* Gate the Start action on a rising edge with Select released. The caller
  * keeps both ports in s0 for its later Select check and button history. */
 u32 nc_pad_start_edge(CPUState *c) {

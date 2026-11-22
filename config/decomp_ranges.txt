@@ -139,6 +139,8 @@ credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
+# Playback interruption on live input or sequence end.
+psx2_exe     80042E30    80042E7C         pad.c
 # Start press edge after live pad decoding.
 psx2_exe     80042E8C    80042EF4         pad.c
 # Select press edge and button history, excluding the action call and its return.

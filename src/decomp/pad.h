@@ -14,6 +14,7 @@ bool nc_enter_player_input(CPUState *c);
 bool nc_leave_player_input(CPUState *c, bool store_buttons);
 u32 nc_player_input_source(CPUState *c);
 u32 nc_dispatch_player_buttons(CPUState *c);
+bool nc_pad_playback_interrupt(CPUState *c, bool check_sequence_end);
 u32 nc_pad_select_edge(CPUState *c);
 u32 nc_pad_start_edge(CPUState *c);
 bool nc_pad_inactivity(CPUState *c);
