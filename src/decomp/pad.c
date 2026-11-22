@@ -402,6 +402,39 @@ u32 nc_menu_right_input(CPUState *c) {
     return 0x80068480;
 }
 
+/* A new Cross press takes priority. A held Cross still lets a new
+ * Triangle through. Both actions use the same menu record. */
+u32 nc_menu_face_press(CPUState *c) {
+    if (c->budget <= 25)
+        return 0x8006851c;
+
+    const u32 buttons = R(30);
+    u32 action = 0;
+    c->budget -= 3;
+    if (buttons & 0x4000) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 0x4000))
+            action = 0x10;
+    }
+    if (!action) {
+        c->budget -= 2;
+        if (buttons & 0x1000) {
+            c->budget -= 7;
+            if (!(MEM_R32(R(28) + 0x18c) & 0x1000))
+                action = 0x20;
+        }
+    }
+    if (!action) {
+        R(2) = buttons & 0x10; /* Up mask from the branch delay slot */
+        return 0x80068578;
+    }
+    R(4) = R(22);
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = action;
+    c->budget -= 6;
+    return 0x800685fc;
+}
+
 /* Start arrives in v0 from the Up check. A fresh Start takes priority
  * over Down and leaves the repeat counter untouched. */
 u32 nc_menu_start_down(CPUState *c) {

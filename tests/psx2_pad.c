@@ -400,6 +400,32 @@ static bool pad_select_edge(void) {
     return true;
 }
 
+static bool menu_face_destination(CPUState *cpu) {
+    return nc_menu_face_press(cpu) == cpu->r[31];
+}
+
+static bool menu_face_inputs(void) {
+    CPUState cpu = initial();
+    cpu.budget = 25;
+    if (nc_menu_face_press(&cpu) != 0x8006851c)
+        return false;
+    cpu.budget = 26;
+    MEM_W32(gp + 0x190, 0x12345678);
+    const u32 faces[] = {0, 0x4000, 0x1000, 0x5000};
+    for (unsigned now = 0; now < 4; ++now) {
+        for (unsigned prev = 0; prev < 4; ++prev) {
+            MEM_W32(gp + 0x18c, faces[prev] | 0x50000008);
+            for (unsigned up = 0; up < 2; ++up) {
+                cpu.r[30] = faces[now] | 0x50000000 | (up << 4);
+                cpu.r[31] = faces[now] & ~faces[prev] ? 0x800685fc : 0x80068578;
+                if (!compare(cpu, 0x8006851c, menu_face_destination, 25))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool menu_start_down_destination(CPUState *cpu) {
     return nc_menu_start_down(cpu) == cpu->r[31];
 }
@@ -1131,12 +1157,12 @@ int main(int argc, char **argv) {
         return 1;
     bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
               playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && menu_start_down_inputs() &&
-              menu_up_inputs() && menu_right_inputs() && menu_left_inputs() &&
-              menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+              pad_select_edge() && pad_start_edge() && menu_face_inputs() &&
+              menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
+              menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
+              pad_inactivity() && l2_direction_edges() && button_dispatch() && sdk_pad_patch() &&
+              pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
+              pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
