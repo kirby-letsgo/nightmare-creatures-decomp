@@ -1853,6 +1853,37 @@ bool nc_credits_save_irq_context(CPUState *c) {
     return true;
 }
 
+/* Clear the DMA callback table and DICR, then register the channel IRQ handler. */
+bool nc_credits_start_dma(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 24;
+    R(4) = 0x800244e0;
+    c->budget -= 3;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x8001afc8;
+    R(5) = 8;
+    c->budget -= 3;
+    nc_call(c, 0x8001b22c); /* clear eight callback slots */
+
+    set_reg(c, 4, 3); /* DMA IRQ */
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800244dc);
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x8001b000); /* trapIntrDMA */
+    MEM_W32(R(2), 0);
+    NC_POLL(c, 1);
+    R(31) = 0x8001afe8;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a6c8); /* InterruptCallback */
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x8001b184); /* setIntrDMA */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Initialize timer 1 and the VBlank callback table, then return its slot setter. */
 bool nc_credits_start_vsync(CPUState *c) {
     if (c->budget <= 14)
