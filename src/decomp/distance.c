@@ -327,6 +327,24 @@ bool nc_prepare_actor_placement_target(CPUState *c) {
     return true;
 }
 
+/* The branch tests bit 2. Its delay slot saves bits 4 and 6 for the
+ * alternate path, even when the paired-angle update is selected. */
+bool nc_begin_placement_update(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    R(1) = 0x800d0000;
+    MEM_W32(0x800d7c14, 0xb00);
+    MEM_W32(R(29) + 0x14, R(31));
+    MEM_W32(0x800d7c10, 0x790000);
+    R(3) = MEM_R16(R(16) + 0x16c);
+    R(2) = R(3) & 0x50;
+    c->budget -= 17;
+    return true;
+}
+
 /* Mode 1 passes the placement record and the linked actor's unsigned
  * byte at 0x398 to the update at 0x80047948. */
 bool nc_begin_placement_mode(CPUState *c, bool *update_actor) {
@@ -378,7 +396,7 @@ bool nc_select_placement_step(CPUState *c, bool *step) {
     return true;
 }
 
-bool nc_finish_placement_mode(CPUState *c) {
+bool nc_restore_placement_frame(CPUState *c) {
     if (c->budget <= 9)
         return false;
     R(31) = MEM_R32(R(29) + 0x14);
