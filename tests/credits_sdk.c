@@ -928,6 +928,31 @@ static bool graph_debug(CPUState *c) {
     return nc_credits_graph_status(c, true);
 }
 
+static bool check_cd_setters(void) {
+    const struct {
+        u32 entry, slot;
+        bool (*routine)(CPUState *);
+    } setters[] = {
+        {0x8001febc, 0x80024768, nc_credits_cd_set_debug},
+        {0x8001ff7c, 0x8002475c, nc_credits_cd_sync_callback},
+        {0x8001ff94, 0x80024760, nc_credits_cd_ready_callback},
+    };
+    const u32 values[] = {0, 1, 0x8002292c, 0xffffffff};
+    for (unsigned i = 0; i < sizeof setters / sizeof setters[0]; i++) {
+        u32 saved = MEM_R32(setters[i].slot);
+        for (unsigned j = 0; j < sizeof values / sizeof values[0]; j++) {
+            u32 previous = ~values[j];
+            MEM_W32(setters[i].slot, previous);
+            CPUState state = arguments(values[j], 2, 3, (j & 1) ? 4096 : 9);
+            if (!compare(state, setters[i].entry, setters[i].routine, 8) ||
+                nc_cpu.r[2] != previous || MEM_R32(setters[i].slot) != values[j])
+                return false;
+        }
+        MEM_W32(setters[i].slot, saved);
+    }
+    return true;
+}
+
 static bool check_cd_state(void) {
     const u8 values[] = {0, 1, 0x7f, 0x80, 0xff};
     for (unsigned i = 0; i < sizeof values; i++) {
@@ -1046,6 +1071,7 @@ int main(int argc, char **argv) {
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
+    pass = pass && check_cd_setters();
     pass = pass && check_cd_state();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();

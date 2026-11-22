@@ -1389,6 +1389,31 @@ bool nc_credits_cd_last_command(CPUState *c) {
     return cd_state_byte(c, 0x8002477d);
 }
 
+/* These CD setters return the previous word before installing a0. */
+static bool exchange_cd_word(CPUState *c, u32 address) {
+    if (c->budget <= 8)
+        return false;
+    c->budget--; /* lui */
+    R(2) = MEM_R32(address);
+    R(1) = 0x80020000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(address, R(4));
+    c->budget -= 3; /* sw, jr and its delay slot */
+    return true;
+}
+
+bool nc_credits_cd_set_debug(CPUState *c) {
+    return exchange_cd_word(c, 0x80024768);
+}
+
+bool nc_credits_cd_sync_callback(CPUState *c) {
+    return exchange_cd_word(c, 0x8002475c);
+}
+
+bool nc_credits_cd_ready_callback(CPUState *c) {
+    return exchange_cd_word(c, 0x80024760);
+}
+
 bool nc_credits_cd_last_position(CPUState *c) {
     if (c->budget <= 4)
         return false;
