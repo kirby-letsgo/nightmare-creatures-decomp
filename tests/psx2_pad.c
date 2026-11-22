@@ -135,29 +135,46 @@ static bool button_dispatch(void) {
     return true;
 }
 
+static bool check_start_edge(u32 buttons, u32 previous, u32 flags, u32 state, u32 resume) {
+    CPUState input = initial();
+    input.r[2] = buttons;
+    input.r[31] = resume;
+    MEM_W32(gp + 0x144, previous);
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(config, flags);
+    MEM_W32(config + 4, state);
+    memcpy(before, nc_ram, RAM_SIZE);
+    input.budget = 34;
+    CPUState native = input;
+    if (nc_pad_start_edge(&native) != 0x80042e8c || memcmp(&native, &input, sizeof input) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    input.budget = 35;
+    native = input;
+    if (nc_pad_start_edge(&native) != input.r[31] || memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    CPUState guest = input;
+    interp_call(&guest, 0x80042e8c);
+    if (memcmp(&native, &guest, sizeof guest) || memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    return true;
+}
+
 static bool pad_start_edge(void) {
     const u32 words[] = {0, 1, 8, 9, 0x00090000, 0xdead4088};
-    CPUState input = initial();
     for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
         for (unsigned held = 0; held < 2; ++held) {
-            input.r[2] = words[i];
-            input.r[31] = (words[i] & 9) == 8 && !held ? 0x80042eb8 : 0x80042efc;
-            MEM_W32(gp + 0x144, 0x00080001 | (held << 3));
-            memcpy(before, nc_ram, RAM_SIZE);
-            input.budget = 13;
-            CPUState native = input;
-            if (nc_pad_start_edge(&native) != 0x80042e8c || memcmp(&native, &input, sizeof input) ||
-                memcmp(before, nc_ram, RAM_SIZE))
-                return false;
-            input.budget = 14;
-            native = input;
-            if (nc_pad_start_edge(&native) != input.r[31] || memcmp(before, nc_ram, RAM_SIZE))
-                return false;
-            CPUState guest = input;
-            interp_call(&guest, 0x80042e8c);
-            if (memcmp(&native, &guest, sizeof guest) || memcmp(before, nc_ram, RAM_SIZE))
+            u32 resume = (words[i] & 9) == 8 && !held ? 0x80042ef4 : 0x80042efc;
+            if (!check_start_edge(words[i], 0x00080001 | (held << 3), 0, 0, resume))
                 return false;
         }
+    }
+    for (unsigned bits = 0; bits < 16; ++bits) {
+        u32 flags = 0x80000020 | ((bits & 1) << 6) | ((bits & 2) << 26);
+        u32 state = 0x40000010 | ((bits & 12) << 22);
+        u32 resume = bits & 1 ? 0x80042f18 : bits ? 0x80042efc : 0x80042ef4;
+        if (!check_start_edge(0xdead4088, 0x80000000, flags, state, resume))
+            return false;
     }
     return true;
 }

@@ -146,7 +146,7 @@ bool nc_player_l2_direction(CPUState *c, bool l2_held) {
 /* Gate the Start action on a rising edge with Select released. The caller
  * keeps both ports in s0 for its later Select check and button history. */
 u32 nc_pad_start_edge(CPUState *c) {
-    if (c->budget <= 13)
+    if (c->budget <= 34)
         return 0x80042e8c;
     R(16) = R(2);
     R(2) = R(16) & 8;
@@ -161,7 +161,26 @@ u32 nc_pad_start_edge(CPUState *c) {
         return 0x80042efc;
 
     c->budget -= 2;
-    return R(2) ? 0x80042efc : 0x80042eb8;
+    if (R(2))
+        return 0x80042efc;
+
+    R(3) = MEM_R32(R(28) + 0x244);
+    R(4) = MEM_R32(R(3));
+    R(2) = R(4) & 0x40;
+    c->budget -= 11;
+    if (R(2))
+        return 0x80042f18; /* save the full button word */
+
+    u32 flags = MEM_R32(R(3) + 4);
+    R(3) = 0x03000000;
+    R(2) = 0x08000000; /* delay slot precedes the last flag test */
+    c->budget -= 7;
+    if (flags & R(3))
+        return 0x80042efc;
+
+    R(2) &= R(4);
+    c->budget -= 3;
+    return R(2) ? 0x80042efc : 0x80042ef4;
 }
 
 /* The decoder returns both ports in v0. Any set bit resets the countdown
