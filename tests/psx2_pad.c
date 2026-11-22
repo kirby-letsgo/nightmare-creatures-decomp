@@ -410,7 +410,7 @@ static bool menu_right_selection(CPUState *cpu) {
 
 static bool menu_direction_selections(void) {
     CPUState cpu = initial();
-    const u32 indices[] = {12, 13, 0xffffffff};
+    const u32 indices[] = {0, 11, 12, 13, 0x40000001, 0xffffffff};
     const u16 values[] = {0, 1, 2, 0x8000};
     for (unsigned right = 0; right < 2; ++right) {
         u32 entry = right ? 0x8006870c : 0x8006865c;
@@ -427,7 +427,7 @@ static bool menu_direction_selections(void) {
                 MEM_W16(0x800d7c6e, j & 1 ? 0x8001 : 0x4321);
                 MEM_W32(gp + 0x18c, 0x87654321);
                 if (indices[i] != 12)
-                    cpu.r[31] = right ? 0x8006879c : 0x800686b8;
+                    cpu.r[31] = 0x800687b4;
                 else if (values[j] == right)
                     cpu.r[31] = 0x800687cc;
                 else
