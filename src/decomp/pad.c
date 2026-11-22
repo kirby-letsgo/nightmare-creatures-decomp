@@ -1308,6 +1308,34 @@ u32 nc_enter_menu_input(CPUState *c) {
     return (R(3) & 0x40) ? 0x800673bc : 0x80067400;
 }
 
+/* Dispatch action 2 for the current record, then reload the configuration
+ * and clear bit 0x10 in its second mode word. */
+bool nc_menu_mode_record_call(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(4) = R(22);
+    u32 record = MEM_R32(R(28) + 0x190);
+    R(6) = 2;
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12 * record;
+    R(31) = 0x800673e4;
+    c->budget -= 12;
+    nc_call(c, 0x80063b70);
+
+    R(4) = MEM_R32(R(28) + 0x244);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = MEM_R32(R(4) + 4);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(3) = ~0x10u;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) &= R(3);
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(R(4) + 4, R(2));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
