@@ -83,6 +83,8 @@ NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged);
 bool nc_scale_spatial_level(CPUState *c, bool actor);
 bool nc_spatial_attenuation(CPUState *c);
 bool nc_prepare_spatial_actor_bearing(CPUState *c);
+bool nc_begin_spatial_point(CPUState *c);
+bool nc_finish_spatial_point(CPUState *c, bool distant);
 bool nc_prepare_spatial_point_bearing(CPUState *c);
 bool nc_prepare_spatial_distance(CPUState *c, bool actor);
 bool nc_prepare_target_bearing(CPUState *c);

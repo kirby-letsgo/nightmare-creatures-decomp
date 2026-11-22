@@ -641,6 +641,33 @@ bool nc_prepare_spatial_actor_bearing(CPUState *c) {
     return true;
 }
 
+bool nc_begin_spatial_point(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(29) -= 40;
+    MEM_W32(R(29) + 28, R(19));
+    R(19) = R(4);
+    MEM_W32(R(29) + 36, R(31));
+    MEM_W32(R(29) + 32, R(20));
+    for (int reg = 18; reg >= 16; --reg)
+        MEM_W32(R(29) + 16 + 4 * (reg - 16), R(reg));
+    c->budget -= 8;
+    return true;
+}
+
+/* The distant call returns to a jump and delay slot before the shared epilogue. */
+bool nc_finish_spatial_point(CPUState *c, bool distant) {
+    const int cycles = distant ? 23 : 21;
+    if (c->budget <= cycles)
+        return false;
+    R(31) = MEM_R32(R(29) + 36);
+    for (int reg = 20; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 16 + 4 * (reg - 16));
+    R(29) += 40;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_prepare_spatial_point_bearing(CPUState *c) {
     if (c->budget <= 23)
         return false;
