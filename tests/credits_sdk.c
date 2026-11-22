@@ -1456,9 +1456,10 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
-static bool check_spu_read(void) {
-    const u32 spu = 0x80060000, dma = 0x80060400, dest = 0x80061000;
-    const int threshold = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+static bool check_spu_transfer(bool reading, bool io) {
+    const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061000;
+    const int threshold = reading ? 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES
+                                  : 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
     const u32 sizes[] = {0, 64, 65};
     StateIO saved = {0};
     cpu_serialize(&saved);
@@ -1468,16 +1469,28 @@ static bool check_spu_read(void) {
     MEM_W32(0x80024680, dma + 4);
     MEM_W32(0x80024684, dma + 8);
     MEM_W32(0x8002468c, dma + 12);
+    for (unsigned i = 0; i < 34; i++)
+        MEM_W16(buffer + 2 * i, 0x7000 + i);
     bool ok = !saved.error;
+    MEM_W32(0x80024694, io ? 0x100 : 0);
     for (unsigned i = 0; ok && i < sizeof sizes / sizeof sizes[0]; i++) {
         MEM_W16(0x80024690, 0x1234);
         MEM_W32(0x800246a0, i ? 35 : 3);
         memset(nc_fast_ptr(dma), 0xff, 16);
-        CPUState state = arguments(dest, sizes[i], 0x1234, i ? threshold + 1 : 4096);
-        ok = compare(state, 0x8001fa30, nc_credits_spu_read, threshold) &&
-             nc_cpu.r[2] == sizes[i] && MEM_R16(spu + 0x1a6) == 0x1234 &&
-             MEM_R32(dma) == dest && MEM_R32(dma + 8) == 0x01000200 &&
-             MEM_R32(dma + 4) == (((sizes[i] + 63) / 64) << 16 | 16);
+        MEM_W16(spu + 0x1a8, 0xbeef);
+        MEM_W16(spu + 0x1ae, 0);
+        CPUState state = arguments(buffer, sizes[i], 0x1234, i ? threshold + 1 : 4096);
+        ok = compare(state, reading ? 0x8001fa30 : 0x8001f9a8,
+                     reading ? nc_credits_spu_read : nc_credits_spu_write, threshold) &&
+             nc_cpu.r[2] == sizes[i] && MEM_R16(spu + 0x1a6) == 0x1234;
+        if (io) {
+            const u16 last = sizes[i] ? MEM_R16(buffer + ((sizes[i] - 1) & ~1u)) : 0xbeef;
+            ok = ok && MEM_R16(spu + 0x1a8) == last && MEM_R32(dma + 8) == UINT32_MAX;
+        } else {
+            ok = ok && MEM_R32(dma) == buffer &&
+                 MEM_R32(dma + 8) == (reading ? 0x01000200u : 0x01000201u) &&
+                 MEM_R32(dma + 4) == (((sizes[i] + 63) / 64) << 16 | 16);
+        }
     }
     saved.loading = true;
     cpu_serialize(&saved);
@@ -3055,7 +3068,9 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
-    pass = pass && check_spu_read();
+    pass = pass && check_spu_transfer(true, false);
+    pass = pass && check_spu_transfer(false, false);
+    pass = pass && check_spu_transfer(false, true);
     pass = pass && check_spu_write_register();
     pass = pass && check_spu_set_address();
     pass = pass && check_spu_read_address();
