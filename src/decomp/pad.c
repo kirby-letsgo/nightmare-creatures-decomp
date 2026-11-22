@@ -1526,6 +1526,23 @@ u32 nc_menu_dispatch_record_24(CPUState *c) {
     return 0x80068fe4;
 }
 
+/* The record 24 check supplies 29 in v0. Each branch delay slot
+ * prepares v0 for the next record or the count-five action. */
+u32 nc_menu_dispatch_record_29(CPUState *c) {
+    if (c->budget <= 8)
+        return 0x800676e4;
+    bool matches = R(3) == R(2);
+    R(2) = 26;
+    c->budget -= 2;
+    if (!matches)
+        return 0x80067730;
+
+    R(3) = MEM_R32(R(28) + 0x2b8);
+    R(2) = 4;
+    c->budget -= 6;
+    return R(3) == 5 ? 0x800676fc : 0x800674e0;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
