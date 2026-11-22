@@ -788,6 +788,42 @@ bool nc_prepare_part_chain_rotation(CPUState *c) {
     return true;
 }
 
+/* Save a pending traversal branch, then select nodes that have links or
+ * a flagged leaf descriptor. v0 retains the value that selected RotTrans. */
+bool nc_select_node_transform(CPUState *c) {
+    if (c->budget <= 36)
+        return false;
+    const u32 node = R(16);
+    int cycles = 6;
+    R(2) = MEM_R32(node + 12);
+    if (R(2)) {
+        MEM_W32(R(19) + 4, R(2));
+        MEM_W32(R(19), R(18));
+        R(19) += 8;
+        R(2) = MEM_R32(node + 12); /* stack writes may overlap the link */
+        ++R(20);
+        cycles += 9;
+    }
+    if (!R(2)) {
+        R(2) = MEM_R32(node + 4);
+        cycles += 6;
+        if (!R(2)) {
+            const u32 descriptor = MEM_R32(node + 0x38);
+            R(2) = MEM_R8(descriptor + 5) & 2;
+            cycles += 11;
+        }
+    }
+    if (R(2)) {
+        R(4) = node + 0x10;
+        R(5) = node + 0x2c;
+        R(6) = R(29) + 0xb8;
+        R(31) = 0x80026634;
+        cycles += 4;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* RotTrans has already written the node translation. Copy the nine
  * rotation halfwords in guest order before composing the node matrix. */
 bool nc_prepare_node_rotation(CPUState *c) {
