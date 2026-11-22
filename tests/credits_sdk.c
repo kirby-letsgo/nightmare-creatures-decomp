@@ -848,6 +848,33 @@ static bool check_draw_sync_callback(void) {
     return true;
 }
 
+static bool check_set_graph_queue(void) {
+    const u32 mode = 0x80024559, diagnostic = 0x80060c00;
+    const u32 requested[] = {1, 0, 0x101, 7};
+    const int threshold = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W32(diagnostic, 0x03e00008);     /* jr ra */
+    MEM_W32(diagnostic + 4, 0xa1090000); /* sb t1, 0(t0) */
+    MEM_W32(0x80024554, diagnostic);
+    MEM_W32(MEM_R32(0x80024550) + 0x34, 0x8001935c);
+    MEM_W32(MEM_R32(0x800244a0) + 4, 0x8001935c);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof requested / sizeof requested[0]; i++) {
+        MEM_W8(mode, 1);
+        MEM_W8(0x8002455a, i == 3 ? 2 : 0);
+        CPUState state = arguments(requested[i], 0x1234, 0x5678, i ? threshold + 1 : 4096);
+        state.r[8] = mode;
+        state.r[9] = 7;
+        ok = compare(state, 0x8001c11c, nc_credits_set_graph_queue, threshold) &&
+             nc_cpu.r[2] == 1 && MEM_R8(mode) == (u8)requested[i];
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_set_graph_debug(void) {
     const u32 levels[] = {0, 1, 2, 0x100, 0xffffff80, 0xffffffff};
     /* Exercise a callback that preserves the arguments and another that uses them. */
@@ -2970,6 +2997,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
+    pass = pass && check_set_graph_queue();
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();

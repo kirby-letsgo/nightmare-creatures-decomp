@@ -2156,6 +2156,75 @@ bool nc_credits_draw_sync_callback(CPUState *c) {
     return true;
 }
 
+/* Change GPU queue mode and detach the GPU DMA callback when the mode changes. */
+bool nc_credits_set_graph_queue(CPUState *c) {
+    const int entry_cycles = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    if (c->budget <= entry_cycles)
+        return false;
+    c->budget--;
+    R(2) = MEM_R8(0x8002455a);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = 0x80024559;
+    c->budget -= 3;
+    MEM_W32(R(29) + 28, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 24, R(18));
+    c->budget--;
+    R(18) = MEM_R8(R(17));
+    R(2) = R(2) < 2;
+    R(16) = R(4);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (!R(2)) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018524);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        NC_POLL(c, NC_INSN_CYCLES);
+        R(31) = 0x8001c16c;
+        R(5) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, R(2));
+    }
+
+    /* The diagnostic may have changed the mode since the first load. */
+    R(2) = MEM_R8(R(17));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, NC_INSN_CYCLES);
+    const bool changed = R(16) != R(2);
+    R(2) = R(18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (changed) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024550);
+        NC_POLL(c, NC_INSN_CYCLES);
+        load_word(c, 2, R(2) + 0x34);
+        NC_POLL(c, NC_INSN_CYCLES);
+        R(31) = 0x8001c198;
+        R(4) = 1;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, R(2));
+
+        set_reg(c, 4, 2);
+        set_reg(c, 5, 0);
+        R(31) = 0x8001c1a8;
+        MEM_W8(R(17), (u8)R(16));
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001a6f8); /* DMACallback(2, NULL) */
+        set_reg(c, 2, R(18));
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_set_graph_debug(CPUState *c) {
     if (c->budget <= 31)
         return false;
