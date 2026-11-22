@@ -2477,6 +2477,56 @@ static bool point_row_records(bool disc) {
     return true;
 }
 
+static bool point_update_entries(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x80, stub = 0x80120000;
+    CPUState input = initial(), native;
+    input.r[29] = frame + 0x48;
+    input.r[31] = 0x8001ac4c;
+    input.r[4] = 0x80124000;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memset(nc_scratch, 0xa5, sizeof before);
+    memcpy(before, nc_scratch, sizeof before);
+    input.budget = 9;
+    native = input;
+    if (nc_save_point_update_frame(&native) || memcmp(&native, &input, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_save_point_update_frame(&native) || native.budget != 1 || native.r[29] != frame ||
+        native.r[19] != input.r[4] || MEM_R32(frame + 0x40) != input.r[31])
+        return false;
+    for (unsigned reg = 16; reg <= 21; ++reg)
+        if (MEM_R32(frame + 0x28 + 4 * (reg - 16)) != input.r[reg])
+            return false;
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        MEM_W32(stub, 0x08000000u | ((0x8001ac28u >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bd0048);
+        input.r[29] = frame;
+        input.budget += 2;
+        interp_call(&input, stub);
+        if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+            return false;
+    }
+    static const struct {
+        u16 state, row, cycles;
+        bool selected;
+    } cases[] = {{0, 3, 12, false}, {1, 3, 12, false}, {2, 3, 11, true},  {3, 1, 9, true},
+                 {4, 2, 13, true},  {5, 0, 15, true},  {6, 0, 13, false}, {65535, 0, 13, false}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        input = initial();
+        input.r[19] = 0x80124000;
+        input.r[31] = cases[i].selected ? 0x8001aca0 : 0x8001aeac;
+        MEM_W16(input.r[19] + 0x386, cases[i].state);
+        if (!compare(input, 0x8001ac4c, nc_select_point_update_row, disc, &native) ||
+            native.budget != input.budget - cases[i].cycles || native.r[20] != cases[i].row ||
+            native.r[18] != (cases[i].selected ? cases[i].row : input.r[18]))
+            return false;
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -4799,9 +4849,9 @@ int main(int argc, char **argv) {
         selected_point_returns(disc) && selected_point_bearings(disc) &&
         reference_bearing_gaps(disc) && actor_distances(disc) && point_pose_and_query(disc) &&
         point_index_advances(disc) && point_update_returns(disc) && point_proximity(disc) &&
-        point_row_records(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        point_row_records(disc) && point_update_entries(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
