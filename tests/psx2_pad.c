@@ -124,6 +124,75 @@ static bool caller(u32 budget, u8 first, u8 second, u32 argument, u32 flags, u32
            !memcmp(nc_ram, after, RAM_SIZE);
 }
 
+static bool sequence_step(u16 buttons, u8 remaining, u8 side_byte) {
+    CPUState cpu = initial();
+    if (!compare(cpu, 0x80062d2c, nc_read_pad_sequence, 100) || MEM_R8(gp + 0x3f8) != remaining ||
+        MEM_R32(0x8008f04c) != side_byte)
+        return false;
+    memcpy(nc_ram, before, RAM_SIZE);
+    if (!nc_read_pad_sequence(&cpu) || cpu.r[2] != buttons)
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    const int budgets[] = {100, 101};
+    for (unsigned i = 0; i < 2; ++i) {
+        cpu = initial();
+        cpu.budget = budgets[i];
+        CPUState guest = cpu;
+        memcpy(nc_ram, before, RAM_SIZE);
+        interp_call(&guest, 0x80062d2c);
+        memcpy(nc_ram, before, RAM_SIZE);
+        nc_set_module(NC_MOD_PSX2);
+        NcFunc read_record = nc_lookup(0x80062d2c);
+        if (!read_record)
+            return false;
+        read_record(&cpu);
+        nc_set_module(NC_MOD_NONE);
+        if (memcmp(&cpu, &guest, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
+            return false;
+    }
+#endif
+    return true;
+}
+
+static bool sequences(void) {
+    const u32 records = 0x80140000;
+    CPUState cpu = initial();
+    MEM_W32(gp + 0x184, 0);
+    if (!compare(cpu, 0x80062cc8, nc_pad_sequence_ended, 40))
+        return false;
+    MEM_W32(gp + 0x184, records);
+    if (!compare(cpu, 0x80062cb0, nc_stop_pad_sequence, 6) || MEM_R32(gp + 0x184) ||
+        MEM_R32(0x8008f164) != 5)
+        return false;
+    MEM_W32(gp + 0x184, records);
+    MEM_W32(gp + 0x188, 0xffffffff);
+    MEM_W8(gp + 0x3f8, 0);
+    MEM_W32(records, 0x11030000);      /* idle for three reads */
+    MEM_W32(records + 4, 0x22010020);  /* single button */
+    MEM_W32(records + 8, 0x3302c080);  /* simultaneous buttons */
+    MEM_W32(records + 12, 0x44014c41); /* first marker half alone */
+    MEM_W32(records + 16, 0x4e414c41);
+    MEM_W32(0x8008f164, 0xdeadbeef);
+    MEM_W32(records + 20, 0x55000000);
+    if (!sequence_step(0, 2, 0x11) || !sequence_step(0, 1, 0x11) || !sequence_step(0, 0, 0x22) ||
+        !sequence_step(0x20, 0, 0x33) || !sequence_step(0xc080, 1, 0x33) ||
+        !sequence_step(0xc080, 0, 0x44) || !sequence_step(0x4c41, 0, 0x4e) ||
+        !sequence_step(0x4c41, 0, 0x55) || MEM_R32(gp + 0x184) != 0 || MEM_R32(gp + 0x188) != 4 ||
+        !sequence_step(0, 0, 0x55))
+        return false;
+    MEM_W32(gp + 0x184, records);
+    MEM_W32(gp + 0x188, 0xffffffff);
+    MEM_W32(records, 0x11000080); /* zero duration wraps to 255 */
+    if (!sequence_step(0x80, 255, 0x11))
+        return false;
+    for (unsigned i = 0; i < 3; ++i) {
+        MEM_W32(gp + 0x188, i + 2);
+        if (!compare(cpu, 0x80062cc8, nc_pad_sequence_ended, 40))
+            return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -134,7 +203,7 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = ports();
+    bool ok = sequences() && ports();
     for (unsigned i = 0; ok && i < 18; ++i) {
         u32 pressed = i == 16 ? 0 : i == 17 ? 0xfafa : 1u << i;
         ok = decode(0x41, pressed, false, 0, 128, 128, 128) &&
