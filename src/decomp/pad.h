@@ -19,6 +19,8 @@ u32 nc_enter_pad_dispatch(CPUState *c);
 u32 nc_pad_playback_poll_gate(CPUState *c);
 u32 nc_poll_playback_input(CPUState *c);
 bool nc_pad_playback_interrupt(CPUState *c, bool check_sequence_end);
+bool nc_call_pad_action(CPUState *c, bool select_pressed);
+bool nc_leave_pad_dispatch(CPUState *c);
 u32 nc_pad_select_edge(CPUState *c);
 u32 nc_pad_start_edge(CPUState *c);
 bool nc_pad_inactivity(CPUState *c);

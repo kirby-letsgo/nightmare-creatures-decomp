@@ -294,6 +294,31 @@ u32 nc_pad_start_edge(CPUState *c) {
     return R(2) ? 0x80042efc : 0x80042ef4;
 }
 
+/* Start resumes at the Select check. A new Select press skips the history
+ * store and returns -1, regardless of the value returned by the action. */
+bool nc_call_pad_action(CPUState *c, bool select_pressed) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = select_pressed ? 0x80042f48 : 0x80042efc;
+    c->budget -= 2;
+    nc_call(c, select_pressed ? 0x80055f5c : 0x8006eae8);
+    if (select_pressed) {
+        R(2) = 0xffffffff;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+    return true;
+}
+
+bool nc_leave_pad_dispatch(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x24);
+    R(16) = MEM_R32(R(29) + 0x20);
+    R(29) += 0x28;
+    c->budget -= 9;
+    return true;
+}
+
 /* With flag 0x40 set, save both ports and report 1. Otherwise only a
  * released Select updates history here. A new press continues at the call. */
 u32 nc_pad_select_edge(CPUState *c) {
