@@ -518,6 +518,57 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+/* The record stores signed whole-unit X/Z, while the actor has eight
+ * fractional bits. The bearing adds record X and subtracts record Z. */
+bool nc_prepare_planar_velocity(CPUState *c) {
+    if (c->budget <= 28)
+        return false;
+    R(3) = MEM_R32(0x800ce9c4);
+    R(29) -= 32;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(5);
+    MEM_W32(R(29) + 28, R(31));
+    MEM_W32(R(29) + 16, R(16));
+    const s32 x = (s16)MEM_R16(R(17) + 0x10);
+    R(4) = ((s32)MEM_R32(R(3) + 0x27c) >> 8) + x;
+    R(5) = (s32)MEM_R32(R(3) + 0x284) >> 8;
+    R(2) = (s32)(s16)MEM_R16(R(17) + 0x14);
+    R(5) -= R(2);
+    R(31) = 0x800588b0;
+    c->budget -= 28;
+    return true;
+}
+
+/* Store the reflected bearing in 16-bit turn units. Project the speed
+ * with a negative quarter-turn offset and signed Q14 table samples. */
+bool nc_finish_planar_velocity(CPUState *c) {
+    if (c->budget <= 53)
+        return false;
+    const u32 angle = R(2) << 4;
+    R(16) = angle - 0x4000;
+    R(4) = R(16);
+    MEM_W16(R(17) + 0x34, -angle);
+    nc_heading_cosine(c);
+    nc_mult(c, (u32)(s32)(s16)R(2), R(18));
+    R(6) = c->lo;
+    MEM_W16(R(17) + 0x20, (s32)R(6) >> 14);
+    R(4) = R(16);
+    nc_heading_sine(c);
+    nc_mult(c, (u32)(s32)(s16)R(2), R(18));
+    R(6) = c->lo;
+    R(2) = (s32)R(6) >> 14;
+    MEM_W16(R(17) + 0x24, R(2));
+    R(31) = MEM_R32(R(29) + 28);
+    R(18) = MEM_R32(R(29) + 24);
+    R(17) = MEM_R32(R(29) + 20);
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 32;
+    c->budget -= 35; /* The two lookups charged nine cycles each. */
+    return true;
+}
+
 static u32 part_rotation_angle(u32 source, unsigned axis, NcRotationInput input) {
     if (input == NC_ROTATION_PACKED)
         return (s32)(s16)MEM_R16(source + 2 * axis);
