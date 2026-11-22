@@ -172,6 +172,7 @@ CREDITS_ROUTINES = {
     0x8001C880: "nc_credits_draw_primitive(c)",
     0x8001C8E0: "nc_credits_draw_otag(c)",
     0x8001C954: "nc_credits_put_draw_env(c)",
+    0x8001CA18: "nc_credits_draw_otag_env(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",
     0x8001CFDC: "nc_credits_read_environment(c, true)",
     0x8001D014: "nc_credits_display_field(c)",
