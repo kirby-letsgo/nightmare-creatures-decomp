@@ -812,6 +812,43 @@ static bool placement_matrix_return(bool disc) {
     return true;
 }
 
+static bool placement_axis_samples(bool disc) {
+    const u32 record = SCRATCH_BASE, frame = SCRATCH_BASE + 0x180;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned wide = 0; wide < 2; ++wide) {
+        CPUState input = initial();
+        input.r[4] = record;
+        input.r[28] = SCRATCH_BASE;
+        input.r[29] = frame + 0x28;
+        input.r[17] = wide ? 0x20000000 : 0;
+        memset(nc_scratch, 0xa5, sizeof before);
+        /* The mode word aliases saved s1, so the read must follow the spill. */
+        MEM_W32(input.r[28] + 0x244, frame + 0x14);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 71;
+        CPUState native = input;
+        if (nc_sample_placement_axes(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = 72;
+        if (!nc_sample_placement_axes(&native) || native.budget != (wide ? 1 : 3) ||
+            native.r[20] != (wide ? 0x2e38u : 0x18e3u) || native.r[31] != 0x8002ae1c)
+            return false;
+        native.budget += 35;
+        if (!nc_store_placement_axes(&native))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            input.budget = 107;
+            interp_call(&input, 0x8002ada0);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_axes(bool disc) {
     const u32 record = SCRATCH_BASE, frame = SCRATCH_BASE + 0x180;
     static const s16 samples[] = {INT16_MIN, -65, -1, 0, 64, INT16_MAX};
@@ -3804,7 +3841,7 @@ int main(int argc, char **argv) {
         !placement_mode_entry(disc) || !placement_step_selection(disc) ||
         !actor_placement_paths(disc) || !actor_placement_targets(disc) ||
         !placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
-        !placement_matrix_scales(disc) || !placement_axes(disc) ||
+        !placement_matrix_scales(disc) || !placement_axis_samples(disc) || !placement_axes(disc) ||
         !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
         !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
         !transposed_placement_scales(disc) || !placement_pose_initializers(disc) ||
