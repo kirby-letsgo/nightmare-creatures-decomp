@@ -1119,6 +1119,8 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80026AA0, 0x80026B28):
                 shared = "true" if i.addr == 0x80026AA0 else "false"
                 out.append(f"    if (nc_sample_traversal_angles(c, {shared})) goto L_80026BB8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026CDC:
+                out.append("    if (nc_compose_traversal_rotation(c)) goto L_80026F60;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026BB8:
                 out.append("    if (nc_build_traversal_matrix(c)) goto L_80026CDC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026A6C:

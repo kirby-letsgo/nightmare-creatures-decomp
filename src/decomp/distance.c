@@ -1288,6 +1288,26 @@ static void rotate_matrix_column(CPUState *c, u32 input, u32 output) {
     }
 }
 
+/* Bit 3 selects the traversal root rotation at fp. Otherwise the part
+ * inherits the current rotation at t7. Both paths install the result. */
+bool nc_compose_traversal_rotation(CPUState *c) {
+    const bool use_root = (R(13) & 8) != 0;
+    const int cycles = use_root ? 127 : 125;
+    if (c->budget <= cycles)
+        return false;
+    const u32 parent = use_root ? R(30) : R(15);
+    const u32 local = R(29) + 0x80, output = R(10) + 0x18;
+    for (unsigned reg = 0; reg < 5; ++reg)
+        gte_write_ctrl(c, reg, MEM_R32(parent + 4 * reg));
+    for (unsigned col = 0; col < 3; ++col)
+        rotate_matrix_column(c, local + 2 * col, output + 2 * col);
+    R(2) = output + 4;
+    R(3) = R(15) = output;
+    load_part_transform(c, output);
+    c->budget -= cycles;
+    return true;
+}
+
 /* Compose this part's rotation, then install the resulting transform for
  * the next part. Only the first column uses the saved matrix pointers. */
 bool nc_compose_part_matrix(CPUState *c) {
