@@ -1392,6 +1392,29 @@ bool nc_menu_record_timeout(CPUState *c) {
     return true;
 }
 
+/* The high mode flag bypasses the record check. For record 29 the
+ * signed counter selects the early increment until it reaches five. */
+u32 nc_menu_check_record_29(CPUState *c) {
+    if (c->budget <= 24)
+        return 0x800674a0;
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(4) = MEM_R32(config);
+    R(2) = 29;
+    c->budget -= 11;
+    if (R(4) & 0x40000000)
+        return 0x80067698;
+
+    R(3) = MEM_R32(R(28) + 0x190);
+    c->budget -= 6;
+    if (R(3) != 29)
+        return 0x8006767c;
+
+    R(3) = MEM_R32(R(28) + 0x2b8);
+    R(2) = 5;
+    c->budget -= 7;
+    return (s32)R(3) < 5 ? 0x800674e0 : 0x800674f0;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
