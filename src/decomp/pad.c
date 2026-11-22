@@ -402,6 +402,35 @@ u32 nc_menu_right_input(CPUState *c) {
     return 0x80068480;
 }
 
+/* v0 carries the Up mask from the preceding path. A held Up starts
+ * repeating when the incremented signed counter reaches 11. */
+u32 nc_menu_up_repeat(CPUState *c) {
+    if (c->budget <= 23)
+        return 0x8006848c;
+
+    bool up = R(2) != 0;
+    R(2) = R(30) & 8; /* Start mask for the next check */
+    c->budget -= 2;
+    if (!up)
+        return 0x800684d0;
+
+    u32 count = MEM_R32(R(28) + 0x194) + 1u;
+    MEM_W32(R(28) + 0x194, count);
+    R(4) = R(22);
+    c->budget -= 9;
+    if ((s32)count < 11) {
+        R(2) = MEM_R32(R(28) + 0x18c) & 0x10;
+        c->budget -= 7;
+        if (R(2))
+            return 0x800687cc;
+    }
+
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 4;
+    c->budget -= 5;
+    return 0x800685fc;
+}
+
 /* Menu state 0x1a switches flags according to the first packet's type
  * nibble. Each path writes only when its old mode bit is present. */
 bool nc_menu_pad_type_flags(CPUState *c) {
