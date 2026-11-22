@@ -611,6 +611,23 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* The planar length uses the last two entries of the matrix's middle row.
+ * Shift the wrapped 32-bit sum as a signed word in the root call's delay slot. */
+bool nc_prepare_matrix_planar_length(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const s32 y = (s16)MEM_R16(R(29) + 0x18);
+    const s32 z = (s16)MEM_R16(R(29) + 0x1a);
+    R(3) = (u32)(y * y);
+    R(2) = z;
+    nc_mult(c, R(2), R(2));
+    R(7) = c->lo;
+    R(4) = (u32)((s32)(R(3) + R(7)) >> 12);
+    R(31) = 0x80034788;
+    c->budget -= 15;
+    return true;
+}
+
 /* Extract three bearings from the scaled matrix at sp+16. When the
  * planar length is zero the first bearing uses the last row and the
  * second bearing is zero. Each 4096-unit result becomes a 16-bit turn. */
