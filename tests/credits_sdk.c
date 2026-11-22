@@ -1278,6 +1278,42 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_callback_controls(void) {
+    const u32 slot = 0x800244a0, original = MEM_R32(slot), table = 0x80061000;
+    const u32 debug = 0x80024768, saved_debug = MEM_R32(debug);
+    const struct {
+        u32 entry, offset;
+        int threshold;
+        bool (*routine)(CPUState *);
+    } cases[] = {
+        {0x8001a6f8, 4, 12, nc_credits_dma_callback},
+        {0x8001a728, 20, 13, nc_credits_vsync_callback},
+        {0x8001a75c, 20, 12, nc_credits_vsync_callbacks},
+        {0x8001a78c, 16, 12, nc_credits_stop_callback},
+        {0x8001a7bc, 24, 12, nc_credits_restart_callback},
+    };
+    MEM_W32(slot, table);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        for (unsigned offset = 0; offset < 28; offset += 4)
+            MEM_W32(table + offset, 0x8001fe20); /* CdLastPos */
+        MEM_W32(table + cases[i].offset, 0x8001febc); /* CdSetDebug records a0 */
+        for (unsigned j = 0; j < 2; j++) {
+            MEM_W32(debug, 0xabcd1234);
+            CPUState state = arguments(0x8001935c, 0x13579, 3, j ? cases[i].threshold + 1 : 4096);
+            if (j)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            bool default_slot = cases[i].entry == 0x8001a728;
+            if (!compare(state, cases[i].entry, cases[i].routine, cases[i].threshold) ||
+                nc_cpu.r[2] != 0xabcd1234 || MEM_R32(debug) != (default_slot ? 0 : state.r[4]) ||
+                nc_cpu.r[5] != (default_slot ? state.r[4] : state.r[5]))
+                return false;
+        }
+    }
+    MEM_W32(debug, saved_debug);
+    MEM_W32(slot, original);
+    return true;
+}
+
 static bool check_interrupt_driver_calls(void) {
     const u32 slot = 0x800244a0, original = MEM_R32(slot);
     const u32 table = 0x80061000, flag = 0x80023418, handler = 0x80023424;
@@ -1844,6 +1880,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_callback_controls();
     pass = pass && check_interrupt_driver_calls();
     pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();

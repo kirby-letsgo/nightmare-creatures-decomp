@@ -1774,6 +1774,44 @@ bool nc_credits_interrupt_callback(CPUState *c) {
     return interrupt_driver_call(c, 8, 0x8001a6e8);
 }
 
+bool nc_credits_dma_callback(CPUState *c) {
+    return interrupt_driver_call(c, 4, 0x8001a718);
+}
+
+/* VSyncCallback(handler) installs it in slot zero. VSyncCallbacks takes a slot. */
+bool nc_credits_vsync_callback(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    R(29) -= 24;
+    c->budget -= 2;
+    R(2) = MEM_R32(0x800244a0);
+    R(5) = R(4);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    R(2) = MEM_R32(R(2) + 20);
+    R(31) = 0x8001a74c;
+    R(4) = 0;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    nc_call(c, R(2));
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_vsync_callbacks(CPUState *c) {
+    return interrupt_driver_call(c, 20, 0x8001a77c);
+}
+
+bool nc_credits_stop_callback(CPUState *c) {
+    return interrupt_driver_call(c, 16, 0x8001a7ac);
+}
+
+bool nc_credits_restart_callback(CPUState *c) {
+    return interrupt_driver_call(c, 24, 0x8001a7dc);
+}
+
 /* Clear the CD callbacks and cached status, then install the IRQ 2 handler. */
 bool nc_credits_cd_init_interrupt(CPUState *c) {
     if (c->budget <= 12)
