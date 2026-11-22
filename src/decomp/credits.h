@@ -142,6 +142,7 @@ bool nc_credits_move_image(CPUState *c);
 bool nc_credits_clear_otag(CPUState *c);
 bool nc_credits_clear_otag_reverse(CPUState *c);
 bool nc_credits_draw_primitive(CPUState *c);
+bool nc_credits_draw_otag_env(CPUState *c);
 bool nc_credits_put_draw_env(CPUState *c);
 bool nc_credits_draw_otag(CPUState *c);
 bool nc_credits_draw_sync(CPUState *c);
