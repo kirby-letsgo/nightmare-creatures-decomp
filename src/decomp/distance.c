@@ -963,6 +963,45 @@ bool nc_test_part_heading(CPUState *c) {
     return true;
 }
 
+/* Each of five parts tries up to five headings. On a match the inner
+ * loop exits immediately, leaving its candidate index in a2 untouched. */
+NcPartSearchStep nc_advance_part_heading_search(CPUState *c, bool matched) {
+    const u32 next_heading = R(6) + 1;
+    if (!matched && (s32)next_heading < 5) {
+        if (c->budget <= 4)
+            return NC_PART_SEARCH_FALLBACK;
+        R(6) = next_heading;
+        R(2) = next_heading * 2;
+        c->budget -= 4;
+        return NC_PART_SEARCH_NEXT_HEADING;
+    }
+
+    const u32 next_part = R(19) + 1;
+    const bool done = (s32)next_part >= 5;
+    const int cycles = (matched ? 6 : 9) + done;
+    if (c->budget <= cycles)
+        return NC_PART_SEARCH_FALLBACK;
+    if (!matched)
+        R(6) = next_heading;
+    R(18) += 1;
+    R(19) = next_part;
+    R(20) += 2;
+    R(2) = !done;
+    c->budget -= cycles;
+    return done ? NC_PART_SEARCH_DONE : NC_PART_SEARCH_NEXT_PART;
+}
+
+bool nc_restore_part_search_frame(CPUState *c) {
+    if (c->budget <= 27)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x3c);
+    for (unsigned reg = 22; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 0x20 + 4 * (reg - 16));
+    R(29) += 0x40;
+    c->budget -= 27;
+    return true;
+}
+
 /* Select the part to transform and its point record. The preceding branch
  * supplies the output vector at sp+0x18 in a1. */
 bool nc_select_part_bearing_point(CPUState *c) {

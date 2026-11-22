@@ -1478,6 +1478,15 @@ class Emitter:
                 out.append("    if (nc_call_part_with_bearing(c)) {")
                 out.append(f"        {self.call(0x8001B5D4)}")
                 out.append("        goto L_8001C01C; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8001C01C, 0x8001C024):
+                matched = "true" if i.addr == 0x8001C01C else "false"
+                out.append(f"    switch (nc_advance_part_heading_search(c, {matched})) {{")
+                out.append("    case NC_PART_SEARCH_NEXT_HEADING: goto L_8001BF54;")
+                out.append("    case NC_PART_SEARCH_NEXT_PART: goto L_8001BF18;")
+                out.append("    case NC_PART_SEARCH_DONE: goto L_8001C04C;")
+                out.append("    case NC_PART_SEARCH_FALLBACK: break; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001C04C:
+                out.append("    if (nc_restore_part_search_frame(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BF18:
                 out.append("    if (nc_begin_part_heading_search(c)) goto L_8001BF54;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BF54:
