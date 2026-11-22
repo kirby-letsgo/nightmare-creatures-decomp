@@ -1559,6 +1559,50 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
+/* Upload a 256-color palette as a single VRAM row and return its CLUT identifier. */
+bool nc_credits_load_clut(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    R(29) -= 40;
+    R(2) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 28, R(17));
+    R(17) = R(6);
+    R(4) = R(29) + 16;
+    R(5) = R(2);
+    R(2) = 256;
+    c->budget -= 5;
+    MEM_W16(R(29) + 20, R(2));
+    R(2) = 1;
+    c->budget -= 2;
+    MEM_W32(R(29) + 32, R(31));
+    c->budget--;
+    MEM_W16(R(29) + 16, R(16));
+    c->budget--;
+    MEM_W16(R(29) + 18, R(17));
+    c->budget--;
+    R(31) = 0x8001b384;
+    MEM_W16(R(29) + 22, R(2));
+    c->budget -= 2;
+    nc_call(c, 0x8001c5a4); /* LoadImage */
+
+    set_reg(c, 4, R(16));
+    R(31) = 0x8001b390;
+    R(5) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001b610); /* GetClut */
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Both fills pack RGB from the low argument bytes. ClearImage2 also sets bit 31. */
 static bool queue_image_fill(CPUState *c, bool high_bit) {
     const unsigned green = high_bit ? 16 : 17;
