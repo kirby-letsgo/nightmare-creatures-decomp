@@ -84,4 +84,6 @@ bool nc_credits_packet_flag(CPUState *c, u8 mask);
 
 bool nc_credits_prepend_packets(CPUState *c, bool range);
 
+bool nc_credits_packet_link(CPUState *c, bool check_end);
+
 #endif

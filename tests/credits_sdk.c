@@ -212,6 +212,26 @@ static bool check_prepend(void) {
     return true;
 }
 
+static bool next_packet(CPUState *c) {
+    return nc_credits_packet_link(c, false);
+}
+static bool end_packet(CPUState *c) {
+    return nc_credits_packet_link(c, true);
+}
+static bool check_link(void) {
+    const u32 tags[] = {0, 0xff000000, 0x12ffffff, 0x00fffffe, 0xff800000, 0xabcdef01};
+    for (unsigned i = 0; i < sizeof tags / sizeof tags[0]; i++)
+        for (unsigned j = 0; j < 2; j++) {
+            u32 base = j ? SCRATCH_BASE : 0x80060300;
+            MEM_W32(base, tags[i]);
+            CPUState start = arguments(base, 0, 0, 10);
+            if (!compare(start, 0x8001b738, next_packet, 9) ||
+                !compare(start, 0x8001b754, end_packet, 9))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -231,6 +251,7 @@ int main(int argc, char **argv) {
     pass = pass && check_primitives();
     pass = pass && check_packet_flags();
     pass = pass && check_prepend();
+    pass = pass && check_link();
     disc_close();
     return pass ? 0 : 1;
 }
