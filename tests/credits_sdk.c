@@ -618,7 +618,7 @@ static void defer_graphics_queue(u32 scratch) {
     MEM_W8(0x80024559, 1);
 }
 
-static bool check_load_clut(void) {
+static bool check_load_clut(u32 entry, bool (*routine)(CPUState *), u16 width) {
     const u32 record = 0x80027488, palette = 0x80062000;
     const u32 driver = MEM_R32(0x80024550);
     const u32 coords[][2] = {{32, 7}, {0xfffffff1, 0x123401ff}};
@@ -633,11 +633,11 @@ static bool check_load_clut(void) {
         MEM_W32(0x80024660, 0);
         memset(nc_fast_ptr(record), 0xcc, 96);
         CPUState state = arguments(palette, x, y, i ? 17 : 4096);
-        ok = compare(state, 0x8001b344, nc_credits_load_clut, 16) &&
+        ok = compare(state, entry, routine, 16) &&
              nc_cpu.r[2] == (((y & 0x3ff) << 6) | ((x >> 4) & 0x3f)) &&
              MEM_R32(record) == MEM_R32(driver + 0x20) && MEM_R32(record + 4) == record + 12 &&
              MEM_R32(record + 8) == palette && MEM_R16(record + 12) == (u16)x &&
-             MEM_R16(record + 14) == (u16)y && MEM_R16(record + 16) == 256 &&
+             MEM_R16(record + 14) == (u16)y && MEM_R16(record + 16) == width &&
              MEM_R16(record + 18) == 1 && MEM_R8(record + 20) == 0xcc;
     }
     saved.loading = true;
@@ -2838,7 +2838,8 @@ int main(int argc, char **argv) {
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
-    pass = pass && check_load_clut();
+    pass = pass && check_load_clut(0x8001b344, nc_credits_load_clut, 256);
+    pass = pass && check_load_clut(0x8001b3ac, nc_credits_load_clut2, 16);
     pass = pass && check_image_queue(0x8001c474, nc_credits_clear_image, 0x0c);
     pass = pass && check_image_queue(0x8001c508, nc_credits_clear_image2, 0x0c);
     pass = pass && check_image_queue(0x8001c5a4, nc_credits_load_image, 0x20);
