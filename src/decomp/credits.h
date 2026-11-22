@@ -108,6 +108,7 @@ bool nc_credits_gpu_command_chain(CPUState *c);
 bool nc_credits_gpu_command_block(CPUState *c);
 bool nc_credits_gpu_control(CPUState *c);
 bool nc_credits_gpu_control_byte(CPUState *c);
+bool nc_credits_clear_ot_dma(CPUState *c);
 bool nc_credits_graphics_status(CPUState *c);
 bool nc_credits_display_field(CPUState *c);
 bool nc_credits_display_x(CPUState *c);

@@ -188,6 +188,7 @@ CREDITS_ROUTINES = {
     0x8001D6AC: "nc_credits_texture_window_word(c)",
     0x8001D730: "nc_credits_display_x(c)",
     0x8001D7EC: "nc_credits_graphics_status(c)",
+    0x8001D804: "nc_credits_clear_ot_dma(c)",
     0x8001E04C: "nc_credits_gpu_control(c)",
     0x8001E074: "nc_credits_gpu_control_byte(c)",
     0x8001E088: "nc_credits_gpu_command_block(c)",
