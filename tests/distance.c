@@ -1094,6 +1094,46 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool part_heading_sources(bool disc) {
+    const u32 part = SCRATCH_BASE + 64;
+    static const struct {
+        bool branch, child;
+        u32 flags, stop;
+        NcHeadingSource source;
+        int cycles;
+    } cases[] = {{true, false, 0, 0x80026b28, NC_HEADING_FROM_PART, 8},
+                 {true, true, 8, 0x80026aa0, NC_HEADING_FROM_SHARED, 8},
+                 {false, true, 8, 0x80026aa0, NC_HEADING_FROM_SHARED, 14},
+                 {false, false, 0x80, 0x80026b28, NC_HEADING_FROM_PART, 17},
+                 {false, false, 0xffffff88, 0x80026aa0, NC_HEADING_FROM_SHARED, 17},
+                 {false, false, 8, 0x80026cdc, NC_HEADING_SKIP, 15}};
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[10] = part;
+        input.r[13] = cases[i].flags;
+        input.r[31] = cases[i].stop;
+        MEM_W32(part + 12, cases[i].branch ? part + 64 : 0);
+        MEM_W32(part + 4, cases[i].child ? part + 96 : 0);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 17;
+        CPUState native = input;
+        if (nc_select_part_heading_source(&native) != NC_HEADING_FALLBACK ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_select_part_heading_source(&native) != cases[i].source ||
+            native.budget != 18 - cases[i].cycles || native.r[2] != (cases[i].flags & 8))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80026a6c);
+            if (memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool child_positions(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 320;
     const s16 point[] = {-32768, 0, 32767};
@@ -2015,9 +2055,9 @@ int main(int argc, char **argv) {
         part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
         node_matrix_installation(disc) && part_composition(disc) &&
         node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
-        child_positions(disc) && scaled_part_filters(disc) && scaled_part_walk(disc) &&
-        scaled_part_positions(disc) && part_offsets(disc) && part_matrix_composition(disc) &&
-        part_transform_setup(disc) && part_chain_traversal(disc);
+        part_heading_sources(disc) && child_positions(disc) && scaled_part_filters(disc) &&
+        scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
+        part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)

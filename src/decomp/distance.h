@@ -44,6 +44,13 @@ bool nc_prepare_part_translation(CPUState *c);
 bool nc_select_part_rotation(CPUState *c);
 bool nc_select_node_transform(CPUState *c);
 bool nc_prepare_node_rotation(CPUState *c);
+typedef enum {
+    NC_HEADING_FALLBACK,
+    NC_HEADING_SKIP,
+    NC_HEADING_FROM_PART,
+    NC_HEADING_FROM_SHARED
+} NcHeadingSource;
+NcHeadingSource nc_select_part_heading_source(CPUState *c);
 bool nc_update_child_position(CPUState *c);
 bool nc_filter_scaled_part(CPUState *c);
 bool nc_begin_scaled_part_walk(CPUState *c);
