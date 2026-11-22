@@ -370,6 +370,8 @@ psx2_exe     800675E8    80067600         pad.c
 psx2_exe     8006767C    800676C4         pad.c
 # Menu record 24 button dispatch and shared exit.
 psx2_exe     800676C4    800676E4         pad.c
+# Record 29 input dispatch and count-five check.
+psx2_exe     800676E4    800676FC         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
