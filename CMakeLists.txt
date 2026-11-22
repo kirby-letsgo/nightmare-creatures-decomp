@@ -165,7 +165,7 @@ endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
     add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c src/decomp/damage.c
-        src/decomp/contact.c)
+        src/decomp/contact.c src/decomp/distance.c)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -225,6 +225,12 @@ target_link_libraries(test_contact PRIVATE nc_runtime)
 add_test(NAME contact_rules COMMAND test_contact)
 add_test(NAME contact_disc COMMAND test_contact "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(contact_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_distance tests/distance.c src/decomp/distance.c src/port/no_gen.c)
+target_link_libraries(test_distance PRIVATE nc_runtime)
+add_test(NAME distance_rules COMMAND test_distance)
+add_test(NAME distance_disc COMMAND test_distance "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(distance_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
 add_test(NAME continue_game COMMAND Python3::Interpreter "${CMAKE_SOURCE_DIR}/tools/test_continue.py"
     $<TARGET_FILE:nightmare> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
