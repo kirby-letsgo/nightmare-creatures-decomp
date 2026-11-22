@@ -1415,6 +1415,56 @@ static bool check_interrupt_start(bool dma) {
     return ok;
 }
 
+static bool check_dma_slot(void) {
+    const u32 dicr = 0x1f8010f4, ram = 0x80061000, initial_control = 0x00410012;
+    const struct {
+        u32 channel, previous, replacement, control;
+    } cases[] = {
+        {0, 0, 0x8001935c, 0x00c10012}, {6, 0x8001935c, 0, 0x00810012},
+        {3, 0x8001935c, 0x8001935c, initial_control},
+        {7, 0x8001935c, 0, initial_control}, {0x40000001, 0, 0x8001935c, 0x00c30012},
+    };
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++) {
+        u32 slot = 0x800244e0u + 4u * cases[i].channel;
+        for (unsigned hardware = 0; hardware < 2 && ok; hardware++) {
+            u32 port = hardware ? dicr : ram;
+            u32 flags = hardware ? 0 : 0xa5000000;
+            u32 expected = cases[i].control;
+            if (cases[i].previous == cases[i].replacement)
+                expected |= flags;
+            StateIO native = {0}, guest = {0};
+            for (unsigned run = 0; run < 2 && ok; run++) {
+                MEM_W32(0x800244dc, port);
+                MEM_W32(port, initial_control | flags);
+                MEM_W32(slot, cases[i].previous);
+                nc_cpu = arguments(cases[i].channel, cases[i].replacement, 0, 34);
+                if (!run && nc_credits_set_dma_slot(&nc_cpu))
+                    ok = false;
+                nc_cpu.budget = 35;
+                if (run)
+                    interp_call(&nc_cpu, 0x8001b184);
+                else
+                    ok = nc_credits_set_dma_slot(&nc_cpu) && ok;
+                interrupt_start_state(run ? &guest : &native);
+                ok = ok && nc_cpu.r[2] == cases[i].previous &&
+                     MEM_R32(slot) == cases[i].replacement && MEM_R32(port) == expected;
+                saved.loading = true;
+                saved.pos = 0;
+                interrupt_start_state(&saved);
+            }
+            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+                 !memcmp(native.buf, guest.buf, guest.len);
+            free(native.buf);
+            free(guest.buf);
+        }
+    }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_vblank_dispatch(void) {
     const u32 slots = 0x800244b4, counter = slots + 32, noop = 0x8001935c;
     u8 saved[36];
@@ -2099,6 +2149,7 @@ int main(int argc, char **argv) {
     pass = pass && check_save_irq_context();
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);
+    pass = pass && check_dma_slot();
     pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
