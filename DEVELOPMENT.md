@@ -157,6 +157,14 @@ Located by RAM diffing, watchpoints and coverage (see below). All in `PSX2.EXE`.
 | `func_8006E38C` | Level loop (one iteration per game frame) |
 | `func_80055AE8` | Adrenaline update (gauge draw at `0x80055DCC`, countdown at `0x80055E94`) |
 
+Player control calls `80070050` at `80044778` with `a0 = 800D7C04` and
+`a1 = 1` in the delay slot. The `player_input` hook at `80044780` sees the
+returned word in `v0` immediately before the game copies it to `s1`.
+The first callee, `8006FF34`, scans two 34-byte packets, records usable
+ports at `gp + 0x238`, and prefers port one. Only port one enables the
+normal decode path. When both are present, the second pad contributes
+its active-high buttons in bits 16–31.
+
 ## Debugging tools
 
 ### Environment variables
