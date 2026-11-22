@@ -961,6 +961,24 @@ bool nc_prepare_part_point_bearing(CPUState *c) {
     return true;
 }
 
+/* Negate the vector bearing and expand it from 4096 to 65536 units per
+ * turn. The fifth argument is stored before the selected part is loaded. */
+bool nc_call_part_with_bearing(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    R(4) = R(17);
+    R(2) = (0u - R(2)) << 4;
+    const u32 part_index = MEM_R8(R(18));
+    R(6) = R(2) & 0xfff0;
+    MEM_W32(R(29) + 0x10, 1);
+    R(3) = R(17) + 4 * part_index;
+    R(5) = MEM_R32(R(3) + 0x4c);
+    R(31) = 0x8001c01c;
+    R(7) = R(19);
+    c->budget -= 16;
+    return true;
+}
+
 /* The cursor uses a signed remainder. A negative remainder selects a
  * halfword immediately before the four point indices copied to the frame. */
 bool nc_select_bearing_point(CPUState *c) {

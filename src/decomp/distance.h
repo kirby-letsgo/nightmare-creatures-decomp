@@ -14,6 +14,7 @@ bool nc_prepare_reference_distance(CPUState *c);
 bool nc_store_reference_distance(CPUState *c);
 bool nc_select_part_bearing_point(CPUState *c);
 bool nc_prepare_part_point_bearing(CPUState *c);
+bool nc_call_part_with_bearing(CPUState *c);
 bool nc_select_bearing_point(CPUState *c);
 bool nc_prepare_selected_point_bearing(CPUState *c);
 bool nc_finish_selected_point_bearing(CPUState *c);
