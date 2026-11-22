@@ -88,6 +88,61 @@ u32 nc_dispatch_player_buttons(CPUState *c) {
     return (buttons & 0x100) ? 0x800447b8 : 0x800448d4;
 }
 
+/* The L2 branch records left/right press edges. Holding both gives left
+ * priority, even when left was already down. Bit 1 marks an active sequence.
+ * Bit 2 and the adjacent halfword track direction and repeat count. */
+bool nc_player_l2_direction(CPUState *c, bool l2_held) {
+    if (c->budget <= (l2_held ? 37 : 3))
+        return false;
+    R(1) = 0x800d0000;
+    if (!l2_held) {
+        R(2) = 0x3c;
+        MEM_W16(0x800cc002, R(2));
+        c->budget -= 3;
+        return true;
+    }
+    MEM_W16(0x800cc002, R(2)); /* 0x50 from the preceding delay slot */
+    bool left = (R(17) & 0x80) != 0;
+    int cycles = 5;
+    if (!left) {
+        R(2) = R(3) & 0x20;
+        cycles += 3;
+        if (!(R(17) & 0x20)) {
+            c->budget -= cycles;
+            return true;
+        }
+    }
+    R(2) = R(3) & (left ? 0x80 : 0x20);
+    cycles += 2;
+    if (!R(2)) {
+        const u32 flags = MEM_R16(0x800cbff8);
+        cycles += 8;
+        if (!(flags & 2)) {
+            R(3) = flags;
+            R(2) = flags | (left ? 6 : 2);
+            MEM_W16(0x800cbff8, R(2));
+            MEM_W16(0x800cbffa, 0);
+            cycles += left ? 8 : 7;
+        } else {
+            bool same_direction = left == ((flags & 4) != 0);
+            if (same_direction)
+                MEM_W16(0x800cbffa, MEM_R16(0x800cbffa) + 1);
+            else
+                MEM_W16(0x800cbffa, 0);
+            R(3) = 0x800cbff8;
+            R(2) = left ? flags | 4 : flags & 0xfffb;
+            MEM_W16(R(3), R(2));
+            cycles += 2 + 9; /* direction test, then flags update and exit */
+            if (left)
+                cycles += same_direction ? 10 : 2;
+            else
+                cycles += same_direction ? 8 : 4;
+        }
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The PSX2 BIOS stubs tail-jump to B0, setting t1 in the delay slot.
  * With three cycles or less, the generated path polls at each boundary. */
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service) {
