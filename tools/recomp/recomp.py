@@ -989,6 +989,9 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x800674E0, 0x800674E4):
+                increment = "true" if i.addr == 0x800674E0 else "false"
+                out.append(f"    if (nc_menu_store_counter(c, {increment})) goto L_80068FE4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800674A0:
                 out.extend(
                     [

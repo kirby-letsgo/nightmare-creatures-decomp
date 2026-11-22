@@ -1415,6 +1415,18 @@ u32 nc_menu_check_record_29(CPUState *c) {
     return (s32)R(3) < 5 ? 0x800674e0 : 0x800674f0;
 }
 
+/* Branches enter at the store when their delay slot has prepared v0. */
+bool nc_menu_store_counter(CPUState *c, bool increment) {
+    int cycles = increment ? 4 : 3;
+    if (c->budget <= cycles)
+        return false;
+    u32 value = increment ? R(3) + 1u : R(2);
+    MEM_W32(R(28) + 0x2b8, value);
+    R(2) = 0;
+    c->budget -= cycles;
+    return true;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
