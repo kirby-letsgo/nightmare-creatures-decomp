@@ -542,6 +542,39 @@ static bool check_display_mask(void) {
     return ok;
 }
 
+static bool check_draw_sync(void) {
+    const u32 slot = 0x80024550, diagnostic = 0x80060c00, table = 0x80061000;
+    const u32 driver = MEM_R32(slot), printer = MEM_R32(0x80024554);
+    const u8 debug = MEM_R8(0x8002455a);
+    MEM_W8(0x8002455a, 0);
+    bool ok = compare(arguments(1, 2, 3, 4096), 0x8001c2e0, nc_credits_draw_sync, 10);
+    /* The diagnostic replaces the driver. Its two sync methods return mode and mode + 1. */
+    MEM_W32(0x80024554, diagnostic);
+    MEM_W32(diagnostic, 0x03e00008);      /* jr ra */
+    MEM_W32(diagnostic + 4, 0xad090000);  /* sw t1, 0(t0) */
+    MEM_W32(table + 0x3c, diagnostic + 8);
+    MEM_W32(table + 0x80 + 0x3c, diagnostic + 16);
+    MEM_W32(diagnostic + 8, 0x03e00008);
+    MEM_W32(diagnostic + 12, 0x24820000); /* addiu v0, a0, 0 */
+    MEM_W32(diagnostic + 16, 0x03e00008);
+    MEM_W32(diagnostic + 20, 0x24820001); /* addiu v0, a0, 1 */
+    const u32 modes[] = {0, 1, UINT32_MAX};
+    for (unsigned i = 0; i < sizeof modes / sizeof modes[0] && ok; i++)
+        for (unsigned verbose = 0; verbose < 2 && ok; verbose++) {
+            MEM_W32(slot, table);
+            MEM_W8(0x8002455a, verbose ? 2 : 1);
+            CPUState state = arguments(modes[i], 2, 3, i ? 11 : 4096);
+            state.r[8] = slot;
+            state.r[9] = table + 0x80;
+            ok = compare(state, 0x8001c2e0, nc_credits_draw_sync, 10) &&
+                 nc_cpu.r[2] == modes[i] + verbose;
+        }
+    MEM_W32(slot, driver);
+    MEM_W32(0x80024554, printer);
+    MEM_W8(0x8002455a, debug);
+    return ok;
+}
+
 static bool check_draw_sync_callback(void) {
     const u32 slot = 0x80024564, diagnostic = 0x80060c00;
     const u8 levels[] = {0, 1, 2, 255};
@@ -2461,6 +2494,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
+    pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
     pass = pass && check_dump_environment(false, 0);
     for (unsigned graph = 0; graph <= 2; graph++)

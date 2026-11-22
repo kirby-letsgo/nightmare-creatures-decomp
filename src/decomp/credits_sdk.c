@@ -1559,9 +1559,8 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
-bool nc_credits_draw_sync_callback(CPUState *c) {
-    if (c->budget <= 10)
-        return false;
+/* Both DrawSync entries save a0 in s0 and check the graphics debug level. */
+static void draw_sync_prologue(CPUState *c) {
     c->budget--;
     R(2) = MEM_R8(0x8002455a);
     R(29) -= 24;
@@ -1572,6 +1571,47 @@ bool nc_credits_draw_sync_callback(CPUState *c) {
     c->budget -= 3;
     MEM_W32(R(29) + 20, R(31));
     c->budget -= 2;
+}
+
+bool nc_credits_draw_sync(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    draw_sync_prologue(c);
+    if (!R(2)) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018568);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        NC_POLL(c, 1);
+        u32 diagnostic = R(2);
+        R(31) = 0x8001c31c;
+        R(5) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, diagnostic);
+    }
+
+    /* The diagnostic can replace the active driver before this lookup. */
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2) + 0x3c);
+    NC_POLL(c, 1);
+    u32 sync = R(2);
+    R(31) = 0x8001c338;
+    R(4) = R(16);
+    NC_POLL(c, 2);
+    nc_call(c, sync);
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_draw_sync_callback(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    draw_sync_prologue(c);
     if (!R(2)) {
         set_reg(c, 2, 0x80020000);
         load_word(c, 2, R(2) + 0x4554);
