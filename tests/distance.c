@@ -37,6 +37,58 @@ static bool compare(CPUState input, u32 pc, bool (*native_fn)(CPUState *), bool 
     return native_fn(&input) && input.budget == 1;
 }
 
+static bool planar_velocities(bool disc) {
+    const u32 record = SCRATCH_BASE, actor = 0x80121000;
+    const s32 cases[][3] = {{0, 0, 0x1900}, {-1, 0, 0x3200}, {0, -1, 0x2c00},
+                            {1, 0, -257},   {0, 1, 257},     {-32768, 32767, INT32_MAX}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = record;
+        input.r[5] = cases[i][2];
+        input.r[29] = record + 512;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(0x800ce9c4, actor);
+        MEM_W32(actor + 0x27c, -257);
+        MEM_W32(actor + 0x284, 511);
+        MEM_W16(record + 0x10, cases[i][0] + 2);
+        MEM_W16(record + 0x14, 1 - cases[i][1]);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        native.budget = 28;
+        CPUState cutoff = native;
+        if (nc_prepare_planar_velocity(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = input.budget;
+        if (!nc_prepare_planar_velocity(&native) || native.budget != input.budget - 28 ||
+            native.r[4] != (u32)cases[i][0] || native.r[5] != (u32)cases[i][1])
+            return false;
+        if (disc)
+            interp_call(&native, 0x80047684);
+        else if (!nc_vector_heading(&native))
+            return false;
+        const u16 heading = -(native.r[2] << 4);
+        const int remaining = native.budget - 53;
+        cutoff = native;
+        cutoff.budget = 53;
+        CPUState attempt = cutoff;
+        memcpy(after, nc_scratch, sizeof after);
+        if (nc_finish_planar_velocity(&attempt) || memcmp(&attempt, &cutoff, sizeof cutoff) ||
+            memcmp(after, nc_scratch, sizeof after) || !nc_finish_planar_velocity(&native) ||
+            native.budget != remaining || MEM_R16(record + 0x34) != heading)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80058868);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool roots(bool disc) {
     CPUState c = initial(), result;
     const u32 cases[][2] = {{0, 0},
@@ -2239,11 +2291,11 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-        projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-        point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-        heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-        record_projections(disc) && projected_heading_gaps(disc) &&
+        planar_velocities(disc) && roots(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
+        actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
+        relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
         projected_heading_selection(disc) && saved_bearing_projections(disc) &&
         facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
         rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
