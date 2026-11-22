@@ -268,6 +268,29 @@ static bool check_draw_mode_words(void) {
     return true;
 }
 
+static bool check_texture_window(void) {
+    const u32 packet = 0x80060500, sp = 0x801fef00;
+    const u32 rects[] = {0, SCRATCH_BASE + 4, packet, 0xa0060504, sp - 16, sp - 40};
+    const u16 values[] = {0, 1, 7, 8, 31, 255, 256, 0xffff, 0x807f};
+    for (unsigned build = 0; build <= 1; build++)
+        for (unsigned i = 0; i < sizeof rects / sizeof rects[0]; i++)
+            for (unsigned j = 0; j < sizeof values / sizeof values[0]; j++) {
+                u32 rect = rects[i];
+                memset(nc_fast_ptr(packet), 0xa5, 16);
+                memset(nc_fast_ptr(sp - 40), 0xce, 40);
+                if (rect)
+                    for (unsigned k = 0; k < 4; k++)
+                        MEM_W16(rect + 2 * k, values[(j + k) % 9]);
+                int cost = (rect ? 39 : 7) + (build ? 19 : 0);
+                CPUState state = arguments(build ? packet : rect, rect, 0xa98, cost + 1);
+                if (!compare(state, build ? 0x8001d048 : 0x8001d6ac,
+                             build ? nc_credits_texture_window_packet : nc_credits_texture_window_word,
+                             cost))
+                    return false;
+            }
+    return true;
+}
+
 static bool check_transfer_packets(void) {
     const u32 packet = 0x80060500;
     const u32 rects[] = {SCRATCH_BASE + 4, packet, 0xa0060504, packet + 8, packet + 12};
@@ -457,6 +480,7 @@ int main(int argc, char **argv) {
     pass = pass && check_priority_packet();
     pass = pass && check_merge_primitives();
     pass = pass && check_transfer_packets();
+    pass = pass && check_texture_window();
     pass = pass && check_draw_mode_words();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
