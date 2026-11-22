@@ -16,6 +16,47 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* The placement heading is the Y rotation in a 4096-unit turn. */
+bool nc_prepare_placement_yaw(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(4) = R(29) + 0x30;
+    R(2) = MEM_R16(R(16) + 0x0a);
+    R(5) = R(29) + 0x10;
+    MEM_W16(R(4) + 4, 0);
+    MEM_W16(R(4), 0);
+    R(31) = 0x8002aefc;
+    MEM_W16(R(4) + 2, R(2));
+    c->budget -= 9;
+    return true;
+}
+
+bool nc_prepare_placement_yaw_scale(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(29) + 0x10;
+    R(31) = 0x8002af08;
+    R(5) = R(29) + 0x40;
+    c->budget -= 3;
+    return true;
+}
+
+/* Apply the scaled yaw matrix to the local negative-Z axis. */
+bool nc_prepare_placement_heading_vector(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(4) = R(29) + 0x10;
+    R(5) = R(29) + 0x38;
+    R(6) = R(16) + 0x118;
+    R(2) = (u32)-256;
+    MEM_W16(R(5) + 4, R(2));
+    MEM_W16(R(5), 0);
+    R(31) = 0x8002af28;
+    MEM_W16(R(5) + 2, 0);
+    c->budget -= 8;
+    return true;
+}
+
 /* After TransposeMatrix, quarter the selected XYZ scale in place. The
  * ScaleMatrixL call stores Y in its delay slot, after the X and Z writes. */
 bool nc_prepare_transposed_placement_scale(CPUState *c) {
