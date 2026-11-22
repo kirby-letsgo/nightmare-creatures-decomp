@@ -1741,6 +1741,56 @@ static bool selected_point_bearings(bool disc) {
     return true;
 }
 
+static bool selected_point_returns(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100, stub = 0x80120000;
+    static const struct {
+        u32 heading, step;
+        u16 index;
+        u8 first, second;
+        int cycles;
+    } cases[] = {{0, 1, 0xffff, 0, 0, 35},
+                 {4095, (u32)-1, 0, 0, 0, 35},
+                 {1024, 1, 3, 0x80, 0, 23},
+                 {2048, (u32)-1, 2, 0, 0xff, 28}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].heading;
+        input.r[16] = 0x80122000;
+        input.r[17] = SCRATCH_BASE;
+        input.r[18] = cases[i].step;
+        input.r[29] = frame;
+        MEM_W8(input.r[16] + 0x38a, cases[i].first);
+        MEM_W8(input.r[16] + 0x39b, cases[i].second);
+        memset(nc_scratch, 0xa5, SCRATCH_SIZE);
+        MEM_W16(input.r[17], cases[i].index);
+        MEM_W32(frame + 0x24, input.r[31]);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 35;
+        CPUState native = input;
+        if (nc_finish_selected_point_bearing(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        const u16 expected = cases[i].index + (cases[i].cycles == 35 ? cases[i].step : 0);
+        if (!nc_finish_selected_point_bearing(&native) || native.budget != 36 - cases[i].cycles ||
+            native.r[2] != cases[i].heading * 16 || MEM_R16(SCRATCH_BASE) != expected)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            MEM_W32(stub, 0x08000000u | ((0x8001c27cu >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffd8);
+            input.r[29] += 0x28;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool reference_bearing_gaps(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100, stub = 0x80120000;
     static const s32 gaps[] = {0, 32766, -32769, -32768, -1};
@@ -4006,12 +4056,12 @@ int main(int argc, char **argv) {
         spatial_distances(disc, true) && spatial_distances(disc, false) &&
         spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
         target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
-        roots(disc) && selected_point_bearings(disc) && reference_bearing_gaps(disc) &&
-        actor_distances(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-        projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-        point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-        heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-        record_projections(disc) && projected_heading_gaps(disc) &&
+        roots(disc) && selected_point_returns(disc) && selected_point_bearings(disc) &&
+        reference_bearing_gaps(disc) && actor_distances(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
+        actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
+        relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
         projected_heading_selection(disc) && saved_bearing_projections(disc) &&
         facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
         rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&

@@ -948,6 +948,31 @@ bool nc_prepare_selected_point_bearing(CPUState *c) {
     return true;
 }
 
+/* Expand the 12-bit vector heading to a 16-bit turn. The two actor
+ * flags independently suppress the caller's signed step through the points. */
+bool nc_finish_selected_point_bearing(CPUState *c) {
+    if (c->budget <= 35)
+        return false;
+    R(4) = (R(2) << 4) & 0xffff;
+    R(3) = MEM_R8(R(16) + 0x38a);
+    int cycles = 23;
+    if (!R(3)) {
+        cycles = 28;
+        if (!MEM_R8(R(16) + 0x39b)) {
+            MEM_W16(R(17), (u16)(MEM_R16(R(17)) + R(18)));
+            cycles = 35;
+        }
+    }
+    R(2) = R(4);
+    R(31) = MEM_R32(R(29) + 0x24);
+    R(18) = MEM_R32(R(29) + 0x20);
+    R(17) = MEM_R32(R(29) + 0x1c);
+    R(16) = MEM_R32(R(29) + 0x18);
+    R(29) += 0x28;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Bearing from the supplied actor to the reference actor. Subtract both
  * 24.8 positions before shifting so negative fractional deltas round down. */
 bool nc_prepare_reference_bearing(CPUState *c) {
