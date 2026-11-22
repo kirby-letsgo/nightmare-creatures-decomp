@@ -928,6 +928,39 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+bool nc_begin_part_pose_heading(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    R(29) -= 0x40;
+    MEM_W32(R(29) + 0x24, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 0x20, R(16));
+    R(16) = R(5);
+    R(2) = (s32)(s16)MEM_R16(0x800d4c9e);
+    R(5) = R(6);
+    MEM_W32(R(29) + 0x28, R(18));
+    R(18) = 0;
+    MEM_W32(R(29) + 0x3c, R(31));
+    for (unsigned reg = 22; reg >= 19; --reg)
+        MEM_W32(R(29) + 0x20 + 4 * (reg - 16), R(reg));
+    c->budget -= 18;
+    return true;
+}
+
+/* Compare the signed low word of the accumulated heading with one turn.
+ * The original retains both halves of the signed product in HI and LO. */
+bool nc_check_part_heading_turn(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+    R(3) = (s32)(s16)MEM_R16(0x800d4c9c);
+    nc_mult(c, R(3), 364u * R(16));
+    R(8) = c->lo;
+    R(2) = (s32)R(8) > 0xffff;
+    R(5) = 0x10;
+    c->budget -= 17;
+    return true;
+}
+
 /* Every entry at 0x8001BEAC has v0 = 2*s0. The shift/add sequence
  * advances the pose heading by 364 units per step in a 65536-unit turn. */
 bool nc_advance_part_pose_heading(CPUState *c, bool *search) {
