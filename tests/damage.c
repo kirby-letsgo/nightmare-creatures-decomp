@@ -101,6 +101,44 @@ static bool lethal_hits(bool disc) {
     return true;
 }
 
+static bool player_reaction(CPUState *c) {
+    return nc_apply_lethal_reaction(c, true);
+}
+
+static bool other_reaction(CPUState *c) {
+    return nc_apply_lethal_reaction(c, false);
+}
+
+static bool lethal_reactions(void) {
+    CPUState cpu = {0};
+    for (unsigned r = 1; r < 32; ++r)
+        cpu.r[r] = 0x12345u * r;
+    cpu.r[17] = target;
+    cpu.r[29] = 0x801fe000;
+    cpu.r[31] = 0x8004f02c;
+    const u32 kinds[] = {1, 15, 40, 41, 42};
+    const int budgets[] = {5, 19, 63, 4096};
+    for (unsigned player = 0; player < 2; ++player)
+        for (unsigned k = 0; k < sizeof kinds / sizeof kinds[0]; ++k)
+            for (unsigned b = 0; b < sizeof budgets / sizeof budgets[0]; ++b) {
+                memset(nc_ram + (target & (RAM_SIZE - 1)), 0, 0x400);
+                MEM_W32(target + 0x2c8, 0x00200000 | player);
+                MEM_W16(ADDR_ADRENALINE, 37);
+                MEM_W16(target + ACTOR_HEALTH_OFFSET, 99);
+                cpu.r[18] = kinds[k];
+                cpu.budget = budgets[b];
+                u32 entry = player ? 0x8004ec8c : 0x8004ecac;
+                if (!compare(cpu, entry, player ? player_reaction : other_reaction, 4) ||
+                    MEM_R16(target + ACTOR_HEALTH_OFFSET) != 0 || MEM_R8(target + 0x39b) != 15 ||
+                    MEM_R32(target + 0x2c8) !=
+                        ((0x00200000 | player) | (player ? 0x100000u : 0x80000u)) ||
+                    MEM_R16(ADDR_ADRENALINE) !=
+                        (!player && kinds[k] != 40 && kinds[k] != 41 ? 256 : 37))
+                    return false;
+            }
+    return true;
+}
+
 /* Each effect call records its four arguments in the actor's test buffer.
  * The original caller and the C caller both execute this guest test stub. */
 static bool death_transitions(void) {
@@ -193,7 +231,7 @@ int main(int argc, char **argv) {
     }
     if (!lethal_hits(compare_disc))
         return 1;
-    if (compare_disc && !death_transitions()) {
+    if (compare_disc && (!lethal_reactions() || !death_transitions())) {
         fprintf(stderr, "death transition comparison failed\n");
         return 1;
     }

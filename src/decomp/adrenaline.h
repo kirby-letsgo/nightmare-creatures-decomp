@@ -6,4 +6,7 @@
 /* True when the gameplay portion of the US HUD update completed natively. */
 bool nc_update_adrenaline(CPUState *c);
 
+bool nc_clear_adrenaline_hud(CPUState *c);
+bool nc_refill_hit_adrenaline(CPUState *c);
+
 #endif

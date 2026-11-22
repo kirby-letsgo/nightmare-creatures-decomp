@@ -142,6 +142,37 @@ NcHitOutcome nc_check_lethal_hit(CPUState *c) {
     return R(2) ? NC_HIT_PLAYER_DEATH : NC_HIT_OTHER_DEATH;
 }
 
+/* Both lethal reactions enter state 15. The player first restores its part
+ * links. The other reaction checks for an adrenaline reward after the change. */
+bool nc_apply_lethal_reaction(CPUState *c, bool player) {
+    if (c->budget <= 4)
+        return false;
+    if (player) {
+        R(31) = 0x8004ec94;
+        R(4) = R(17);
+        NC_POLL(c, 2);
+        nc_call(c, 0x800362e4);
+    }
+    R(4) = R(17);
+    NC_POLL(c, 1);
+    R(5) = 15;
+    NC_POLL(c, 1);
+    R(31) = player ? 0x8004eca4 : 0x8004ecbc;
+    R(6) = player ? 0x100000 : 0x80000;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8004d0cc);
+    if (!player) {
+        R(4) = R(17);
+        NC_POLL(c, 1);
+        R(31) = 0x8004ecc8;
+        R(5) = R(18);
+        NC_POLL(c, 2);
+        nc_call(c, 0x80052b80);
+    }
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Reset the animation fields before installing the new actor state. */
 bool nc_set_actor_state(CPUState *c) {
     if (c->budget <= 14)
