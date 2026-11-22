@@ -114,6 +114,7 @@ bool nc_step_record_angle(CPUState *c);
 bool nc_prepare_placement_yaw(CPUState *c);
 bool nc_prepare_placement_yaw_scale(CPUState *c);
 bool nc_prepare_placement_heading_vector(CPUState *c);
+bool nc_prepare_placement_vector(CPUState *c, u32 source_offset, u32 result_offset, u32 resume);
 bool nc_prepare_transposed_placement_scale(CPUState *c);
 bool nc_step_placement_record(CPUState *c);
 bool nc_step_record_angle_pair(CPUState *c);

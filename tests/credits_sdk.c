@@ -1322,15 +1322,18 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
-static bool check_start_pad(void) {
+static bool check_pad_setup(void) {
     const struct {
         u32 entry;
         int threshold;
         u32 expected_return;
+        u32 initial_irq_bits, expected_irq_bits;
         bool (*routine)(CPUState *);
     } cases[] = {
-        {0x8001a38c, 4, 0, nc_credits_start_pad},
-        {0x8001a3c4, 3, 1, nc_credits_bios_start_pad},
+        {0x8001a324, 11, 1, 0x401, 0, nc_credits_sdk_init_pad},
+        {0x8001a3b4, 3, 1, 0x401, 0x401, nc_credits_bios_init_pad},
+        {0x8001a38c, 4, 0, 0, 0x401, nc_credits_start_pad},
+        {0x8001a3c4, 3, 1, 0, 0x401, nc_credits_bios_start_pad},
     };
     StateIO saved = {0};
     cpu_serialize(&saved);
@@ -1340,9 +1343,11 @@ static bool check_start_pad(void) {
         for (unsigned started = 0; started < 2 && ok; started++) {
             StateIO native = {0}, guest = {0};
             for (unsigned run = 0; run < 2 && ok; run++) {
-                nc_cpu = arguments(7, 2, 3, cases[i].threshold);
+                nc_cpu = arguments(0x80061000, 34, 0x80061040, cases[i].threshold);
+                nc_cpu.r[7] = 32;
                 nc_cpu.r[9] = started ? 0x13 : 0x14;
                 bios_call(&nc_cpu, 0xb0);
+                nc_cpu.cop0[12] = cases[i].initial_irq_bits;
                 nc_cpu.r[2] = UINT32_MAX;
                 if (!run && cases[i].routine(&nc_cpu))
                     ok = false;
@@ -1355,7 +1360,7 @@ static bool check_start_pad(void) {
                 cpu_serialize(result);
                 bios_serialize(result);
                 ok = ok && nc_cpu.r[2] == cases[i].expected_return &&
-                     (nc_cpu.cop0[12] & 0x401) == 0x401;
+                     (nc_cpu.cop0[12] & 0x401) == cases[i].expected_irq_bits;
                 saved.loading = true;
                 saved.pos = 0;
                 cpu_serialize(&saved);
@@ -2316,7 +2321,7 @@ int main(int argc, char **argv) {
     pass = pass && check_callback_controls();
     pass = pass && check_interrupt_driver_control(false);
     pass = pass && check_interrupt_driver_control(true);
-    pass = pass && check_start_pad();
+    pass = pass && check_pad_setup();
     pass = pass && check_interrupt_auto_clear();
     pass = pass && check_irq_entry_hooks();
     pass = pass && check_critical_sections();

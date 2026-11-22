@@ -66,7 +66,9 @@ CREDITS_ROUTINES = {
     0x8001A128: "nc_credits_change_case(c, true)",
     0x8001A158: "nc_credits_change_case(c, false)",
     0x8001A2AC: "nc_credits_change_clear_pad(c)",
+    0x8001A324: "nc_credits_sdk_init_pad(c)",
     0x8001A38C: "nc_credits_start_pad(c)",
+    0x8001A3B4: "nc_credits_bios_init_pad(c)",
     0x8001A3C4: "nc_credits_bios_start_pad(c)",
     0x8001A444: "nc_credits_enter_critical_section(c)",
     0x8001A688: "nc_credits_change_clear_counter(c)",
@@ -699,7 +701,9 @@ class Emitter:
                 targets.update((passed, rejected))
         targets = {t for t in targets if f.addr <= t < f.end}
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AE78:
-            targets.update((0x8002AEFC, 0x8002AF08, 0x8002AF28))
+            targets.update(
+                (0x8002AEFC, 0x8002AF08, 0x8002AF28, 0x8002AF38, 0x8002AF48, 0x8002AF58, 0x8002AF68)
+            )
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.add(0x8002B200)
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
@@ -1540,6 +1544,23 @@ class Emitter:
                 }[i.addr]
                 out.append(f"    if (nc_prepare_placement_{helper}(c)) {{")
                 out.append(f"        {self.call(callee)}")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x8002AF28,
+                0x8002AF38,
+                0x8002AF48,
+                0x8002AF58,
+            ):
+                source, result = {
+                    0x8002AF28: (0xC8, 0xA8),
+                    0x8002AF38: (0xD0, 0xB8),
+                    0x8002AF48: (0xF8, 0xD8),
+                    0x8002AF58: (0x100, 0xE8),
+                }[i.addr]
+                resume = i.addr + 0x10
+                args = f"c, 0x{source:X}, 0x{result:X}, 0x{resume:X}"
+                out.append(f"    if (nc_prepare_placement_vector({args})) {{")
+                out.append(f"        {self.call(0x8007A320)}")
                 out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B1D0:
                 out.append("    if (nc_prepare_transposed_placement_scale(c)) {")
