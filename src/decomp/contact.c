@@ -1,5 +1,60 @@
 #include "decomp/contact.h"
 
+/* The caller has copied 24 primary (state, kind) pairs and two secondary
+ * pairs to its stack. A zero result skips outgoing contact detection. */
+bool nc_player_attack_kind(CPUState *c) {
+    if (c->budget <= 271)
+        return false;
+    const u32 actor = R(8), table = R(29);
+    int cycles = 5;
+    R(5) = MEM_R8(actor + 0x38A);
+    for (unsigned i = 0; i < 24; i++) {
+        R(4) = table + 4 * i;
+        cycles += 6;
+        if (R(5) == (u32)(s32)(s16)MEM_R16(R(4))) {
+            R(3) = 2 * (i + 1);
+            R(2) = (u32)(s32)(s16)MEM_R16(R(4) + 2);
+            cycles += 5;
+            goto done;
+        }
+        cycles += 3;
+    }
+    R(4) = table + 96;
+    cycles += 6;
+    if (MEM_R32(actor + 0x44)) {
+        R(4) = MEM_R8(actor + 0x38B);
+        cycles += 6;
+        if (R(4) != 0xff) {
+            R(6) = R(4);
+            cycles += 2;
+            for (unsigned i = 0; i < 2; i++) {
+                R(4) = table + 4 * i;
+                R(5) = 4 * i;
+                cycles += 6;
+                if (R(6) == (u32)(s32)(s16)MEM_R16(R(4) + 96)) {
+                    R(3) = 2 * i;
+                    R(2) = (u32)(s32)(s16)MEM_R16(R(4) + 98);
+                    cycles += 6;
+                    goto done;
+                }
+                cycles += 4;
+            }
+            R(4) = table + 8;
+        }
+    }
+    R(3) = MEM_R32(actor + 0x2C8) & 0x8000;
+    R(2) = 0;
+    cycles += 7;
+    if (R(3)) {
+        R(2) = MEM_R8(actor + 0x39B) == 19;
+        cycles += 6;
+    }
+done:
+    R(29) = table + 104;
+    c->budget -= cycles + 3;
+    return true;
+}
+
 /* Expand one center/extent record into the lower and upper corner arrays.
  * Each of the four inlined copies takes 54 cycles. Preserve load/store order
  * because guest pointers can alias, and leave each caller's cursors in place. */

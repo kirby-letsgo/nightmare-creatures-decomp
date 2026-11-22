@@ -173,6 +173,56 @@ static bool check_states(bool disc) {
     return true;
 }
 
+static bool check_attack_kinds(bool disc) {
+    const u32 actor = 0x80120000, table = SCRATCH_BASE + 0x100;
+    for (unsigned i = 0; i < 24; ++i) {
+        MEM_W16(table + i * 4, i + 1);
+        MEM_W16(table + i * 4 + 2, i + 100);
+    }
+    MEM_W16(table + 96, 50);
+    MEM_W16(table + 98, 0xfffe);
+    MEM_W16(table + 100, 51);
+    MEM_W16(table + 102, 250);
+    const unsigned secondary[] = {0, 50, 51, 255};
+    for (unsigned primary = 0; primary <= 25; primary++)
+        for (unsigned j = 0; j < 4; j++)
+            for (unsigned flags = 0; flags < 8; flags++) {
+                CPUState c = initial_cpu();
+                c.r[8] = actor;
+                c.r[29] = table;
+                c.r[31] = 0; /* interp_resume_exe stops when the guest returns to zero */
+                MEM_W8(actor + 0x38A, primary);
+                MEM_W8(actor + 0x38B, secondary[j]);
+                MEM_W8(actor + 0x39B, (flags & 4) ? 19 : 0);
+                MEM_W32(actor + 0x2C8, (flags & 2) ? 0x8000 : 0);
+                MEM_W32(actor + 0x44, flags & 1);
+                c.budget = 271;
+                CPUState native = c;
+                if (nc_player_attack_kind(&native) || memcmp(&native, &c, sizeof c))
+                    return false;
+                native.budget = c.budget = 272;
+                u32 want = (flags & 6) == 6;
+                if ((flags & 1) && j == 1)
+                    want = (u32)-2;
+                if ((flags & 1) && j == 2)
+                    want = 250;
+                if (primary >= 1 && primary <= 24)
+                    want = primary + 99;
+                if (!nc_player_attack_kind(&native) || native.r[2] != want)
+                    return false;
+                if (disc) {
+                    /* At this mid-function entry the original epilogue pops the stack. */
+                    interp_resume_exe(&c, 0x8004260C);
+                    if (memcmp(&c, &native, sizeof c)) {
+                        fprintf(stderr, "attack kind mismatch: primary %u secondary %u flags %u\n",
+                                primary, secondary[j], flags);
+                        return false;
+                    }
+                }
+            }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -191,7 +241,8 @@ int main(int argc, char **argv) {
             mark_exit(regions[i]->rejected, NC_CONTACT_REJECT);
         }
     }
-    bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc);
+    bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
+              check_attack_kinds(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
