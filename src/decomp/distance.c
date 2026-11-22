@@ -765,6 +765,26 @@ bool nc_start_scaled_part_position(CPUState *c) {
     return true;
 }
 
+/* Linked parts always sample angles. A leaf needs flag 0x80. The
+ * delay slots leave bit 3 in v0 even when the leaf skips sampling. */
+NcHeadingSource nc_select_part_heading_source(CPUState *c) {
+    if (c->budget <= 17)
+        return NC_HEADING_FALLBACK;
+    const u32 part = R(10);
+    R(2) = R(13) & 8;
+    c->budget -= 6;
+    if (!MEM_R32(part + 12)) {
+        c->budget -= 6;
+        if (!MEM_R32(part + 4)) {
+            c->budget -= 3;
+            if (!(R(13) & 0x80))
+                return NC_HEADING_SKIP;
+        }
+    }
+    c->budget -= 2;
+    return R(2) ? NC_HEADING_FROM_SHARED : NC_HEADING_FROM_PART;
+}
+
 /* The starting part already holds its scaled position. Other parts use
  * the current GTE matrix and store the MAC coordinates directly. */
 bool nc_update_child_position(CPUState *c) {
