@@ -1207,6 +1207,45 @@ bool nc_menu_dispatch_direction(CPUState *c) {
     return true;
 }
 
+/* A fresh Cross takes priority over Triangle. After held Down, the first
+ * instruction masks Cross again; the other entry already has it in v0. */
+u32 nc_menu_mode_face_buttons(CPUState *c, bool mask_cross) {
+    if (c->budget <= (mask_cross ? 23 : 22))
+        return mask_cross ? 0x80068f34 : 0x80068f38;
+    if (mask_cross) {
+        R(2) = R(30) & 0x4000;
+        c->budget--;
+    }
+
+    bool cross = R(2) != 0;
+    R(2) = R(30) & 0x1000;
+    c->budget -= 2;
+    if (cross) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 0x4000)) {
+            R(4) = R(22);
+            R(2) = MEM_R32(R(28) + 0x190);
+            R(6) = 0x10;
+            c->budget -= 6;
+            return 0x80068f88;
+        }
+    }
+
+    c->budget -= 2;
+    if (!R(2))
+        return 0x80068fa8;
+    R(2) = MEM_R32(R(28) + 0x18c) & 0x1000;
+    R(4) = R(22);
+    c->budget -= 7;
+    if (R(2))
+        return 0x80068fa8;
+
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 0x20;
+    c->budget -= 4;
+    return 0x80068f88;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
