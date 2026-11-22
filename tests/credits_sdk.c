@@ -944,6 +944,39 @@ static bool check_cd_test_parameter_count(void) {
     return true;
 }
 
+static bool spu_write_delay(CPUState *c) {
+    return nc_credits_spu_set_delay(c, false);
+}
+
+static bool spu_read_delay(CPUState *c) {
+    return nc_credits_spu_set_delay(c, true);
+}
+
+static bool check_spu_delays(void) {
+    const u32 slot = 0x8002468c, original = MEM_R32(slot);
+    const u32 addresses[] = {original, 0x80060000, SCRATCH_BASE + 4};
+    const u32 words[] = {0, 0xffffffff, 0xa5192345};
+    if (original != 0x1f801014)
+        return false;
+    for (unsigned i = 0; i < sizeof addresses / sizeof addresses[0]; i++) {
+        MEM_W32(slot, addresses[i]);
+        for (unsigned j = 0; j < sizeof words / sizeof words[0]; j++)
+            for (unsigned reading = 0; reading < 2; reading++) {
+                if (i)
+                    MEM_W32(addresses[i], words[j]);
+                u32 expected = (MEM_R32(addresses[i]) & 0xf0ffffff) |
+                               (reading ? 0x22000000 : 0x20000000);
+                CPUState state = arguments(1, 2, 3, j ? 16 : 4096);
+                if (!compare(state, reading ? 0x8001fc4c : 0x8001fc20,
+                             reading ? spu_read_delay : spu_write_delay, 15) ||
+                    nc_cpu.r[2] != expected || (i && MEM_R32(addresses[i]) != expected))
+                    return false;
+            }
+    }
+    MEM_W32(slot, original);
+    return true;
+}
+
 static bool check_cd_setters(void) {
     const struct {
         u32 entry, slot;
@@ -1224,6 +1257,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();

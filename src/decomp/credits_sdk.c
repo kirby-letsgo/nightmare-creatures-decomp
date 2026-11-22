@@ -1367,6 +1367,23 @@ bool nc_credits_set_graph_debug(CPUState *c) {
     return true;
 }
 
+/* _spu_FsetDelayW and _spu_FsetDelayR update the SPU bus delay register. */
+bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
+    if (c->budget <= 15)
+        return false;
+    c->budget--;
+    R(4) = MEM_R32(0x8002468c);
+    R(3) = 0xf0ff0000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R32(R(4));
+    R(3) = reading ? 0x22000000 : 0x20000000;
+    R(2) = (R(2) & 0xf0ffffff) | R(3);
+    c->budget -= NC_LOAD_CYCLES + 4;
+    MEM_W32(R(4), R(2));
+    c->budget -= 3;
+    return true;
+}
+
 /* CdStatus, CdMode and CdLastCom each return one cached unsigned byte. */
 static bool cd_state_byte(CPUState *c, u32 address) {
     if (c->budget <= 6)
