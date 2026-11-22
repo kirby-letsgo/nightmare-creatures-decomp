@@ -1577,6 +1577,8 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_vector({args})) {{")
                 out.append(f"        {self.call(0x8007A320)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B0B0:
+                out.append("    if (nc_begin_placement_matrices(c)) goto L_8002B14C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B1D0:
                 out.append("    if (nc_prepare_transposed_placement_scale(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
