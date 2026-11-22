@@ -314,6 +314,76 @@ bool nc_credits_link_packets(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_move(CPUState *c) {
+    if (c->budget <= 32)
+        return false;
+
+    const u32 packet = R(8) = R(4);
+    const u32 rect = R(5);
+    c->budget--;
+    bool nonempty = MEM_R16(rect + 4) != 0;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (nonempty) {
+        nonempty = MEM_R16(rect + 6) != 0;
+        c->budget -= NC_LOAD_CYCLES + 3;
+    }
+    R(4) = nonempty ? 5 : 0;
+    if (!nonempty)
+        c->budget -= 2;
+
+    MEM_W32(packet + 4, 0x01000000); /* clear texture cache */
+    c->budget -= 2;
+    MEM_W32(packet + 8, 0x80000000); /* VRAM-to-VRAM copy */
+    R(3) = (u16)R(6);
+    c->budget -= 3;
+    MEM_W8(packet + 3, (u8)R(4));
+    c->budget--;
+    R(4) = MEM_R32(rect);
+    const u32 destination = (R(7) << 16) | R(3);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(packet + 16, destination);
+    c->budget--;
+    MEM_W32(packet + 12, R(4));
+    c->budget--;
+    R(2) = MEM_R32(rect + 4);
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(packet + 20, R(2));
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_credits_draw_load(CPUState *c) {
+    if (c->budget <= 35)
+        return false;
+
+    const u32 packet = R(4), rect = R(5);
+    s16 width = (s16)MEM_R16(rect + 4);
+    c->budget -= NC_LOAD_CYCLES;
+    s16 height = (s16)MEM_R16(rect + 6);
+    nc_mult(c, (u32)(s32)width, (u32)(s32)height);
+    /* Two 16-bit pixels per word, with space for at most twelve words. */
+    u32 pixel_words = (u32)(((s32)c->lo + 1) / 2);
+    u32 length = pixel_words <= 12 ? pixel_words + 4 : 0;
+    c->budget -= NC_LOAD_CYCLES + 11 + (length == 0);
+
+    MEM_W8(packet + 3, (u8)length);
+    c->budget--;
+    MEM_W32(packet + 4, 0xa0000000); /* CPU-to-VRAM copy */
+    c->budget--;
+    for (unsigned off = 0; off <= 4; off += 4) {
+        u32 word = MEM_R32(rect + off);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        MEM_W32(packet + 8 + off, word);
+        c->budget--;
+    }
+    R(2) = packet + length * 4;
+    R(3) = 0x01000000; /* clear texture cache after the pixel data */
+    c->budget -= 3;
+    MEM_W32(R(2), R(3));
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_merge_primitives(CPUState *c) {
     if (c->budget <= 17)
         return false;

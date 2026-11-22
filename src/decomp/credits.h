@@ -88,6 +88,8 @@ bool nc_credits_packet_link(CPUState *c, bool check_end);
 
 bool nc_credits_link_packets(CPUState *c);
 
+bool nc_credits_draw_move(CPUState *c);
+bool nc_credits_draw_load(CPUState *c);
 bool nc_credits_merge_primitives(CPUState *c);
 bool nc_credits_end_packet(CPUState *c);
 
