@@ -87,6 +87,30 @@ static bool displacements(bool disc) {
     return true;
 }
 
+static bool headings(bool disc) {
+    CPUState c = initial(), result;
+    const s32 axes[] = {-2147483647, -2097151, -1024, -17, -1, 0, 1, 17, 1024, 2097151, 2147483647};
+    /* Non-disc runs use a synthetic ramp. Disc runs read the game's table. */
+    if (!disc)
+        for (unsigned i = 0; i <= 1024; i++)
+            MEM_W16(0x80085C4C + i * 2, i / 2);
+    for (unsigned i = 0; i < sizeof axes / sizeof axes[0]; i++)
+        for (unsigned j = 0; j < sizeof axes / sizeof axes[0]; j++) {
+            c.r[4] = (u32)axes[i];
+            c.r[5] = (u32)axes[j];
+            bool wrapped = (axes[i] > 2097151 || axes[i] < -2097151) &&
+                           (axes[j] > 2097151 || axes[j] < -2097151);
+            if (wrapped) {
+                CPUState before = c;
+                if (nc_vector_heading(&c) || memcmp(&before, &c, sizeof c))
+                    return false;
+            } else if (!compare(c, 0x80047684, nc_vector_heading, disc, &result))
+                return false;
+        }
+    c.r[4] = c.r[5] = 0;
+    return compare(c, 0x80047684, nc_vector_heading, disc, &result) && result.r[2] == 512;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -100,7 +124,7 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    bool ok = roots(disc) && displacements(disc);
+    bool ok = roots(disc) && displacements(disc) && headings(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

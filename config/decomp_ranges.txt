@@ -14,3 +14,22 @@ psx2_exe     8004EB30    8004EB78         damage.c
 # The death callbacks at 80055EDC..80055EF4 still run the original instructions.
 psx2_exe     80055DD4    80055EDC         adrenaline.c
 psx2_exe     80055EF4    80055F48         adrenaline.c
+credits_exe  80018C8C    80018CFC         credits.c
+# Vector heading, excluding the original division exception paths.
+psx2_exe     80047684    800476C4         distance.c
+psx2_exe     800476C8    800476D4         distance.c
+psx2_exe     800476E0    8004770C         distance.c
+psx2_exe     80047710    8004771C         distance.c
+psx2_exe     80047728    80047768         distance.c
+psx2_exe     8004776C    80047778         distance.c
+psx2_exe     80047784    800477B4         distance.c
+psx2_exe     800477B8    800477C4         distance.c
+psx2_exe     800477D0    80047814         distance.c
+psx2_exe     80047818    80047824         distance.c
+psx2_exe     80047830    80047860         distance.c
+psx2_exe     80047864    80047870         distance.c
+psx2_exe     8004787C    800478B8         distance.c
+psx2_exe     800478BC    800478C8         distance.c
+psx2_exe     800478D4    80047904         distance.c
+psx2_exe     80047908    80047914         distance.c
+psx2_exe     80047920    80047948         distance.c

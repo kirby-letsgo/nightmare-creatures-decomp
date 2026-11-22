@@ -529,6 +529,8 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == "credits_exe" and i.addr == 0x80018C8C:
+                out.append("    if (nc_credits_skip_input(c)) return;")
             if i.addr in contact_blocks:
                 check, passed, rejected = contact_blocks[i.addr]
                 out.extend(
@@ -548,6 +550,8 @@ class Emitter:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
                 out.append("    if (nc_distance_root(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
+                out.append("    if (nc_vector_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
@@ -650,6 +654,8 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     em = Emitter(mod, launcher)
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
+    if mod.name == "credits_exe":
+        header.append('#include "decomp/credits.h"')
     if mod.name == "psx2_exe":
         header.append('#include "decomp/adrenaline.h"')
         header.append('#include "decomp/damage.h"')

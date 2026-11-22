@@ -1,4 +1,53 @@
 #include "decomp/distance.h"
+#include <limits.h>
+
+/* Convert an X/Z displacement to the game's 4096-unit turn. The table
+ * supplies one octant; the sign and dominant axis determine its reflection. */
+bool nc_vector_heading(CPUState *c) {
+    static const struct {
+        u16 base;
+        bool reflect;
+        u8 cycles;
+    } octants[] = {
+        {0, false, 29},    {1024, true, 29},  /* +Z, +X */
+        {4096, true, 32},  {3072, false, 31}, /* +Z, -X */
+        {2048, true, 31},  {1024, false, 30}, /* -Z, +X */
+        {2048, false, 30}, {3072, true, 31},  /* -Z, -X */
+    };
+    s32 x = (s32)R(4), z = (s32)R(5);
+    if (c->budget <= 29 || x == INT32_MIN || z == INT32_MIN)
+        return false;
+    int zero_axes = (x == 0) + (z == 0);
+    u32 ax = x < 0 ? (u32)-x : (u32)x;
+    u32 az = z < 0 ? (u32)-z : (u32)z;
+    /* Original axis handling substitutes +1, even for the zero vector. */
+    if (!ax)
+        ax = 1;
+    if (!az)
+        az = 1;
+    bool x_major = ax > az;
+    unsigned octant = 4 * (z < 0) + 2 * (x < 0) + x_major;
+    int cycles = octants[octant].cycles + zero_axes;
+    u32 minor = x_major ? az : ax, major = x_major ? ax : az;
+    /* A wrapped signed numerator can index outside the normal angle table. */
+    if (c->budget <= cycles || minor > INT32_MAX / 1024u)
+        return false;
+    u32 numerator = minor * 1024;
+    u32 index = numerator / major;
+    u32 angle = (u32)(s32)(s16)MEM_R16(0x80085C4Cu + index * 2);
+    c->lo = R(4) = index;
+    c->hi = numerator % major;
+    R(1) = 0x80080000u + index * 2;
+    R(5) = az;
+    if (octants[octant].reflect) {
+        R(3) = angle;
+        R(2) = octants[octant].base - angle;
+    } else {
+        R(2) = octants[octant].base + angle;
+    }
+    c->budget -= cycles;
+    return true;
+}
 
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
