@@ -1543,6 +1543,40 @@ u32 nc_menu_dispatch_record_29(CPUState *c) {
     return R(3) == 5 ? 0x800676fc : 0x800674e0;
 }
 
+/* Record 26 checks Left when its signed halfword at +10 is five.
+ * The Right check follows even when the Left action was dispatched. */
+u32 nc_menu_record_26_left(CPUState *c) {
+    if (c->budget <= 18)
+        return 0x80067730;
+    bool matches = R(3) == R(2);
+    R(2) = 5;
+    c->budget -= 2;
+    if (!matches)
+        return 0x800677bc;
+
+    R(3) = (s32)(s16)MEM_R16(0x80088502);
+    R(2) = R(30) & 0x80;
+    c->budget -= 7;
+    if (R(3) != 5)
+        return 0x800677bc;
+
+    R(2) = 0x08000000;
+    c->budget -= 2;
+    if (!(R(30) & 0x80))
+        return 0x80067770;
+    R(2) &= R(4);
+    R(4) = R(22);
+    c->budget -= 3;
+    if (R(2)) {
+        R(5) = 0x800884f8;
+        R(6) = 0x10;
+        R(31) = 0x80067770;
+        c->budget -= 4;
+        nc_call(c, 0x80063b70);
+    }
+    return 0x80067770;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
