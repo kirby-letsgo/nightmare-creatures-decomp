@@ -2,6 +2,29 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* Player control has already loaded the flags into v1. A live read
+ * resumes at the player_input hook with the full button word in v0.
+ * Sequence playback sets s1 itself and joins the caller after the hook. */
+u32 nc_player_input_source(CPUState *c) {
+    if (c->budget <= 7)
+        return 0x80044754;
+    R(2) = R(3) & 0x30;
+    if (R(2)) {
+        R(31) = 0x80044768;
+        c->budget -= 5;
+        nc_call(c, 0x80062d2c);
+        R(17) = R(2) & 0xffff;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        return 0x80044784;
+    }
+    R(4) = 0x800d7c04;
+    R(5) = 1;
+    R(31) = 0x80044780;
+    c->budget -= 7;
+    nc_call(c, 0x80070050);
+    return 0x80044780;
+}
+
 /* The PSX2 BIOS stubs tail-jump to B0, setting t1 in the delay slot.
  * With three cycles or less, the generated path polls at each boundary. */
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service) {

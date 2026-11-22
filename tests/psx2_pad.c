@@ -4,6 +4,7 @@
 #include "port/hw/hw.h"
 #include "port/interp.h"
 #include "port/runtime.h"
+#include "port/settings.h"
 
 static u8 before[RAM_SIZE], after[RAM_SIZE];
 static const u32 gp = 0x80120000, packet = 0x8008f1c0, config = 0x80130000;
@@ -37,6 +38,64 @@ static bool compare(CPUState cpu, u32 entry, bool (*native)(CPUState *), int cut
                 cpu.budget, MEM_R8(packet + 1), MEM_R16(packet + 2));
         return false;
     }
+    return true;
+}
+
+static bool player_source(u32 flags) {
+    const u32 actor = 0x80160000, records = 0x80170000;
+    bool sequence = (flags & 0x30) != 0;
+    CPUState input = initial();
+    input.r[3] = flags;
+    input.r[31] = sequence ? 0x80044784 : 0x80044780;
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(config, flags);
+    MEM_W32(packet, 0xbfef4100);      /* port one: 0x4010 */
+    MEM_W32(packet + 34, 0xfd5f4100); /* port two: 0x02a0 */
+    MEM_W32(gp + 0x184, records);
+    MEM_W32(gp + 0x188, 0);
+    MEM_W8(gp + 0x3f8, 3);
+    MEM_W32(records, 0x77048080);
+    MEM_W16(0x800d7c26, 0); /* save buttons and return before movement processing */
+    memcpy(before, nc_ram, RAM_SIZE);
+
+    CPUState low = input;
+    low.budget = 7;
+    CPUState native = low;
+    if (nc_player_input_source(&native) != 0x80044754 || memcmp(&native, &low, sizeof low) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    native = input;
+    u32 buttons = sequence ? 0x8080 : 0x02a04010;
+    if (nc_player_input_source(&native) != input.r[31] || native.r[2] != buttons ||
+        native.r[17] != (sequence ? buttons : input.r[17]))
+        return false;
+    memcpy(after, nc_ram, RAM_SIZE);
+    memcpy(nc_ram, before, RAM_SIZE);
+    CPUState guest = input;
+    interp_call(&guest, 0x80044754);
+    if (memcmp(&guest, &native, sizeof guest) || memcmp(nc_ram, after, RAM_SIZE))
+        return false;
+
+    /* With a centered modern stick the hook clears live direction bits.
+     * Sequence direction bits pass through untouched. Exercise the caller
+     * at both sides of the budget cutoff after its 16-cycle prologue. */
+    bios_set_pad(0);
+    for (unsigned modern = 0; modern < 2; ++modern) {
+        settings.controls = modern ? CONTROLS_MODERN : CONTROLS_TANK;
+        for (int budget = 23; budget <= 24; ++budget) {
+            memcpy(nc_ram, before, RAM_SIZE);
+            CPUState cpu = initial();
+            cpu.r[4] = actor;
+            cpu.budget = budget;
+            nc_set_module(NC_MOD_PSX2);
+            nc_call(&cpu, 0x80044724);
+            nc_set_module(NC_MOD_NONE);
+            u32 expected = modern && !sequence ? buttons & ~0xf0u : buttons;
+            if (MEM_R32(actor + 0x2f8) != expected)
+                return false;
+        }
+    }
+    settings.controls = CONTROLS_TANK;
     return true;
 }
 
@@ -463,6 +522,8 @@ int main(int argc, char **argv) {
              caller(4096, first, second, 0x800d7c04, 0, 0x03000000) &&
              caller(4096, first, second, 0x800d7c04, 0, 0);
     }
+    for (unsigned flags = 0; ok && flags <= 0x30; flags += 0x10)
+        ok = player_source(flags);
     disc_close();
     return ok ? 0 : 1;
 }

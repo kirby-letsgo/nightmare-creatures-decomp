@@ -611,6 +611,8 @@ class Emitter:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.update((0x80047254, 0x800472B8))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.add(0x80044780)
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
             targets.add(0x800700C8)
         if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
@@ -645,6 +647,15 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044754:
+                out.extend(
+                    [
+                        "    switch (nc_player_input_source(c)) {",
+                        "    case 0x80044780: goto L_80044780;",
+                        "    case 0x80044784: goto L_80044784;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80070050:
                 out.extend(
                     [
