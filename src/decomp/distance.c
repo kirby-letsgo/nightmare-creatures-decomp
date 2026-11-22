@@ -252,6 +252,47 @@ bool nc_prepare_transposed_placement_scale(CPUState *c) {
     return true;
 }
 
+bool nc_begin_actor_placement_target(CPUState *c, bool *has_pose) {
+    if (c->budget <= 17)
+        return false;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 0x20, R(31));
+    MEM_W32(R(29) + 0x18, R(16));
+    R(4) = MEM_R32(R(17) + 0x164);
+    *has_pose = MEM_R32(R(4) + 0x20) != 0;
+    R(2) = 0;
+    if (*has_pose)
+        R(31) = 0x8002b260;
+    c->budget -= *has_pose ? 17 : 15;
+    return true;
+}
+
+bool nc_finish_actor_placement_target(CPUState *c, bool has_pose) {
+    if (c->budget <= (has_pose ? 114 : 12))
+        return false;
+    if (has_pose) {
+        R(3) = MEM_R32(R(17) + 0x164);
+        MEM_W16(R(17) + 0x0a, R(2));
+        R(4) = MEM_R32(R(3) + 0x50);
+        R(31) = 0x8002b318;
+        R(5) = R(29) + 0x10;
+        nc_transform_part_position(c, true);
+        R(3) = MEM_R16(R(29) + 0x12);
+        R(2) = 1;
+        MEM_W16(R(17) + 8, 0);
+        R(3) = 40u - R(3);
+        MEM_W16(R(17) + 2, R(3));
+    }
+    R(31) = MEM_R32(R(29) + 0x20);
+    R(17) = MEM_R32(R(29) + 0x1c);
+    R(16) = MEM_R32(R(29) + 0x18);
+    R(29) += 0x28;
+    c->budget -= has_pose ? 29 : 12; /* The part transform charges 85 cycles. */
+    return true;
+}
+
 /* Offset the actor's whole-unit X/Z by 100 units along its 16-bit heading.
  * The Q14 components are multiplied by 25 and shifted by 12 in the game. */
 bool nc_prepare_actor_placement_target(CPUState *c) {
