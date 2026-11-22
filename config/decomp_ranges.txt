@@ -400,6 +400,8 @@ psx2_exe     800677BC    800677E0         pad.c
 psx2_exe     800677E0    80067804         pad.c
 # Record 37 type-7 stick sample and unsigned counter check.
 psx2_exe     8006780C    80067830         pad.c
+# Track both stick axes before testing Start.
+psx2_exe     800680EC    80068154         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
