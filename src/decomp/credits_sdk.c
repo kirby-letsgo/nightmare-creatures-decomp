@@ -1475,6 +1475,64 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+bool nc_credits_strcmp(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    bool both_present = R(4) != 0;
+    c->budget -= 2;
+    if (both_present) {
+        both_present = R(5) != 0;
+        NC_POLL(c, 2);
+    }
+    if (!both_present) {
+        bool equal = R(4) == R(5);
+        NC_POLL(c, 2);
+        if (equal)
+            goto equal_strings;
+        bool left_present = R(4) != 0;
+        R(2) = 1;
+        NC_POLL(c, 2);
+        if (!left_present) {
+            R(2) = UINT32_MAX;
+            NC_POLL(c, 2);
+        }
+        goto done;
+    }
+
+    for (;;) {
+        R(3) = MEM_R8(R(4));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        R(2) = MEM_R8(R(5));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        bool different = R(3) != R(2);
+        R(5)++;
+        NC_POLL(c, 2);
+        if (different)
+            break;
+        bool terminator = R(3) == 0;
+        R(4)++;
+        NC_POLL(c, 2);
+        if (terminator)
+            goto equal_strings;
+    }
+
+    /* Both unsigned bytes are read again on the mismatch path. */
+    R(3) = MEM_R8(R(4));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(2) = MEM_R8(R(5) - 1);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(3) - R(2));
+    goto done;
+equal_strings:
+    R(2) = 0;
+    NC_POLL(c, 2);
+done:
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* The credits strncmp orders null pointers before checking the byte limit. */
 bool nc_credits_strncmp(CPUState *c) {
     if (c->budget <= 2)
