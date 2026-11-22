@@ -3934,6 +3934,102 @@ bool nc_credits_cd_audio_ready(CPUState *c) {
     return true;
 }
 
+/* Select a playlist entry and issue CdlPlay using its table-of-contents position. */
+bool nc_credits_cd_play_track(CPUState *c) {
+    const u32 index = 0x80024c34, playlist = 0x80024aa4, last_track = 0x800273e4;
+    if (c->budget <= 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(index);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 28, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 24, R(16));
+    R(2) <<= 2;
+    R(1) = 0x80020000 + R(2);
+    c->budget -= 4;
+    R(2) = MEM_R32(R(1) + 0x4aa4);
+    R(1) = 0x80020000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(0x80024c38, 0);
+    c->budget -= 3;
+    if (!R(2)) {
+        /* At the terminator, restart at zero or mark playback stopped. */
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024c3c);
+        NC_POLL(c, NC_INSN_CYCLES);
+        const bool repeat = R(2) != 0;
+        R(2) = UINT32_MAX;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        set_reg(c, 1, 0x80020000);
+        MEM_W32(index, repeat ? 0 : R(2));
+        NC_POLL(c, NC_INSN_CYCLES);
+        if (repeat)
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, index);
+    NC_POLL(c, NC_INSN_CYCLES);
+    const bool active = (s32)R(3) >= 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (active) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024aa0);
+        NC_POLL(c, NC_INSN_CYCLES);
+        set_reg(c, 2, R(2) + 1);
+        set_reg(c, 1, 0x80020000);
+        MEM_W32(0x80024aa0, R(2));
+        NC_POLL(c, NC_INSN_CYCLES);
+        set_reg(c, 2, R(3) << 2);
+        set_reg(c, 1, 0x80020000);
+        set_reg(c, 1, R(1) + R(2));
+        load_word(c, 5, R(1) + 0x4aa4);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, last_track);
+        set_reg(c, 16, 0x80020000);
+        set_reg(c, 16, playlist);
+        set_reg(c, 2, (s32)R(2) < (s32)R(5));
+        const bool beyond_disc = R(2) != 0;
+        R(4) = 3;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (beyond_disc) {
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x80018c38);
+            R(31) = 0x8002304c;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x80019a60); /* printf */
+            set_reg(c, 2, 0x80020000);
+            load_word(c, 2, index);
+            set_reg(c, 3, 0x80020000);
+            load_word(c, 3, last_track);
+            set_reg(c, 2, R(2) << 2);
+            set_reg(c, 2, R(2) + R(16));
+            MEM_W32(R(2), R(3));
+            NC_POLL(c, NC_INSN_CYCLES);
+            set_reg(c, 4, 3);
+        }
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, index);
+        set_reg(c, 6, 0);
+        set_reg(c, 2, R(2) << 2);
+        set_reg(c, 2, R(2) + R(16));
+        load_word(c, 5, R(2));
+        set_reg(c, 2, 0x80020000);
+        set_reg(c, 2, 0x80027254);
+        set_reg(c, 5, R(5) << 2);
+        R(31) = 0x80023098;
+        R(5) += R(2);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001ffac); /* CdControl(CdlPlay, position, NULL) */
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* CdGetToc forwards the caller's track-position buffer to CdGetToc2(1, buffer). */
 bool nc_credits_cd_get_toc(CPUState *c) {
     if (c->budget <= 5)
