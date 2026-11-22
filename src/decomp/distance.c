@@ -611,6 +611,49 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* Rotate each column of the input matrix with the shared GTE rotation.
+ * The input may overlap the frame, so each column is stored before the
+ * next is read. The scaled result feeds the three-heading extraction. */
+bool nc_prepare_heading_matrix(CPUState *c) {
+    if (c->budget <= 119)
+        return false;
+    const u32 input = R(4), frame = R(29) - 88;
+    R(29) = frame;
+    MEM_W32(frame + 76, R(19));
+    R(19) = R(5);
+    MEM_W32(frame + 80, R(31));
+    for (int reg = 18; reg >= 16; --reg)
+        MEM_W32(frame + 64 + 4 * (reg - 16), R(reg));
+
+    const u32 scale = 0x80018538;
+    const u32 sx = MEM_R32(scale), sy = MEM_R32(scale + 4), sz = MEM_R32(scale + 8);
+    MEM_W32(frame + 48, sx);
+    MEM_W32(frame + 52, sy);
+    MEM_W32(frame + 56, sz);
+    MEM_W32(frame + 60, MEM_R32(scale + 12));
+    R(5) = frame + 48;
+    R(6) = 0x800d7688;
+    for (unsigned reg = 0; reg < 5; ++reg)
+        gte_write_ctrl(c, reg, MEM_R32(R(6) + 4 * reg));
+
+    const u32 matrix = frame + 16;
+    for (unsigned column = 0; column < 3; ++column) {
+        const u32 offset = 2 * column;
+        for (unsigned row = 0; row < 3; ++row)
+            gte_write_data(c, 9 + row, MEM_R16(input + offset + 6 * row));
+        gte_command(c, 0x049e012); /* MVMVA, rotation matrix, IR vector, no translation */
+        for (unsigned row = 0; row < 3; ++row) {
+            R(12 + row) = gte_read_data(c, 9 + row);
+            MEM_W16(matrix + offset + 6 * row, R(12 + row));
+        }
+    }
+    R(2) = matrix + 4;
+    R(3) = R(4) = matrix;
+    R(31) = 0x8003475c;
+    c->budget -= 119;
+    return true;
+}
+
 /* The planar length uses the last two entries of the matrix's middle row.
  * Shift the wrapped 32-bit sum as a signed word in the root call's delay slot. */
 bool nc_prepare_matrix_planar_length(CPUState *c) {
