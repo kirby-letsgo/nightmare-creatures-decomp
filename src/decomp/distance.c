@@ -16,6 +16,72 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* Mode 3 moves each signed coordinate toward its target by a power-of-two
+ * fraction. The shift at 0x148 independently controls the three angle steps. */
+bool nc_step_placement_record(CPUState *c) {
+    const int body_cycles = 63 * NC_INSN_CYCLES + 26 * (NC_LOAD_CYCLES - NC_INSN_CYCLES);
+    if (c->budget <= body_cycles + 3 * 12)
+        return false;
+
+    const u32 record = R(4);
+    R(29) -= 0x30;
+    MEM_W32(R(29) + 0x28, R(16));
+    R(16) = record;
+    MEM_W32(R(29) + 0x2c, R(31));
+
+    R(5) = (s16)MEM_R16(record + 0x0a);
+    const u16 target_angle = MEM_R16(record + 0x12) & 0xfff;
+    R(6) = MEM_R32(record + 0x148);
+    s32 current = (s16)MEM_R16(record);
+    R(7) = MEM_R32(record + 0x14c);
+    MEM_W16(record + 0x12, target_angle);
+    s32 target = (s16)MEM_R16(record + 0x18);
+    R(4) = (s16)MEM_R16(record + 0x12);
+    /* The next target is read before storing each updated coordinate. */
+    for (unsigned axis = 0; axis < 2; ++axis) {
+        const s32 next = current + ((target - current) >> (R(7) & 31));
+        target = (s16)MEM_R16(record + 0x1a + 2 * axis);
+        MEM_W16(record + 2 * axis, next);
+        current = (s16)MEM_R16(record + 2 * axis + 2);
+        R(7) = MEM_R32(record + 0x14c);
+    }
+    const s32 next_z = current + ((target - current) >> (R(7) & 31));
+    R(2) = MEM_R16(record + 0x10) & 0xfff;
+    MEM_W16(record + 4, next_z);
+    R(3) = MEM_R16(record + 0x14) & 0xfff;
+    MEM_W16(record + 0x10, R(2));
+    R(31) = 0x8002b04c;
+    MEM_W16(record + 0x14, R(3));
+    nc_step_record_angle(c);
+
+    R(4) = (s16)MEM_R16(record + 0x10);
+    R(5) = (s16)MEM_R16(record + 8);
+    R(6) = MEM_R32(record + 0x148);
+    R(31) = 0x8002b060;
+    MEM_W16(record + 0x0a, R(2));
+    nc_step_record_angle(c);
+
+    R(4) = MEM_R32(record + 0x12c);
+    R(5) = MEM_R32(record + 0x128);
+    R(6) = MEM_R32(record + 0x148);
+    R(31) = 0x8002b074;
+    MEM_W16(record + 8, R(2));
+    nc_step_record_angle(c);
+
+    R(3) = MEM_R16(record + 8) & 0xfff;
+    MEM_W32(record + 0x128, R(2));
+    R(2) = MEM_R16(record + 0x0a) & 0xfff;
+    MEM_W16(record + 8, R(3));
+    R(3) = MEM_R16(record + 0x0c) & 0xfff;
+    MEM_W16(record + 0x0a, R(2));
+    MEM_W16(record + 0x0c, R(3));
+    R(31) = MEM_R32(R(29) + 0x2c);
+    R(16) = MEM_R32(R(29) + 0x28);
+    R(29) += 0x30;
+    c->budget -= body_cycles;
+    return true;
+}
+
 /* Bit 2 of the record flags selects this pair of angle updates. The
  * second call's delay slot stores the first result; the jump stores the second. */
 bool nc_step_record_angle_pair(CPUState *c) {
