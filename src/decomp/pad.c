@@ -1457,6 +1457,31 @@ u32 nc_menu_record_29_thresholds(CPUState *c) {
     return 0x800674e4;
 }
 
+/* Reload the counter after the record calls before advancing it. */
+bool nc_menu_advance_record_counter(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(3) = MEM_R32(R(28) + 0x2b8) + 1u;
+    MEM_W32(R(28) + 0x2b8, R(3));
+    R(2) = 0;
+    c->budget -= 8;
+    return true;
+}
+
+u32 nc_menu_check_count_130(CPUState *c) {
+    if (c->budget <= 6)
+        return 0x800675e8;
+    c->budget -= 3;
+    if ((s32)R(4) < 130) {
+        R(2) = R(4) + 1u;
+        return 0x800674e4;
+    }
+
+    R(2) = 130;
+    c->budget -= 3;
+    return R(3) == 130 ? 0x80067600 : 0x8006767c;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
