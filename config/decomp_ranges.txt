@@ -241,6 +241,8 @@ psx2_exe     8006718C    80067200         pad.c
 psx2_exe     8006725C    800672B4         pad.c
 # Menu sequence progress writes and record loop boundary.
 psx2_exe     800672E0    80067308         pad.c
+# Menu button scan register restore and return.
+psx2_exe     80067308    80067338         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c

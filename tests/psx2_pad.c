@@ -1085,6 +1085,44 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
 }
 #endif
 
+static bool menu_scan_return(void) {
+    CPUState cpu = initial();
+    for (unsigned i = 0; i < 8; ++i)
+        MEM_W32(cpu.r[29] + 0x10 + 4 * i, 0x81234560 + i);
+    MEM_W32(cpu.r[29] + 0x30, 0); /* stop the interpreter after the return */
+    memcpy(before, nc_ram, RAM_SIZE);
+    cpu.budget = 30;
+    CPUState native = cpu;
+    if (nc_leave_menu_button_scan(&native) || memcmp(&native, &cpu, sizeof cpu) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    cpu.budget = 31;
+    native = cpu;
+    if (!nc_leave_menu_button_scan(&native))
+        return false;
+    interp_resume_exe(&cpu, 0x80067308);
+    if (memcmp(&native, &cpu, sizeof cpu) || memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+
+#ifdef NC_TEST_GENERATED_PAD
+    /* Idle takes 13 cycles to reach the return, a held shoulder word takes 20. */
+    const u32 held[] = {0, 0x100, 0x301};
+    for (unsigned i = 0; i < sizeof held / sizeof held[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = held[i];
+        MEM_W32(gp + 0x18c, held[i]);
+        memset(nc_ram + ((input.r[29] - 0x38) & (RAM_SIZE - 1)), 0xa5, 0x38);
+        memcpy(before, nc_ram, RAM_SIZE);
+        CPUState guest = input;
+        interp_call(&guest, 0x80067130);
+        memcpy(after, nc_ram, RAM_SIZE);
+        if (!compare_generated(input, 0x80067130, held[i] ? 50 : 43))
+            return false;
+    }
+#endif
+    return true;
+}
+
 static bool full_pad_dispatch(void) {
     const u32 words[] = {0, 1, 8, 9, 0x00080001};
     MEM_W32(gp + 0x244, config);
@@ -1462,7 +1500,7 @@ int main(int argc, char **argv) {
               playback_read() && playback_poll_gate() && playback_interrupt() &&
               pad_select_edge() && pad_start_edge() && menu_button_scan_edges() &&
               menu_sequence_matches() && menu_record_sequences() && menu_record_progress() &&
-              menu_navigation_history() && menu_direction_selections() &&
+              menu_scan_return() && menu_navigation_history() && menu_direction_selections() &&
               menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
               menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
               menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
