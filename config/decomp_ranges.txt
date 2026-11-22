@@ -155,6 +155,8 @@ psx2_exe     80042DE4    80042E18         pad.c
 psx2_exe     80042E18    80042E30         pad.c
 # Playback interruption on live input or sequence end.
 psx2_exe     80042E30    80042E7C         pad.c
+# Live pad read before the Start and Select checks.
+psx2_exe     80042E7C    80042E8C         pad.c
 # Start press edge after live pad decoding.
 psx2_exe     80042E8C    80042EF4         pad.c
 # Select press edge and button history, excluding the action call and its return.

@@ -36,6 +36,19 @@ bool nc_leave_player_input(CPUState *c, bool store_buttons) {
     return true;
 }
 
+/* Both live-input callers pass (0x800d7c04, 1). Only player control
+ * resumes at the modern-controls hook with the decoded word in v0. */
+bool nc_call_live_pad(CPUState *c, u32 return_address) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = 0x800d7c04;
+    R(5) = 1;
+    R(31) = return_address;
+    c->budget -= 4;
+    nc_call(c, 0x80070050);
+    return true;
+}
+
 /* Player control has already loaded the flags into v1. A live read
  * resumes at the player_input hook with the full button word in v0.
  * Sequence playback sets s1 itself and joins the caller after the hook. */
@@ -51,11 +64,8 @@ u32 nc_player_input_source(CPUState *c) {
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         return 0x80044784;
     }
-    R(4) = 0x800d7c04;
-    R(5) = 1;
-    R(31) = 0x80044780;
-    c->budget -= 7;
-    nc_call(c, 0x80070050);
+    c->budget -= 3;
+    nc_call_live_pad(c, 0x80044780); /* entry guard covers the four call instructions */
     return 0x80044780;
 }
 
