@@ -204,6 +204,54 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool placement_vector_frame(bool disc, bool begin) {
+    const u32 frame = SCRATCH_BASE + 0x100;
+    const u32 entry = begin ? 0x8002ae78 : 0x8002af68;
+    bool (*run)(CPUState *) = begin ? nc_begin_placement_vectors : nc_finish_placement_vectors;
+    CPUState input = initial();
+    input.r[4] = SCRATCH_BASE;
+    input.r[29] = begin ? frame + 0x68 : frame;
+    input.r[31] = begin ? 0x8002aee0 : 0x80010000;
+    input.budget = begin ? 42 : 9;
+    memset(nc_scratch, 0xa5, SCRATCH_SIZE);
+    MEM_W32(frame + 0x60, 0x87654321);
+    MEM_W32(frame + 0x64, input.r[31]);
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memcpy(before, nc_scratch, sizeof before);
+    CPUState native = input;
+    if (run(&native) || memcmp(&native, &input, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = ++input.budget;
+    if (!begin)
+        native.r[31] = 0xdeadbeef;
+    if (!run(&native) || native.budget != 1 || native.r[29] != (begin ? frame : frame + 0x68))
+        return false;
+    if (begin) {
+        if (MEM_R32(frame + 0x60) != input.r[16] || MEM_R32(frame + 0x64) != input.r[31] ||
+            native.r[16] != input.r[4])
+            return false;
+        for (unsigned offset = 0; offset < 0x20; offset += 4)
+            if (MEM_R32(frame + 0x40 + offset) != MEM_R32(0x800184d8 + offset))
+                return false;
+    } else if (native.r[16] != 0x87654321 || native.r[31] != input.r[31]) {
+        return false;
+    }
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        /* Enter with the stop stack adjusted for the frame allocation/restoration. */
+        const u32 stub = 0x80120000;
+        MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bd0000u | (u16)(begin ? 0x68 : -0x68));
+        input.r[29] = native.r[29];
+        input.budget += 2;
+        interp_call(&input, stub);
+        return !memcmp(&native, &input, sizeof input) && !memcmp(after, nc_scratch, sizeof after);
+    }
+    return true;
+}
+
 static bool placement_vector_pairs(bool disc) {
     static const struct {
         u32 source, result;
@@ -3053,7 +3101,8 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
+    if (!placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
+        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
         !transposed_placement_scales(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =

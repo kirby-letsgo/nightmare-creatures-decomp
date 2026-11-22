@@ -16,6 +16,41 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* Save the caller's frame and copy both four-word scale vectors. The game
+ * stages XYZ before writing it, then reads and copies the padding word. */
+bool nc_begin_placement_vectors(CPUState *c) {
+    if (c->budget <= 42)
+        return false;
+    R(29) -= 0x68;
+    MEM_W32(R(29) + 0x60, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x64, R(31));
+    for (u32 offset = 0; offset < 0x20; offset += 0x10) {
+        R(5) = 0x800184d8 + offset;
+        const u32 dst = R(29) + 0x40 + offset;
+        R(2) = MEM_R32(R(5));
+        R(3) = MEM_R32(R(5) + 4);
+        R(4) = MEM_R32(R(5) + 8);
+        MEM_W32(dst, R(2));
+        MEM_W32(dst + 4, R(3));
+        MEM_W32(dst + 8, R(4));
+        R(2) = MEM_R32(R(5) + 12);
+        MEM_W32(dst + 12, R(2));
+    }
+    c->budget -= 42;
+    return true;
+}
+
+bool nc_finish_placement_vectors(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x64);
+    R(16) = MEM_R32(R(29) + 0x60);
+    R(29) += 0x68;
+    c->budget -= 9;
+    return true;
+}
+
 /* The placement heading is the Y rotation in a 4096-unit turn. */
 bool nc_prepare_placement_yaw(CPUState *c) {
     if (c->budget <= 9)
