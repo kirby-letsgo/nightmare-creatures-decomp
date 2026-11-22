@@ -1675,6 +1675,46 @@ bool nc_credits_bios_gpu_command(CPUState *c) {
     return bios_service(c, 0xa0, 0x49);
 }
 
+bool nc_credits_bios_init_pad(CPUState *c) {
+    return bios_service(c, 0xb0, 0x12);
+}
+
+/* Preserve both buffer/size pairs across the SDK patch and ChangeClearPad. */
+bool nc_credits_sdk_init_pad(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    for (unsigned i = 0; i < 3; i++) {
+        MEM_W32(R(29) + 16 + 4 * i, R(16 + i));
+        R(16 + i) = R(4 + i);
+        c->budget -= 2;
+    }
+    MEM_W32(R(29) + 28, R(19));
+    c->budget--;
+    MEM_W32(R(29) + 32, R(31));
+    R(31) = 0x8001a350;
+    R(19) = R(7);
+    c->budget -= 3;
+    nc_call(c, 0x8001a3e4); /* _patch_pad */
+    R(31) = 0x8001a358;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a2ac); /* ChangeClearPad */
+    for (unsigned i = 0; i < 3; i++)
+        set_reg(c, 4 + i, R(16 + i));
+    R(31) = 0x8001a36c;
+    R(7) = R(19);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a3b4); /* BIOS InitPAD */
+    load_word(c, 31, R(29) + 32);
+    for (int i = 3; i >= 0; i--)
+        load_word(c, 16 + i, R(29) + 16 + 4 * i);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_bios_start_pad(CPUState *c) {
     return bios_service(c, 0xb0, 0x13);
 }
