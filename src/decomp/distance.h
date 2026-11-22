@@ -131,6 +131,8 @@ bool nc_prepare_transposed_placement_scale(CPUState *c);
 bool nc_begin_actor_placement_target(CPUState *c, bool *has_pose);
 bool nc_finish_actor_placement_target(CPUState *c, bool has_pose);
 bool nc_prepare_actor_placement_target(CPUState *c);
+bool nc_select_placement_step(CPUState *c, bool *step);
+bool nc_finish_placement_mode(CPUState *c);
 bool nc_step_placement_record(CPUState *c);
 bool nc_step_record_angle_pair(CPUState *c);
 bool nc_prepare_paired_point_bearing(CPUState *c);

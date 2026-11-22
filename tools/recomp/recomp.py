@@ -1672,6 +1672,13 @@ class Emitter:
                 out.append("    if (nc_prepare_actor_placement_target(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_8002B304; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B384:
+                out.append("    { bool step;")
+                out.append("      if (nc_select_placement_step(c, &step)) {")
+                out.append(f"        if (step) {{ {self.call(0x8002AFB4)} }}")
+                out.append("        goto L_8002B3BC; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B3BC:
+                out.append("    if (nc_finish_placement_mode(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
                 out.append("    if (nc_step_record_angle_pair(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:
