@@ -345,6 +345,28 @@ bool nc_begin_placement_update(CPUState *c) {
     return true;
 }
 
+NcPlacementCounterPath nc_check_placement_counter(CPUState *c) {
+    if (c->budget <= 20)
+        return NC_PLACEMENT_COUNTER_FALLBACK;
+    const u32 record = R(16);
+    R(3) = MEM_R32(record + 0x170);
+    c->budget -= 6;
+    if (!R(3))
+        return NC_PLACEMENT_COUNTER_ZERO;
+
+    /* The branch delay slot decrements v1 even when the flag skips the store. */
+    R(2) = MEM_R16(record + 0x16c) & 0x10;
+    R(3) -= 1;
+    c->budget -= 7;
+    if (!R(2))
+        return NC_PLACEMENT_CHECK_TARGET;
+
+    R(2) = (s32)MEM_R32(record + 0x174) < (s32)R(3);
+    MEM_W32(record + 0x170, R(3));
+    c->budget -= 7;
+    return R(2) ? NC_PLACEMENT_UPDATE_MODE : NC_PLACEMENT_APPLY_PRESET;
+}
+
 /* Each 20-byte preset starts with two packed eight-byte groups: position
  * and angles. Load both words of each group before writing the record. */
 bool nc_apply_placement_preset(CPUState *c) {

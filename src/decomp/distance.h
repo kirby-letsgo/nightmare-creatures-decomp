@@ -132,6 +132,14 @@ bool nc_begin_actor_placement_target(CPUState *c, bool *has_pose);
 bool nc_finish_actor_placement_target(CPUState *c, bool has_pose);
 bool nc_prepare_actor_placement_target(CPUState *c);
 bool nc_begin_placement_update(CPUState *c);
+typedef enum {
+    NC_PLACEMENT_COUNTER_FALLBACK,
+    NC_PLACEMENT_COUNTER_ZERO,
+    NC_PLACEMENT_CHECK_TARGET,
+    NC_PLACEMENT_UPDATE_MODE,
+    NC_PLACEMENT_APPLY_PRESET,
+} NcPlacementCounterPath;
+NcPlacementCounterPath nc_check_placement_counter(CPUState *c);
 bool nc_apply_placement_preset(CPUState *c);
 bool nc_begin_placement_mode(CPUState *c, bool *update_actor);
 bool nc_select_placement_step(CPUState *c, bool *step);
