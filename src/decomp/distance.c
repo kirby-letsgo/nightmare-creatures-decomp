@@ -179,6 +179,48 @@ bool nc_prepare_placement_translation(CPUState *c) {
     return true;
 }
 
+bool nc_prepare_placement_light_rotation(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = R(18);
+    R(17) = R(19) + 0x78;
+    R(31) = 0x8002b19c;
+    R(5) = R(17);
+    c->budget -= 4;
+    return true;
+}
+
+bool nc_prepare_placement_light_scale(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(17);
+    R(31) = 0x8002b1a8;
+    R(5) = R(20);
+    c->budget -= 3;
+    return true;
+}
+
+/* All three GTE setters receive their matrix pointer in the call delay slot. */
+bool nc_prepare_placement_matrix_setter(CPUState *c, u32 matrix, u32 resume) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = resume;
+    R(4) = matrix;
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_prepare_placement_transpose(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = R(16);
+    R(16) = R(19) + 0x58;
+    R(31) = 0x8002b1d0;
+    R(5) = R(16);
+    c->budget -= 4;
+    return true;
+}
+
 /* After TransposeMatrix, quarter the selected XYZ scale in place. The
  * ScaleMatrixL call stores Y in its delay slot, after the X and Z writes. */
 bool nc_prepare_transposed_placement_scale(CPUState *c) {
