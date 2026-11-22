@@ -400,6 +400,23 @@ static bool pad_select_edge(void) {
     return true;
 }
 
+static bool menu_pad_type_flags(void) {
+    CPUState cpu = initial();
+    cpu.r[31] = 0x800683d0;
+    cpu.budget = 29;
+    const u8 types[] = {0x41, 0x53, 0x70, 0x73, 0x7f, 0xff};
+    for (unsigned i = 0; i < sizeof types; ++i) {
+        MEM_W8(packet + 1, types[i]);
+        for (unsigned bits = 0; bits < 16; ++bits) {
+            u32 flags = 0xa5a00018 | ((bits & 3) << 1) | ((bits & 12) << 13);
+            MEM_W32(0x80087a40, flags);
+            if (!compare(cpu, 0x80068344, nc_menu_pad_type_flags, 28))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool menu_confirm_destination(CPUState *cpu) {
     return nc_menu_confirm_edge(cpu) == cpu->r[31];
 }
@@ -979,10 +996,11 @@ int main(int argc, char **argv) {
         return 1;
     bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
               playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && menu_confirm_edges() && pad_inactivity() &&
-              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+              pad_select_edge() && pad_start_edge() && menu_pad_type_flags() &&
+              menu_confirm_edges() && pad_inactivity() && l2_direction_edges() &&
+              button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+              ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

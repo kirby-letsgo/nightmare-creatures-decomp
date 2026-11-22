@@ -347,6 +347,40 @@ u32 nc_pad_select_edge(CPUState *c) {
     return (previous & 1) ? 0x80042f54 : 0x80042f40;
 }
 
+/* Menu state 0x1a switches flags according to the first packet's type
+ * nibble. Each path writes only when its old mode bit is present. */
+bool nc_menu_pad_type_flags(CPUState *c) {
+    if (c->budget <= 28)
+        return false;
+    R(31) = 0x8006834c;
+    c->budget -= 2;
+    nc_pad_packet_type(c); /* six cycles are covered by the entry guard */
+    bool analog = R(2) == 7;
+    R(3) = 7;
+    R(5) = 0x80087a40;
+    R(4) = MEM_R32(R(5));
+    c->budget -= 12;
+    if (analog) {
+        R(2) = 0xffff0000; /* delay slot */
+        if (R(4) & 0x8000) {
+            R(3) = 0xfffeffff;
+            R(2) = (R(4) & ~0x18000u) | 6;
+            MEM_W32(R(5), R(2));
+            c->budget -= 8;
+        }
+    } else {
+        R(2) = 0xfffe0000; /* delay slot */
+        if (R(4) & 2) {
+            R(2) = 0xfffeffff;
+            R(3) = (R(4) & ~0x10006u) | 0x8000;
+            R(4) = 0xfffffffb;
+            MEM_W32(R(5), R(3));
+            c->budget -= 8;
+        }
+    }
+    return true;
+}
+
 /* The preceding delay slot tested Start in the current word (fp).
  * A new Start takes priority over Cross. Each exit leaves the next
  * button mask in v0, including when both buttons are pressed. */

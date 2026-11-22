@@ -765,6 +765,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068344:
+                out.append("    if (nc_menu_pad_type_flags(c)) goto L_800683D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068154:
                 out.extend(
                     [
