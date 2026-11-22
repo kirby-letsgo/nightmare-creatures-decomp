@@ -73,3 +73,4 @@ credits_exe  8001B874    8001BA5C         credits_sdk.c
 credits_exe  8001B824    8001B874         credits_sdk.c
 credits_exe  8001B770    8001B7E8         credits_sdk.c
 credits_exe  8001B738    8001B770         credits_sdk.c
+credits_exe  8001B7E8    8001B80C         credits_sdk.c
