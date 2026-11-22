@@ -1446,6 +1446,8 @@ class Emitter:
                 out.append("    if (nc_prepare_selected_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_8001C27C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001C27C:
+                out.append("    if (nc_finish_selected_point_bearing(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001A71C:
                 out.append("    if (nc_prepare_reference_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
