@@ -614,7 +614,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.update((0x80047254, 0x800472B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
-            targets.update((0x80044754, 0x80044780))
+            targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
             targets.add(0x800700C8)
         if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
@@ -663,6 +663,17 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800451E8, 0x800451EC):
                 store_buttons = "true" if i.addr == 0x800451E8 else "false"
                 out.append(f"    if (nc_leave_player_input(c, {store_buttons})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044784:
+                out.extend(
+                    [
+                        "    switch (nc_dispatch_player_buttons(c)) {",
+                        "    case 0x800451EC: goto L_800451EC;",
+                        "    case 0x800451E8: goto L_800451E8;",
+                        "    case 0x800447B8: goto L_800447B8;",
+                        "    case 0x800448D4: goto L_800448D4;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044754:
                 out.extend(
                     [
