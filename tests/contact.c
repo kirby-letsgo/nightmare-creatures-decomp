@@ -52,6 +52,61 @@ static bool check(const Region *region, CPUState initial, NcContactResult want, 
     return true;
 }
 
+static bool check_preparation(bool disc) {
+    const u32 entries[] = {0x800420B4, 0x800421A4, 0x8004281C, 0x80042904};
+    const u32 extents[] = {0, 1, 0x7fff, 0xffff};
+    const u32 center = SCRATCH_BASE + 0x100;
+    u8 initial_mem[SCRATCH_SIZE], native_mem[SCRATCH_SIZE];
+    for (unsigned i = 0; i < 4; i++)
+        for (unsigned layout = 0; layout < 3; layout++)
+            for (unsigned e = 0; e < 4; e++) {
+                bool outgoing = i >= 2;
+                u32 lower = layout == 1 ? center + 12 : SCRATCH_BASE + 0x200;
+                u32 upper = layout == 2 ? lower + 2 : SCRATCH_BASE + 0x300;
+                CPUState initial = initial_cpu();
+                initial.r[4] = center + 12;
+                initial.r[5] = outgoing ? lower : center;
+                initial.r[6] = outgoing ? upper : lower;
+                initial.r[outgoing ? 23 : 7] = outgoing ? center : upper;
+                initial.r[31] = entries[i] + 0x78;
+                memset(nc_scratch, 0xcd, SCRATCH_SIZE);
+                const u32 coords[] = {0xffffffff, 0x80000000, 0x12347fff};
+                for (unsigned axis = 0; axis < 3; axis++)
+                    MEM_W32(center + axis * 4, coords[axis]);
+                MEM_W16(center + 12, extents[e]);
+                memcpy(initial_mem, nc_scratch, SCRATCH_SIZE);
+                initial.budget = 54;
+                CPUState native = initial;
+                if (nc_prepare_attack_box(&native, outgoing) ||
+                    memcmp(&native, &initial, sizeof native) ||
+                    memcmp(initial_mem, nc_scratch, SCRATCH_SIZE))
+                    return false;
+                initial.budget = 55;
+                native = initial;
+                if (!nc_prepare_attack_box(&native, outgoing) || native.budget != 1)
+                    return false;
+                if (!layout) {
+                    for (unsigned axis = 0; axis < 3; axis++)
+                        if (MEM_R16(lower + axis * 2) != (u16)(coords[axis] - extents[e]) ||
+                            MEM_R16(upper + axis * 2) != (u16)(coords[axis] + extents[e]))
+                            return false;
+                }
+                if (disc) {
+                    memcpy(native_mem, nc_scratch, SCRATCH_SIZE);
+                    memcpy(nc_scratch, initial_mem, SCRATCH_SIZE);
+                    CPUState guest = initial;
+                    interp_call(&guest, entries[i]);
+                    if (memcmp(&native, &guest, sizeof guest) ||
+                        memcmp(native_mem, nc_scratch, SCRATCH_SIZE)) {
+                        fprintf(stderr, "box preparation mismatch: copy %u layout %u extent %u\n",
+                                i, layout, extents[e]);
+                        return false;
+                    }
+                }
+            }
+    return true;
+}
+
 static bool check_boxes(bool disc) {
     const struct {
         s32 center;
@@ -136,7 +191,7 @@ int main(int argc, char **argv) {
             mark_exit(regions[i]->rejected, NC_CONTACT_REJECT);
         }
     }
-    bool ok = check_boxes(disc) && check_states(disc);
+    bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
