@@ -613,6 +613,10 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
+                out.append("    if (nc_select_pad(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800700FC:
+                out.append("    if (nc_decode_pad(c)) goto L_800705D8;")
             if i.addr in contact_blocks:
                 check, passed, rejected = contact_blocks[i.addr]
                 out.extend(
@@ -632,6 +636,8 @@ class Emitter:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
                 out.append("    if (nc_distance_root(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800472D8:
+                out.append("    if (nc_actor_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047220:
                 out.append("    if (nc_prepare_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
@@ -816,6 +822,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == "psx2_exe":
         header.append('#include "decomp/adrenaline.h"')
         header.append('#include "decomp/damage.h"')
+        header.append('#include "decomp/pad.h"')
         header.append('#include "decomp/contact.h"')
         header.append('#include "decomp/distance.h"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):

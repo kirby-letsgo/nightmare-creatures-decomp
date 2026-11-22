@@ -58,6 +58,20 @@ bool nc_return_point_heading(CPUState *c) {
     return true;
 }
 
+/* Actor facing combines two word-sized angles in 65536 units per turn.
+ * The return delay slot sign-extends the wrapped sum. */
+bool nc_actor_heading(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    const u32 pose = MEM_R32(R(4) + 0x20);
+    const u32 linked = MEM_R32(pose + 4);
+    const u32 heading = MEM_R32(pose + 0x48);
+    R(3) = MEM_R32(linked + 0x40);
+    R(2) = (s32)(s16)(heading + R(3));
+    c->budget -= 18;
+    return true;
+}
+
 /* The low 16 angle bits represent a full turn. The game disc supplies
  * 4096 signed Q14 samples per table, indexed by the upper 12 angle bits. */
 static bool heading_sample(CPUState *c, u32 table) {
