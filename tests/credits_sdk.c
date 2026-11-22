@@ -454,6 +454,48 @@ static bool check_set_graph_debug(void) {
     return true;
 }
 
+static bool check_gpu_command_block(void) {
+    const u32 source = 0x80060800, data_slot = 0x80024628, control_slot = 0x8002462c;
+    const u32 data_port = MEM_R32(data_slot), control_port = MEM_R32(control_slot);
+    const u32 outputs[] = {SCRATCH_BASE, source + 4, 0xa0060800, data_slot};
+    const int budgets[] = {11, 17, 26, 53, 4096};
+    for (unsigned count = 0; count <= 5; count++)
+        for (unsigned d = 0; d < sizeof outputs / sizeof outputs[0]; d++)
+            for (unsigned b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
+                for (unsigned i = 0; i < 5; i++)
+                    MEM_W32(source + i * 4, SCRATCH_BASE + i * 4);
+                MEM_W32(data_slot, outputs[d]);
+                MEM_W32(control_slot, SCRATCH_BASE + 64);
+                CPUState state = arguments(source, count, 0, budgets[b]);
+                if (!compare(state, 0x8001e088, nc_credits_gpu_command_block, 10))
+                    return false;
+            }
+    MEM_W32(data_slot, data_port);
+    MEM_W32(control_slot, control_port);
+
+    /* Send three draw-mode words through GP0 and observe the final GPU status. */
+    u32 old_status = MEM_R32(control_port);
+    for (unsigned native = 0; native < 2; native++) {
+        MEM_W32(control_port, 0x04000002);
+        MEM_W32(data_port, 0xe1000000);
+        for (unsigned i = 0; i < 3; i++)
+            MEM_W32(source + 4 * i, 0xe1000011 + i);
+        nc_cpu = arguments(source, 3, 0, 4096);
+        if (native) {
+            if (!nc_credits_gpu_command_block(&nc_cpu))
+                return false;
+        } else {
+            interp_call(&nc_cpu, 0x8001e088);
+        }
+        u32 status = MEM_R32(control_port);
+        if (((status >> 29) & 3) != 0 || (status & 0x1ff) != 0x13)
+            return false;
+    }
+    MEM_W32(data_port, 0xe1000000 | (old_status & 0x7ff));
+    MEM_W32(control_port, 0x04000000 | ((old_status >> 29) & 3));
+    return true;
+}
+
 static bool check_gpu_control(void) {
     const u32 cache = 0x80024d30, port = MEM_R32(0x8002462c);
     const u32 outputs[] = {SCRATCH_BASE + 4, 0xa0060500, cache + 4};
@@ -806,6 +848,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_offset();
     pass = pass && check_display_field();
     pass = pass && check_gpu_control();
+    pass = pass && check_gpu_command_block();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_draw_sync_callback();

@@ -108,6 +108,7 @@ credits_exe  8001CFDC    8001D014         credits_sdk.c
 credits_exe  8001D014    8001D048         credits_sdk.c
 credits_exe  8001E04C    8001E074         credits_sdk.c
 credits_exe  8001E074    8001E088         credits_sdk.c
+credits_exe  8001E088    8001E0D8         credits_sdk.c
 credits_exe  8001D7EC    8001D804         credits_sdk.c
 credits_exe  8001D048    8001D084         credits_sdk.c
 credits_exe  8001D6AC    8001D730         credits_sdk.c

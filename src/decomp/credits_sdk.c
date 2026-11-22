@@ -516,6 +516,41 @@ bool nc_credits_read_environment(CPUState *c, bool display) {
     return true;
 }
 
+bool nc_credits_gpu_command_block(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(29) -= 8;
+    R(6) = R(5) - 1;
+    c->budget -= 3;
+    R(3) = MEM_R32(0x8002462c);
+    R(2) = 0x04000000; /* disable DMA for direct GP0 writes */
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(3), R(2));
+    bool has_words = R(5) != 0;
+    R(2) = 0;
+    c->budget -= 3;
+
+    if (has_words) {
+        set_reg(c, 5, 0xffffffff);
+        bool more;
+        do {
+            load_word(c, 3, R(4));
+            set_reg(c, 4, R(4) + 4);
+            set_reg(c, 2, 0x80020000);
+            load_word(c, 2, R(2) + 0x4628);
+            set_reg(c, 6, R(6) - 1);
+            MEM_W32(R(2), R(3));
+            NC_POLL(c, NC_INSN_CYCLES);
+            more = R(6) != R(5);
+            R(2) = 0;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+        } while (more);
+    }
+    set_reg(c, 29, R(29) + 8);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_gpu_control(CPUState *c) {
     if (c->budget <= 12)
         return false;
