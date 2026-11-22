@@ -2824,6 +2824,50 @@ static bool record_point_projections(bool disc) {
     return true;
 }
 
+static bool record_pose_coordinates(bool disc) {
+    const u32 record = SCRATCH_BASE + 0x80, pose = record + 0x100;
+    const s16 coords[][3] = {
+        {0, 0, 0}, {-1, 0, 1}, {INT16_MIN, INT16_MAX, -3}, {INT16_MAX, -1, INT16_MIN}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < 4; ++i) {
+        for (unsigned call = 0; call < 2; ++call) {
+            CPUState input = initial();
+            input.r[16] = record;
+            input.r[18] = call ? 3 : 1;
+            input.r[19] = pose + 0x80;
+            input.r[31] = call ? 0x8002959c : 0x80029364;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(record + 4, pose);
+            MEM_W32(record + 0x2c, 0x12345);
+            for (unsigned axis = 0; axis < 3; ++axis)
+                MEM_W16(record + 0x18 + 2 * axis, coords[i][axis]);
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = call ? 35 : 33;
+            CPUState native = input;
+            if (nc_place_record_pose(&native) || memcmp(&input, &native, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_place_record_pose(&native) || native.budget != 1 ||
+                MEM_R32(record + 0x2c) != 0x80012345 ||
+                MEM_R16(pose + 0x10) != (u16)-coords[i][0] ||
+                MEM_R16(pose + 0x12) != (u16)coords[i][1] ||
+                MEM_R16(pose + 0x14) != (u16)coords[i][2] || native.r[4] != record ||
+                native.r[5] != (call ? input.r[19] : input.r[5]))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x80029310);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5149,9 +5193,9 @@ int main(int argc, char **argv) {
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
-        record_point_projections(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        record_point_projections(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
