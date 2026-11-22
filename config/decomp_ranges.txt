@@ -228,6 +228,8 @@ psx2_exe     800686D4    8006870C         pad.c
 # Horizontal selection for menu record 12.
 psx2_exe     8006865C    80068698         pad.c
 psx2_exe     8006870C    8006874C         pad.c
+# Menu button edge gate and scan setup.
+psx2_exe     80067130    8006718C         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
