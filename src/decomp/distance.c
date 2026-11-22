@@ -3165,6 +3165,32 @@ bool nc_select_point_update_row(CPUState *c) {
     return true;
 }
 
+bool nc_begin_record_point_heading(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(29) -= 0x20;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x14, R(17));
+    MEM_W32(R(29) + 0x18, R(31));
+    R(3) = 0x40000000;
+    R(2) = MEM_R32(R(16) + 0x2c) & R(3);
+    R(17) = R(5);
+    c->budget -= 12;
+    return true;
+}
+
+bool nc_return_record_point_heading(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x18);
+    R(17) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x20;
+    c->budget -= 12;
+    return true;
+}
+
 /* X uses record minus point. The point's Z has the opposite sign convention,
  * so the vector-heading call receives the sum of the signed Z halfwords. */
 bool nc_call_record_point_bearing(CPUState *c) {
