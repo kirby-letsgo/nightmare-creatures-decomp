@@ -1647,6 +1647,16 @@ bool nc_credits_cd_position_to_sector(CPUState *c) {
     return true;
 }
 
+bool nc_credits_cd_set_test_parameter_count(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(1) = 0x80020000;
+    c->budget--;
+    MEM_W32(R(1) + 0x4a04, R(4));
+    c->budget -= 3; /* store, return and delay slot */
+    return true;
+}
+
 bool nc_credits_cd_last_position(CPUState *c) {
     if (c->budget <= 4)
         return false;

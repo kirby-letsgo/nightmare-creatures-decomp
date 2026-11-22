@@ -928,6 +928,22 @@ static bool graph_debug(CPUState *c) {
     return nc_credits_graph_status(c, true);
 }
 
+static bool check_cd_test_parameter_count(void) {
+    const u32 slot = 0x80024a04, saved = MEM_R32(slot);
+    const u32 counts[] = {0, 1, 0x12345678, 0xffffffff};
+    const int budgets[] = {5, 4096};
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0]; i++)
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            MEM_W32(slot, ~counts[i]);
+            CPUState state = arguments(counts[i], 2, 3, budgets[j]);
+            if (!compare(state, 0x80021b44, nc_credits_cd_set_test_parameter_count, 4) ||
+                MEM_R32(slot) != counts[i])
+                return false;
+        }
+    MEM_W32(slot, saved);
+    return true;
+}
+
 static bool check_cd_setters(void) {
     const struct {
         u32 entry, slot;
@@ -1207,6 +1223,7 @@ int main(int argc, char **argv) {
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
+    pass = pass && check_cd_test_parameter_count();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
