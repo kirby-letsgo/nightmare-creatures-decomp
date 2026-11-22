@@ -99,6 +99,42 @@ static bool player_source(u32 flags) {
     return true;
 }
 
+static bool button_dispatch(void) {
+    const u32 actor = 0x80160000;
+    const struct {
+        u32 buttons, actor, continuation;
+        u16 state;
+    } cases[] = {
+        {0x00000001, actor, 0x800451ec, 1},      {0xbeef0101, 0, 0x800451ec, 0},
+        {0x00000100, 0, 0x800451e8, 1},          {0, actor, 0x800451e8, 0},
+        {0x00000100, actor, 0x800451e8, 0},      {0x01010000, actor, 0x800448d4, 1},
+        {0x00000100, actor, 0x800447b8, 0xffff}, {0x12344180, actor, 0x800447b8, 1},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = cases[i].actor;
+        input.r[17] = cases[i].buttons;
+        input.r[31] = cases[i].continuation; /* stop the interpreter at the branch destination */
+        MEM_W16(0x800d7c26, cases[i].state);
+        MEM_W32(actor + 0x2f8, 0xabcd40c0);
+        memcpy(before, nc_ram, RAM_SIZE);
+        input.budget = 17;
+        CPUState native = input;
+        if (nc_dispatch_player_buttons(&native) != 0x80044784 ||
+            memcmp(&native, &input, sizeof input) || memcmp(nc_ram, before, RAM_SIZE))
+            return false;
+        input.budget = 18;
+        native = input;
+        if (nc_dispatch_player_buttons(&native) != cases[i].continuation ||
+            memcmp(nc_ram, before, RAM_SIZE))
+            return false;
+        interp_call(&input, 0x80044784);
+        if (memcmp(&native, &input, sizeof input) || memcmp(nc_ram, before, RAM_SIZE))
+            return false;
+    }
+    return true;
+}
+
 static bool ports(void) {
     const u8 types[] = {0xff, 0x41, 0x73, 0x53};
     for (unsigned a = 0; a < 4; ++a)
@@ -555,8 +591,9 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
-              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+              ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

@@ -59,6 +59,35 @@ u32 nc_player_input_source(CPUState *c) {
     return 0x80044780;
 }
 
+/* Live and sequenced input meet here in s1, after the live-input hook.
+ * Select skips the store. A missing actor or zero halfword takes the store
+ * path. The remaining paths also load the previous word for edge checks. */
+u32 nc_dispatch_player_buttons(CPUState *c) {
+    if (c->budget <= 17)
+        return 0x80044784;
+
+    const u32 buttons = R(17);
+    R(2) = buttons & 1;
+    c->budget -= 3;
+    if (R(2))
+        return 0x800451ec;
+
+    c->budget -= 2;
+    if (!R(16))
+        return 0x800451e8;
+
+    bool active = MEM_R16(0x800d7c26) != 0;
+    R(2) = buttons & 0x100;
+    c->budget -= 7;
+    if (!active)
+        return 0x800451e8;
+
+    R(3) = MEM_R32(R(16) + 0x2f8);
+    R(2) = 0x50; /* delay slot on both branches */
+    c->budget -= 5;
+    return (buttons & 0x100) ? 0x800447b8 : 0x800448d4;
+}
+
 /* The PSX2 BIOS stubs tail-jump to B0, setting t1 in the delay slot.
  * With three cycles or less, the generated path polls at each boundary. */
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service) {
