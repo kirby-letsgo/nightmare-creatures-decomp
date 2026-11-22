@@ -3105,6 +3105,36 @@ bool nc_finish_actor_distance(CPUState *c, bool missing_target) {
     return true;
 }
 
+/* The point record stores -X and Z in whole units. Convert each actor
+ * coordinate before subtraction and pass the low-word sum to the root. */
+bool nc_prepare_point_distance_root(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    const u32 point = R(3);
+    const s32 actor_x = (s32)MEM_R32(R(19) + 0x27c) >> 8;
+    R(16) = -(s32)(s16)MEM_R16(point + 0xa) - actor_x;
+    const s32 point_z = (s16)MEM_R16(point + 0xc);
+    R(2) = (s32)MEM_R32(R(19) + 0x284) >> 8;
+    R(17) = point_z - R(2);
+    nc_mult(c, R(17), R(17));
+    R(3) = c->lo;
+    R(4) = R(16) * R(16) + R(3);
+    R(31) = 0x8001ad2c;
+    c->budget -= 23;
+    return true;
+}
+
+bool nc_call_point_distance_bearing(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(4) = R(16);
+    R(5) = R(17);
+    R(31) = 0x8001ad3c;
+    R(21) = R(2);
+    c->budget -= 4;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
