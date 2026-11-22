@@ -30,6 +30,7 @@ bool nc_init_part_transform(CPUState *c);
 bool nc_begin_part_chain(CPUState *c);
 bool nc_append_part_parent(CPUState *c);
 bool nc_prepare_part_chain_rotation(CPUState *c);
+bool nc_prepare_node_rotation(CPUState *c);
 bool nc_transform_part_offset(CPUState *c);
 bool nc_compose_part_matrix(CPUState *c);
 bool nc_finish_part_translation(CPUState *c);

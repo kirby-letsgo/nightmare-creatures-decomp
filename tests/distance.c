@@ -824,6 +824,48 @@ static bool part_rotation_matrices(bool disc, NcRotationInput variant) {
     return true;
 }
 
+static bool node_rotations(bool disc) {
+    const u32 source = SCRATCH_BASE + 64;
+    const s16 values[] = {-32768, 0, 32767, -4096, 4096, 0, 1, -1, -13};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < 3; ++i) {
+        const u32 output = i == 1 ? source + 2 : SCRATCH_BASE + 256;
+        CPUState input = initial();
+        input.r[16] = output - 0x18;
+        input.r[17] = source;
+        input.r[18] = SCRATCH_BASE + 512;
+        input.r[21] = i == 2 ? source + 4 : source;
+        input.r[31] = 0x8007a0e0;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned k = 0; k < 9; ++k)
+            MEM_W16(source + 2 * k, values[k]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 46;
+        CPUState native = input;
+        if (nc_prepare_node_rotation(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_node_rotation(&native) || native.budget != 1 ||
+            native.r[4] != input.r[18] || native.r[5] != source || native.r[6] != output ||
+            native.r[31] != 0x800266a4)
+            return false;
+        for (unsigned k = 0; k < 9; ++k) {
+            const unsigned index = i == 1 ? 0 : (i == 2 && k == 0 ? 2 : k);
+            if (MEM_R16(output + 2 * k) != (u16)values[index])
+                return false;
+        }
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80026634);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_offsets(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 512;
     const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
@@ -1564,8 +1606,8 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
-              part_chain_traversal(disc);
+              node_rotations(disc) && part_offsets(disc) && part_matrix_composition(disc) &&
+              part_transform_setup(disc) && part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)

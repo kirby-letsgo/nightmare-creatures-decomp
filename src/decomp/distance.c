@@ -788,6 +788,27 @@ bool nc_prepare_part_chain_rotation(CPUState *c) {
     return true;
 }
 
+/* RotTrans has already written the node translation. Copy the nine
+ * rotation halfwords in guest order before composing the node matrix. */
+bool nc_prepare_node_rotation(CPUState *c) {
+    if (c->budget <= 46)
+        return false;
+    const u32 output = R(16) + 0x18, source = R(17);
+    MEM_W16(output, MEM_R16(R(21)));
+    for (unsigned offset = 2; offset <= 16; offset += 2) {
+        R(2) = MEM_R16(source + offset);
+        MEM_W16(output + offset, R(2));
+    }
+    R(4) = R(18);
+    R(5) = source;
+    R(6) = R(18) = output;
+    R(17) += 32;
+    R(21) += 32;
+    R(31) = 0x800266a4;
+    c->budget -= 46;
+    return true;
+}
+
 /* Transform the selected part's signed local offset into the accumulated
  * matrix translation before composing its rotation. */
 bool nc_transform_part_offset(CPUState *c) {
