@@ -1623,6 +1623,21 @@ u32 nc_menu_record_37_pad_type(CPUState *c) {
     return R(2) == 7 ? 0x8006780c : 0x800677e0;
 }
 
+/* On the type-7 path, sample both stick bytes before testing the counter. */
+u32 nc_menu_record_37_read_stick(CPUState *c) {
+    if (c->budget <= 24)
+        return 0x8006780c;
+    R(4) = R(29) + 0x10;
+    R(5) = R(29) + 0x11;
+    R(31) = 0x80067818;
+    c->budget -= 3;
+    nc_read_pad_stick(c);
+    R(2) = MEM_R32(0x8008f040) < 0x1f9u;
+    R(17) = 0x100;
+    c->budget -= 8;
+    return R(2) ? 0x80067830 : 0x800680ec;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
