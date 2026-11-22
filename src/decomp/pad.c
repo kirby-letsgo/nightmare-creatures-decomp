@@ -2,6 +2,40 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* Save the player-control frame before deciding whether to read input.
+ * v0 retains the blocking bits and v1 retains the full flags for the selector. */
+bool nc_enter_player_input(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    R(29) -= 0x20;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(3) = MEM_R32(R(28) + 0x244);
+    MEM_W32(R(29) + 0x1c, R(31));
+    MEM_W32(R(29) + 0x18, R(18));
+    MEM_W32(R(29) + 0x14, R(17));
+    R(3) = MEM_R32(R(3));
+    R(2) = R(3) & 0x80009800;
+    R(16) = R(4);
+    c->budget -= 16;
+    return true;
+}
+
+/* The early exit skips the button-word store and shares the frame restore. */
+bool nc_leave_player_input(CPUState *c, bool store_buttons) {
+    int cycles = store_buttons ? 16 : 15;
+    if (c->budget <= cycles)
+        return false;
+    if (store_buttons)
+        MEM_W32(R(16) + 0x2f8, R(17));
+    R(31) = MEM_R32(R(29) + 0x1c);
+    R(18) = MEM_R32(R(29) + 0x18);
+    R(17) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x20;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Player control has already loaded the flags into v1. A live read
  * resumes at the player_input hook with the full button word in v0.
  * Sequence playback sets s1 itself and joins the caller after the hook. */

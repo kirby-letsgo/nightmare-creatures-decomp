@@ -403,6 +403,65 @@ static bool packet_readers(void) {
     return true;
 }
 
+/* For a blocked read the entry and early return are the entire disc path. */
+static bool blocked_player_input(u32 flags) {
+    CPUState input = initial();
+    input.r[4] = 0x80160000;
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(config, flags);
+    MEM_W32(input.r[4] + 0x2f8, 0x12345678);
+    memcpy(before, nc_ram, RAM_SIZE);
+    CPUState low = input;
+    low.budget = 16;
+    CPUState native = low;
+    if (nc_enter_player_input(&native) || memcmp(&native, &low, sizeof low) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    native = input;
+    if (!nc_enter_player_input(&native) || native.r[2] != (flags & 0x80009800) ||
+        native.r[3] != flags || native.r[16] != input.r[4] ||
+        !nc_leave_player_input(&native, false) || native.budget != input.budget - 31 ||
+        MEM_R32(input.r[4] + 0x2f8) != 0x12345678)
+        return false;
+    memcpy(after, nc_ram, RAM_SIZE);
+    memcpy(nc_ram, before, RAM_SIZE);
+    CPUState guest = input;
+    interp_call(&guest, 0x80044724);
+    if (memcmp(&native, &guest, sizeof guest) || memcmp(nc_ram, after, RAM_SIZE))
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    /* 16 cycles to enter, then 15 to restore the frame. */
+    return compare_generated(input, 0x80044724, 16) && compare_generated(input, 0x80044724, 31);
+#else
+    return true;
+#endif
+}
+
+static bool player_input_return(bool store_buttons) {
+    CPUState input = initial();
+    const u32 sp = input.r[29];
+    MEM_W32(sp + 0x1c, 0); /* stop interp_resume_exe at the restored return address */
+    MEM_W32(sp + 0x18, 0x12345678);
+    MEM_W32(sp + 0x14, 0xcafebabe);
+    MEM_W32(sp + 0x10, 0x87654321);
+    input.r[16] = sp + 0x14 - 0x2f8; /* destination aliases the saved s1 */
+    memcpy(before, nc_ram, RAM_SIZE);
+    CPUState low = input;
+    low.budget = store_buttons ? 16 : 15;
+    CPUState native = low;
+    if (nc_leave_player_input(&native, store_buttons) || memcmp(&native, &low, sizeof low) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    native = input;
+    if (!nc_leave_player_input(&native, store_buttons) ||
+        native.r[17] != (store_buttons ? input.r[17] : 0xcafebabe))
+        return false;
+    memcpy(after, nc_ram, RAM_SIZE);
+    memcpy(nc_ram, before, RAM_SIZE);
+    interp_resume_exe(&input, store_buttons ? 0x800451e8 : 0x800451ec);
+    return !memcmp(&input, &native, sizeof input) && !memcmp(nc_ram, after, RAM_SIZE);
+}
+
 static bool sequence_init(u32 flags, bool alternate, bool interrupts_enabled) {
     CPUState cpu = initial();
     cpu.cop0[12] = interrupts_enabled ? 0x405 : 4;
@@ -524,6 +583,10 @@ int main(int argc, char **argv) {
     }
     for (unsigned flags = 0; ok && flags <= 0x30; flags += 0x10)
         ok = player_source(flags);
+    const u32 blocked_flags[] = {0x80000000, 0x8000, 0x1000, 0x800, 0x80009830};
+    for (unsigned i = 0; ok && i < sizeof blocked_flags / sizeof blocked_flags[0]; ++i)
+        ok = blocked_player_input(blocked_flags[i]);
+    ok = ok && player_input_return(false) && player_input_return(true);
     disc_close();
     return ok ? 0 : 1;
 }
