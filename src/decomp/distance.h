@@ -12,6 +12,8 @@ bool nc_actor_heading(CPUState *c);
 bool nc_prepare_local_point_heading(CPUState *c);
 bool nc_prepare_reference_distance(CPUState *c);
 bool nc_store_reference_distance(CPUState *c);
+bool nc_begin_part_heading_search(CPUState *c);
+bool nc_test_part_heading(CPUState *c);
 bool nc_select_part_bearing_point(CPUState *c);
 bool nc_prepare_part_point_bearing(CPUState *c);
 bool nc_call_part_with_bearing(CPUState *c);

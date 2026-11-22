@@ -928,6 +928,41 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* The loop sets s5 to the signed reciprocal multiplier for division by 360.
+ * Keep the multiply results as well as the angle truncated toward zero. */
+static u32 part_degrees_to_heading(CPUState *c, u32 address) {
+    const u32 scaled = (u32)MEM_R16(address) << 16;
+    nc_mult(c, scaled, R(21));
+    R(8) = c->hi;
+    R(3) = (s32)scaled >> 31;
+    return (u32)((s32)(scaled + R(8)) >> 8) - R(3);
+}
+
+bool nc_begin_part_heading_search(CPUState *c) {
+    if (c->budget <= 21)
+        return false;
+    const u32 heading = part_degrees_to_heading(c, R(20));
+    const u32 pose = MEM_R32(R(17) + 0x20);
+    R(4) = (heading - MEM_R32(pose + 0x48)) & 0xffff;
+    R(6) = 0;
+    R(2) = 0;
+    c->budget -= 21;
+    return true;
+}
+
+bool nc_test_part_heading(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    const u32 candidate = part_degrees_to_heading(c, R(22) + R(2));
+    const u32 gap = (R(4) - candidate) & 0xffff;
+    /* Accept offsets strictly within 182 units of zero across the wrap. */
+    R(2) = gap - 182;
+    R(3) = R(2) > 0xfe94;
+    R(5) = R(29) + 0x18;
+    c->budget -= 19;
+    return true;
+}
+
 /* Select the part to transform and its point record. The preceding branch
  * supplies the output vector at sp+0x18 in a1. */
 bool nc_select_part_bearing_point(CPUState *c) {
