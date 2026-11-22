@@ -313,6 +313,35 @@ static bool check_draw_area(void) {
     return true;
 }
 
+static bool read_draw_env(CPUState *c) {
+    return nc_credits_read_environment(c, false);
+}
+static bool read_disp_env(CPUState *c) {
+    return nc_credits_read_environment(c, true);
+}
+
+static bool check_environment_reads(void) {
+    for (unsigned display = 0; display < 2; display++) {
+        u32 source = display ? 0x800245c4 : 0x80024568;
+        u32 length = display ? 20 : 92;
+        const u32 destinations[] = {0, 0x80060503, SCRATCH_BASE + 1, source, source - 3,
+                                    source + 1, source + 0x20000004, 0x801feefc - length};
+        const int budgets[] = {11, 13, 19, 100, 4096};
+        for (unsigned i = 0; i < sizeof destinations / sizeof destinations[0]; i++)
+            for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+                if (destinations[i])
+                    memset(nc_fast_ptr(destinations[i]), 0x8c, length);
+                for (u32 k = 0; k < length; k++)
+                    MEM_W8(source + k, (u8)(7 * k + 1));
+                CPUState state = arguments(destinations[i], 0, 0, budgets[j]);
+                if (!compare(state, display ? 0x8001cfdc : 0x8001caf4,
+                             display ? read_disp_env : read_draw_env, 10))
+                    return false;
+            }
+    }
+    return true;
+}
+
 static bool check_display_x(void) {
     const u32 rects[] = {0x80060800, SCRATCH_BASE + 2};
     const u8 graphs[] = {0, 1, 2, 3, 255};
@@ -593,6 +622,7 @@ int main(int argc, char **argv) {
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
     pass = pass && check_display_x();
+    pass = pass && check_environment_reads();
     pass = pass && check_draw_area();
     pass = pass && check_draw_corners();
     pass = pass && check_draw_mode_words();

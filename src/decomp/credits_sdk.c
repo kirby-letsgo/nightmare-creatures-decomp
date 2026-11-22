@@ -487,6 +487,35 @@ bool nc_credits_draw_area_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_read_environment(CPUState *c, bool display) {
+    /* Eight cycles to reach memcpy, then two for its entry guard. */
+    if (c->budget <= 10)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(5) = display ? 0x800245c4 : 0x80024568;
+    c->budget -= 4;
+    MEM_W32(R(29) + 20, R(31));
+    R(31) = display ? 0x8001cffc : 0x8001cb14;
+    R(6) = display ? 20 : 92;
+    c->budget -= 3;
+    NC_FN_ENTER(c, 0x80019928);
+    nc_credits_copy_bytes(c);
+
+    R(2) = R(16);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(31) = MEM_R32(R(29) + 20);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(16) = MEM_R32(R(29) + 16);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 24;
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_display_x(CPUState *c) {
     if (c->budget <= 37)
         return false;
