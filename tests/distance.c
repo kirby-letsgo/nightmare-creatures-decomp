@@ -637,6 +637,48 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool part_translation(bool disc) {
+    const u32 matrix = SCRATCH_BASE, frame = SCRATCH_BASE + 256;
+    const u32 outputs[] = {SCRATCH_BASE + 64, matrix + 0x18, frame + 0xe0};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof outputs / sizeof outputs[0]; ++i) {
+        CPUState input = initial();
+        input.r[17] = matrix;
+        input.r[20] = outputs[i];
+        input.r[29] = frame;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(matrix + 0x14, -5);
+        MEM_W32(matrix + 0x18, 0);
+        MEM_W32(matrix + 0x1c, INT32_MIN);
+        MEM_W32(frame + 0xf4, input.r[31]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 39;
+        CPUState native = input;
+        if (nc_finish_part_translation(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_finish_part_translation(&native) || native.budget != 1 ||
+            MEM_R32(outputs[i]) != (u32)-2 || MEM_R32(outputs[i] + 4) != (i == 1 ? (u32)-1 : 0) ||
+            MEM_R32(outputs[i] + 8) != (i == 1 ? (u32)-1 : (u32)(INT32_MIN / 4)))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Enter with caller sp so the oracle recognizes the return. */
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x800345bcu >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdff08); /* addiu sp, sp, -248 */
+            input.r[29] += 248;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool heading_matrix_setup(bool disc) {
     const s16 rotations[][9] = {{4096, 0, 0, 0, 4096, 0, 0, 0, 4096},
                                 {0, 0, -4096, 0, 4096, 0, 4096, 0, 0},
@@ -1247,7 +1289,7 @@ int main(int argc, char **argv) {
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
-              matrix_planar_lengths(disc) && heading_matrix_setup(disc);
+              matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
