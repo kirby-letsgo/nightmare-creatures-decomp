@@ -19,4 +19,6 @@ bool nc_credits_load_file(CPUState *c);
 
 bool nc_credits_read_sectors(CPUState *c);
 
+bool nc_credits_init_pad(CPUState *c);
+
 #endif
