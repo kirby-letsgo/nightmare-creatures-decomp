@@ -3105,6 +3105,66 @@ bool nc_finish_actor_distance(CPUState *c, bool missing_target) {
     return true;
 }
 
+bool nc_save_point_update_frame(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 0x48;
+    MEM_W32(R(29) + 0x34, R(19));
+    R(19) = R(4);
+    MEM_W32(R(29) + 0x40, R(31));
+    MEM_W32(R(29) + 0x3c, R(21));
+    MEM_W32(R(29) + 0x38, R(20));
+    MEM_W32(R(29) + 0x30, R(18));
+    MEM_W32(R(29) + 0x2c, R(17));
+    MEM_W32(R(29) + 0x28, R(16));
+    c->budget -= 9;
+    return true;
+}
+
+bool nc_select_point_update_row(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    const u16 state = MEM_R16(R(19) + 0x386);
+    u32 row, comparison;
+    int cycles;
+    switch (state) {
+    case 2:
+        row = 3;
+        comparison = 2;
+        cycles = 11;
+        break;
+    case 3:
+        row = 1;
+        comparison = 1;
+        cycles = 9;
+        break;
+    case 4:
+        row = 2;
+        comparison = 5;
+        cycles = 13;
+        break;
+    case 5:
+        row = 0;
+        comparison = 5;
+        cycles = 15;
+        break;
+    default:
+        row = state < 2 ? 3 : 0;
+        comparison = state < 2 ? 2 : 5;
+        cycles = state < 2 ? 12 : 13;
+        break;
+    }
+    if (c->budget <= cycles)
+        return false;
+    R(3) = state;
+    R(2) = comparison;
+    R(20) = row;
+    if (state >= 2 && state <= 5)
+        R(18) = row;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each 20-byte row holds signed point identifiers. Its signed cursor
  * selects an identifier, which indexes the 36-byte coordinate records. */
 bool nc_lookup_point_row_record(CPUState *c) {
