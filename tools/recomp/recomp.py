@@ -874,6 +874,11 @@ class Emitter:
                 out.append("    if (nc_transform_part_offset(c)) {")
                 out.append(f"        {self.call(0x80025FE4)}")
                 out.append("        goto L_80034480; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80034480:
+                out.append("    { bool more_parts = R(16) != 0;")
+                out.append("      if (nc_compose_part_matrix(c)) {")
+                out.append("          if (more_parts) goto L_80034430;")
+                out.append("          goto L_800345BC; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800345BC:
                 out.append("    if (nc_finish_part_translation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034610:
