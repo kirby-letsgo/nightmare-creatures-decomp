@@ -166,7 +166,7 @@ target_link_libraries(nightmare PRIVATE nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
     add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c src/decomp/damage.c
         src/decomp/contact.c src/decomp/distance.c)
-    target_sources(nc_gen PRIVATE src/decomp/credits.c src/decomp/credits_roll.c)
+    target_sources(nc_gen PRIVATE src/decomp/credits.c src/decomp/credits_roll.c src/decomp/credits_sdk.c)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -296,3 +296,8 @@ add_executable(test_credits_music tests/credits_music.c src/decomp/credits_roll.
 target_link_libraries(test_credits_music PRIVATE nc_runtime)
 add_test(NAME credits_music_disc COMMAND test_credits_music "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(credits_music_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_credits_sdk tests/credits_sdk.c src/decomp/credits_sdk.c src/port/no_gen.c)
+target_link_libraries(test_credits_sdk PRIVATE nc_runtime)
+add_test(NAME credits_sdk_disc COMMAND test_credits_sdk "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(credits_sdk_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")

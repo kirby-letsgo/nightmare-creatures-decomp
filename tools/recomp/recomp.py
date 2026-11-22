@@ -51,6 +51,7 @@ CREDITS_ROUTINES = {
     0x800197E0: "nc_credits_free(c)",
     0x800198B0: "nc_credits_find_allocation(c)",
     0x800198EC: "nc_credits_allocation_size(c)",
+    0x80019928: "nc_credits_copy_bytes(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
