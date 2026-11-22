@@ -1094,6 +1094,46 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool traversal_angle_samples(bool disc, bool shared) {
+    const u32 angles[][3] = {{0, 0x4000, 0x8000}, {-18, -2, -1}, {0xfffe, 0x7ffe, 0xbfff}};
+    const u32 cosine = 0x80140000, sine = cosine + 0x4000;
+    /* Give the words just outside the ordinary cosine table distinct values. */
+    for (int k = -1; k <= 4096; ++k) {
+        MEM_W16(cosine + 2 * k, 0x9303 + 37 * k);
+        MEM_W16(sine + 2 * k, 0xcafe - 17 * k);
+    }
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i) {
+        CPUState input = initial();
+        input.r[10] = SCRATCH_BASE;
+        input.r[23] = SCRATCH_BASE + 256;
+        input.r[20] = sine;
+        input.r[21] = cosine;
+        input.r[31] = 0x80026bb8;
+        const u32 source = shared ? input.r[23] : input.r[10] + 0x40;
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W32(source + 4 * axis, angles[i][axis]);
+        input.budget = shared ? 57 : 54;
+        CPUState native = input;
+        if (nc_sample_traversal_angles(&native, shared) || memcmp(&input, &native, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_sample_traversal_angles(&native, shared) || native.budget != 1)
+            return false;
+        const int x_indices[] = {0, -1, 4096};
+        const int x_index = shared ? x_indices[i] : (x_indices[i] & 4095);
+        const u16 sample = MEM_R16(cosine + 2 * x_index);
+        const u32 expected = shared ? (u32)(sample & 4095) >> 2 : (u32)((s32)(s16)sample >> 2);
+        if (native.r[11] != expected)
+            return false;
+        if (disc) {
+            interp_call(&input, shared ? 0x80026aa0 : 0x80026b28);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_heading_sources(bool disc) {
     const u32 part = SCRATCH_BASE + 64;
     static const struct {
@@ -2055,6 +2095,7 @@ int main(int argc, char **argv) {
         part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
         node_matrix_installation(disc) && part_composition(disc) &&
         node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
+        traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         part_heading_sources(disc) && child_positions(disc) && scaled_part_filters(disc) &&
         scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
         part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);

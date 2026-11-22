@@ -689,7 +689,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80026560:
             targets.update((0x80026634, 0x800266A4))
         if self.mod.name == "psx2_exe" and f.addr == 0x80026828:
-            targets.update((0x80026908, 0x80026AA0))
+            targets.update((0x80026908, 0x80026AA0, 0x80026BB8))
         if self.mod.name == "psx2_exe" and f.addr == 0x800266F4:
             targets.update((0x80026784, 0x800267C8, 0x800267DC))
         if self.mod.name == "psx2_exe" and f.addr == 0x80026394:
@@ -1096,6 +1096,9 @@ class Emitter:
                 out.append("    if (nc_start_scaled_part_position(c)) goto L_80026908;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026908:
                 out.append("    if (nc_begin_scaled_part_walk(c)) goto L_800269B4;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80026AA0, 0x80026B28):
+                shared = "true" if i.addr == 0x80026AA0 else "false"
+                out.append(f"    if (nc_sample_traversal_angles(c, {shared})) goto L_80026BB8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026A6C:
                 out.append("    switch (nc_select_part_heading_source(c)) {")
                 out.append("    case NC_HEADING_SKIP: goto L_80026CDC;")
