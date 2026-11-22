@@ -1810,6 +1810,82 @@ bool nc_credits_store_image(CPUState *c) {
     return queue_image_transfer(c, true);
 }
 
+/* MoveImage fills in the VRAM copy packet and submits it through the active driver. */
+bool nc_credits_move_image(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(6);
+    R(4) = 0x800185c4; /* "MoveImage" */
+    c->budget -= 4;
+    MEM_W32(R(29) + 28, R(31));
+    R(31) = 0x8001c69c;
+    R(5) = R(16);
+    c->budget -= 3;
+    nc_call(c, 0x8001c34c); /* checkRECT */
+
+    R(2) = (s32)(s16)MEM_R16(R(16) + 4);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    bool has_width = R(2) != 0;
+    R(2) = UINT32_MAX;
+    NC_POLL(c, 2);
+    if (has_width) {
+        R(2) = (s32)(s16)MEM_R16(R(16) + 6);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        bool has_height = R(2) != 0;
+        R(2) = R(17) << 16;
+        NC_POLL(c, 2);
+        if (has_height) {
+            set_reg(c, 3, R(18) & 0xffff);
+            set_reg(c, 2, R(2) | R(3));
+            set_reg(c, 5, 0x80020000);
+            set_reg(c, 5, 0x80024608);
+            load_word(c, 4, R(16)); /* source XY */
+            set_reg(c, 3, 0x80020000);
+            load_word(c, 3, 0x80024550);
+            set_reg(c, 6, 20); /* packet size */
+            set_reg(c, 1, 0x80020000);
+            MEM_W32(0x8002460c, R(2)); /* destination XY */
+            NC_POLL(c, 1);
+            MEM_W32(R(5), R(4));
+            NC_POLL(c, 1);
+            load_word(c, 2, R(16) + 4);
+            set_reg(c, 7, 0);
+            set_reg(c, 1, 0x80020000);
+            MEM_W32(0x80024610, R(2)); /* width and height */
+            NC_POLL(c, 1);
+            load_word(c, 4, R(3) + 0x18);
+            load_word(c, 2, R(3) + 8);
+            NC_POLL(c, 1);
+            u32 enqueue = R(2);
+            R(31) = 0x8001c714;
+            R(5) -= 8;
+            NC_POLL(c, 2);
+            nc_call(c, enqueue);
+        } else {
+            R(2) = UINT32_MAX;
+            NC_POLL(c, 2);
+        }
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 static void ordering_table_prologue(CPUState *c) {
     c->budget--;
     R(2) = MEM_R8(0x8002455a);

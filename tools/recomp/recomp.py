@@ -164,6 +164,7 @@ CREDITS_ROUTINES = {
     0x8001C508: "nc_credits_clear_image2(c)",
     0x8001C5A4: "nc_credits_load_image(c)",
     0x8001C608: "nc_credits_store_image(c)",
+    0x8001C66C: "nc_credits_move_image(c)",
     0x8001C730: "nc_credits_clear_otag(c)",
     0x8001C7E8: "nc_credits_clear_otag_reverse(c)",
     0x8001C880: "nc_credits_draw_primitive(c)",

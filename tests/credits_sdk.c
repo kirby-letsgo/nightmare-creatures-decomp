@@ -680,6 +680,43 @@ static bool check_load_clut(u32 entry, bool (*routine)(CPUState *), u16 width) {
     return ok && !saved.error;
 }
 
+static bool check_move_image(void) {
+    const u32 rect = 0x80062000, packet = 0x80024600, record = 0x80027488;
+    const u32 driver = MEM_R32(0x80024550);
+    const u32 sizes[] = {0x00020004, 0x00020000, 0x00000004, 0xffff0004};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    defer_graphics_queue(0x80060c00);
+    MEM_W32(0x80024554, 0x8001935c); /* no-op diagnostic */
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0] && ok; i++) {
+        MEM_W8(0x8002455a, i ? 2 : 0);
+        MEM_W32(0x8002465c, 0);
+        MEM_W32(0x80024660, 0);
+        MEM_W32(rect, 0x00100020);
+        MEM_W32(rect + 4, sizes[i]);
+        memset(nc_fast_ptr(packet + 8), 0xaa, 12);
+        memset(nc_fast_ptr(record), 0xcc, 96);
+        CPUState state = arguments(rect, 0x12340031, 0xabcd0042, i ? 13 : 4096);
+        ok = compare(state, 0x8001c66c, nc_credits_move_image, 12);
+        if (i == 1 || i == 2) {
+            ok = ok && nc_cpu.r[2] == UINT32_MAX && MEM_R32(0x8002465c) == 0 &&
+                 MEM_R32(packet + 8) == 0xaaaaaaaa && MEM_R32(record) == 0xcccccccc;
+        } else {
+            ok = ok && MEM_R32(record) == MEM_R32(driver + 0x18) &&
+                 MEM_R32(record + 4) == record + 12 && MEM_R32(record + 8) == 0 &&
+                 MEM_R32(packet + 8) == MEM_R32(rect) && MEM_R32(packet + 12) == 0x00420031 &&
+                 MEM_R32(packet + 16) == sizes[i] &&
+                 !memcmp(nc_fast_ptr(record + 12), nc_fast_ptr(packet), 20) &&
+                 MEM_R8(record + 32) == 0xcc;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_image_queue(u32 entry, bool (*routine)(CPUState *), u32 method_offset) {
     const bool clear = method_offset == 0x0c;
     const int threshold = clear ? 14 : 10;
@@ -2939,6 +2976,7 @@ int main(int argc, char **argv) {
     pass = pass && check_load_tpage();
     pass = pass && check_load_clut(0x8001b344, nc_credits_load_clut, 256);
     pass = pass && check_load_clut(0x8001b3ac, nc_credits_load_clut2, 16);
+    pass = pass && check_move_image();
     pass = pass && check_image_queue(0x8001c474, nc_credits_clear_image, 0x0c);
     pass = pass && check_image_queue(0x8001c508, nc_credits_clear_image2, 0x0c);
     pass = pass && check_image_queue(0x8001c5a4, nc_credits_load_image, 0x20);
