@@ -213,3 +213,59 @@ bool nc_credits_run(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* GsGetTimInfo describes pixels and the optional palette with the same
+ * four halfwords (x, y, width, height) followed by a data pointer. */
+static void upload_tim_rect(CPUState *c, bool palette) {
+    const unsigned rect_offset = palette ? 0x20 : 0x14;
+    const unsigned rect_regs[] = {2, 3, 6, 7};
+    load_word(c, 5, R(29) + rect_offset + 8);
+    for (unsigned i = 0; i < 4; i++) {
+        R(rect_regs[i]) = MEM_R16(R(29) + rect_offset + 2 * i);
+        NC_POLL(c, NC_LOAD_CYCLES);
+    }
+    if (!palette)
+        set_reg(c, 4, R(16));
+    for (unsigned i = 0; i < 3; i++) {
+        MEM_W16(R(29) + 0x30 + 2 * i, (u16)R(rect_regs[i]));
+        NC_POLL(c, NC_INSN_CYCLES);
+    }
+    R(31) = palette ? 0x80018f74 : 0x80018f38;
+    MEM_W16(R(29) + 0x36, (u16)R(7));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001c5a4); /* LoadImage */
+}
+
+bool nc_credits_load_tim(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 0x48;
+    MEM_W32(R(29) + 0x40, R(31));
+    MEM_W32(R(29) + 0x3c, R(17));
+    R(31) = 0x80018ef8;
+    MEM_W32(R(29) + 0x38, R(16));
+    c->budget -= 5;
+    nc_call(c, 0x80018e28); /* read file into the credits heap */
+    set_reg(c, 17, R(2));
+    set_reg(c, 4, R(17) + 4); /* skip TIM magic */
+    R(5) = R(29) + 0x10;
+    call(c, 0x8001ecb4, 0x80018f08);
+    set_reg(c, 16, R(29) + 0x30);
+    upload_tim_rect(c, false);
+    load_word(c, 2, R(29) + 0x10);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, R(2) & 8);
+    const bool palette = R(2) != 0;
+    R(4) = R(16);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (palette)
+        upload_tim_rect(c, true);
+    R(4) = R(17);
+    call(c, 0x800197e0, 0x80018f7c); /* release TIM buffer */
+    load_word(c, 31, R(29) + 0x40);
+    load_word(c, 17, R(29) + 0x3c);
+    load_word(c, 16, R(29) + 0x38);
+    set_reg(c, 29, R(29) + 0x48);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

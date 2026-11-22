@@ -13,4 +13,6 @@ bool nc_credits_find_allocation(CPUState *c);
 
 bool nc_credits_run(CPUState *c);
 
+bool nc_credits_load_tim(CPUState *c);
+
 #endif
