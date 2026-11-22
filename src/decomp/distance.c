@@ -25,6 +25,27 @@ bool nc_init_actor_coordinates(CPUState *c) {
     return true;
 }
 
+/* Both coordinates and the reference point are signed whole units. */
+bool nc_prepare_local_point_heading(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    const u32 point = R(4);
+    R(29) -= 24;
+    MEM_W32(R(29) + 16, R(31));
+    const s16 point_x = (s16)MEM_R16(point);
+    const s16 origin_x = (s16)MEM_R16(0x800D7630);
+    const s16 origin_z = (s16)MEM_R16(0x800D7634);
+    const s16 point_z = (s16)MEM_R16(point + 4);
+    R(6) = point_x;
+    R(2) = origin_x;
+    R(3) = origin_z;
+    R(4) = point_x - origin_x;
+    R(5) = point_z - origin_z;
+    R(31) = 0x8004720C;
+    c->budget -= 19;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */

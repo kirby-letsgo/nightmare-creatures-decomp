@@ -290,7 +290,11 @@ static bool actor_headings(bool disc) {
     return true;
 }
 
-static bool point_headings(bool disc) {
+static bool point_headings(bool disc, bool local) {
+    const int cycles = local ? 19 : 21;
+    const u32 entry = local ? 0x800471e0 : 0x80047220;
+    const u32 resume = local ? 0x8004720c : 0x80047254;
+    bool (*prepare)(CPUState *) = local ? nc_prepare_local_point_heading : nc_prepare_point_heading;
     const s16 points[][2] = {{-4, -3}, {-4, -4},        {-5, -3},       {-3, -3},
                              {-4, -2}, {-32768, 32767}, {32767, -32768}};
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -304,25 +308,29 @@ static bool point_headings(bool disc) {
         memset(nc_scratch, 0xa5, sizeof before);
         MEM_W32(0x800D7780, (u32)-769); /* -4 after arithmetic shift */
         MEM_W32(0x800D7788, 1023);      /* +3 */
+        MEM_W16(0x800D7630, (u16)-4);
+        MEM_W16(0x800D7634, (u16)-3);
         MEM_W16(point, points[i][0]);
         MEM_W16(point + 4, points[i][1]);
         memcpy(before, nc_scratch, sizeof before);
         CPUState cutoff = input;
-        cutoff.budget = 21;
+        cutoff.budget = cycles;
         CPUState native = cutoff;
-        if (nc_prepare_point_heading(&native) || memcmp(&native, &cutoff, sizeof native) ||
+        if (prepare(&native) || memcmp(&native, &cutoff, sizeof native) ||
             memcmp(nc_scratch, before, sizeof before))
             return false;
         native = input;
-        native.budget = 22;
+        native.budget = cycles + 1;
         s32 x = point == save ? (s16)input.r[31] : points[i][0];
-        if (!nc_prepare_point_heading(&native) || native.budget != 1 ||
-            native.r[4] != (u32)(-4 - x) || native.r[5] != (u32)(3 + points[i][1]) ||
-            native.r[3] != (u32)x || native.r[6] != (u32)(s32)points[i][1] ||
-            native.r[2] != (u32)-4 || native.r[31] != 0x80047254 ||
+        s32 dx = local ? x + 4 : -4 - x;
+        s32 v1 = local ? -3 : x;
+        s32 a2 = local ? x : points[i][1];
+        if (!prepare(&native) || native.budget != 1 || native.r[4] != (u32)dx ||
+            native.r[5] != (u32)(3 + points[i][1]) || native.r[3] != (u32)v1 ||
+            native.r[6] != (u32)a2 || native.r[2] != (u32)-4 || native.r[31] != resume ||
             native.r[29] != input.r[29] - 24 || MEM_R32(save) != input.r[31])
             return false;
-        native.budget = input.budget - 21;
+        native.budget = input.budget - cycles;
         if (!nc_vector_heading(&native))
             return false;
         cutoff = native;
@@ -340,7 +348,7 @@ static bool point_headings(bool disc) {
             return false;
         if (disc) {
             memcpy(nc_scratch, before, sizeof before);
-            interp_call(&input, 0x80047220);
+            interp_call(&input, entry);
             if (memcmp(&input, &native, sizeof input) || memcmp(nc_scratch, after, sizeof after))
                 return false;
         }
@@ -423,7 +431,8 @@ int main(int argc, char **argv) {
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-              point_headings(disc) && actor_headings(disc) && heading_projections(disc);
+              point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
+              heading_projections(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

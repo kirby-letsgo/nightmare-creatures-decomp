@@ -251,6 +251,9 @@ def load_module(name: str, exe: str) -> Module:
         # Splat may group standalone routines after the preceding return.
         # Provide dispatcher entries even when no static pointer refers to them.
         entries.update(CREDITS_ROUTINES)
+    if name == "psx2_exe":
+        # Independent point-heading entry grouped after the projection return.
+        entries.add(0x800471E0)
     for addr in entries:
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
@@ -580,7 +583,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
-            targets.update((0x800471AC, 0x800471B4))
+            targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.add(0x80047254)
         table_cases: list[int] = []
@@ -642,7 +645,11 @@ class Emitter:
                 out.append("    if (nc_prepare_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_80047254; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80047254:
+            if self.mod.name == "psx2_exe" and i.addr == 0x800471E0:
+                out.append("    if (nc_prepare_local_point_heading(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_8004720C; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
                 out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
