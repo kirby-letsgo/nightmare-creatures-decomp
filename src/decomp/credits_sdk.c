@@ -516,6 +516,68 @@ bool nc_credits_read_environment(CPUState *c, bool display) {
     return true;
 }
 
+/* Probe GPU revision with GP1(10h), then test draw-mode bit 12 on older GPUs. */
+bool nc_credits_gpu_version(CPUState *c) {
+    if (c->budget <= 58)
+        return false;
+    bool extended = (R(4) & 8) != 0;
+    c->budget -= 2;
+    R(2) = MEM_R32(0x8002462c);
+    R(3) = 0x10000007;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), R(3));
+    c->budget -= 2;
+    R(5) = MEM_R32(0x80024628);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    u32 version = MEM_R32(R(5)) & 0xffffff;
+    R(3) = 0xe1000000;
+    c->budget -= NC_LOAD_CYCLES + 5;
+
+    if (version == 2) {
+        R(4) = 0x09000000;
+        c->budget -= 3;
+        if (extended) {
+            R(4) |= 1;
+            c->budget -= 2;
+            R(3) = MEM_R32(0x8002462c);
+            R(2) = 4;
+            c->budget -= NC_LOAD_CYCLES + 1;
+            MEM_W32(R(3), R(4));
+            c->budget -= 3;
+        } else {
+            R(2) = 3;
+            c->budget--;
+        }
+    } else {
+        c->budget--;
+        R(2) = MEM_R32(0x8002462c);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        R(2) = (MEM_R32(R(2)) & 0x3fff) | 0xe1001000;
+        c->budget -= NC_LOAD_CYCLES + 3;
+        MEM_W32(R(5), R(2));
+        c->budget -= 2;
+        R(2) = MEM_R32(0x80024628);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        R(3) = MEM_R32(0x8002462c);
+        c->budget -= NC_LOAD_CYCLES;
+        (void)MEM_R32(R(2)); /* GPUREAD before the status check */
+        c->budget -= NC_LOAD_CYCLES;
+        bool supported = (MEM_R32(R(3)) & 0x1000) != 0;
+        c->budget -= NC_LOAD_CYCLES + 4;
+        if (supported && extended) {
+            c->budget -= 3;
+            MEM_W32(R(3), 0x20000504);
+            R(2) = 2;
+            c->budget -= 3;
+        } else {
+            R(2) = supported;
+            c->budget -= supported ? 4 : 2;
+        }
+    }
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_gpu_parameter(CPUState *c) {
     if (c->budget <= 18)
         return false;

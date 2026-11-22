@@ -513,6 +513,45 @@ static bool check_bios_gpu_command(void) {
     return true;
 }
 
+static bool check_gpu_version(void) {
+    const u32 gp0 = 0x80024628, gp1 = 0x8002462c;
+    const u32 saved0 = MEM_R32(gp0), saved1 = MEM_R32(gp1);
+    const u32 data = 0x80060840, control = SCRATCH_BASE + 8;
+    for (unsigned path = 0; path < 3; path++)
+        for (unsigned extended = 0; extended < 2; extended++) {
+            MEM_W32(gp0, path == 1 ? control : data);
+            MEM_W32(gp1, control);
+            MEM_W32(data, path == 2 ? 0xab000002 : 0);
+            MEM_W32(control, 0xffffffff);
+            CPUState state = arguments(extended ? 8 : 0, 2, 3, extended ? 59 : 4096);
+            u32 expected = path == 2 ? 3 + extended : path == 1 ? 1 + extended : 0;
+            if (!compare(state, 0x8001eb9c, nc_credits_gpu_version, 58) || nc_cpu.r[2] != expected)
+                return false;
+        }
+    MEM_W32(gp0, saved0);
+    MEM_W32(gp1, saved1);
+
+    StateIO initial = {0}, native = {0}, guest = {0};
+    gpu_serialize(&initial);
+    CPUState state = arguments(8, 2, 3, 4096);
+    nc_cpu = state;
+    bool ok = nc_credits_gpu_version(&nc_cpu);
+    gpu_serialize(&native);
+    initial.loading = true;
+    gpu_serialize(&initial);
+    nc_cpu = state;
+    interp_call(&nc_cpu, 0x8001eb9c);
+    gpu_serialize(&guest);
+    ok = ok && !initial.error && !native.error && !guest.error && native.len == guest.len &&
+         !memcmp(native.buf, guest.buf, guest.len);
+    initial.pos = 0;
+    gpu_serialize(&initial);
+    free(initial.buf);
+    free(native.buf);
+    free(guest.buf);
+    return ok;
+}
+
 static bool check_gpu_command_chain(void) {
     const u32 slots = 0x8002462c, head = 0x80060840;
     u32 ports[4];
@@ -1546,6 +1585,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_control();
     pass = pass && check_gpu_command_block();
     pass = pass && check_bios_gpu_command();
+    pass = pass && check_gpu_version();
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
