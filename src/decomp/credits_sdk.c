@@ -207,3 +207,41 @@ bool nc_credits_change_case(CPUState *c, bool uppercase) {
     c->budget -= change ? 14 : 13;
     return true;
 }
+
+/* Psy-Q packet constructors write the DMA word count and GP0 opcode.
+ * A polyline also needs a terminator in its last word. */
+bool nc_credits_init_primitive(CPUState *c, NcCreditsPrimitive primitive) {
+    static const struct {
+        u8 words, opcode;
+    } packets[] = {
+        [NC_POLY_F3] = {4, 0x20},    [NC_POLY_FT3] = {7, 0x24},  [NC_POLY_G3] = {6, 0x30},
+        [NC_POLY_GT3] = {9, 0x34},   [NC_POLY_F4] = {5, 0x28},   [NC_POLY_FT4] = {9, 0x2c},
+        [NC_POLY_G4] = {8, 0x38},    [NC_POLY_GT4] = {12, 0x3c}, [NC_SPRT8] = {3, 0x74},
+        [NC_SPRT16] = {3, 0x7c},     [NC_SPRT] = {4, 0x64},      [NC_TILE1] = {2, 0x68},
+        [NC_TILE8] = {2, 0x70},      [NC_TILE16] = {2, 0x78},    [NC_TILE] = {3, 0x60},
+        [NC_LINE_F2] = {3, 0x40},    [NC_LINE_G2] = {4, 0x50},   [NC_LINE_F3] = {5, 0x48},
+        [NC_LINE_G3] = {7, 0x58},    [NC_LINE_F4] = {6, 0x4c},   [NC_LINE_G4] = {9, 0x5c},
+        [NC_BLOCK_FILL] = {3, 0x02},
+    };
+    const u8 opcode = packets[primitive].opcode, words = packets[primitive].words;
+    const bool polyline = (opcode & 0xe8) == 0x48;
+    if (c->budget <= (polyline ? 8 : 5))
+        return false;
+    if (polyline) {
+        R(3) = 0x55555555;
+        c->budget -= 2;
+    }
+    R(2) = words;
+    c->budget--;
+    MEM_W8(R(4) + 3, words);
+    c->budget--;
+    R(2) = opcode;
+    c->budget--;
+    MEM_W8(R(4) + 7, opcode);
+    if (polyline) {
+        c->budget--;
+        MEM_W32(R(4) + 4 * words, R(3));
+    }
+    c->budget -= 2;
+    return true;
+}
