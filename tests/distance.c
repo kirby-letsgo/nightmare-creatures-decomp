@@ -204,6 +204,28 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool record_angle_steps(bool disc) {
+    static const struct {
+        u32 target, current, shift;
+        s32 delta, step;
+    } cases[] = {{0, 0, 0, 0, 0},          {1024, 0, 2, 1024, 256},
+                 {2046, 0, 1, 2046, 1023}, {2047, 0, 1, -2049, -1025},
+                 {2048, 0, 31, -2048, -1}, {0, 1, 32, -1, -1},
+                 {0, 4095, 0, 1, 1},       {(u32)-8, (u32)-3, 33, -5, -3},
+                 {0, UINT32_MAX, 0, 1, 1}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial(), result;
+        input.r[4] = cases[i].target;
+        input.r[5] = cases[i].current;
+        input.r[6] = cases[i].shift;
+        if (!compare(input, 0x8002af7c, nc_step_record_angle, disc, &result) ||
+            result.r[4] != (u32)cases[i].delta ||
+            result.r[2] != cases[i].current + (u32)cases[i].step)
+            return false;
+    }
+    return true;
+}
+
 static bool paired_point_return(bool disc) {
     const u32 frame = SCRATCH_BASE + 128, stub = 0x80120000;
     u8 before[SCRATCH_SIZE];
@@ -2795,10 +2817,10 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        spatial_frames(disc, true) && spatial_frames(disc, false) && paired_point_return(disc) &&
-        paired_point_placement(disc) && actor_level_selection(disc) && actor_level_calls(disc) &&
-        point_level_selection(disc) && spatial_levels(disc, true) && spatial_levels(disc, false) &&
-        spatial_attenuation(disc) && spatial_distances(disc, true) &&
+        spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_steps(disc) &&
+        paired_point_return(disc) && paired_point_placement(disc) && actor_level_selection(disc) &&
+        actor_level_calls(disc) && point_level_selection(disc) && spatial_levels(disc, true) &&
+        spatial_levels(disc, false) && spatial_attenuation(disc) && spatial_distances(disc, true) &&
         spatial_distances(disc, false) && spatial_bearings(disc, true) &&
         spatial_bearings(disc, false) && target_vertical_velocities(disc) &&
         target_displacements(disc) && planar_velocities(disc) && roots(disc) &&
