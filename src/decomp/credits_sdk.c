@@ -1812,6 +1812,30 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 24, 0x8001a7dc);
 }
 
+/* startIntr clears its work area in words, advancing a0 after each store. */
+bool nc_credits_clear_irq_words(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 8;
+    bool more = R(5) != 0;
+    R(2) = R(5) - 1;
+    c->budget -= 3;
+    if (more) {
+        set_reg(c, 3, UINT32_MAX);
+        do {
+            MEM_W32(R(4), 0);
+            NC_POLL(c, 1);
+            set_reg(c, 2, R(2) - 1);
+            more = R(2) != R(3);
+            R(4) += 4;
+            NC_POLL(c, 2);
+        } while (more);
+    }
+    set_reg(c, 29, R(29) + 8);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_check_callback(CPUState *c) {
     if (c->budget <= 6)
         return false;
