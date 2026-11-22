@@ -46,6 +46,38 @@ bool nc_prepare_local_point_heading(CPUState *c) {
     return true;
 }
 
+/* Distance to the signed reference point, whose Z axis is reflected.
+ * SquareRoot0 receives the wrapped sum of the low product words. */
+bool nc_prepare_reference_distance(CPUState *c) {
+    if (c->budget <= 28)
+        return false;
+    const s32 x = (s32)MEM_R32(0x800D7780) >> 8;
+    const s32 dx = x - (s16)MEM_R16(0x800D7648);
+    const s32 z = (s32)MEM_R32(0x800D7788) >> 8;
+    const s32 dz = z + (s16)MEM_R16(0x800D764C);
+    nc_mult(c, (u32)dz, (u32)dz);
+    R(2) = dz;
+    R(3) = c->lo;
+    R(4) = (u32)dx * (u32)dx + c->lo;
+    R(29) -= 24;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x800472B8;
+    c->budget -= 28;
+    return true;
+}
+
+bool nc_store_reference_distance(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(1) = 0x800D0000;
+    MEM_W32(0x800D7764, R(2));
+    MEM_W32(0x800D7760, R(2));
+    R(31) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= 10;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
