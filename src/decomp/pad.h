@@ -23,6 +23,7 @@ bool nc_call_pad_action(CPUState *c, bool select_pressed);
 bool nc_leave_pad_dispatch(CPUState *c);
 u32 nc_pad_select_edge(CPUState *c);
 u32 nc_pad_start_edge(CPUState *c);
+u32 nc_menu_left_input(CPUState *c);
 bool nc_menu_pad_type_flags(CPUState *c);
 u32 nc_menu_confirm_edge(CPUState *c);
 bool nc_pad_inactivity(CPUState *c);
