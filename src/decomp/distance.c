@@ -1,6 +1,21 @@
 #include "decomp/distance.h"
 #include <limits.h>
 
+/* The record stores angles in 4096 units per turn. The original switches
+ * direction at 2047, then adds the shifted step to the full current angle. */
+bool nc_step_record_angle(CPUState *c) {
+    const u32 offset = (R(4) - R(5)) & 0xfff;
+    const bool reverse = offset >= 2047;
+    const int cycles = reverse ? 12 : 11;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = reverse ? offset - 4096 : offset;
+    const s32 step = (s32)R(4) >> (R(6) & 31);
+    R(2) = R(5) + (u32)step;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The paired points use unsigned halfwords. Their differences are full
  * words, including negative displacements across the signed-halfword edge. */
 bool nc_prepare_paired_point_bearing(CPUState *c) {
