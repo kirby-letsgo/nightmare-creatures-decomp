@@ -567,6 +567,9 @@ class Emitter:
                 out.append("    if (nc_heading_cosine(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80035338:
                 out.append("    if (nc_heading_sine(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80034828, 0x800348FC):
+                quarter = "true" if i.addr == 0x80034828 else "false"
+                out.append(f"    if (nc_transform_part_position(c, {quarter})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:

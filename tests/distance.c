@@ -173,6 +173,66 @@ static bool projected_points(bool disc) {
     return true;
 }
 
+static bool part_positions(bool disc) {
+    const u32 matrices[][5] = {
+        {0x1000, 0, 0x1000, 0, 0x1000}, /* identity */
+        {0x10000000, 0xf0000000, 0, 0, 0x1000},
+        {0xf8ab1234, 0x7fff4321, 0x8000fffb, 0x2468aaa0, 0xabcd1357},
+    };
+    const u32 coords[] = {0, 1, 0xfffffff7, 0x7fff, 0xffff8000, 0x7fffffff, 0x80000000};
+    const unsigned count = sizeof coords / sizeof coords[0];
+    u8 original[SCRATCH_SIZE], expected[SCRATCH_SIZE];
+    for (unsigned m = 0; m < sizeof matrices / sizeof matrices[0]; ++m) {
+        for (unsigned i = 0; i < 5; ++i)
+            MEM_W32(0x800d7688 + i * 4, matrices[m][i]);
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W16(0x800d7630 + axis * 2, 0xfffd + axis);
+        for (unsigned quarter = 0; quarter < 2; ++quarter)
+            for (unsigned sample = 0; sample < count; ++sample)
+                for (unsigned alias = 0; alias < 2; ++alias) {
+                    CPUState c = initial();
+                    c.r[4] = SCRATCH_BASE + 0x40;
+                    c.r[29] = SCRATCH_BASE + 0x180;
+                    c.r[5] = alias ? c.r[29] - 12 : SCRATCH_BASE + 0x240;
+                    memset(nc_scratch, 0xa5, SCRATCH_SIZE);
+                    for (unsigned axis = 0; axis < 3; ++axis)
+                        MEM_W32(c.r[4] + 0x2c + 4 * axis, coords[(sample + axis) % count]);
+                    memcpy(original, nc_scratch, SCRATCH_SIZE);
+                    c.budget = quarter ? 85 : 82;
+                    CPUState native = c;
+                    if (nc_transform_part_position(&native, quarter) ||
+                        memcmp(&native, &c, sizeof c) || memcmp(original, nc_scratch, SCRATCH_SIZE))
+                        return false;
+                    native.budget = ++c.budget;
+                    if (!nc_transform_part_position(&native, quarter) || native.budget != 1)
+                        return false;
+                    if (!m && !alias) {
+                        for (unsigned axis = 0; axis < 3; ++axis) {
+                            s32 v = (s32)coords[(sample + axis) % count];
+                            s16 narrowed = (s16)(quarter ? v >> 2 : v);
+                            if (MEM_R16(c.r[5] + axis * 2) !=
+                                (u16)((narrowed >> 1) - (0xfffd + axis)))
+                                return false;
+                        }
+                    }
+                    if (disc) {
+                        memcpy(expected, nc_scratch, SCRATCH_SIZE);
+                        memcpy(nc_scratch, original, SCRATCH_SIZE);
+                        interp_call(&c, quarter ? 0x80034828 : 0x800348fc);
+                        if (memcmp(&c, &native, sizeof c) ||
+                            memcmp(expected, nc_scratch, SCRATCH_SIZE)) {
+                            fprintf(stderr,
+                                    "part transform mismatch: matrix %u, scale %u, sample %u, "
+                                    "alias %u\n",
+                                    m, quarter, sample, alias);
+                            return false;
+                        }
+                    }
+                }
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -187,7 +247,7 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-              projected_points(disc);
+              projected_points(disc) && part_positions(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
