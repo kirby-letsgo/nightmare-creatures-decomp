@@ -945,6 +945,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068F88:
+                out.append("    if (nc_menu_dispatch_face_button(c)) goto L_80068FA8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068FA8:
+                out.append("    if (nc_menu_mode_record_result(c)) goto L_80068FE4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80068F34, 0x80068F38):
                 mask_cross = "true" if i.addr == 0x80068F34 else "false"
                 out.extend(

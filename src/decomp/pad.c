@@ -1191,17 +1191,21 @@ u32 nc_menu_mode_down(CPUState *c) {
     return 0x80068f0c;
 }
 
-/* Up and Down share the selected-record call and save the full button word. */
-bool nc_menu_dispatch_direction(CPUState *c) {
-    if (c->budget <= 7)
-        return false;
+/* Both dispatch sites call the selected record and save the full button word. */
+static void dispatch_menu_record(CPUState *c, u32 return_address) {
     R(5) = 0x800883c0 + 12 * R(2);
     R(2) = 0x800883c0;
-    R(31) = 0x80068f28;
+    R(31) = return_address;
     c->budget -= 7;
     nc_call(c, 0x80063b70);
     MEM_W32(R(28) + 0x18c, R(30));
     NC_POLL(c, NC_INSN_CYCLES);
+}
+
+bool nc_menu_dispatch_direction(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    dispatch_menu_record(c, 0x80068f28);
     R(2) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
@@ -1244,6 +1248,35 @@ u32 nc_menu_mode_face_buttons(CPUState *c, bool mask_cross) {
     R(6) = 0x20;
     c->budget -= 4;
     return 0x80068f88;
+}
+
+bool nc_menu_dispatch_face_button(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    dispatch_menu_record(c, 0x80068fa4);
+    return true;
+}
+
+/* Read the record after dispatch: the guest call may have changed it. */
+bool nc_menu_mode_record_result(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    R(3) = MEM_R32(R(28) + 0x190);
+    MEM_W32(R(28) + 0x18c, R(30));
+    c->budget -= 7;
+    if (R(3) == 103) {
+        MEM_W32(R(28) + 0x18c, 0);
+        R(2) = 2;
+        c->budget -= 3;
+    } else if (R(3) == 105 || R(3) == 106) {
+        MEM_W32(R(28) + 0x18c, 0);
+        R(2) = 4;
+        c->budget -= 6;
+    } else {
+        R(2) = 0;
+        c->budget -= 4;
+    }
+    return true;
 }
 
 bool nc_menu_clear_repeat(CPUState *c) {
