@@ -113,6 +113,7 @@ bool nc_project_heading_offset(CPUState *c);
 bool nc_step_record_angle(CPUState *c);
 bool nc_begin_placement_defaults(CPUState *c);
 bool nc_finish_placement_defaults(CPUState *c);
+bool nc_store_placement_axes(CPUState *c);
 bool nc_init_placement_pose(CPUState *c);
 bool nc_begin_placement_matrices(CPUState *c);
 bool nc_begin_placement_vectors(CPUState *c);

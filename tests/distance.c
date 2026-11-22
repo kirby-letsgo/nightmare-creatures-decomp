@@ -812,6 +812,50 @@ static bool placement_matrix_return(bool disc) {
     return true;
 }
 
+static bool placement_axes(bool disc) {
+    const u32 record = SCRATCH_BASE, frame = SCRATCH_BASE + 0x180;
+    static const s16 samples[] = {INT16_MIN, -65, -1, 0, 64, INT16_MAX};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+        CPUState input = initial();
+        input.r[19] = record;
+        input.r[29] = frame;
+        input.r[2] = 0xbeef0000u | (u16)samples[i];
+        input.r[16] = 511;
+        input.r[17] = -512;
+        input.r[18] = -1;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned reg = 16; reg <= 20; ++reg)
+            MEM_W32(frame + 0x10 + 4 * (reg - 16), reg * 123);
+        MEM_W32(frame + 0x24, input.r[31]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 35;
+        CPUState native = input;
+        if (nc_store_placement_axes(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_store_placement_axes(&native) || native.budget != 1 ||
+            MEM_R16(record + 0x100) != (u16)(samples[i] >> 6) ||
+            MEM_R16(record + 0xf8) != (u16) - (samples[i] >> 6))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Recreate the frame on entry so the interpreter stops at the caller. */
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x8002ae1cu >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffd8);
+            input.r[29] += 0x28;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_vector_frame(bool disc, bool begin) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const u32 entry = begin ? 0x8002ae78 : 0x8002af68;
@@ -3760,10 +3804,11 @@ int main(int argc, char **argv) {
         !placement_mode_entry(disc) || !placement_step_selection(disc) ||
         !actor_placement_paths(disc) || !actor_placement_targets(disc) ||
         !placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
-        !placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
-        !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
-        !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
-        !placement_pose_initializers(disc) || !placement_record_steps(disc))
+        !placement_matrix_scales(disc) || !placement_axes(disc) ||
+        !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
+        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
+        !transposed_placement_scales(disc) || !placement_pose_initializers(disc) ||
+        !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
