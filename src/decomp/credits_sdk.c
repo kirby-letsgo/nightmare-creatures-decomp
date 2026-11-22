@@ -960,6 +960,91 @@ bool nc_credits_gpu_control_byte(CPUState *c) {
     return true;
 }
 
+/* Clear an ordering table backwards with DMA channel 6. */
+bool nc_credits_clear_ot_dma(CPUState *c) {
+    if (c->budget <= 9 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(5); /* number of entries */
+    c->budget -= 3;
+    R(5) = MEM_R32(0x80024648);
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    R(2) = MEM_R32(R(5));
+    R(3) = 0x08000000; /* channel 6 enable in DPCR */
+    R(2) |= R(3);
+    c->budget -= NC_LOAD_CYCLES + 2;
+    MEM_W32(R(5), R(2));
+    c->budget--;
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024644);
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(R(2), 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, R(16) << 2);
+    set_reg(c, 2, R(2) - 4);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x8002463c);
+    set_reg(c, 4, R(4) + R(2));
+    MEM_W32(R(3), R(4)); /* last tag in the table */
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024640);
+    set_reg(c, 3, 0x11000000);
+    MEM_W32(R(2), R(16));
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024644);
+    set_reg(c, 3, R(3) | 2);
+    MEM_W32(R(2), R(3)); /* start a descending, manually triggered transfer */
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(31) = 0x8001d880;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001e9fc); /* set_alarm */
+
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024644);
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 2, R(2));
+    set_reg(c, 3, 1u << 24);
+    set_reg(c, 2, R(2) & R(3));
+    bool busy = R(2) != 0;
+    R(2) = R(16);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (busy)
+        set_reg(c, 17, 1u << 24);
+    while (busy) {
+        R(31) = 0x8001d8ac;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001ea30); /* get_alarm */
+        const bool timed_out = R(2) != 0;
+        R(2) = UINT32_MAX;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (timed_out)
+            break;
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024644);
+        NC_POLL(c, NC_INSN_CYCLES);
+        load_word(c, 2, R(2));
+        NC_POLL(c, NC_INSN_CYCLES);
+        set_reg(c, 2, R(2) & R(17));
+        busy = R(2) != 0;
+        R(2) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_graphics_status(CPUState *c) {
     if (c->budget <= 10)
         return false;
