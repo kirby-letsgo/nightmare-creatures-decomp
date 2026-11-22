@@ -1675,6 +1675,45 @@ bool nc_credits_bios_gpu_command(CPUState *c) {
     return bios_service(c, 0xa0, 0x49);
 }
 
+bool nc_credits_flush_cache(CPUState *c) {
+    return bios_service(c, 0xa0, 0x44);
+}
+
+/* Replace eleven words in the BIOS pad handler with NOPs while IRQs are disabled. */
+bool nc_credits_patch_pad(CPUState *c) {
+    if (c->budget <= 71)
+        return false;
+    R(1) = 0x80020000;
+    c->budget--;
+    MEM_W32(0x80024c80, R(31));
+    R(31) = 0x8001a3f4;
+    c->budget -= 3;
+    nc_call(c, 0x8001a444); /* EnterCriticalSection */
+    R(10) = 0xb0;
+    R(31) = 0x8001a400;
+    R(9) = 0x57;
+    c->budget -= 3;
+    nc_call(c, R(10)); /* GetB0Table */
+
+    R(2) = MEM_R32(R(2) + 0x16c);
+    R(9) = 11;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    do {
+        R(9)--;
+        c->budget--;
+        MEM_W32(R(2) + 0x594, 0);
+        R(2) += 4;
+        c->budget -= 3;
+    } while (R(9));
+    R(31) = 0x8001a420;
+    c->budget -= 2;
+    nc_call(c, 0x8001a434); /* FlushCache */
+    c->budget--;
+    R(31) = MEM_R32(0x80024c80);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_bios_init_pad(CPUState *c) {
     return bios_service(c, 0xb0, 0x12);
 }
