@@ -675,6 +675,10 @@ class Emitter:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
+        if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
+            targets.add(0x8006C750)
+        if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
+            targets.add(0x8006C938)
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
             targets.update((0x800587A0, 0x800587CC, 0x80058830))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
@@ -1286,6 +1290,13 @@ class Emitter:
                 out.append("    if (nc_finish_matrix_headings(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):
+                actor = i.addr == 0x8006C714
+                source = "actor" if actor else "point"
+                resume = 0x8006C750 if actor else 0x8006C938
+                out.append(f"    if (nc_prepare_spatial_{source}_bearing(c)) {{")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8005876C:
                 out.append("    if (nc_prepare_target_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
