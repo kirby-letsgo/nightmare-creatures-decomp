@@ -1058,6 +1058,38 @@ static bool check_spu_read_address(void) {
     return true;
 }
 
+static bool check_spu_dma_priority(void) {
+    const u32 slot = 0x80024688, original = MEM_R32(slot);
+    const u32 targets[] = {original, SCRATCH_BASE + 4, slot};
+    const u32 modes[] = {0, 1, UINT32_MAX};
+    if (original != 0x1f8010f0)
+        return false;
+    for (unsigned i = 0; i < sizeof targets / sizeof targets[0]; i++) {
+        u32 first = targets[i];
+        /* With the pointer aimed at itself the first store redirects the second. */
+        u32 second = first == slot ? slot & 0xfff8ffff : first;
+        u32 saved = MEM_R32(second);
+        for (unsigned j = 0; j < sizeof modes / sizeof modes[0]; j++) {
+            MEM_W32(slot, first);
+            MEM_W32(second, 0xa5af6789);
+            u32 expected = (first == second ? 0xa5a86789 : 0xa5af6789) |
+                           (modes[j] ? 0x30000 : 0x50000);
+            CPUState state = arguments(modes[j], 2, 3, j ? 28 : 4096);
+            nc_cpu = state;
+            if (!nc_credits_spu_set_dma_priority(&nc_cpu) || MEM_R32(second) != expected)
+                return false;
+            MEM_W32(slot, first);
+            MEM_W32(second, 0xa5af6789);
+            if (!compare(state, 0x8001fbc0, nc_credits_spu_set_dma_priority, 27) ||
+                nc_cpu.r[2] != second || nc_cpu.r[3] != expected)
+                return false;
+        }
+        MEM_W32(second, saved);
+    }
+    MEM_W32(slot, original);
+    return true;
+}
+
 static bool check_spu_delays(void) {
     const u32 slot = 0x8002468c, original = MEM_R32(slot);
     const u32 addresses[] = {original, 0x80060000, SCRATCH_BASE + 4};
@@ -1366,6 +1398,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_write_register();
     pass = pass && check_spu_set_address();
     pass = pass && check_spu_read_address();
+    pass = pass && check_spu_dma_priority();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();

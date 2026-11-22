@@ -1468,6 +1468,32 @@ bool nc_credits_spu_read_address(CPUState *c) {
     return true;
 }
 
+/* _spu_FsetPCR selects the SPU DMA channel priority in DPCR bits 16..18. */
+bool nc_credits_spu_set_dma_priority(CPUState *c) {
+    if (c->budget <= 27)
+        return false;
+    c->budget--;
+    R(5) = MEM_R32(0x80024688);
+    R(3) = 0xfff80000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R32(R(5)) & 0xfff8ffff;
+    R(3) = 0xfff8ffff;
+    c->budget -= NC_LOAD_CYCLES + 2;
+    MEM_W32(R(5), R(2));
+
+    bool priority_three = R(4) != 0;
+    c->budget -= 4; /* store, branch with delay slot, then lui */
+    R(2) = MEM_R32(0x80024688);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(3) = MEM_R32(R(2));
+    R(4) = priority_three ? 0x30000 : 0x50000;
+    R(3) |= R(4);
+    c->budget -= NC_LOAD_CYCLES + 2 + priority_three;
+    MEM_W32(R(2), R(3));
+    c->budget -= 3;
+    return true;
+}
+
 /* _spu_FsetDelayW and _spu_FsetDelayR update the SPU bus delay register. */
 bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     if (c->budget <= 15)
