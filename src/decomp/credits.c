@@ -37,3 +37,32 @@ bool nc_credits_skip_input(CPUState *c) {
     c->budget--;
     return true;
 }
+
+/* Build the SpuCommonAttr used by the per-frame CD fade. The caller supplies
+ * independent channel levels; zero converts to 0xffff, as on the disc. */
+bool nc_credits_set_cd_volume(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+
+    R(29) -= 0x40;
+    const u32 attr = R(29) + 0x10;
+    const u32 left = (R(4) << 7) - 1;
+    R(5) = (R(5) << 7) - 1;
+    MEM_W32(attr, 0x2c0); /* CD left volume, right volume, and mix enable */
+    R(2) = 1;
+    MEM_W16(attr + 0x10, (u16)left);
+    R(4) = attr;
+    MEM_W32(R(29) + 0x38, R(31));
+    MEM_W16(attr + 0x12, (u16)R(5));
+    R(31) = 0x8001931c;
+    MEM_W32(attr + 0x18, 1);
+    c->budget -= 14;
+    nc_call(c, 0x8001ed98); /* SpuSetCommonAttr */
+
+    R(31) = MEM_R32(R(29) + 0x38);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 0x40;
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
