@@ -1604,6 +1604,25 @@ bool nc_menu_record_26_right(CPUState *c) {
     return true;
 }
 
+/* Record 37 uses the first pad packet's type to select its stick path. */
+u32 nc_menu_record_37_pad_type(CPUState *c) {
+    if (c->budget <= 17)
+        return 0x800677bc;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 26; /* branch delay slot */
+    c->budget -= 6;
+    if (R(3) != 37)
+        return 0x8006833c;
+
+    R(31) = 0x800677d4;
+    c->budget -= 2;
+    nc_pad_packet_type(c);
+    R(3) = 7;
+    R(4) = R(22);
+    c->budget -= 3;
+    return R(2) == 7 ? 0x8006780c : 0x800677e0;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
