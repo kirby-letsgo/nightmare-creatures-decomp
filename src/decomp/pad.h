@@ -3,6 +3,8 @@
 
 #include "port/recomp.h"
 
+bool nc_pad_packet_type(CPUState *c);
+bool nc_read_pad_stick(CPUState *c);
 bool nc_select_pad(CPUState *c);
 bool nc_decode_pad(CPUState *c);
 u32 nc_read_pad(CPUState *c);

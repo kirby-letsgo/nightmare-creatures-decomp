@@ -2,6 +2,28 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* Both readers use port one's raw packet. At 800677CC the caller checks
+ * for type 7 before asking for the stick bytes at 80067810. */
+bool nc_pad_packet_type(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(2) = MEM_R8(PAD_PACKET + 1) >> 4;
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_read_pad_stick(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    R(2) = MEM_R8(PAD_PACKET + 6);
+    MEM_W8(R(4), R(2));
+    /* The first destination may overlap the packet. Read Y after writing X. */
+    R(2) = MEM_R8(PAD_PACKET + 7);
+    MEM_W8(R(5), R(2));
+    c->budget -= 13;
+    return true;
+}
+
 /* The packet status need only differ from ff. The low nibble of the ID
  * describes packet length and does not participate in pad selection. */
 static bool supported_pad(u32 packet, u32 status, int *cycles) {
