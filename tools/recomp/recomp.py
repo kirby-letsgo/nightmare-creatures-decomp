@@ -910,6 +910,15 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068B74:
+                out.extend(
+                    [
+                        "    switch (nc_menu_record_face_edges(c)) {",
+                        "    case 0x80068BEC: goto L_80068BEC;",
+                        "    case 0x80068CE0: goto L_80068CE0;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80068980:
                 out.append("    if (nc_menu_apply_record_select(c)) goto L_80068CF8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006893C:

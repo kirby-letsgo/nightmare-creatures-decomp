@@ -868,6 +868,41 @@ u32 nc_menu_record_shoulder_repeat(CPUState *c) {
     return 0x80068b74;
 }
 
+/* Cross uses the offset already in v1. Triangle reloads the record index
+ * and computes its own offset, even when Cross was held. */
+u32 nc_menu_record_face_edges(CPUState *c) {
+    if (c->budget <= 30)
+        return 0x80068b74;
+    bool cross = R(2) != 0;
+    R(2) = R(30) & 0x1000;
+    c->budget -= 2;
+    if (cross) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 0x4000)) {
+            R(4) = R(22);
+            R(5) = 0x800883c0 + R(3);
+            R(6) = 0x10;
+            c->budget -= 6;
+            return 0x80068ce0;
+        }
+    }
+    bool triangle = R(2) != 0;
+    R(2) = R(30) & 0x8000;
+    c->budget -= 2;
+    if (triangle) {
+        c->budget -= 7;
+        if (!(MEM_R32(R(28) + 0x18c) & 0x1000)) {
+            R(4) = R(22);
+            R(2) = 0x800883c0;
+            R(5) = R(2) + 12u * MEM_R32(R(28) + 0x190);
+            R(6) = 0x20;
+            c->budget -= 12;
+            return 0x80068ce0;
+        }
+    }
+    return 0x80068bec;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
