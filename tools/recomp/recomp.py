@@ -700,7 +700,16 @@ class Emitter:
         targets = {t for t in targets if f.addr <= t < f.end}
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AE78:
             targets.update(
-                (0x8002AEFC, 0x8002AF08, 0x8002AF28, 0x8002AF38, 0x8002AF48, 0x8002AF58, 0x8002AF68)
+                (
+                    0x8002AEE0,
+                    0x8002AEFC,
+                    0x8002AF08,
+                    0x8002AF28,
+                    0x8002AF38,
+                    0x8002AF48,
+                    0x8002AF58,
+                    0x8002AF68,
+                )
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.add(0x8002B200)
@@ -1530,6 +1539,10 @@ class Emitter:
                 out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:
                 out.append("    if (nc_step_placement_record(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AE78:
+                out.append("    if (nc_begin_placement_vectors(c)) goto L_8002AEE0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AF68:
+                out.append("    if (nc_finish_placement_vectors(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002AEE0, 0x8002AEFC, 0x8002AF08):
                 helper, callee, resume = {
                     0x8002AEE0: ("yaw", 0x8007A7A0, 0x8002AEFC),
