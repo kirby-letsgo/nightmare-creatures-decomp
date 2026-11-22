@@ -96,6 +96,7 @@ credits_exe  8001B4E4    8001B520         credits_sdk.c
 credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
+credits_exe  8001B414    8001B4E4         credits_sdk.c
 # PSX2 pad presence, packet decoding, and the second port's high button word.
 psx2_exe     8006FF34    8007001C         pad.c
 psx2_exe     80070050    800700FC         pad.c

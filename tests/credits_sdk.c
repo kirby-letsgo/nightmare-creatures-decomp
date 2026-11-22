@@ -337,6 +337,25 @@ static bool check_texture_page(void) {
     return true;
 }
 
+static bool check_default_draw(void) {
+    const u32 heights[] = {0, 256, 257, 288, 289, 0x10001, 0xffffffff, 0x80000000};
+    /* Include a saved-register overlap and an output alias of the graph-type byte. */
+    const u32 dest[] = {0x80060300, SCRATCH_BASE + 2, 0x801feed0, 0xa0024558};
+    for (unsigned mode = 0; mode < 4; mode++)
+        for (unsigned i = 0; i < sizeof heights / sizeof heights[0]; i++)
+            for (unsigned j = 0; j < sizeof dest / sizeof dest[0]; j++) {
+                CPUState state = arguments(dest[j], 0x10000 + i, 0xfffffff0 + j, 84);
+                state.r[7] = 320;
+                memset(nc_fast_ptr(dest[j]), 0xab, 32);
+                MEM_W32(state.r[29] + 0x10, heights[i]);
+                MEM_W32(0x80024504, mode >> 1);
+                MEM_W8(0x80024558, mode & 1);
+                if (!compare(state, 0x8001b414, nc_credits_default_draw, 83))
+                    return false;
+            }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -362,6 +381,7 @@ int main(int argc, char **argv) {
     pass = pass && check_palette();
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
+    pass = pass && check_default_draw();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
     disc_close();

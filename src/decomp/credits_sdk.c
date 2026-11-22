@@ -440,3 +440,93 @@ bool nc_credits_texture_page(CPUState *c) {
     c->budget -= 3;
     return true;
 }
+
+bool nc_credits_default_draw(CPUState *c) {
+    if (c->budget <= 83)
+        return false;
+
+    R(29) -= 0x28;
+    c->budget--;
+    MEM_W32(R(29) + 0x18, R(18));
+    c->budget--;
+    R(18) = MEM_R32(R(29) + 0x38); /* height, the fifth argument */
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x20, R(20));
+    R(20) = R(6);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x10, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 0x24, R(31));
+    R(31) = 0x8001b448;
+    R(16) = R(7);
+    c->budget -= 3;
+    NC_FN_ENTER(c, 0x8001b538);
+    nc_credits_video_mode(c, false);
+
+    const u32 env = R(17);
+    bool pal = R(2) != 0;
+    R(3) = 1;
+    c->budget--;
+    MEM_W16(env, (u16)R(19));
+    c->budget--;
+    MEM_W16(env + 2, (u16)R(20));
+    c->budget--;
+    MEM_W16(env + 4, (u16)R(16));
+    c->budget--;
+    /* Empty texture window and black background. */
+    for (unsigned off = 0x0c; off <= 0x12; off += 2) {
+        MEM_W16(env + off, 0);
+        c->budget--;
+    }
+    for (unsigned off = 0x19; off <= 0x1b; off++) {
+        MEM_W8(env + off, 0);
+        c->budget--;
+    }
+    MEM_W8(env + 0x16, 1); /* dithering */
+    c->budget--;
+    MEM_W16(env + 6, (u16)R(18));
+    R(2) = (s32)R(18) <= (pal ? 288 : 256);
+    c->budget -= pal ? 4 : 3;
+    MEM_W8(env + 0x17, (u8)R(2)); /* allow drawing to the displayed area */
+    c->budget--;
+    MEM_W16(env + 8, (u16)R(19));
+    c->budget--;
+    R(31) = 0x8001b49c;
+    MEM_W16(env + 10, (u16)R(20));
+    c->budget -= 2;
+    NC_FN_ENTER(c, 0x8001c1c8);
+    nc_credits_graph_status(c, false);
+    bool read_again = R(2) != 1;
+    R(2) = env;
+    c->budget -= 3;
+    if (read_again) {
+        R(31) = 0x8001b4b0;
+        c->budget -= 2;
+        NC_FN_ENTER(c, 0x8001c1c8);
+        nc_credits_graph_status(c, false);
+        R(2) = env;
+        c->budget--;
+    }
+
+    R(3) = 10;
+    c->budget--;
+    MEM_W16(env + 0x14, (u16)R(3)); /* texture page */
+    c->budget--;
+    MEM_W8(env + 0x18, 0); /* disable background clear */
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 0x24);
+    c->budget -= NC_LOAD_CYCLES;
+    for (int reg = 20; reg >= 16; reg--) {
+        R(reg) = MEM_R32(R(29) + 0x10 + (reg - 16) * 4);
+        c->budget -= NC_LOAD_CYCLES;
+    }
+    R(29) += 0x28;
+    c->budget -= 3;
+    return true;
+}
