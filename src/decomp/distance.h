@@ -9,6 +9,7 @@ bool nc_finish_actor_distance(CPUState *c, bool missing_target);
 bool nc_prepare_point_distance_root(CPUState *c);
 bool nc_store_point_pose_heading(CPUState *c);
 bool nc_prepare_point_coordinate_query(CPUState *c);
+bool nc_check_point_proximity(CPUState *c, bool from_query);
 bool nc_step_point_x(CPUState *c);
 bool nc_step_point_z(CPUState *c);
 bool nc_turn_toward_point(CPUState *c);

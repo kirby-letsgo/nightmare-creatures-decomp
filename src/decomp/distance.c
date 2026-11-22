@@ -3210,6 +3210,20 @@ bool nc_prepare_point_coordinate_query(CPUState *c) {
     return true;
 }
 
+/* The pose-heading path joins at the distance test, bypassing the query result. */
+bool nc_check_point_proximity(CPUState *c, bool from_query) {
+    const bool copy_result = from_query && R(2) != 0;
+    const int cycles = from_query ? (copy_result ? 10 : 4) : 3;
+    if (c->budget <= cycles)
+        return false;
+    if (copy_result)
+        MEM_W16(R(19) + 0x360, MEM_R16(R(29) + 0x14));
+    R(2) = (s32)R(21) < 150;
+    R(4) = R(20);
+    c->budget -= cycles;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
