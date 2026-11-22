@@ -1597,6 +1597,17 @@ bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     return true;
 }
 
+/* DeliverEvent selects BIOS B0 service 7 in the tail jump's delay slot. */
+bool nc_credits_deliver_event(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(10) = 0xb0;
+    R(9) = 7;
+    c->budget -= 3;
+    nc_jump(c, R(10));
+    return true;
+}
+
 /* The default callbacks notify the BIOS CD event class through DeliverEvent. */
 static bool cd_default_event(CPUState *c, u32 spec, u32 resume) {
     if (c->budget <= 6)

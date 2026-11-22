@@ -144,6 +144,7 @@ CREDITS_ROUTINES = {
     0x8001FC20: "nc_credits_spu_set_delay(c, false)",
     0x8001FC4C: "nc_credits_spu_set_delay(c, true)",
     0x8001FC78: "nc_credits_spu_wait(c)",
+    0x8001FCD8: "nc_credits_deliver_event(c)",
     0x8001FD78: "nc_credits_cd_default_sync(c)",
     0x8001FDA0: "nc_credits_cd_default_ready(c)",
     0x8001FDC8: "nc_credits_cd_default_read(c)",
