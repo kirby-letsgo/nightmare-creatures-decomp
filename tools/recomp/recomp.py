@@ -77,6 +77,7 @@ CREDITS_ROUTINES = {
     0x8001A3E4: "nc_credits_patch_pad(c)",
     0x8001A434: "nc_credits_flush_cache(c)",
     0x8001A444: "nc_credits_enter_critical_section(c)",
+    0x8001A638: "nc_credits_put_string(c)",
     0x8001A688: "nc_credits_change_clear_counter(c)",
     0x8001A698: "nc_credits_reset_callback(c)",
     0x8001A6C8: "nc_credits_interrupt_callback(c)",
