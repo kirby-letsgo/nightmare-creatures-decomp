@@ -260,3 +260,30 @@ bool nc_credits_packet_flag(CPUState *c, u8 mask) {
     c->budget -= 2;
     return true;
 }
+
+bool nc_credits_prepend_packets(CPUState *c, bool range) {
+    if (c->budget <= 21)
+        return false;
+    const u32 address_mask = 0x00ffffff, size_mask = 0xff000000;
+    const u32 last = range ? R(6) : R(5);
+    R(range ? 7 : 6) = address_mask;
+    R(range ? 8 : 7) = size_mask;
+    c->budget -= 3;
+    R(3) = MEM_R32(last);
+    c->budget -= NC_LOAD_CYCLES;
+    R(2) = MEM_R32(R(4));
+    c->budget -= NC_LOAD_CYCLES;
+    R(3) = (R(3) & size_mask) | (R(2) & address_mask);
+    c->budget -= 3;
+    MEM_W32(last, R(3));
+    c->budget--;
+    /* Read the head again: the tail can alias it. */
+    R(2) = MEM_R32(R(4));
+    c->budget -= NC_LOAD_CYCLES;
+    R(5) &= address_mask;
+    R(2) = (R(2) & size_mask) | R(5);
+    c->budget -= 3;
+    MEM_W32(R(4), R(2));
+    c->budget -= 2;
+    return true;
+}

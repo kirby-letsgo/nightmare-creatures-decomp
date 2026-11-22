@@ -82,4 +82,6 @@ bool nc_credits_init_primitive(CPUState *c, NcCreditsPrimitive primitive);
 
 bool nc_credits_packet_flag(CPUState *c, u8 mask);
 
+bool nc_credits_prepend_packets(CPUState *c, bool range);
+
 #endif
