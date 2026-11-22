@@ -618,7 +618,7 @@ static void defer_graphics_queue(u32 scratch) {
     MEM_W8(0x80024559, 1);
 }
 
-static bool check_load_image(void) {
+static bool check_image_transfer(u32 entry, bool (*routine)(CPUState *), u32 method_offset) {
     const u32 scratch = 0x80060c00, rect = scratch + 32, pixels = 0x80062000;
     const u32 record = 0x80027488, driver = MEM_R32(0x80024550);
     StateIO saved = {0};
@@ -634,8 +634,8 @@ static bool check_load_image(void) {
         MEM_W32(0x80024660, 0);
         memset(nc_fast_ptr(record), 0xcc, 96);
         CPUState state = arguments(rect, pixels, 3, verbose ? 11 : 4096);
-        ok = compare(state, 0x8001c5a4, nc_credits_load_image, 10) &&
-             MEM_R32(record) == MEM_R32(driver + 0x20) && MEM_R32(record + 4) == record + 12 &&
+        ok = compare(state, entry, routine, 10) &&
+             MEM_R32(record) == MEM_R32(driver + method_offset) && MEM_R32(record + 4) == record + 12 &&
              MEM_R32(record + 8) == pixels && !memcmp(nc_fast_ptr(record + 12), nc_fast_ptr(rect), 8) &&
              MEM_R8(record + 20) == 0xcc;
     }
@@ -2801,7 +2801,8 @@ int main(int argc, char **argv) {
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
-    pass = pass && check_load_image();
+    pass = pass && check_image_transfer(0x8001c5a4, nc_credits_load_image, 0x20);
+    pass = pass && check_image_transfer(0x8001c608, nc_credits_store_image, 0x1c);
     pass = pass && check_draw_otag();
     pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
