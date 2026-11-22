@@ -1711,6 +1711,57 @@ bool nc_credits_cd_default_read(CPUState *c) {
     return cd_default_event(c, 0x40, 0x8001fde0);
 }
 
+static void cd_mix_control(CPUState *c, u32 slot, u8 value) {
+    c->budget--;
+    R(3) = MEM_R32(slot);
+    R(2) = value;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W8(R(3), value);
+    c->budget--;
+}
+
+static void cd_mix_channel(CPUState *c, u32 slot, unsigned channel) {
+    c->budget--;
+    R(3) = MEM_R32(slot);
+    c->budget -= NC_LOAD_CYCLES;
+    R(2) = MEM_R8(R(4) + channel);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W8(R(3), (u8)R(2));
+    c->budget--;
+}
+
+/* CD_vol programs four CD audio mix coefficients through register banks 2 and 3. */
+bool nc_credits_cd_volume(CPUState *c) {
+    if (c->budget <= 56)
+        return false;
+    cd_mix_control(c, 0x80024a20, 2);
+    cd_mix_channel(c, 0x80024a28, 0);
+    cd_mix_channel(c, 0x80024a2c, 1);
+    cd_mix_control(c, 0x80024a20, 3);
+    cd_mix_channel(c, 0x80024a24, 2);
+    cd_mix_channel(c, 0x80024a28, 3);
+    cd_mix_control(c, 0x80024a2c, 0x20); /* apply the mix */
+    R(2) = 0;
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_credits_cd_mix(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x80020364;
+    c->budget -= 3;
+    nc_call(c, 0x80021440);
+    set_reg(c, 2, 1);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Load a CD port pointer from the guest table, including the load delay nop. */
 static void cd_flush_port(CPUState *c, u32 slot) {
     set_reg(c, 2, 0x80020000);
