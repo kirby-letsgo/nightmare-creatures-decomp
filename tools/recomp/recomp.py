@@ -58,6 +58,7 @@ CREDITS_ROUTINES = {
     0x80019A60: "nc_credits_printf(c)",
     0x8001A128: "nc_credits_change_case(c, true)",
     0x8001A158: "nc_credits_change_case(c, false)",
+    0x8001B4E4: "nc_credits_default_display(c)",
     0x8001B520: "nc_credits_video_mode(c, true)",
     0x8001B538: "nc_credits_video_mode(c, false)",
     0x8001B610: "nc_credits_palette_id(c)",

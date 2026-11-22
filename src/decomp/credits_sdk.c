@@ -347,3 +347,28 @@ bool nc_credits_video_mode(CPUState *c, bool replace) {
     c->budget -= replace ? 8 : 6;
     return true;
 }
+
+bool nc_credits_default_display(CPUState *c) {
+    if (c->budget <= 17)
+        return false;
+    R(3) = MEM_R32(R(29) + 0x10); /* fifth argument: height */
+    R(2) = R(4);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    for (unsigned i = 0; i < 3; i++) {
+        MEM_W16(R(2) + i * 2, (u16)R(5 + i));
+        c->budget--;
+    }
+    /* Clear the screen rectangle and mode flags, in their guest store order. */
+    for (unsigned off = 8; off <= 14; off += 2) {
+        MEM_W16(R(2) + off, 0);
+        c->budget--;
+    }
+    const unsigned offsets[] = {0x11, 0x10, 0x13, 0x12};
+    for (unsigned i = 0; i < 4; i++) {
+        MEM_W8(R(2) + offsets[i], 0);
+        c->budget--;
+    }
+    MEM_W16(R(2) + 6, (u16)R(3));
+    c->budget -= 2;
+    return true;
+}
