@@ -516,6 +516,34 @@ bool nc_credits_read_environment(CPUState *c, bool display) {
     return true;
 }
 
+bool nc_credits_gpu_command_chain(CPUState *c) {
+    if (c->budget <= 27)
+        return false;
+
+    /* Set GP1 DMA direction to CPU-to-GPU before programming channel 2. */
+    c->budget -= 2;
+    R(2) = MEM_R32(0x8002462c);
+    R(3) = 0x04000002;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), R(3));
+    c->budget -= 2;
+    R(2) = MEM_R32(0x80024630);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), R(4)); /* list head */
+    c->budget -= 2;
+    R(2) = MEM_R32(0x80024634);
+    R(3) = 0x01000000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), 0); /* block count is unused in linked-list mode */
+    c->budget -= 2;
+    R(2) = MEM_R32(0x80024638);
+    R(3) |= 0x401; /* start linked-list transfer from RAM */
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), R(3));
+    c->budget -= 3;
+    return true;
+}
+
 bool nc_credits_gpu_command_block(CPUState *c) {
     if (c->budget <= 10)
         return false;

@@ -454,6 +454,58 @@ static bool check_set_graph_debug(void) {
     return true;
 }
 
+static bool check_gpu_command_chain(void) {
+    const u32 slots = 0x8002462c, head = 0x80060840;
+    u32 ports[4];
+    for (unsigned i = 0; i < 4; i++)
+        ports[i] = MEM_R32(slots + 4 * i);
+    const u32 targets[][4] = {
+        {SCRATCH_BASE, head + 4, head + 8, head + 12},
+        {head, 0xa0060840, head, head},
+        {SCRATCH_BASE, slots + 8, SCRATCH_BASE + 4, SCRATCH_BASE + 8},
+    };
+    const u32 heads[] = {head, head + 4, 0xa0060848, SCRATCH_BASE + 16};
+    for (unsigned i = 0; i < sizeof targets / sizeof targets[0]; i++)
+        for (unsigned j = 0; j < sizeof heads / sizeof heads[0]; j++) {
+            memset(nc_fast_ptr(head), 0x5a, 24);
+            memset(nc_fast_ptr(SCRATCH_BASE), 0xa5, 24);
+            for (unsigned k = 0; k < 4; k++)
+                MEM_W32(slots + 4 * k, targets[i][k]);
+            if (!compare(arguments(heads[j], 0, 0, 28), 0x8001e0d8, nc_credits_gpu_command_chain, 27))
+                return false;
+        }
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(slots + 4 * i, ports[i]);
+
+    /* A two-node list sets the mask bits and draw mode through GPU DMA. */
+    MEM_W32(head, 0x01000000 | ((head + 8) & 0xffffff));
+    MEM_W32(head + 4, 0xe6000003);
+    MEM_W32(head + 8, 0x01ffffff);
+    MEM_W32(head + 12, 0xe100001b);
+    u32 old_status = MEM_R32(ports[0]);
+    for (unsigned native = 0; native < 2; native++) {
+        MEM_W32(ports[0], 0x04000000);
+        MEM_W32(MEM_R32(0x80024628), 0xe6000000);
+        MEM_W32(MEM_R32(0x80024628), 0xe1000000);
+        nc_cpu = arguments(head, 0, 0, 28);
+        if (native) {
+            if (!nc_credits_gpu_command_chain(&nc_cpu))
+                return false;
+        } else {
+            interp_call(&nc_cpu, 0x8001e0d8);
+        }
+        u32 status = MEM_R32(ports[0]);
+        if (((status >> 29) & 3) != 2 || (status & 0x1fff) != 0x181b ||
+            MEM_R32(ports[1]) != (head & 0xffffff) || MEM_R32(ports[2]) != 0 ||
+            MEM_R32(ports[3]) != 0x401)
+            return false;
+    }
+    MEM_W32(MEM_R32(0x80024628), 0xe6000000 | ((old_status >> 11) & 3));
+    MEM_W32(MEM_R32(0x80024628), 0xe1000000 | (old_status & 0x7ff));
+    MEM_W32(ports[0], 0x04000000 | ((old_status >> 29) & 3));
+    return true;
+}
+
 static bool check_gpu_command_block(void) {
     const u32 source = 0x80060800, data_slot = 0x80024628, control_slot = 0x8002462c;
     const u32 data_port = MEM_R32(data_slot), control_port = MEM_R32(control_slot);
@@ -849,6 +901,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_field();
     pass = pass && check_gpu_control();
     pass = pass && check_gpu_command_block();
+    pass = pass && check_gpu_command_chain();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_draw_sync_callback();
