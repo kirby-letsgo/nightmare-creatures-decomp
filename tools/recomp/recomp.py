@@ -636,7 +636,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x800473E8:
             targets.update((0x80047480, 0x80047518))
         if self.mod.name == "psx2_exe" and f.addr == 0x80046B1C:
-            targets.update((0x80046E68, 0x80046F2C, 0x800470A4))
+            targets.update((0x80046E68, 0x80046F2C, 0x8004701C, 0x800470A4))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -844,6 +844,12 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80046E68, 0x80046F2C):
                 subtract_x = "true" if i.addr == 0x80046E68 else "false"
                 out.append(f"    if (nc_apply_rotated_point_offset(c, {subtract_x})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80046FA0:
+                out.append("    if (nc_begin_actor_point_placement(c)) {")
+                out.append(f"        {self.call(0x8003531C)}")
+                out.append("        goto L_8004701C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800470A4:
+                out.append("    if (nc_finish_actor_point_placement(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004701C:
                 out.append("    if (nc_place_actor_points(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
