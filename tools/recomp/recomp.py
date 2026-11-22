@@ -978,6 +978,12 @@ class Emitter:
                 out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80025FE4:
                 out.append("    if (nc_sample_part_rotation(c, NC_ROTATION_PART)) goto L_8002607C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026560:
+                out.append("    if (nc_start_node_traversal(c)) goto L_800265CC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800265AC:
+                out.append("    if (nc_restore_node_branch(c)) goto L_800265CC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800266A4:
+                out.append("    if (nc_apply_node_matrix(c)) goto L_800266B4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800265CC:
                 out.append("    if (nc_select_node_transform(c)) {")
                 out.append("        if (!R(2)) goto L_800266B4;")
