@@ -1669,6 +1669,24 @@ u32 nc_menu_calibration_triangle(CPUState *c, bool after_action) {
     return 0x80068330;
 }
 
+/* The Triangle call returns at the history store. Other menu paths
+ * enter at the record load or with the comparison operands already set. */
+u32 nc_menu_record_pad_gate(CPUState *c, u32 entry) {
+    int cycles = entry == 0x80068330 ? 7 : entry == 0x80068334 ? 6 : 2;
+    if (c->budget <= cycles)
+        return entry;
+    if (entry == 0x80068330)
+        MEM_W32(R(28) + 0x18c, R(30));
+    if (entry != 0x8006833c) {
+        R(3) = MEM_R32(R(28) + 0x190);
+        R(2) = 26;
+    }
+    bool matches = R(3) == R(2);
+    R(2) = R(30) & 0x10; /* Up mask in the branch delay slot */
+    c->budget -= cycles;
+    return matches ? 0x80068344 : 0x8006848c;
+}
+
 /* On the type-7 path, sample both stick bytes before testing the counter. */
 u32 nc_menu_record_37_read_stick(CPUState *c) {
     if (c->budget <= 24)

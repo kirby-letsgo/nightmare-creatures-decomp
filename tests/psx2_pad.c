@@ -1586,6 +1586,47 @@ static bool menu_calibration_triangle(void) {
     return true;
 }
 
+static bool record_gate_after_triangle(CPUState *cpu) {
+    return nc_menu_record_pad_gate(cpu, 0x80068330) == cpu->r[31];
+}
+
+static bool record_gate_reload(CPUState *cpu) {
+    return nc_menu_record_pad_gate(cpu, 0x80068334) == cpu->r[31];
+}
+
+static bool record_gate_compare(CPUState *cpu) {
+    return nc_menu_record_pad_gate(cpu, 0x8006833c) == cpu->r[31];
+}
+
+static bool menu_record_pad_gate(void) {
+    const u32 buttons[] = {0, 0x10, 0x1000, 0x1010};
+    const struct {
+        u32 entry;
+        int cycles;
+        bool (*run)(CPUState *);
+    } paths[] = {{0x80068330, 7, record_gate_after_triangle},
+                 {0x80068334, 6, record_gate_reload},
+                 {0x8006833c, 2, record_gate_compare}};
+    for (unsigned p = 0; p < sizeof paths / sizeof paths[0]; ++p) {
+        for (unsigned record = 25; record <= 26; ++record) {
+            for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
+                CPUState cpu = initial();
+                cpu.budget = paths[p].cycles + 1;
+                cpu.r[30] = buttons[i];
+                cpu.r[2] = 37;
+                cpu.r[3] = record == 25 ? 37 : 36;
+                bool matches = paths[p].entry == 0x8006833c ? cpu.r[3] == cpu.r[2] : record == 26;
+                cpu.r[31] = matches ? 0x80068344 : 0x8006848c;
+                MEM_W32(gp + 0x18c, 0xdeadbeef);
+                MEM_W32(gp + 0x190, record);
+                if (!compare(cpu, paths[p].entry, paths[p].run, paths[p].cycles))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool menu_calibration_action(void) {
     const u32 buttons[] = {0, 8, 0x4000, 0x4008};
     for (unsigned record = 36; record <= 37; ++record) {
@@ -2740,15 +2781,15 @@ int main(int argc, char **argv) {
         menu_record_29_gate() && menu_counter_updates() && menu_record_29_thresholds() &&
         menu_count_130() && menu_record_input_gate() && menu_record_24_dispatch() &&
         menu_record_29_dispatch() && menu_store_stick_calibration() && menu_expand_stick_bounds() &&
-        menu_stick_bounds() && menu_calibration_triangle() && menu_calibration_action() &&
-        menu_record_37_action() && menu_record_37_stick() && menu_record_37_types() &&
-        menu_record_26_left() && menu_record_26_right() && menu_input_return() &&
-        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
-        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        menu_stick_bounds() && menu_calibration_triangle() && menu_record_pad_gate() &&
+        menu_calibration_action() && menu_record_37_action() && menu_record_37_stick() &&
+        menu_record_37_types() && menu_record_26_left() && menu_record_26_right() &&
+        menu_input_return() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

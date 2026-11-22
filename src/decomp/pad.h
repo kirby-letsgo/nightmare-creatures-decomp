@@ -66,6 +66,7 @@ bool nc_menu_advance_record_counter(CPUState *c);
 u32 nc_menu_check_count_130(CPUState *c);
 u32 nc_menu_dispatch_record_29(CPUState *c);
 u32 nc_menu_calibration_triangle(CPUState *c, bool after_action);
+u32 nc_menu_record_pad_gate(CPUState *c, u32 entry);
 bool nc_menu_calibration_action(CPUState *c);
 bool nc_menu_record_37_action(CPUState *c);
 u32 nc_menu_record_37_read_stick(CPUState *c);
