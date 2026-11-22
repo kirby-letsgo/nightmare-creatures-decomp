@@ -278,6 +278,8 @@ psx2_exe     800688EC    8006893C         pad.c
 psx2_exe     8006893C    80068980         pad.c
 # Record 10 Select action, button history reset, and follow-up call.
 psx2_exe     80068980    800689A8         pad.c
+# Ordinary menu record D-pad priority and repeat checks.
+psx2_exe     800689A8    80068ADC         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.

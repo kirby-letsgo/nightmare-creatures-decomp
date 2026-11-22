@@ -818,6 +818,39 @@ bool nc_menu_apply_record_select(CPUState *c) {
     return true;
 }
 
+/* Ordinary records take one direction in disc order. Before the sixth
+ * tick, only a direction absent from the previous word dispatches. */
+u32 nc_menu_record_direction_repeat(CPUState *c) {
+    if (c->budget <= 30)
+        return 0x800689a8;
+    static const struct {
+        u32 button, action;
+    } directions[] = {{0x10, 4}, {0x40, 8}, {0x80, 0x80}, {0x20, 0x40}};
+
+    c->budget--; /* initial Up mask */
+    for (unsigned i = 0; i < sizeof directions / sizeof directions[0]; ++i) {
+        c->budget -= 2;
+        if (!(R(30) & directions[i].button))
+            continue;
+
+        R(2) = increment_menu_repeat(c) < 6;
+        R(4) = R(22);
+        c->budget -= 9;
+        if (R(2)) {
+            R(2) = MEM_R32(R(28) + 0x18c) & directions[i].button;
+            c->budget -= 7;
+            if (R(2))
+                return 0x80068cf8;
+        }
+        R(5) = 0x800883c0 + R(3);
+        R(6) = directions[i].action;
+        c->budget -= 5;
+        return 0x80068ce0;
+    }
+    R(2) = R(30) & 0x400; /* next button mask, from the final delay slot */
+    return 0x80068adc;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
