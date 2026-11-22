@@ -1,0 +1,10 @@
+# Verified handwritten coverage. One original instruction per aligned address.
+# Module     Start       End (exclusive)  Handwritten implementation
+psx2_exe     800422DC    80042360         contact.c
+psx2_exe     80042AA0    80042B24         contact.c
+psx2_exe     8004E510    8004E570         contact.c
+psx2_exe     8004E6E0    8004E9EC         damage.c
+psx2_exe     8004EB30    8004EB78         damage.c
+# The death callbacks at 80055EDC..80055EF4 still run the original instructions.
+psx2_exe     80055DD4    80055EDC         adrenaline.c
+psx2_exe     80055EF4    80055F48         adrenaline.c
