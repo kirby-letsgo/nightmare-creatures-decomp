@@ -507,6 +507,49 @@ bool nc_credits_texture_window_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_mode_packet(CPUState *c) {
+    /* Both command builders can run to completion within this budget. */
+    if (c->budget <= 88)
+        return false;
+
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(4) = R(5);
+    R(2) = 2;
+    R(5) = R(6);
+    c->budget -= 5;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    R(17) = MEM_R32(R(29) + 48); /* fifth argument: texture-window rectangle */
+    R(6) = (u16)R(7);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    R(31) = 0x8001d1a4;
+    MEM_W8(R(16) + 3, 2);
+    c->budget -= 2;
+    NC_FN_ENTER(c, 0x8001d470);
+    nc_credits_draw_mode_word(c);
+    MEM_W32(R(16) + 4, R(2));
+    R(31) = 0x8001d1b0;
+    R(4) = R(17);
+    c->budget -= 3;
+    NC_FN_ENTER(c, 0x8001d6ac);
+    nc_credits_texture_window_word(c);
+    MEM_W32(R(16) + 8, R(2));
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 24);
+    c->budget -= NC_LOAD_CYCLES;
+    R(17) = MEM_R32(R(29) + 20);
+    c->budget -= NC_LOAD_CYCLES;
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 32;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_draw_move(CPUState *c) {
     if (c->budget <= 32)
         return false;
