@@ -2711,6 +2711,37 @@ bool nc_finish_matrix_headings(CPUState *c) {
     return true;
 }
 
+/* The null-target branch still saves ra in its delay slot. */
+bool nc_begin_actor_distance(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    c->budget -= 3;
+    return true;
+}
+
+bool nc_call_actor_distance_root(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x8004ce60;
+    R(4) = R(6) + R(3);
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_finish_actor_distance(CPUState *c, bool missing_target) {
+    const int cycles = missing_target ? 7 : 8;
+    if (c->budget <= cycles)
+        return false;
+    if (missing_target)
+        R(2) = 0;
+    R(31) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
