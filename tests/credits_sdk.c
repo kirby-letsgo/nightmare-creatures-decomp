@@ -1216,6 +1216,36 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_cd_search_directory(void) {
+    const u32 parents = 0x80025458, name = 0x80060000;
+    u8 saved[128 * 44];
+    memcpy(saved, nc_fast_ptr(parents), sizeof saved);
+    memcpy(nc_fast_ptr(name), "CREDITS", 8);
+    const struct {
+        unsigned count;
+        int match, expected;
+    } cases[] = {{0, -1, -1}, {1, 0, 1}, {3, 2, 3}, {3, -1, -1},
+                 {128, 127, 128}, {128, -1, -1}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(parents), 0, sizeof saved);
+        for (unsigned n = 0; n < cases[i].count; n++) {
+            bool match = (int)n == cases[i].match;
+            MEM_W32(parents + n * 44, match || n == 1 ? 7 : 2);
+            memcpy(nc_fast_ptr(parents + n * 44 + 8), match || n != 1 ? "CREDITS" : "CREDITX", 8);
+        }
+        for (unsigned j = 0; j < 2; j++) {
+            CPUState state = arguments(7, name, 3, j ? 14 : 4096);
+            if (j)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            if (!compare(state, 0x80022214, nc_credits_cd_search_directory, 13) ||
+                nc_cpu.r[2] != (u32)cases[i].expected)
+                return false;
+        }
+    }
+    memcpy(nc_fast_ptr(parents), saved, sizeof saved);
+    return true;
+}
+
 static bool check_cd_copy_identifier(void) {
     const u32 src = 0x80060004;
     const u32 dests[] = {SCRATCH_BASE + 1, src, src - 1, src + 1, 0xa0060005};
@@ -1464,6 +1494,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_cd_search_directory();
     pass = pass && check_cd_copy_identifier();
     pass = pass && check_strcmp();
     pass = pass && check_strncmp();
