@@ -673,6 +673,25 @@ static bool menu_record_select_destination(CPUState *cpu) {
     return nc_menu_record_select(cpu) == cpu->r[31];
 }
 
+static bool menu_apply_record_select(void) {
+    CPUState cpu = initial();
+    const u32 record = 0x80088438;
+    u16 saved_target = MEM_R16(record + 6);
+    cpu.r[5] = record;
+    cpu.r[31] = 0x80068cf8;
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(gp + 0x190, 10);
+    MEM_W16(0x800d7c6c, 0);    /* no sound assigned */
+    MEM_W16(record + 6, 0xff); /* stay on this menu record */
+    MEM_W32(config, 0x100000); /* the action clears this bit */
+    MEM_W32(gp + 0x18c, 0x80004001);
+    MEM_W32(0x8008eee4, 0xffffffff);
+    bool ok = compare(cpu, 0x80068980, nc_menu_apply_record_select, 2) &&
+              MEM_R32(gp + 0x18c) == 0 && MEM_R32(0x8008eee4) == 1 && MEM_R32(config) == 0;
+    MEM_W16(record + 6, saved_target);
+    return ok;
+}
+
 static bool menu_record_dispatch_and_select(void) {
     CPUState cpu = initial();
     const u32 record = 0x80160000, item = 0x80170000;
@@ -1698,20 +1717,20 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
-              playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && menu_button_scan_edges() &&
-              menu_sequence_matches() && menu_record_sequences() && menu_record_progress() &&
-              menu_completed_sequence() && menu_enabled_records() && menu_scan_return() &&
-              menu_navigation_history() && menu_scan_history() && menu_record_shoulders() &&
-              menu_record_button_pairs() && menu_record_triangle() &&
-              menu_record_dispatch_and_select() && menu_direction_selections() &&
-              menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
-              menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-              menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
-              pad_inactivity() && l2_direction_edges() && button_dispatch() && sdk_pad_patch() &&
-              pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
-              pad_driver() && packet_readers() && sequences() && ports();
+    bool ok =
+        pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() && playback_read() &&
+        playback_poll_gate() && playback_interrupt() && pad_select_edge() && pad_start_edge() &&
+        menu_button_scan_edges() && menu_sequence_matches() && menu_record_sequences() &&
+        menu_record_progress() && menu_completed_sequence() && menu_enabled_records() &&
+        menu_scan_return() && menu_navigation_history() && menu_scan_history() &&
+        menu_record_shoulders() && menu_record_button_pairs() && menu_record_triangle() &&
+        menu_record_dispatch_and_select() && menu_apply_record_select() &&
+        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
+        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
+        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
+        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
+        sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

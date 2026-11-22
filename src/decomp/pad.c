@@ -793,6 +793,31 @@ u32 nc_menu_record_select(CPUState *c) {
     return 0x80068980;
 }
 
+/* A fresh Select on record 10 dispatches action 0x20, clears button
+ * history, and sets the guest flag before the second call. */
+bool nc_menu_apply_record_select(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80068988;
+    R(6) = 0x20;
+    c->budget -= 2;
+    nc_call(c, 0x80063b70);
+
+    R(2) = 1;
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(R(28) + 0x18c, 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(1) = 0x80090000;
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(0x8008eee4, R(2));
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(31) = 0x800689a0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8006ebc4);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
