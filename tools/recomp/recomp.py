@@ -844,6 +844,7 @@ class Emitter:
             targets.add(0x80067830)
             targets.add(0x80067804)
             targets.add(0x80068330)
+            targets.add(0x80068344)
             targets.add(0x800682FC)
             targets.add(0x800682D8)
             targets.add(0x800677E0)
@@ -1419,6 +1420,15 @@ class Emitter:
                         "    switch (nc_menu_left_input(c)) {",
                         "    case 0x80068424: goto L_80068424;",
                         "    case 0x80068438: goto L_80068438;",
+                        "    case 0x8006848C: goto L_8006848C;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80068330, 0x80068334, 0x8006833C):
+                out.extend(
+                    [
+                        f"    switch (nc_menu_record_pad_gate(c, 0x{i.addr:08X})) {{",
+                        "    case 0x80068344: goto L_80068344;",
                         "    case 0x8006848C: goto L_8006848C;",
                         "    }",
                     ]
