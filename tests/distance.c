@@ -204,19 +204,25 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
-static bool placement_matrix_translation(bool disc) {
+static bool placement_matrix_calls(bool disc) {
     static const struct {
-        u32 entry, callee;
+        u32 entry, callee, matrix_reg;
         bool (*prepare)(CPUState *);
-    } calls[] = {{0x8002b14c, 0x8007a7a0, nc_prepare_placement_rotation},
-                 {0x8002b160, 0x8007a1f0, nc_prepare_placement_scale},
-                 {0x8002b16c, 0x8007a320, nc_prepare_placement_position},
-                 {0x8002b180, 0x8007a370, nc_prepare_placement_translation}};
+    } calls[] = {{0x8002b14c, 0x8007a7a0, 0, nc_prepare_placement_rotation},
+                 {0x8002b160, 0x8007a1f0, 0, nc_prepare_placement_scale},
+                 {0x8002b16c, 0x8007a320, 0, nc_prepare_placement_position},
+                 {0x8002b180, 0x8007a370, 0, nc_prepare_placement_translation},
+                 {0x8002b18c, 0x8007a7a0, 0, nc_prepare_placement_light_rotation},
+                 {0x8002b19c, 0x8007a1f0, 0, nc_prepare_placement_light_scale},
+                 {0x8002b1a8, 0x8007a3a0, 16, NULL},
+                 {0x8002b1b0, 0x8007a430, 16, NULL},
+                 {0x8002b1b8, 0x8007a3d0, 17, NULL},
+                 {0x8002b1c0, 0x8007a750, 0, nc_prepare_placement_transpose}};
     const u32 record = SCRATCH_BASE, scale = SCRATCH_BASE + 0x200;
     CPUState input = initial();
     input.r[19] = record;
     input.r[20] = scale;
-    input.r[31] = 0x8002b18c;
+    input.r[31] = 0x8002b1d0;
     memset(nc_scratch, 0, SCRATCH_SIZE);
     MEM_W16(record, -32768);
     MEM_W16(record + 2, 0);
@@ -231,10 +237,26 @@ static bool placement_matrix_translation(bool disc) {
     for (unsigned i = 0; i < sizeof calls / sizeof calls[0]; ++i) {
         CPUState entry = native, result;
         entry.r[31] = calls[i].callee;
-        if (!compare(entry, calls[i].entry, calls[i].prepare, disc, &result))
-            return false;
-        if (!calls[i].prepare(&native))
-            return false;
+        if (calls[i].prepare) {
+            if (!compare(entry, calls[i].entry, calls[i].prepare, disc, &result) ||
+                !calls[i].prepare(&native))
+                return false;
+        } else {
+            const u32 matrix = native.r[calls[i].matrix_reg], resume = calls[i].entry + 8;
+            result = entry;
+            result.budget = 2;
+            CPUState cutoff = result;
+            if (nc_prepare_placement_matrix_setter(&result, matrix, resume) ||
+                memcmp(&result, &cutoff, sizeof result))
+                return false;
+            if (!nc_prepare_placement_matrix_setter(&native, matrix, resume))
+                return false;
+            if (disc) {
+                interp_call(&entry, calls[i].entry);
+                if (memcmp(&native, &entry, sizeof entry))
+                    return false;
+            }
+        }
         if (disc)
             interp_call(&native, calls[i].callee);
     }
@@ -3191,7 +3213,7 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_matrix_translation(disc) || !placement_matrix_scales(disc) ||
+    if (!placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||
         !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
         !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
         !transposed_placement_scales(disc) || !placement_record_steps(disc))

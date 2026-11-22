@@ -718,7 +718,21 @@ class Emitter:
                 )
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
-            targets.update((0x8002B160, 0x8002B16C, 0x8002B180, 0x8002B18C, 0x8002B200))
+            targets.update(
+                (
+                    0x8002B160,
+                    0x8002B16C,
+                    0x8002B180,
+                    0x8002B18C,
+                    0x8002B19C,
+                    0x8002B1A8,
+                    0x8002B1B0,
+                    0x8002B1B8,
+                    0x8002B1C0,
+                    0x8002B1D0,
+                    0x8002B200,
+                )
+            )
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
@@ -1588,14 +1602,31 @@ class Emitter:
                 0x8002B160,
                 0x8002B16C,
                 0x8002B180,
+                0x8002B18C,
+                0x8002B19C,
+                0x8002B1C0,
             ):
                 helper, callee, resume = {
                     0x8002B14C: ("rotation", 0x8007A7A0, 0x8002B160),
                     0x8002B160: ("scale", 0x8007A1F0, 0x8002B16C),
                     0x8002B16C: ("position", 0x8007A320, 0x8002B180),
                     0x8002B180: ("translation", 0x8007A370, 0x8002B18C),
+                    0x8002B18C: ("light_rotation", 0x8007A7A0, 0x8002B19C),
+                    0x8002B19C: ("light_scale", 0x8007A1F0, 0x8002B1A8),
+                    0x8002B1C0: ("transpose", 0x8007A750, 0x8002B1D0),
                 }[i.addr]
                 out.append(f"    if (nc_prepare_placement_{helper}(c)) {{")
+                out.append(f"        {self.call(callee)}")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8002B1A8, 0x8002B1B0, 0x8002B1B8):
+                reg, callee = {
+                    0x8002B1A8: (16, 0x8007A3A0),
+                    0x8002B1B0: (16, 0x8007A430),
+                    0x8002B1B8: (17, 0x8007A3D0),
+                }[i.addr]
+                resume = i.addr + 8
+                args = f"c, R({reg}), 0x{resume:X}"
+                out.append(f"    if (nc_prepare_placement_matrix_setter({args})) {{")
                 out.append(f"        {self.call(callee)}")
                 out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B1D0:
