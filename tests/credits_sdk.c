@@ -539,6 +539,28 @@ static bool check_gpu_command_chain(void) {
     return true;
 }
 
+static bool check_set_queue_alarm(void) {
+    const u32 frames[] = {0, 1, 0x7fffffff, 0xffffff0f, 0xffffff10, 0xffffffff};
+    const int budgets[] = {5, 15, 32, 4096};
+    const u32 timer_slot = 0x80023404, timer = MEM_R32(timer_slot);
+    /* Keep VSync's timer read identical on each replay. */
+    MEM_W32(timer_slot, 0x80060c00);
+    for (unsigned i = 0; i < sizeof frames / sizeof frames[0]; i++)
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            MEM_W32(0x800244d4, frames[i]);
+            MEM_W32(0x80024670, 0xdecafbad);
+            MEM_W32(0x80024674, 0xabcdef01);
+            CPUState state = arguments(0x1357, 0xabcd, 0x5678, budgets[j]);
+            if (i & 1)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            if (!compare(state, 0x8001e9fc, nc_credits_set_queue_alarm, 4) ||
+                MEM_R32(0x80024670) != frames[i] + 240 || MEM_R32(0x80024674) != 0)
+                return false;
+        }
+    MEM_W32(timer_slot, timer);
+    return true;
+}
+
 static bool check_queue_command(void) {
     const u32 scratch = 0x80060c00, command = 0x8001935c;
     const int budgets[] = {6, 11, 32, 4096};
@@ -984,6 +1006,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
+    pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
