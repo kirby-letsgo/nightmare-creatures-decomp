@@ -644,6 +644,10 @@ class Emitter:
                 out.append("    if (nc_read_pad_sequence(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
                 out.append("    if (nc_select_pad(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8007001C:
+                out.append("    if (nc_pad_packet_type(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8007002C:
+                out.append("    if (nc_read_pad_stick(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800700FC:
                 out.append("    if (nc_decode_pad(c)) goto L_800705D8;")
             if i.addr in contact_blocks:

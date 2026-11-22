@@ -149,6 +149,52 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
 }
 #endif
 
+static bool packet_readers(void) {
+    CPUState cpu = initial();
+    /* A disconnected status and the second port's ID do not gate the raw read. */
+    MEM_W8(packet, 0xff);
+    MEM_W8(packet + 35, 0x73);
+    const u8 ids[] = {0, 0x41, 0x4f, 0x73, 0x79, 0xff};
+    for (unsigned i = 0; i < sizeof ids; ++i) {
+        MEM_W8(packet + 1, ids[i]);
+        CPUState result = cpu;
+        if (!nc_pad_packet_type(&result) || result.r[2] != (u32)(ids[i] >> 4) ||
+            !compare(cpu, 0x8007001c, nc_pad_packet_type, 6))
+            return false;
+#ifdef NC_TEST_GENERATED_PAD
+        if (!compare_generated(cpu, 0x8007001c, 6))
+            return false;
+#endif
+    }
+
+    const u32 stack_byte = cpu.r[29] + 0x10;
+    const u32 destinations[][2] = {
+        {stack_byte, stack_byte + 1},
+        {stack_byte, stack_byte},
+        {packet + 7, stack_byte},
+    };
+    const u8 axes[][2] = {{0x80, 0x80}, {0, 0xff}, {0xff, 0}};
+    for (unsigned i = 0; i < sizeof destinations / sizeof destinations[0]; ++i)
+        for (unsigned j = 0; j < sizeof axes / sizeof axes[0]; ++j) {
+            cpu.r[4] = destinations[i][0];
+            cpu.r[5] = destinations[i][1];
+            MEM_W32(stack_byte, 0x11223344);
+            MEM_W8(packet + 6, axes[j][0]);
+            MEM_W8(packet + 7, axes[j][1]);
+            if (!compare(cpu, 0x8007002c, nc_read_pad_stick, 13))
+                return false;
+            u8 y = cpu.r[4] == packet + 7 ? axes[j][0] : axes[j][1];
+            if (MEM_R8(cpu.r[4]) != (cpu.r[4] == cpu.r[5] ? y : axes[j][0]) ||
+                MEM_R8(cpu.r[5]) != y)
+                return false;
+#ifdef NC_TEST_GENERATED_PAD
+            if (!compare_generated(cpu, 0x8007002c, 13))
+                return false;
+#endif
+        }
+    return true;
+}
+
 static bool sequence_init(u32 flags, bool alternate, bool interrupts_enabled) {
     CPUState cpu = initial();
     cpu.cop0[12] = interrupts_enabled ? 0x405 : 4;
@@ -242,7 +288,7 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = sequences() && ports();
+    bool ok = packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
