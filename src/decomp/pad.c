@@ -543,6 +543,33 @@ u32 nc_menu_record_sequence(CPUState *c) {
     return 0x800672b4;
 }
 
+/* A matching step saves the low byte of the next position. A mismatch
+ * clears the position in the fixed record table. */
+bool nc_menu_store_progress(CPUState *c, bool matched) {
+    if (c->budget <= 3)
+        return false;
+    if (matched) {
+        R(2) = R(4) + R(21);
+        MEM_W8(R(2), (u8)R(3));
+    } else {
+        R(1) = 0x80090000 + R(4);
+        MEM_W8(0x80088594 + R(4), 0);
+    }
+    c->budget -= 3;
+    return true;
+}
+
+u32 nc_menu_next_record(CPUState *c, bool increment) {
+    int cycles = increment ? 4 : 3;
+    if (c->budget <= cycles)
+        return increment ? 0x800672f8 : 0x800672fc;
+    if (increment)
+        R(19)++;
+    R(2) = R(19) << 1; /* branch delay slot also runs on the last record */
+    c->budget -= cycles;
+    return (s32)R(19) < 11 ? 0x8006718c : 0x80067308;
+}
+
 /* Ordinary menu records process the direction before saving the button word. */
 bool nc_menu_apply_direction(CPUState *c) {
     if (c->budget <= 2)

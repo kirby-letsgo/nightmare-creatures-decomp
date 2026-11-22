@@ -826,6 +826,19 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x800672E0, 0x800672EC):
+                matched = "true" if i.addr == 0x800672E0 else "false"
+                out.append(f"    if (nc_menu_store_progress(c, {matched})) goto L_800672F8;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800672F8, 0x800672FC):
+                increment = "true" if i.addr == 0x800672F8 else "false"
+                out.extend(
+                    [
+                        f"    switch (nc_menu_next_record(c, {increment})) {{",
+                        "    case 0x8006718C: goto L_8006718C;",
+                        "    case 0x80067308: goto L_80067308;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x800687B4:
                 out.append("    if (nc_menu_apply_direction(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687C8:
