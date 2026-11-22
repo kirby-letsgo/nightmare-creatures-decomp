@@ -696,6 +696,8 @@ class Emitter:
             if f.addr <= start < f.end:
                 targets.update((passed, rejected))
         targets = {t for t in targets if f.addr <= t < f.end}
+        if self.mod.name == "psx2_exe" and f.addr == 0x8002AE78:
+            targets.update((0x8002AEFC, 0x8002AF08, 0x8002AF28))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.add(0x8002B200)
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
@@ -1514,6 +1516,15 @@ class Emitter:
                 out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:
                 out.append("    if (nc_step_placement_record(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8002AEE0, 0x8002AEFC, 0x8002AF08):
+                helper, callee, resume = {
+                    0x8002AEE0: ("yaw", 0x8007A7A0, 0x8002AEFC),
+                    0x8002AEFC: ("yaw_scale", 0x8007A1F0, 0x8002AF08),
+                    0x8002AF08: ("heading_vector", 0x8007A320, 0x8002AF28),
+                }[i.addr]
+                out.append(f"    if (nc_prepare_placement_{helper}(c)) {{")
+                out.append(f"        {self.call(callee)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B1D0:
                 out.append("    if (nc_prepare_transposed_placement_scale(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
