@@ -157,6 +157,7 @@ CREDITS_ROUTINES = {
     0x8001C1E8: "nc_credits_draw_sync_callback(c)",
     0x8001C244: "nc_credits_set_display_mask(c)",
     0x8001C2E0: "nc_credits_draw_sync(c)",
+    0x8001C5A4: "nc_credits_load_image(c)",
     0x8001C880: "nc_credits_draw_primitive(c)",
     0x8001C8E0: "nc_credits_draw_otag(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",

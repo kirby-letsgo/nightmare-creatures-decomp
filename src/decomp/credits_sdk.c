@@ -1559,6 +1559,45 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
+/* Validate the VRAM rectangle, then queue its eight bytes and the pixel source. */
+bool nc_credits_load_image(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(5);
+    R(4) = 0x800185ac; /* "LoadImage" */
+    c->budget -= 4;
+    MEM_W32(R(29) + 24, R(31));
+    R(31) = 0x8001c5cc;
+    R(5) = R(16);
+    c->budget -= 3;
+    nc_call(c, 0x8001c34c); /* checkRECT */
+
+    set_reg(c, 5, R(16));
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    set_reg(c, 6, 8);
+    load_word(c, 4, R(2) + 0x20);
+    load_word(c, 2, R(2) + 8);
+    NC_POLL(c, 1);
+    u32 enqueue = R(2);
+    R(31) = 0x8001c5f0;
+    R(7) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, enqueue);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* DrawPrim saves the packet length before synchronizing, then submits its payload. */
 bool nc_credits_draw_primitive(CPUState *c) {
     if (c->budget <= 17)
