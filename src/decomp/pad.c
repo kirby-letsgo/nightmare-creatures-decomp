@@ -1482,6 +1482,30 @@ u32 nc_menu_check_count_130(CPUState *c) {
     return R(3) == 130 ? 0x80067600 : 0x8006767c;
 }
 
+/* The direct entry has already checked bit 30 of the primary mode. */
+u32 nc_menu_record_input_gate(CPUState *c, bool check_primary) {
+    if (c->budget <= (check_primary ? 28 : 17))
+        return check_primary ? 0x8006767c : 0x80067698;
+    if (check_primary) {
+        u32 config = MEM_R32(R(28) + 0x244);
+        R(3) = 0x40000000;
+        R(2) = MEM_R32(config) & R(3);
+        c->budget -= 11;
+        if (!R(2))
+            return 0x800687d8;
+    }
+
+    R(2) = 0;
+    c->budget -= 6;
+    if (MEM_R32(R(28) + 0x3fc))
+        return 0x80068fe4;
+
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(4) = MEM_R32(config + 4);
+    c->budget -= 11;
+    return (R(4) & 0x03000000) ? 0x80068fe4 : 0x800676c4;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
