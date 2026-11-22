@@ -137,6 +137,7 @@ bool nc_credits_clear_image(CPUState *c);
 bool nc_credits_clear_image2(CPUState *c);
 bool nc_credits_load_image(CPUState *c);
 bool nc_credits_store_image(CPUState *c);
+bool nc_credits_clear_otag(CPUState *c);
 bool nc_credits_clear_otag_reverse(CPUState *c);
 bool nc_credits_draw_primitive(CPUState *c);
 bool nc_credits_draw_otag(CPUState *c);

@@ -1810,11 +1810,7 @@ bool nc_credits_store_image(CPUState *c) {
     return queue_image_transfer(c, true);
 }
 
-/* Build a reverse ordering table through the driver, then link its first tag
- * to the SDK terminator and return the original table address. */
-bool nc_credits_clear_otag_reverse(CPUState *c) {
-    if (c->budget <= 12)
-        return false;
+static void ordering_table_prologue(CPUState *c) {
     c->budget--;
     R(2) = MEM_R8(0x8002455a);
     R(29) -= 32;
@@ -1828,6 +1824,70 @@ bool nc_credits_clear_otag_reverse(CPUState *c) {
     c->budget -= 3;
     MEM_W32(R(29) + 24, R(31));
     c->budget -= 2;
+}
+
+/* Link each tag to the next and return the address of the final tag. */
+bool nc_credits_clear_otag(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    ordering_table_prologue(c);
+    if (!R(2)) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x800185d0);
+        set_reg(c, 5, R(16));
+        u32 diagnostic = R(2);
+        R(31) = 0x8001c774;
+        R(6) = R(17);
+        NC_POLL(c, 2);
+        nc_call(c, diagnostic);
+    }
+
+    set_reg(c, 17, R(17) - 1);
+    R(3) = 0xff0000;
+    NC_POLL(c, 2);
+    if (R(17)) {
+        set_reg(c, 5, 0xff0000);
+        set_reg(c, 5, 0xffffff);
+        set_reg(c, 6, 0xff000000);
+        do {
+            set_reg(c, 17, R(17) - 1);
+            set_reg(c, 4, R(16) + 4);
+            MEM_W8(R(16) + 3, 0); /* zero packet length before updating its link */
+            NC_POLL(c, 1);
+            load_word(c, 2, R(16));
+            set_reg(c, 3, R(4) & R(5));
+            set_reg(c, 2, R(2) & R(6));
+            set_reg(c, 2, R(2) | R(3));
+            MEM_W32(R(16), R(2));
+            NC_POLL(c, 1);
+            R(16) = R(4);
+            NC_POLL(c, 2);
+        } while (R(17));
+        set_reg(c, 3, 0xff0000);
+    }
+    set_reg(c, 3, R(3) | 0xffff);
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x80024614);
+    set_reg(c, 2, R(2) & R(3));
+    MEM_W32(R(16), R(2));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
+/* Build a reverse ordering table through the driver, then link its first tag
+ * to the SDK terminator and return the original table address. */
+bool nc_credits_clear_otag_reverse(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    ordering_table_prologue(c);
 
     if (!R(2)) {
         set_reg(c, 4, 0x80020000);
