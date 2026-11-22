@@ -166,6 +166,29 @@ static bool check_primitives(void) {
     return true;
 }
 
+static bool semi_trans(CPUState *c) {
+    return nc_credits_packet_flag(c, 2);
+}
+static bool shade_tex(CPUState *c) {
+    return nc_credits_packet_flag(c, 1);
+}
+
+static bool check_packet_flags(void) {
+    const u32 args[] = {0, 1, 0x80000000};
+    for (unsigned i = 0; i < sizeof args / sizeof args[0]; i++)
+        for (unsigned byte = 0; byte <= 255; byte++) {
+            const u32 base = SCRATCH_BASE + 4;
+            CPUState start = arguments(base, args[i], 0, 10);
+            MEM_W8(base + 7, (u8)byte);
+            if (!compare(start, 0x8001b824, semi_trans, 9))
+                return false;
+            MEM_W8(base + 7, (u8)byte);
+            if (!compare(start, 0x8001b84c, shade_tex, 9))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -183,6 +206,7 @@ int main(int argc, char **argv) {
     pass = pass && check_printf();
     pass = pass && check_case();
     pass = pass && check_primitives();
+    pass = pass && check_packet_flags();
     disc_close();
     return pass ? 0 : 1;
 }
