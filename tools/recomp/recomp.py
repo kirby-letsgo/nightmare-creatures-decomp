@@ -36,6 +36,7 @@ CREDITS_ROUTINES = {
     0x80018E28: "nc_credits_load_file",
     0x80018EE4: "nc_credits_load_tim",
     0x80018F94: "nc_credits_run",
+    0x80019220: "nc_credits_init_shared_record",
     0x800192E4: "nc_credits_set_cd_volume",
     0x80019454: "nc_credits_init_heap",
     0x8001949C: "nc_credits_resize",
