@@ -1,4 +1,5 @@
 #include "decomp/credits.h"
+#include "port/interp.h"
 
 /* CREDITS.EXE 80018C8C. The display loop polls the first InitPAD buffer
  * after VSync. With an event due, let the generated code poll at each
@@ -91,4 +92,33 @@ bool nc_credits_init_heap(CPUState *c) {
     MEM_W32(gp + 0x14, size);
     c->budget -= 18;
     return true;
+}
+
+/* Locate the record whose payload equals a0. Even the sentinel is tested:
+ * its null payload can match. The original does not test the head for null. */
+bool nc_credits_find_allocation(CPUState *c) {
+    if (c->budget <= 20)
+        return false;
+    R(3) = MEM_R32(R(28) + 0x2c);
+    c->budget -= NC_LOAD_CYCLES;
+    for (;;) {
+        if (c->budget <= 17) {
+            /* A later record can straddle an event. Resume with the current
+             * cursor at the original loop head, after the initial head load. */
+            interp_call(c, 0x800198b4);
+            return true;
+        }
+        if (MEM_R32(R(3) + 4) == R(4)) {
+            R(2) = R(3);
+            c->budget -= 10;
+            return true;
+        }
+        R(3) = MEM_R32(R(3) + 0x18);
+        R(2) = 0;
+        c->budget -= 13;
+        if (!R(3)) {
+            c->budget -= 4;
+            return true;
+        }
+    }
 }

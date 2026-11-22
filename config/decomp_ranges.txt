@@ -42,3 +42,4 @@ psx2_exe     80047920    80047948         distance.c
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
 credits_exe  80019454    8001949C         credits.c
+credits_exe  800198B0    800198EC         credits.c
