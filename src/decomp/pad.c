@@ -818,6 +818,22 @@ bool nc_menu_apply_record_select(CPUState *c) {
     return true;
 }
 
+static u32 repeat_menu_record_action(CPUState *c, u32 button, u32 action) {
+    R(2) = increment_menu_repeat(c) < 6;
+    R(4) = R(22);
+    c->budget -= 9;
+    if (R(2)) {
+        R(2) = MEM_R32(R(28) + 0x18c) & button;
+        c->budget -= 7;
+        if (R(2))
+            return 0x80068cf8;
+    }
+    R(5) = 0x800883c0 + R(3);
+    R(6) = action;
+    c->budget -= 5;
+    return 0x80068ce0;
+}
+
 /* Ordinary records take one direction in disc order. Before the sixth
  * tick, only a direction absent from the previous word dispatches. */
 u32 nc_menu_record_direction_repeat(CPUState *c) {
@@ -833,22 +849,23 @@ u32 nc_menu_record_direction_repeat(CPUState *c) {
         if (!(R(30) & directions[i].button))
             continue;
 
-        R(2) = increment_menu_repeat(c) < 6;
-        R(4) = R(22);
-        c->budget -= 9;
-        if (R(2)) {
-            R(2) = MEM_R32(R(28) + 0x18c) & directions[i].button;
-            c->budget -= 7;
-            if (R(2))
-                return 0x80068cf8;
-        }
-        R(5) = 0x800883c0 + R(3);
-        R(6) = directions[i].action;
-        c->budget -= 5;
-        return 0x80068ce0;
+        return repeat_menu_record_action(c, directions[i].button, directions[i].action);
     }
     R(2) = R(30) & 0x400; /* next button mask, from the final delay slot */
     return 0x80068adc;
+}
+
+u32 nc_menu_record_shoulder_repeat(CPUState *c) {
+    if (c->budget <= 25)
+        return 0x80068adc;
+    c->budget -= 2;
+    if (R(2)) /* L1 mask prepared by the preceding D-pad check */
+        return repeat_menu_record_action(c, 0x400, 0x100);
+    c->budget -= 2;
+    if (R(30) & 0x800)
+        return repeat_menu_record_action(c, 0x800, 0x200);
+    R(2) = R(30) & 0x4000; /* Cross mask in the branch delay slot */
+    return 0x80068b74;
 }
 
 bool nc_menu_clear_repeat(CPUState *c) {
