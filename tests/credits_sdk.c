@@ -969,6 +969,23 @@ static bool check_cd_names(void) {
     return true;
 }
 
+static bool check_cd_sector_to_position(void) {
+    const u32 sectors[] = {0, 74, 75, 4349, 4350, 449849, 449850, (u32)-150,
+                           (u32)-151, (u32)-4651, 0x7fffffff, 0x80000000};
+    const u32 addresses[] = {0x80060001, 0xa0060003, SCRATCH_BASE + 5};
+    for (unsigned i = 0; i < sizeof sectors / sizeof sectors[0]; i++)
+        for (unsigned j = 0; j < sizeof addresses / sizeof addresses[0]; j++) {
+            u32 address = addresses[j];
+            memset(nc_fast_ptr(address - 1), 0xcc, 5);
+            CPUState state = arguments(sectors[i], address, 3, j ? 66 : 4096);
+            if (!compare(state, 0x800203e0, nc_credits_cd_sector_to_position, 65) ||
+                nc_cpu.r[2] != address || MEM_R8(address - 1) != 0xcc ||
+                MEM_R8(address + 3) != 0xcc)
+                return false;
+        }
+    return true;
+}
+
 static bool check_cd_position_to_sector(void) {
     const struct {
         u8 minute, second, frame;
@@ -1113,6 +1130,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
+    pass = pass && check_cd_sector_to_position();
     pass = pass && check_cd_position_to_sector();
     pass = pass && check_cd_state();
     pass = pass && check_graph_status();
