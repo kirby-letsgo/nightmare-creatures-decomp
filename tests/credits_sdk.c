@@ -244,6 +244,21 @@ static bool check_link_writer(void) {
     return true;
 }
 
+static bool check_merge_primitives(void) {
+    const u32 first = 0x80060800;
+    const u32 seconds[] = {first + 4, SCRATCH_BASE + 12, first, 0xa0060800};
+    const u8 sizes[][2] = {{0, 0}, {1, 14}, {7, 8}, {8, 8}, {0, 16}, {255, 255}};
+    for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0]; i++)
+        for (unsigned j = 0; j < sizeof seconds / sizeof seconds[0]; j++) {
+            MEM_W32(first, 0x00abcdef | ((u32)sizes[i][0] << 24));
+            MEM_W32(seconds[j], 0x00123456 | ((u32)sizes[i][1] << 24));
+            CPUState state = arguments(first, seconds[j], 0, 18);
+            if (!compare(state, 0x8001bbdc, nc_credits_merge_primitives, 17))
+                return false;
+        }
+    return true;
+}
+
 static bool check_terminator(void) {
     const u32 tags[] = {0, 0x11100000, 0xa5ffffff, 0x01400000, 0xffabcdef};
     for (unsigned i = 0; i < sizeof tags / sizeof tags[0]; i++)
@@ -378,6 +393,7 @@ int main(int argc, char **argv) {
     pass = pass && check_link();
     pass = pass && check_link_writer();
     pass = pass && check_terminator();
+    pass = pass && check_merge_primitives();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
