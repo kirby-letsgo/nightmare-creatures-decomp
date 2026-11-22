@@ -407,3 +407,29 @@ bool nc_credits_read_sectors(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Give both pad ports their receive buffers, start polling, and sample the
+ * credits skip buttons once after the first VBlank. */
+bool nc_credits_init_pad(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(4) = 0x80024ca4;
+    R(5) = 0x22;
+    R(6) = R(4) + 0x22;
+    R(31) = 0x80018d1c;
+    R(7) = 0x22;
+    c->budget -= 8;
+    nc_call(c, 0x8001a324);          /* InitPAD */
+    call(c, 0x8001a38c, 0x80018d24); /* StartPAD */
+    R(4) = 0;
+    call(c, 0x8001a2ac, 0x80018d2c); /* ChangeClearPad */
+    R(4) = 0;
+    call(c, V_SYNC, 0x80018d34);
+    call(c, 0x80018c8c, 0x80018d3c);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
