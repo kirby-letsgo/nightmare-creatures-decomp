@@ -428,6 +428,8 @@ psx2_exe     800680EC    80068154         pad.c
 psx2_exe     8006818C    800681EC         pad.c
 # Store confirmed analog-stick midpoints and inward-adjusted limits.
 psx2_exe     800681EC    800682D8         pad.c
+# Dispatch the selected record action after stick calibration.
+psx2_exe     800682D8    800682FC         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
