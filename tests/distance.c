@@ -2782,6 +2782,48 @@ static bool record_heading_frames(bool disc) {
     return true;
 }
 
+static bool record_point_projections(bool disc) {
+    const u32 record = SCRATCH_BASE, point = record + 0x80;
+    static const struct {
+        s16 x, z, point_x, point_z;
+        s32 weight_x, weight_z, limit;
+    } cases[] = {{0, 0, 0, 0, 1, 1, 0},
+                 {-1, 0, 511, 0, 1, 0, 1},
+                 {0, 0, 513, 0, 1, 0, 1},
+                 {0, 0, 0, 1, 0, 1, 1},
+                 {-4, -3, 2, -5, -4, 3, 0},
+                 {1, 0, 0, 0, -1, 0, INT32_MAX},
+                 {INT16_MAX, INT16_MIN, INT16_MIN, INT16_MIN, INT32_MIN, INT32_MAX, 1}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial(), native;
+        input.r[16] = record;
+        input.r[19] = point;
+        MEM_W16(record + 0x18, cases[i].x);
+        MEM_W16(record + 0x1c, cases[i].z);
+        MEM_W16(point, cases[i].point_x);
+        MEM_W16(point + 4, cases[i].point_z);
+        MEM_W32(0x800d7748, cases[i].weight_x);
+        MEM_W32(0x800d7750, cases[i].weight_z);
+        MEM_W32(0x800d7c14, cases[i].limit);
+        const s64 dx = cases[i].point_x - cases[i].x;
+        const s64 dz = -cases[i].point_z - cases[i].z;
+        const s32 projection = (s32)(dx * cases[i].weight_x + dz * cases[i].weight_z);
+        input.r[31] = projection < 0 ? 0x80029460 : 0x800292b8;
+        if (!compare(input, 0x80029270, nc_project_record_point, disc, &native) ||
+            (s32)native.r[3] != projection || native.budget != input.budget - 30)
+            return false;
+        if (projection >= 0) {
+            input = native;
+            const bool outside = projection > (s32)((u32)cases[i].limit << 9);
+            input.r[31] = outside ? 0x80029460 : 0x800292d4;
+            if (!compare(input, 0x800292b8, nc_check_record_projection_limit, disc, &native) ||
+                native.r[2] != outside || native.budget != input.budget - 9)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5106,9 +5148,10 @@ int main(int argc, char **argv) {
         point_index_advances(disc) && point_update_returns(disc) && point_proximity(disc) &&
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
-        unlinked_pose_headings(disc) && record_heading_frames(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        unlinked_pose_headings(disc) && record_heading_frames(disc) &&
+        record_point_projections(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

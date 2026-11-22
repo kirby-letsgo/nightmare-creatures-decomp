@@ -16,6 +16,8 @@ bool nc_copy_linked_heading_offset(CPUState *c);
 bool nc_set_unlinked_pose_heading(CPUState *c);
 bool nc_apply_unlinked_pose_bearing(CPUState *c);
 bool nc_copy_linked_bearing(CPUState *c);
+bool nc_project_record_point(CPUState *c);
+bool nc_check_record_projection_limit(CPUState *c);
 bool nc_begin_record_point_heading(CPUState *c);
 bool nc_return_record_point_heading(CPUState *c);
 bool nc_expand_record_point_bearing(CPUState *c);
