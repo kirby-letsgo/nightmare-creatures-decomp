@@ -1623,17 +1623,30 @@ u32 nc_menu_record_37_pad_type(CPUState *c) {
     return R(2) == 7 ? 0x8006780c : 0x800677e0;
 }
 
+static void call_record_37_action(CPUState *c, u32 return_address) {
+    u32 record = MEM_R32(R(28) + 0x190);
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12 * record;
+    R(31) = return_address;
+    c->budget -= 11;
+    nc_call(c, 0x80063b70);
+}
+
 /* Record 37 dispatches action 0x20 when the packet type is not seven. */
 bool nc_menu_record_37_action(CPUState *c) {
     if (c->budget <= 11)
         return false;
-    u32 record = MEM_R32(R(28) + 0x190);
     R(6) = 0x20;
-    R(2) = 0x800883c0;
-    R(5) = R(2) + 12 * record;
-    R(31) = 0x80067804;
-    c->budget -= 11;
-    nc_call(c, 0x80063b70);
+    call_record_37_action(c, 0x80067804);
+    return true;
+}
+
+/* Calibration already supplied the action in a2. This caller sets a0 from s6. */
+bool nc_menu_calibration_action(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(4) = R(22);
+    call_record_37_action(c, 0x800682fc);
     return true;
 }
 
