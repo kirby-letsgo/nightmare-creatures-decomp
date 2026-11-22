@@ -1,5 +1,71 @@
 #include "decomp/contact.h"
 
+/* US 800362F8. The three byte arrays identify the original parent, the
+ * displaced part, and its replacement. Restore the saved links in reverse. */
+bool nc_restore_part_links(CPUState *c) {
+    const s16 count = (s16)R(2); /* sign-extended halfword at actor + 0x25c */
+    const int cycles = count == 0 ? 2 : 6 + (count > 0 ? count * 30 : 0);
+    if (c->budget <= cycles)
+        return false;
+    const u32 actor = R(7);
+    R(9) = actor + 0x25c;
+    if (count) {
+        R(6) = (u32)count - 1;
+        while ((s32)R(6) >= 0) {
+            const u32 indices = R(9) + R(6);
+            R(4) = indices;
+            const u32 displaced = MEM_R8(indices + 4);
+            const u32 parent = MEM_R8(indices + 2);
+            R(3) = actor + 4 * parent;
+            R(8) = MEM_R32(actor + 0x4c + 4 * displaced);
+            const u32 replacement = MEM_R8(indices + 6);
+            R(5) = MEM_R32(R(3) + 0x4c);
+            R(2) = MEM_R32(actor + 0x4c + 4 * replacement);
+            --R(6);
+            MEM_W32(R(8) + 4, 0);
+            MEM_W32(R(5), R(2));
+            MEM_W32(R(2) + 4, R(5));
+        }
+        MEM_W16(R(9), 0);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+/* Reattach the saved part and expand the three signed translation components
+ * to the live part's word fields before updating its flags. */
+bool nc_restore_attached_part(CPUState *c) {
+    if (c->budget <= 54)
+        return false;
+    const u32 actor = R(7);
+    u32 index = MEM_R16(R(5) + 0x5a);
+    R(5) = MEM_R32(R(5) + 4);
+    R(8) = MEM_R32(actor + 0x4c + 4 * index);
+    MEM_W32(R(8) + 4, R(5));
+    MEM_W32(R(5), R(8));
+    MEM_W16(R(5) + 0x14, 0);
+    MEM_W16(R(5) + 0x12, 0);
+    MEM_W16(R(5) + 0x10, 0);
+    for (unsigned axis = 0; axis < 3; ++axis) {
+        const u32 saved = MEM_R32(actor + 0x18);
+        s16 coordinate = (s16)MEM_R16(saved + 0x20 + 2 * axis);
+        MEM_W32(R(5) + 0x40 + 4 * axis, (u32)(s32)coordinate);
+    }
+    R(3) |= 0xffff; /* high half set by the preceding branch delay slot */
+    R(2) = MEM_R32(actor + 0x2cc);
+    MEM_W32(actor + 0x18, 0);
+    R(2) &= R(3);
+    MEM_W32(actor + 0x2cc, R(2));
+    R(4) = actor;
+    R(6) = 0;
+    R(7) = 0x1f00;
+    R(31) = 0x800363f0;
+    MEM_W32(R(29) + 0x10, 0);
+    c->budget -= 54;
+    nc_call(c, 0x8005162c);
+    return true;
+}
+
 /* Mark an actor as non-interactive unless its protected-state combination is active.
  * func_80034D2C uses bit 0x4000 as the guard and bit 0x02000000 as its override. */
 bool nc_mark_actor_noninteractive(CPUState *c) {

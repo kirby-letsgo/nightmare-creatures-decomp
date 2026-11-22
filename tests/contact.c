@@ -1,4 +1,5 @@
 #include "decomp/contact.h"
+#include "credits_compare.h"
 #include "port/disc.h"
 #include "port/exe.h"
 #include "port/interp.h"
@@ -403,6 +404,84 @@ static bool check_actor_noninteractive(bool disc) {
     return true;
 }
 
+static bool restored_links(bool disc) {
+    const u32 actor = 0x80130000, nodes = 0x80141000;
+    const s16 counts[] = {-32768, -1, 0, 1, 2};
+    CPUState cpu = initial_cpu();
+    cpu.r[7] = actor;
+    cpu.r[31] = 0x80036358;
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0]; ++i) {
+        s16 n = counts[i];
+        cpu.r[2] = (u32)(s32)n;
+        MEM_W16(actor + 0x25c, n);
+        /* Both records write the same parent. The first record must win. */
+        for (unsigned part = 0; part < 5; ++part) {
+            unsigned index = part == 1 ? 254 : part;
+            MEM_W32(actor + 0x4c + 4 * index, nodes + 0x80 * part);
+            MEM_W32(nodes + 0x80 * part, 0xfeedfffe);
+            MEM_W32(nodes + 0x80 * part + 4, 0x1f2e3d4c);
+        }
+        MEM_W16(actor + 0x25e, 0x0000);
+        MEM_W16(actor + 0x260, 0x02fe);
+        MEM_W16(actor + 0x262, 0x0403);
+        int cycles = n == 0 ? 2 : 6 + (n > 0 ? 30 * n : 0);
+        cpu.budget = cycles + 1;
+        if (disc) {
+            if (!compare(cpu, 0x800362f8, nc_restore_part_links, cycles))
+                return false;
+        } else {
+            CPUState native = cpu;
+            if (!nc_restore_part_links(&native) || native.budget != 1)
+                return false;
+        }
+        if (MEM_R16(actor + 0x25c) || MEM_R32(nodes) != (n > 0 ? nodes + 3 * 0x80 : 0xfeedfffe))
+            return false;
+        for (unsigned record = 0; record < 2; ++record) {
+            bool restored = n > (int)record;
+            if (MEM_R32(nodes + 0x80 * (record + 1) + 4) != (restored ? 0 : 0x1f2e3d4c) ||
+                MEM_R32(nodes + 0x80 * (record + 3) + 4) != (restored ? nodes : 0x1f2e3d4c))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool restored_attachment(void) {
+    const u32 actor = 0x80130000, saved = 0x80140000, part = 0x80141000, parent = 0x80142000;
+    const s16 positions[][3] = {{-32768, 0, 32767}, {17, -29, -1}};
+    const int budgets[] = {55, 77, 4096};
+    CPUState cpu = initial_cpu();
+    cpu.r[3] = 0xffbf0000;
+    cpu.r[5] = saved;
+    cpu.r[7] = actor;
+    cpu.r[29] = 0x801fe000;
+    cpu.r[31] = 0x800363f0;
+    for (unsigned p = 0; p < 2; ++p)
+        for (unsigned b = 0; b < sizeof budgets / sizeof budgets[0]; ++b) {
+            const unsigned index = p ? 256 : 2;
+            MEM_W32(actor + 0x18, saved);
+            MEM_W32(actor + 0x2cc, ~0u);
+            MEM_W32(actor + 0x4c + 4 * index, parent);
+            MEM_W16(saved + 0x5a, index);
+            MEM_W32(saved + 4, part);
+            memset(nc_ram + (part & (RAM_SIZE - 1)), 0, 0x80);
+            for (unsigned axis = 0; axis < 3; ++axis) {
+                MEM_W16(saved + 0x20 + 2 * axis, positions[p][axis]);
+                MEM_W16(part + 0x10 + 2 * axis, 0xabcd);
+            }
+            cpu.budget = budgets[b];
+            if (!compare(cpu, 0x80036368, nc_restore_attached_part, 54) ||
+                MEM_R32(parent + 4) != part || MEM_R32(part) != parent || MEM_R32(actor + 0x18) ||
+                MEM_R32(actor + 0x2cc) != 0xffbfffff)
+                return false;
+            for (unsigned axis = 0; axis < 3; ++axis)
+                if (MEM_R16(part + 0x10 + 2 * axis) ||
+                    (s32)MEM_R32(part + 0x40 + 4 * axis) != positions[p][axis])
+                    return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -425,7 +504,10 @@ int main(int argc, char **argv) {
     bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
               check_response_states(disc) && check_attack_kinds(disc) && check_attack_parts(disc) &&
               check_player_gate(disc) && check_actor_noninteractive(disc);
-    if (disc)
+    ok = ok && restored_links(disc);
+    if (disc) {
+        ok = ok && restored_attachment();
         disc_close();
+    }
     return ok ? 0 : 1;
 }

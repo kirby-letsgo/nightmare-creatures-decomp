@@ -642,6 +642,10 @@ class Emitter:
                 out.append("    if (nc_player_attack_kind(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80041540:
                 out.append("    if (nc_attack_part(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800362F8:
+                out.append("    if (nc_restore_part_links(c)) goto L_80036358;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80036368:
+                out.append("    if (nc_restore_attached_part(c)) goto L_800363F0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034D2C:
                 out.append("    if (nc_mark_actor_noninteractive(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042760:
