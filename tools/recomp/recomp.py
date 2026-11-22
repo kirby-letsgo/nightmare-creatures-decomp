@@ -568,6 +568,8 @@ class Emitter:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004260C:
+                out.append("    if (nc_player_attack_kind(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
                 out.append("    if (nc_select_base_damage(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):

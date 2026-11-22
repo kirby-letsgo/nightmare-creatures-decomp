@@ -252,6 +252,13 @@ disabled. To compare both gameplay builds directly, add `--no-adrenaline` to
 
 ### Attack contact
 
+Before the player attack loop builds any boxes, `func_80042520` selects an attack
+kind from the player's animation state. The recompiled build scans the 24 primary
+state/kind pairs first. If there is no match, it checks two secondary pairs when
+the actor has the secondary animation and its state is valid. The final fallback
+recognizes state 19 with actor flag `0x8000`. A zero result ends the contact pass.
+In the first-combat movie, state 5 selects kind 1 and state 24 selects kind 15.
+
 The recompiled build uses `src/decomp/contact.c` in both attack loops. Each loop
 compares a center and extent with a box on three axes. Touching the boundary counts
 as overlap. Separation on any axis advances the loop to its next candidate.
