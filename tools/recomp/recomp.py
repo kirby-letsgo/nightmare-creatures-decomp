@@ -107,6 +107,7 @@ CREDITS_ROUTINES = {
     0x8001BB10: "nc_credits_draw_move(c)",
     0x8001BB70: "nc_credits_draw_load(c)",
     0x8001BBDC: "nc_credits_merge_primitives(c)",
+    0x8001BD94: "nc_credits_dump_display(c)",
     0x8001C0B0: "nc_credits_set_graph_debug(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
     0x8001C1D8: "nc_credits_graph_status(c, true)",
