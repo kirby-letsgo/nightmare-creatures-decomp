@@ -107,6 +107,7 @@ CREDITS_ROUTINES = {
     0x8001AFB0: "nc_credits_start_dma(c)",
     0x8001B184: "nc_credits_set_dma_slot(c)",
     0x8001B22C: "nc_credits_clear_irq_words(c)",
+    0x8001B258: "nc_credits_load_tpage(c)",
     0x8001B344: "nc_credits_load_clut(c)",
     0x8001B3AC: "nc_credits_load_clut2(c)",
     0x8001B414: "nc_credits_default_draw(c)",

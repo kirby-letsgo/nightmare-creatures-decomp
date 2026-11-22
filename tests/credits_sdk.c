@@ -618,6 +618,40 @@ static void defer_graphics_queue(u32 scratch) {
     MEM_W8(0x80024559, 1);
 }
 
+static bool check_load_tpage(void) {
+    const u32 record = 0x80027488, pixels = 0x80062000;
+    const struct { s32 mode, width; u16 words; } cases[] = {
+        {0, 19, 4}, {0, -19, 0xfffc}, {1, 19, 9}, {1, -19, 0xfff7},
+        {2, 19, 19}, {3, 19, 0x1234}, {-1, 19, 0x1234}
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    defer_graphics_queue(0x80060c00);
+    MEM_W8(0x8002455a, 0);
+    MEM_W8(0x80024558, 0); /* standard texture-page encoding */
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++) {
+        CPUState state = arguments(pixels, cases[i].mode, 2, i ? 39 : 4096);
+        state.r[7] = 192;
+        MEM_W32(state.r[29] + 16, 256);
+        MEM_W32(state.r[29] + 20, cases[i].width);
+        MEM_W32(state.r[29] + 24, 7);
+        MEM_W16(state.r[29] - 28, 0x1234);
+        MEM_W32(0x8002465c, 0);
+        MEM_W32(0x80024660, 0);
+        memset(nc_fast_ptr(record), 0xcc, 96);
+        ok = compare(state, 0x8001b258, nc_credits_load_tpage, 38) &&
+             nc_cpu.r[2] == (((cases[i].mode & 3u) << 7) | 0x53) &&
+             MEM_R32(record + 8) == pixels && MEM_R16(record + 12) == 192 &&
+             MEM_R16(record + 14) == 256 && MEM_R16(record + 16) == cases[i].words &&
+             MEM_R16(record + 18) == 7;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_load_clut(u32 entry, bool (*routine)(CPUState *), u16 width) {
     const u32 record = 0x80027488, palette = 0x80062000;
     const u32 driver = MEM_R32(0x80024550);
@@ -2838,6 +2872,7 @@ int main(int argc, char **argv) {
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
+    pass = pass && check_load_tpage();
     pass = pass && check_load_clut(0x8001b344, nc_credits_load_clut, 256);
     pass = pass && check_load_clut(0x8001b3ac, nc_credits_load_clut2, 16);
     pass = pass && check_image_queue(0x8001c474, nc_credits_clear_image, 0x0c);

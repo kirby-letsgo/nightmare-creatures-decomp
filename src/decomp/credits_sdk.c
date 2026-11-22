@@ -1559,6 +1559,89 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
+/* Build the VRAM rectangle in 16-bit words, upload it, then encode the texture page. */
+bool nc_credits_load_tpage(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    R(29) -= 48;
+    c->budget--;
+    MEM_W32(R(29) + 36, R(19));
+    c->budget--;
+    R(19) = MEM_R32(R(29) + 64); /* y */
+    c->budget -= NC_LOAD_CYCLES;
+    R(3) = MEM_R32(R(29) + 68); /* width in pixels */
+    c->budget -= NC_LOAD_CYCLES;
+    R(2) = MEM_R32(R(29) + 72); /* height */
+    R(8) = R(4);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(5); /* texture depth */
+    c->budget -= 2;
+    MEM_W32(R(29) + 32, R(18));
+    R(18) = R(6); /* blend mode */
+    c->budget -= 2;
+    MEM_W32(R(29) + 28, R(17));
+    R(17) = R(7); /* x */
+    c->budget -= 2;
+    MEM_W32(R(29) + 40, R(31));
+    c->budget--;
+    MEM_W16(R(29) + 16, R(17));
+    c->budget--;
+    MEM_W16(R(29) + 22, R(2));
+    R(2) = 1;
+    c->budget -= 2;
+    MEM_W16(R(29) + 18, R(19));
+    c->budget -= 2;
+
+    const s32 width = (s32)R(3);
+    switch ((s32)R(16)) {
+    case 0: /* four 4-bit pixels per word */
+        R(2) = (u32)(width / 4);
+        c->budget -= 8 + (width < 0);
+        MEM_W16(R(29) + 20, R(2));
+        c->budget -= 3;
+        break;
+    case 1: /* two 8-bit pixels per word */
+        R(2) = (u32)(width / 2);
+        c->budget -= 3;
+        MEM_W16(R(29) + 20, R(2));
+        c->budget -= 3;
+        break;
+    case 2:
+        R(2) = 2;
+        c->budget -= 6;
+        MEM_W16(R(29) + 20, R(3));
+        c->budget -= 2;
+        break;
+    default: /* Other modes leave the stack rectangle's width untouched. */
+        R(2) = (s32)R(16) < 0 ? 1 : 2;
+        c->budget -= (s32)R(16) < 0 ? 7 : 8;
+        break;
+    }
+    R(4) = R(29) + 16;
+    R(31) = 0x8001b30c;
+    R(5) = R(8);
+    c->budget -= 2;
+    nc_call(c, 0x8001c5a4); /* LoadImage */
+
+    set_reg(c, 4, R(16));
+    set_reg(c, 5, R(18));
+    set_reg(c, 6, R(17));
+    R(31) = 0x8001b320;
+    R(7) = R(19);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001b548); /* GetTPage */
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 40);
+    load_word(c, 19, R(29) + 36);
+    load_word(c, 18, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Upload the palette as a single VRAM row and return its CLUT identifier. */
 static bool upload_clut(CPUState *c, u32 width, u32 entry) {
     if (c->budget <= 16)
