@@ -28,6 +28,24 @@ bool nc_mark_actor_noninteractive(CPUState *c) {
     return true;
 }
 
+/* Stop outgoing contact before response handling while the target is entering,
+ * leaving, or already in the terminal state represented by states 13, 14, and 24. */
+NcContactResult nc_target_state_allows_contact(CPUState *c) {
+    if (c->budget <= 11)
+        return NC_CONTACT_TIMED;
+
+    R(3) = MEM_R8(R(16) + 0x39b);
+    R(2) = (u32)(R(3) - 13) < 2;
+    R(3) &= 0xff;
+    c->budget -= 8;
+    if (R(2))
+        return NC_CONTACT_REJECT;
+
+    R(2) = 24;
+    c->budget -= 3;
+    return R(3) == R(2) ? NC_CONTACT_REJECT : NC_CONTACT_PASS;
+}
+
 /* Resolve the part requested by either of the player's attack slots.
  * The contact loop supplies a default part when this lookup returns zero. */
 bool nc_attack_part(CPUState *c) {

@@ -510,6 +510,7 @@ class Emitter:
                 0x800426E8: ("nc_player_can_attack", 0x80042734, 0x80042D68),
                 0x800422DC: ("nc_attack_bounds", 0x80042360, 0x800424AC),
                 0x80042AA0: ("nc_attack_bounds", 0x80042B24, 0x80042D10),
+                0x80042BF0: ("nc_target_state_allows_contact", 0x80042C14, 0x80042D68),
                 0x8004E510: ("nc_target_accepts_contact", 0x8004E570, 0x8004E6AC),
             }
             if self.mod.name == "psx2_exe"

@@ -14,6 +14,8 @@ typedef struct Region {
 static const Region player_gate = {0x800426E8, 0x80042734, 0x80042D68, 25, nc_player_can_attack};
 static const Region incoming = {0x800422DC, 0x80042360, 0x800424AC, 49, nc_attack_bounds};
 static const Region outgoing = {0x80042AA0, 0x80042B24, 0x80042D10, 49, nc_attack_bounds};
+static const Region response_state = {0x80042BF0, 0x80042C14, 0x80042D68, 11,
+                                      nc_target_state_allows_contact};
 static const Region state_check = {0x8004E510, 0x8004E570, 0x8004E6AC, 25,
                                    nc_target_accepts_contact};
 
@@ -171,6 +173,37 @@ static bool check_states(bool disc) {
                     return false;
                 }
             }
+    return true;
+}
+
+static bool check_response_states(bool disc) {
+    const u32 target = 0x80120000;
+    for (unsigned state = 0; state < 256; ++state) {
+        CPUState initial = initial_cpu();
+        initial.r[16] = target;
+        MEM_W8(target + 0x39b, state);
+
+        initial.budget = response_state.max_cycles;
+        CPUState native = initial;
+        if (nc_target_state_allows_contact(&native) != NC_CONTACT_TIMED ||
+            memcmp(&native, &initial, sizeof native))
+            return false;
+
+        initial.budget++;
+        native = initial;
+        const bool rejected = state == 13 || state == 14 || state == 24;
+        const NcContactResult want = rejected ? NC_CONTACT_REJECT : NC_CONTACT_PASS;
+        const int cycles = state == 13 || state == 14 ? 8 : 11;
+        if (nc_target_state_allows_contact(&native) != want || native.r[3] != state ||
+            native.r[2] != (state == 13 || state == 14 ? 1u : 24u) ||
+            native.budget != initial.budget - cycles)
+            return false;
+
+        if (!check(&response_state, initial, want, disc)) {
+            fprintf(stderr, "response state mismatch: state %u\n", state);
+            return false;
+        }
+    }
     return true;
 }
 
@@ -382,15 +415,16 @@ int main(int argc, char **argv) {
         ExecInfo exe;
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
-        const Region *regions[] = {&incoming, &outgoing, &state_check, &player_gate};
+        const Region *regions[] = {&incoming, &outgoing, &response_state, &state_check,
+                                   &player_gate};
         for (unsigned i = 0; i < sizeof regions / sizeof regions[0]; ++i) {
             mark_exit(regions[i]->passed, NC_CONTACT_PASS);
             mark_exit(regions[i]->rejected, NC_CONTACT_REJECT);
         }
     }
     bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
-              check_attack_kinds(disc) && check_attack_parts(disc) && check_player_gate(disc) &&
-              check_actor_noninteractive(disc);
+              check_response_states(disc) && check_attack_kinds(disc) && check_attack_parts(disc) &&
+              check_player_gate(disc) && check_actor_noninteractive(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
