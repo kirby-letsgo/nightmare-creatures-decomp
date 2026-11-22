@@ -19,6 +19,7 @@ bool nc_prepare_saved_bearing_projection(CPUState *c);
 bool nc_finish_projected_point_update(CPUState *c);
 bool nc_prepare_facing_offset(CPUState *c);
 bool nc_begin_projected_point_update(CPUState *c, bool *use_point);
+bool nc_prepare_rotated_point_offset(CPUState *c, bool negative_z);
 bool nc_apply_rotated_point_offset(CPUState *c, bool subtract_x);
 bool nc_prepare_point_heading(CPUState *c);
 bool nc_return_point_heading(CPUState *c);

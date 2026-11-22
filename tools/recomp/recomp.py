@@ -107,6 +107,7 @@ CREDITS_ROUTINES = {
     0x8001BB10: "nc_credits_draw_move(c)",
     0x8001BB70: "nc_credits_draw_load(c)",
     0x8001BBDC: "nc_credits_merge_primitives(c)",
+    0x8001BC14: "nc_credits_dump_draw(c)",
     0x8001BD94: "nc_credits_dump_display(c)",
     0x8001C0B0: "nc_credits_set_graph_debug(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
@@ -624,6 +625,8 @@ class Emitter:
             targets.update((0x80047328, 0x800473C0))
         if self.mod.name == "psx2_exe" and f.addr == 0x800473E8:
             targets.update((0x80047480, 0x80047518))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80046B1C:
+            targets.update((0x80046E68, 0x80046F2C))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -821,6 +824,13 @@ class Emitter:
                 out.append("    if (nc_finish_heading_projection(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80046E18, 0x80046EDC):
+                negative_z = i.addr == 0x80046E18
+                resume = 0x80046E68 if negative_z else 0x80046F2C
+                arg = "true" if negative_z else "false"
+                out.append(f"    if (nc_prepare_rotated_point_offset(c, {arg})) {{")
+                out.append(f"        {self.call(0x8007A320)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x80046E68, 0x80046F2C):
                 subtract_x = "true" if i.addr == 0x80046E68 else "false"
                 out.append(f"    if (nc_apply_rotated_point_offset(c, {subtract_x})) return;")

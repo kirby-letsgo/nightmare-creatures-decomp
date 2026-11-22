@@ -297,6 +297,34 @@ bool nc_begin_projected_point_update(CPUState *c, bool *use_point) {
     return true;
 }
 
+/* Rotate the local -Z or +X basis vector with the record's matrix.
+ * Copy all eight bytes, including the fourth halfword, into the guest frame. */
+bool nc_prepare_rotated_point_offset(CPUState *c, bool negative_z) {
+    if (c->budget <= 28)
+        return false;
+    const u32 frame = R(29) - 56;
+    R(29) = frame;
+    MEM_W32(frame + 40, R(16));
+    R(16) = R(4);
+    MEM_W32(frame + 44, R(17));
+    R(17) = R(5);
+    MEM_W32(frame + 48, R(31));
+
+    const u32 vector = negative_z ? 0x8008eefc : 0x8008ef04;
+    R(2) = MEM_R32(vector);
+    R(3) = MEM_R32(vector + 4);
+    nc_swl(c, frame + 19, R(2));
+    nc_swr(c, frame + 16, R(2));
+    nc_swl(c, frame + 23, R(3));
+    nc_swr(c, frame + 20, R(3));
+    R(4) = R(17) + 0x38;
+    R(5) = frame + 16;
+    R(6) = frame + 24;
+    R(31) = negative_z ? 0x80046e68 : 0x80046f2c;
+    c->budget -= 28;
+    return true;
+}
+
 /* ApplyMatrix left the rotated vector on the stack. Both entries scale
  * the low product words by 1/512, rounding toward zero. They move the
  * record in opposite X/Z directions. */

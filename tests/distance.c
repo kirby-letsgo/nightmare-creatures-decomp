@@ -412,6 +412,57 @@ static bool projection_entries(bool disc) {
     return true;
 }
 
+static bool rotated_vector_setup(bool disc) {
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned negative_z = 0; negative_z < 2; ++negative_z) {
+        const u32 source = negative_z ? 0x8008eefc : 0x8008ef04;
+        if (!disc) {
+            MEM_W32(source, 0x80017fff + negative_z);
+            MEM_W32(source + 4, 0x1234abcd + negative_z);
+        }
+        for (unsigned alignment = 0; alignment < 4; ++alignment) {
+            CPUState input = initial();
+            input.r[4] = (u32)-513;
+            input.r[5] = SCRATCH_BASE;
+            input.r[29] = SCRATCH_BASE + 512 + alignment;
+            input.r[31] = 0x8007a320; /* stop at ApplyMatrix */
+            memset(nc_scratch, 0xa5, sizeof before);
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 28;
+            CPUState native = input;
+            if (nc_prepare_rotated_point_offset(&native, negative_z) ||
+                memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            const u32 frame = input.r[29] - 56;
+            const u32 first = MEM_R32(source), second = MEM_R32(source + 4);
+            if (!nc_prepare_rotated_point_offset(&native, negative_z) || native.budget != 1 ||
+                native.r[29] != frame || native.r[4] != input.r[5] + 0x38 ||
+                native.r[5] != frame + 16 || native.r[6] != frame + 24 || native.r[2] != first ||
+                native.r[3] != second)
+                return false;
+            for (unsigned b = 0; b < 8; ++b)
+                if (MEM_R8(frame + 16 + b) != MEM_R8(source + b))
+                    return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                /* Match interp_call's expected stack at the nested call. */
+                const u32 stub = 0x80120000, pc = negative_z ? 0x80046e18 : 0x80046edc;
+                MEM_W32(stub, 0x08000000u | ((pc >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bd0038); /* addiu sp, sp, 56 */
+                input.r[29] = frame;
+                input.budget += 2;
+                interp_call(&input, stub);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool rotated_point_offsets(bool disc) {
     const s32 components[][2] = {
         {0, 0}, {511, -511}, {-512, 513}, {-513, -1025}, {0x40000001, -0x40000001}};
@@ -943,7 +994,8 @@ int main(int argc, char **argv) {
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
               record_projections(disc) && projected_heading_gaps(disc) &&
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-              facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc);
+              facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
+              rotated_vector_setup(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

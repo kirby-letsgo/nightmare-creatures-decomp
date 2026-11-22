@@ -964,7 +964,84 @@ bool nc_credits_priority_packet(CPUState *c) {
     return true;
 }
 
-bool nc_credits_dump_display(CPUState *c) {
+/* Both environment diagnostics reload the callback before every report. */
+static void report_fields(CPUState *c, u32 format, u32 resume, bool rectangle) {
+    unsigned reg = rectangle ? 3 : 2;
+    set_reg(c, reg, 0x80020000);
+    load_word(c, reg, R(reg) + 0x4554);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, format);
+    u32 callback = R(reg);
+    R(31) = resume;
+    if (rectangle)
+        MEM_W32(R(29) + 16, R(2));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, callback);
+}
+
+static void report_rectangle(CPUState *c, unsigned offset, u32 format, u32 resume) {
+    for (unsigned j = 0; j < 4; j++) {
+        R(j == 3 ? 2 : 5 + j) = (u32)(s32)(s16)MEM_R16(R(16) + offset + j * 2);
+        NC_POLL(c, NC_LOAD_CYCLES);
+    }
+    report_fields(c, format, resume, true);
+}
+
+static void report_flag(CPUState *c, unsigned offset, u32 format, u32 resume) {
+    R(5) = MEM_R8(R(16) + offset);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    report_fields(c, format, resume, false);
+}
+
+static void report_draw_page(CPUState *c) {
+    R(31) = 0x8001bcd4;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001c1c8);
+    set_reg(c, 3, 1);
+    bool alternate = R(2) == 1;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (!alternate) {
+        R(31) = 0x8001bce8;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001c1c8);
+        set_reg(c, 3, 2);
+        alternate = R(2) == 2;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x800183a8);
+    R(2) = MEM_R16(R(16) + 20);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    unsigned reg = alternate ? 3 : 8;
+    set_reg(c, reg, 0x80020000);
+    load_word(c, reg, R(reg) + 0x4554);
+    set_reg(c, 5, R(2) >> (alternate ? 9 : 7));
+    set_reg(c, 5, R(5) & 3);
+    set_reg(c, 6, R(2) >> (alternate ? 7 : 5));
+    set_reg(c, 6, R(6) & 3);
+    set_reg(c, 7, R(2) << 6);
+    set_reg(c, 7, R(7) & 0x7c0);
+    if (alternate) {
+        set_reg(c, 2, R(2) << 3);
+        set_reg(c, 2, R(2) & 0x300);
+    } else {
+        set_reg(c, 3, R(2) << 4);
+        set_reg(c, 3, R(3) & 0x100);
+        set_reg(c, 2, R(2) >> 2);
+        set_reg(c, 2, R(2) & 0x200);
+        set_reg(c, 3, R(3) + R(2));
+    }
+    u32 callback = R(reg);
+    R(31) = alternate ? 0x8001bd30 : 0x8001bd80;
+    MEM_W32(R(29) + 16, R(alternate ? 2 : 3)); /* VRAM y */
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, callback);
+    if (alternate)
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+static bool dump_environment(CPUState *c, bool draw) {
     if (c->budget <= 4)
         return false;
     R(29) -= 32;
@@ -975,45 +1052,36 @@ bool nc_credits_dump_display(CPUState *c) {
     MEM_W32(R(29) + 28, R(31));
     c->budget--;
 
-    /* Report the display and screen rectangles. The fourth signed coordinate
-     * is the fifth argument to the diagnostic callback, passed on the stack. */
-    for (unsigned i = 0; i < 2; i++) {
-        u32 rect = R(16) + i * 8;
-        for (unsigned j = 0; j < 3; j++) {
-            R(5 + j) = (u32)(s32)(s16)MEM_R16(rect + j * 2);
+    if (draw) {
+        report_rectangle(c, 0, 0x800183d0, 0x8001bc4c); /* clipping rectangle */
+        for (unsigned j = 0; j < 2; j++) {
+            R(5 + j) = (u32)(s32)(s16)MEM_R16(R(16) + 8 + j * 2);
             NC_POLL(c, NC_LOAD_CYCLES);
         }
-        R(2) = (u32)(s32)(s16)MEM_R16(rect + 6);
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 3, 0x80020000);
-        load_word(c, 3, R(3) + 0x4554);
-        set_reg(c, 4, 0x80020000);
-        set_reg(c, 4, i ? 0x80018444 : 0x80018428);
-        u32 callback = R(3);
-        R(31) = i ? 0x8001bdf4 : 0x8001bdcc;
-        MEM_W32(R(29) + 16, R(2));
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, callback);
-    }
-
-    /* The interlace and RGB24 flags have separate format strings. */
-    for (unsigned i = 0; i < 2; i++) {
-        R(5) = MEM_R8(R(16) + 16 + i);
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, R(2) + 0x4554);
-        set_reg(c, 4, 0x80020000);
-        set_reg(c, 4, i ? 0x8001846c : 0x80018460);
-        u32 callback = R(2);
-        R(31) = i ? 0x8001be2c : 0x8001be10;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, callback);
+        report_fields(c, 0x800183e8, 0x8001bc6c, false); /* drawing offset */
+        report_rectangle(c, 12, 0x800183f8, 0x8001bc94); /* texture window */
+        report_flag(c, 22, 0x80018410, 0x8001bcb0); /* dithering */
+        report_flag(c, 23, 0x8001841c, 0x8001bccc); /* draw to display */
+        report_draw_page(c);
+    } else {
+        report_rectangle(c, 0, 0x80018428, 0x8001bdcc);
+        report_rectangle(c, 8, 0x80018444, 0x8001bdf4);
+        report_flag(c, 16, 0x80018460, 0x8001be10); /* interlace */
+        report_flag(c, 17, 0x8001846c, 0x8001be2c); /* RGB24 */
     }
     load_word(c, 31, R(29) + 28);
     load_word(c, 16, R(29) + 24);
     set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
+}
+
+bool nc_credits_dump_draw(CPUState *c) {
+    return dump_environment(c, true);
+}
+
+bool nc_credits_dump_display(CPUState *c) {
+    return dump_environment(c, false);
 }
 
 bool nc_credits_set_graph_debug(CPUState *c) {
