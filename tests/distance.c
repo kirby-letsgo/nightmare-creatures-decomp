@@ -870,6 +870,56 @@ static bool node_transform_selection(bool disc) {
     return true;
 }
 
+static bool node_continuations(bool disc) {
+    const u32 node = SCRATCH_BASE, frame = node + 256;
+    static const struct {
+        u32 link, pending, stop;
+        NcNodeContinuation result;
+        int cycles;
+    } cases[] = {{SCRATCH_BASE + 64, 1, 0x800265cc, NC_NODE_NEXT, 6},
+                 {0, 1, 0x800265ac, NC_NODE_POP, 8},
+                 {0, 0, 0x80010000, NC_NODE_RETURN, 32}};
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = node;
+        input.r[19] = frame + 24;
+        input.r[20] = cases[i].pending;
+        input.r[29] = frame;
+        input.r[31] = cases[i].stop;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(node + 4, cases[i].link);
+        for (unsigned reg = 16; reg <= 21; ++reg)
+            MEM_W32(frame + 0xc0 + 4 * (reg - 16), 0x80000000u + reg);
+        MEM_W32(frame + 0xd8, input.r[31]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 32;
+        CPUState native = input;
+        if (nc_advance_node_transform(&native) != NC_NODE_FALLBACK ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_advance_node_transform(&native) != cases[i].result ||
+            native.budget != 33 - cases[i].cycles || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        if (disc) {
+            u32 entry = 0x800266b4;
+            if (cases[i].result == NC_NODE_RETURN) {
+                const u32 stub = 0x80120000;
+                MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bdff20); /* addiu sp, sp, -224 */
+                input.r[29] += 224;
+                input.budget += 2;
+                entry = stub;
+            }
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool node_rotations(bool disc) {
     const u32 source = SCRATCH_BASE + 64;
     const s16 values[] = {-32768, 0, 32767, -4096, 4096, 0, 1, -1, -13};
@@ -1652,8 +1702,8 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              node_transform_selection(disc) && node_rotations(disc) && part_offsets(disc) &&
-              part_matrix_composition(disc) && part_transform_setup(disc) &&
+              node_transform_selection(disc) && node_continuations(disc) && node_rotations(disc) &&
+              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
               part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);

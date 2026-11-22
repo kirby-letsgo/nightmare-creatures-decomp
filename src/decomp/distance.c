@@ -824,6 +824,28 @@ bool nc_select_node_transform(CPUState *c) {
     return true;
 }
 
+/* Follow the next link, pop a saved branch, or return to the caller.
+ * The stack cursor moves in the delay slot of the second branch. */
+NcNodeContinuation nc_advance_node_transform(CPUState *c) {
+    if (c->budget <= 32)
+        return NC_NODE_FALLBACK;
+    R(16) = MEM_R32(R(16) + 4);
+    c->budget -= 6;
+    if (R(16))
+        return NC_NODE_NEXT;
+    R(19) -= 8;
+    c->budget -= 2;
+    if (R(20))
+        return NC_NODE_POP;
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0xd8);
+    for (int reg = 21; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0xc0 + 4 * (reg - 16));
+    R(29) += 0xe0;
+    c->budget -= 24;
+    return NC_NODE_RETURN;
+}
+
 /* RotTrans has already written the node translation. Copy the nine
  * rotation halfwords in guest order before composing the node matrix. */
 bool nc_prepare_node_rotation(CPUState *c) {

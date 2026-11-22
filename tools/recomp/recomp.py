@@ -981,6 +981,12 @@ class Emitter:
                 out.append("        if (!R(2)) goto L_800266B4;")
                 out.append(f"        {self.call(0x8007A530)}")
                 out.append("        goto L_80026634; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800266B4:
+                out.append("    switch (nc_advance_node_transform(c)) {")
+                out.append("    case NC_NODE_NEXT: goto L_800265CC;")
+                out.append("    case NC_NODE_POP: goto L_800265AC;")
+                out.append("    case NC_NODE_RETURN: return;")
+                out.append("    case NC_NODE_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026634:
                 out.append("    if (nc_prepare_node_rotation(c)) {")
                 out.append(f"        {self.call(0x8007A0E0)}")
