@@ -89,3 +89,81 @@ bool nc_credits_string_length(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+static void set_reg(CPUState *c, unsigned reg, u32 value) {
+    R(reg) = value;
+    NC_POLL(c, NC_INSN_CYCLES);
+}
+static void load_word(CPUState *c, unsigned reg, u32 addr) {
+    R(reg) = MEM_R32(addr);
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+/* Both lengths are measured first. Strings with the same end address are
+ * rejected. On success the destination length is scanned a second time. */
+bool nc_credits_append_string(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(29) -= 0x20;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 0x18, R(18));
+    R(18) = R(5);
+    MEM_W32(R(29) + 0x1c, R(31));
+    MEM_W32(R(29) + 0x10, R(16));
+    c->budget -= 8;
+    if (!R(17)) {
+        set_reg(c, 2, 0);
+    } else {
+        bool has_source = R(18) != 0;
+        R(2) = 0;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (has_source) {
+            R(31) = 0x800199b8;
+            R(4) = R(17);
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x80019a30);
+            set_reg(c, 4, R(18));
+            R(31) = 0x800199c4;
+            R(16) = R(17) + R(2);
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x80019a30);
+            set_reg(c, 2, R(18) + R(2));
+            bool same_end = R(16) == R(2);
+            R(3) = R(17);
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (same_end) {
+                set_reg(c, 2, 0);
+            } else {
+                bool more;
+                do {
+                    R(2) = MEM_R8(R(17));
+                    NC_POLL(c, NC_LOAD_CYCLES);
+                    NC_POLL(c, NC_INSN_CYCLES);
+                    more = R(2) != 0;
+                    R(17)++;
+                    NC_POLL(c, 2 * NC_INSN_CYCLES);
+                } while (more);
+                set_reg(c, 17, R(17) - 1);
+                do {
+                    R(2) = MEM_R8(R(18));
+                    NC_POLL(c, NC_LOAD_CYCLES);
+                    set_reg(c, 18, R(18) + 1);
+                    MEM_W8(R(17), (u8)R(2));
+                    NC_POLL(c, NC_INSN_CYCLES);
+                    more = R(2) != 0;
+                    R(17)++;
+                    NC_POLL(c, 2 * NC_INSN_CYCLES);
+                } while (more);
+                R(2) = R(3);
+                NC_POLL(c, 2 * NC_INSN_CYCLES);
+            }
+        }
+    }
+    load_word(c, 31, R(29) + 0x1c);
+    for (int reg = 18; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 0x10 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 0x20);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
