@@ -505,6 +505,40 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+/* Sample the three part angles, biased by two angle units as in the
+ * call delay slots. The matrix products consume signed Q12 values;
+ * the final sine stays in Q14 until the first products are underway. */
+bool nc_sample_part_rotation(CPUState *c) {
+    if (c->budget <= 104)
+        return false;
+    const u32 part = R(4), frame = R(29) - 48;
+    R(29) = frame;
+    MEM_W32(frame + 16, R(16));
+    R(16) = part;
+    MEM_W32(frame + 40, R(31));
+    for (int reg = 21; reg >= 17; --reg)
+        MEM_W32(frame + 16 + 4 * (reg - 16), R(reg));
+    R(19) = R(5);
+
+    const unsigned cosine_regs[] = {21, 20, 17};
+    for (unsigned axis = 0; axis < 3; ++axis) {
+        R(4) = MEM_R32(part + 0x40 + 4 * axis) + 2;
+        nc_heading_cosine(c);
+        R(cosine_regs[axis]) = (s32)(s16)R(2) >> 2;
+    }
+    R(4) = MEM_R32(part + 0x40) + 2;
+    nc_heading_sine(c);
+    R(18) = (s32)(s16)R(2) >> 2;
+    R(4) = MEM_R32(part + 0x44) + 2;
+    nc_heading_sine(c);
+    R(16) = (s32)(s16)R(2) >> 2;
+    R(4) = MEM_R32(part + 0x48) + 2;
+    nc_heading_sine(c);
+    R(31) = 0x8002607c;
+    c->budget -= 50;
+    return true;
+}
+
 /* After the two angle lookups, s0 holds the scaled cosine component.
  * Store projected X and prepare Z for the store in the heading call's delay slot. */
 bool nc_project_heading_offset(CPUState *c) {

@@ -729,6 +729,46 @@ static bool part_chain_traversal(bool disc) {
     return true;
 }
 
+static bool part_rotation_samples(bool disc) {
+    const u32 frame = SCRATCH_BASE + 256, part = SCRATCH_BASE;
+    const u32 angles[][3] = {{0, 0x4000, 0x8000}, {-3, -2, -1}, {0x3ffd, 0x7ffe, 0xbfff}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = part;
+        input.r[5] = SCRATCH_BASE + 512;
+        input.r[29] = frame + 48;
+        input.r[31] = 0x8002607c;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W32(part + 0x40 + 4 * axis, angles[i][axis]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 104;
+        CPUState native = input;
+        if (nc_sample_part_rotation(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_sample_part_rotation(&native) || native.budget != 1 || native.r[29] != frame ||
+            native.r[19] != input.r[5] || native.r[31] != 0x8002607c)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Match the oracle's stack at the continuation after the sixth lookup. */
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x80025fe4u >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bd0030); /* addiu sp, sp, 48 */
+            input.r[29] = frame;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_offsets(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 512;
     const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
@@ -1470,7 +1510,7 @@ int main(int argc, char **argv) {
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
               part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
-              part_chain_traversal(disc);
+              part_chain_traversal(disc) && part_rotation_samples(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
