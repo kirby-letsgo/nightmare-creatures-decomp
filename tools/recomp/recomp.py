@@ -132,6 +132,7 @@ CREDITS_ROUTINES = {
     0x8001E074: "nc_credits_gpu_control_byte(c)",
     0x8001E088: "nc_credits_gpu_command_block(c)",
     0x8001E0D8: "nc_credits_gpu_command_chain(c)",
+    0x8001E124: "nc_credits_gpu_parameter(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
