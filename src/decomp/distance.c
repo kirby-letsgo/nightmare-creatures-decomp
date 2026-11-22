@@ -132,6 +132,53 @@ bool nc_prepare_placement_vector(CPUState *c, u32 source_offset, u32 result_offs
     return true;
 }
 
+/* Build the matrix at record + 0x38 from the three angles at +0x08. */
+bool nc_prepare_placement_rotation(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(18) = R(19) + 8;
+    R(4) = R(18);
+    R(16) = R(19) + 0x38;
+    R(31) = 0x8002b160;
+    R(5) = R(16);
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_prepare_placement_scale(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(16);
+    R(31) = 0x8002b16c;
+    R(5) = R(20);
+    c->budget -= 3;
+    return true;
+}
+
+/* Transform the signed XYZ at the start of the record into the three-word
+ * vector at +0x98, then install that vector as the matrix translation. */
+bool nc_prepare_placement_position(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(4) = R(16);
+    R(5) = R(19);
+    R(17) = R(19) + 0x98;
+    R(31) = 0x8002b180;
+    R(6) = R(17);
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_prepare_placement_translation(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(16);
+    R(31) = 0x8002b18c;
+    R(5) = R(17);
+    c->budget -= 3;
+    return true;
+}
+
 /* After TransposeMatrix, quarter the selected XYZ scale in place. The
  * ScaleMatrixL call stores Y in its delay slot, after the X and Z writes. */
 bool nc_prepare_transposed_placement_scale(CPUState *c) {
