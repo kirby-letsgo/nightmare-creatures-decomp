@@ -149,6 +149,31 @@ bool nc_store_projected_heading(CPUState *c) {
     return true;
 }
 
+/* Compare the new bearing with the record's previous bearing. The guest
+ * reflects a difference over half a turn once, even for out-of-range inputs. */
+bool nc_projected_heading_gap(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const s32 projected = (s16)R(2);
+    const s32 previous = (s16)MEM_R16(R(16) + 0x0a);
+    s32 gap = projected - previous;
+    int cycles = 11;
+    if (gap <= 0) {
+        gap = -gap;
+        cycles = 12;
+    }
+    if (gap > 2048) {
+        gap = 4096 - gap;
+        cycles = 15;
+    }
+    R(17) = projected;
+    R(4) = previous;
+    R(3) = gap;
+    R(2) = gap < 569;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
