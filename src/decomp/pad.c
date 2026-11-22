@@ -1055,6 +1055,48 @@ u32 nc_menu_record_four_timing(CPUState *c) {
     return 0x80068fe4;
 }
 
+/* The timeout dispatches record 4 before testing this frame's Cross bit. */
+bool nc_menu_dispatch_timed_record(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(4) = R(22);
+    R(5) = 0x800883f0;
+    R(6) = 0x10;
+    R(31) = 0x80068dd0;
+    c->budget -= 5;
+    nc_call(c, 0x80063b70);
+    R(2) = R(30) & 0x4000;
+    NC_POLL(c, NC_INSN_CYCLES);
+    return true;
+}
+
+/* v0 holds the current Cross bit. Only a fresh press dispatches the
+ * selected 12-byte record and saves the complete button word. */
+bool nc_menu_record_cross(CPUState *c) {
+    if (c->budget <= 20)
+        return false;
+    c->budget -= 2;
+    if (!R(2))
+        return true;
+
+    R(2) = MEM_R32(R(28) + 0x18c) & 0x4000;
+    R(4) = R(22);
+    c->budget -= 7;
+    if (R(2))
+        return true;
+
+    u32 index = MEM_R32(R(28) + 0x190);
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12 * index;
+    R(6) = 0x10;
+    R(31) = 0x80068e14;
+    c->budget -= 11;
+    nc_call(c, 0x80063b70);
+    MEM_W32(R(28) + 0x18c, R(30));
+    NC_POLL(c, NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
