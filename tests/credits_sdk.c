@@ -488,6 +488,31 @@ static bool check_gpu_parameter(void) {
     return ok;
 }
 
+static bool check_bios_gpu_command(void) {
+    const u32 gp0 = MEM_R32(0x80024628), status = MEM_R32(0x8002462c);
+    const u32 saved = (MEM_R32(status) >> 11) & 3;
+    for (u32 mask = 0; mask < 4; mask++) {
+        CPUState state = arguments(0xe6000000 | mask, 2, 3, mask & 1 ? 4 : 4096);
+        if (!compare(state, 0x8001eca4, nc_credits_bios_gpu_command, 3))
+            return false;
+        /* GPU state is separate from the CPU snapshot. Verify each GP0 write. */
+        for (unsigned native = 0; native < 2; native++) {
+            MEM_W32(gp0, 0xe6000000 | (mask ^ 3));
+            nc_cpu = state;
+            if (native) {
+                if (!nc_credits_bios_gpu_command(&nc_cpu))
+                    return false;
+            } else {
+                interp_call(&nc_cpu, 0x8001eca4);
+            }
+            if (((MEM_R32(status) >> 11) & 3) != mask)
+                return false;
+        }
+    }
+    MEM_W32(gp0, 0xe6000000 | saved);
+    return true;
+}
+
 static bool check_gpu_command_chain(void) {
     const u32 slots = 0x8002462c, head = 0x80060840;
     u32 ports[4];
@@ -1520,6 +1545,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_field();
     pass = pass && check_gpu_control();
     pass = pass && check_gpu_command_block();
+    pass = pass && check_bios_gpu_command();
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();

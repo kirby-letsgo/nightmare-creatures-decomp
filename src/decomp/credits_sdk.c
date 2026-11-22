@@ -1597,6 +1597,17 @@ bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     return true;
 }
 
+/* GPU_cw passes the GP0 command word in a0 to BIOS A0 service 0x49. */
+bool nc_credits_bios_gpu_command(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(10) = 0xa0;
+    R(9) = 0x49;
+    c->budget -= 3;
+    nc_jump(c, R(10));
+    return true;
+}
+
 /* DeliverEvent selects BIOS B0 service 7 in the tail jump's delay slot. */
 bool nc_credits_deliver_event(CPUState *c) {
     if (c->budget <= 3)
