@@ -718,6 +718,18 @@ static void load_part_transform(CPUState *c, u32 matrix) {
     }
 }
 
+static void transform_part_position(CPUState *c, u32 part) {
+    gte_write_data(c, 0, MEM_R32(part + 0x10));
+    gte_write_data(c, 1, MEM_R32(part + 0x14));
+    gte_command(c, 0x0480012); /* MVMVA, rotation matrix, V0, translation */
+    const u32 output = part + 0x2c;
+    for (unsigned axis = 0; axis < 3; ++axis)
+        MEM_W32(output + 4 * axis, gte_read_data(c, 25 + axis));
+    R(12) = gte_read_ctrl(c, 31);
+    R(2) = R(29) + 0xa8;
+    MEM_W32(R(2), R(12));
+}
+
 /* Install the caller's rotation and translation, then transform the
  * part's signed local XYZ. The stored position is four times the MAC
  * result. The stack flag word is written before the positions are reread. */
@@ -741,14 +753,8 @@ bool nc_start_scaled_part_position(CPUState *c) {
     MEM_W32(frame + 0xb8, part);
     load_part_transform(c, R(30));
 
-    gte_write_data(c, 0, MEM_R32(part + 0x10));
-    gte_write_data(c, 1, MEM_R32(part + 0x14));
-    gte_command(c, 0x0480012); /* MVMVA, rotation matrix, V0, translation */
+    transform_part_position(c, part);
     const u32 output = part + 0x2c;
-    for (unsigned axis = 0; axis < 3; ++axis)
-        MEM_W32(output + 4 * axis, gte_read_data(c, 25 + axis));
-    R(12) = gte_read_ctrl(c, 31);
-    MEM_W32(frame + 0xa8, R(12));
     const u32 x = MEM_R32(output);
     R(3) = MEM_R32(output + 8) << 2;
     MEM_W32(output, x << 2);
@@ -756,6 +762,22 @@ bool nc_start_scaled_part_position(CPUState *c) {
     MEM_W32(output + 8, R(3));
     MEM_W32(output + 4, R(2));
     c->budget -= 82;
+    return true;
+}
+
+/* The starting part already holds its scaled position. Other parts use
+ * the current GTE matrix and store the MAC coordinates directly. */
+bool nc_update_child_position(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    const u32 part = R(10);
+    R(16) = MEM_R32(R(29) + 0xb8);
+    R(2) = part + 0x10;
+    c->budget -= 6;
+    if (part != R(16)) {
+        transform_part_position(c, part);
+        c->budget -= 17;
+    }
     return true;
 }
 
