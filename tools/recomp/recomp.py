@@ -789,12 +789,12 @@ class Emitter:
                 )
             if self.mod.name == "psx2_exe" and i.addr in (0x8006865C, 0x8006870C):
                 right = i.addr == 0x8006870C
-                change, ordinary = (0x8006874C, 0x8006879C) if right else (0x80068698, 0x800686B8)
+                change = 0x8006874C if right else 0x80068698
                 out.extend(
                     [
                         f"    switch (nc_menu_direction_selection(c, {str(right).lower()})) {{",
                         f"    case 0x{change:X}: goto L_{change:X};",
-                        f"    case 0x{ordinary:X}: goto L_{ordinary:X};",
+                        "    case 0x800687B4: goto L_800687B4;",
                         "    case 0x800687CC: goto L_800687CC;",
                         "    }",
                     ]

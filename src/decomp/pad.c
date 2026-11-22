@@ -451,8 +451,15 @@ u32 nc_menu_direction_selection(CPUState *c, bool right) {
     R(2) = 12;
     R(4) = R(3) << 1;
     c->budget -= 6;
-    if (R(3) != 12)
-        return right ? 0x8006879c : 0x800686b8;
+    if (R(3) != 12) {
+        /* Ordinary records are twelve bytes each. Both paths join at
+         * the same call, with the direction encoded in a1. */
+        R(2) = 0x800883c0;
+        R(4) = R(2) + R(3) * 12u;
+        R(5) = right ? 0x40 : 0x80;
+        c->budget -= right ? 6 : 7;
+        return 0x800687b4;
+    }
 
     const u32 address = 0x800d7c22;
     u32 current = (u32)(s32)(s16)MEM_R16(address);
