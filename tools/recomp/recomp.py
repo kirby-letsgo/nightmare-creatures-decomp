@@ -665,6 +665,8 @@ class Emitter:
             targets.add(0x8002607C)
         if self.mod.name == "psx2_exe" and f.addr == 0x800261C8:
             targets.add(0x80026248)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80026394:
+            targets.add(0x80026414)
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         table_cases: list[int] = []
@@ -916,13 +918,21 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
                 out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80025FE4:
-                out.append("    if (nc_sample_part_rotation(c, false)) goto L_8002607C;")
+                out.append("    if (nc_sample_part_rotation(c, NC_ROTATION_PART)) goto L_8002607C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026394:
+                out.append(
+                    "    if (nc_sample_part_rotation(c, NC_ROTATION_PACKED)) goto L_80026414;"
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026414:
+                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_PACKED)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800261C8:
-                out.append("    if (nc_sample_part_rotation(c, true)) goto L_80026248;")
+                out.append(
+                    "    if (nc_sample_part_rotation(c, NC_ROTATION_TRANSPOSED)) goto L_80026248;"
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80026248:
-                out.append("    if (nc_finish_part_rotation(c, true)) return;")
+                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_TRANSPOSED)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002607C:
-                out.append("    if (nc_finish_part_rotation(c, false)) return;")
+                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_PART)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8003433C:
                 out.append("    if (nc_init_part_transform(c)) goto L_800343D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800343D8:
