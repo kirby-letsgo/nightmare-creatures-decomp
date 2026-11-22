@@ -1394,6 +1394,56 @@ bool nc_credits_spu_write_register(CPUState *c) {
     return true;
 }
 
+/* _spu_FsetRXXa can also return either address representation without a store. */
+bool nc_credits_spu_set_address(CPUState *c) {
+    if (c->budget <= 47)
+        return false;
+    c->budget--;
+    u32 align = MEM_R32(0x8002469c);
+    R(6) = R(4); /* register index, or -1/-2 for conversion only */
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (align) {
+        c->budget--;
+        R(4) = MEM_R32(0x800246a4);
+        nc_divu(c, R(5), R(4));
+        c->budget -= NC_LOAD_CYCLES + 4;
+        if (R(4) == 0) {
+            nc_break(c, 0x8001fb0c, 0x1c00);
+            c->budget--;
+        }
+        c->budget -= 4; /* test the remainder in HI */
+        if (c->hi != 0) {
+            c->budget--;
+            u32 mask = MEM_R32(0x800246a8);
+            R(5) = (R(5) + R(4)) & ~mask;
+            c->budget -= NC_LOAD_CYCLES + 3;
+        }
+    }
+    c->budget--;
+    u32 shift = MEM_R32(0x800246a0);
+    R(7) = R(5) >> (shift & 31);
+    R(2) = R(5);
+    c->budget -= NC_LOAD_CYCLES + 5;
+    if (R(6) == (u32)-2) {
+        c->budget -= 2;
+    } else {
+        c->budget -= 2;
+        if (R(6) == (u32)-1) {
+            R(2) = (u16)R(7);
+            c->budget -= 2;
+        } else {
+            c->budget--;
+            R(4) = MEM_R32(0x80024678);
+            R(3) = R(4) + R(6) * 2;
+            c->budget -= NC_LOAD_CYCLES + 2;
+            MEM_W16(R(3), (u16)R(7));
+            c->budget--;
+        }
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* _spu_FgetRXXa reads a raw SPU register or expands it to a byte address. */
 bool nc_credits_spu_read_address(CPUState *c) {
     if (c->budget <= 20)
