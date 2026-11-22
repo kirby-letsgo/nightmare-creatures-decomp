@@ -637,6 +637,59 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool matrix_headings(bool disc) {
+    const s16 matrices[][9] = {
+        {4096, 0, 0, 0, 4096, 0, 0, 0, 4096},
+        {4096, 0, 0, -4096, 0, 0, 0, 4096, 0},
+        {-32768, 0, 0, 32767, -1, -32768, 32767, -32768, -1},
+    };
+    const u32 lengths[] = {0, 1, 64, 0x7fffffff};
+    const u32 frame = SCRATCH_BASE + 128;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof matrices / sizeof matrices[0]; ++i)
+        for (unsigned j = 0; j < sizeof lengths / sizeof lengths[0]; ++j) {
+            CPUState input = initial();
+            input.r[2] = lengths[j];
+            input.r[29] = frame;
+            /* Include output overlapping the saved registers. */
+            input.r[19] = j == 2 ? frame + 0x40 : SCRATCH_BASE;
+            memset(nc_scratch, 0xa5, sizeof before);
+            for (unsigned k = 0; k < 9; ++k)
+                MEM_W16(frame + 16 + k * 2, matrices[i][k]);
+            MEM_W32(frame + 0x50, input.r[31]);
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = lengths[j] ? 155 : 111;
+            CPUState native = input;
+            if (nc_finish_matrix_headings(&native) || memcmp(&input, &native, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_finish_matrix_headings(&native) || native.r[29] != frame + 88 ||
+                native.r[31] != input.r[31] || native.budget <= 0 ||
+                (!lengths[j] && MEM_R16(input.r[19] + 2) != 0))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                /* Enter with the caller's stack pointer for interp_call's return check. */
+                const u32 stub = 0x80120000;
+                MEM_W32(stub, 0x08000000u | ((0x80034788u >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bdffa8); /* addiu sp, sp, -88 */
+                input.r[29] += 88;
+                input.budget += 2;
+                interp_call(&input, stub);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    CPUState exceptional = initial();
+    exceptional.r[2] = 0x80000000;
+    CPUState unchanged = exceptional;
+    return !nc_finish_matrix_headings(&exceptional) &&
+           !memcmp(&exceptional, &unchanged, sizeof unchanged);
+}
+
 static bool facing_offsets(bool disc) {
     const u32 record = SCRATCH_BASE + 0x80;
     const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
@@ -1112,7 +1165,7 @@ int main(int argc, char **argv) {
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
-              actor_point_placements(disc);
+              actor_point_placements(disc) && matrix_headings(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

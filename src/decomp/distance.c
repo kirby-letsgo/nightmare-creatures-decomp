@@ -611,6 +611,50 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* Extract three bearings from the scaled matrix at sp+16. When the
+ * planar length is zero the first bearing uses the last row and the
+ * second bearing is zero. Each 4096-unit result becomes a 16-bit turn. */
+bool nc_finish_matrix_headings(CPUState *c) {
+    const u32 length = R(2);
+    const int cycles = length ? 28 : 18;
+    /* Each heading lookup takes at most 34 cycles. Its first component
+     * fits a signed halfword (or its negation), keeping the ratio in range. */
+    if (length == 0x80000000u || c->budget <= cycles + 25 + (length ? 3 : 2) * 34)
+        return false;
+    const u32 frame = R(29);
+    R(16) = length;
+    R(18) = 0;
+    if (length) {
+        R(4) = (s32)(s16)MEM_R16(frame + 0x1a);
+        R(5) = (s32)(s16)MEM_R16(frame + 0x18);
+        nc_vector_heading(c);
+        R(17) = R(2);
+        R(4) = -(s32)(s16)MEM_R16(frame + 0x1c);
+        R(5) = (s32)(s16)MEM_R16(frame + 0x10);
+        nc_vector_heading(c);
+        R(18) = R(2);
+    } else {
+        R(4) = -(s32)(s16)MEM_R16(frame + 0x1e);
+        R(5) = (s32)(s16)MEM_R16(frame + 0x20);
+        nc_vector_heading(c);
+        R(17) = R(2);
+    }
+    R(4) = -(s32)(s16)MEM_R16(frame + 0x16);
+    R(5) = length;
+    nc_vector_heading(c);
+    R(3) = R(2);
+    MEM_W16(R(19), R(17) << 4);
+    MEM_W16(R(19) + 2, R(18) << 4);
+    R(2) = R(3) << 4;
+    MEM_W16(R(19) + 4, R(2));
+    R(31) = MEM_R32(frame + 0x50);
+    for (int reg = 19; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x40 + 4 * (reg - 16));
+    R(29) += 0x58;
+    c->budget -= cycles + 25;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
