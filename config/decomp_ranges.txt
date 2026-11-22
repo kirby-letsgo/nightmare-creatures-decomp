@@ -321,6 +321,8 @@ psx2_exe     800672E0    80067308         pad.c
 psx2_exe     80067308    80067338         pad.c
 # Menu input frame, button word and initial mode checks.
 psx2_exe     80067358    800673BC         pad.c
+# Initial menu action 2 call and mode-bit clear.
+psx2_exe     800673BC    80067400         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c

@@ -981,6 +981,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800673BC:
+                out.append("    if (nc_menu_mode_record_call(c)) goto L_800674A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80067358:
                 out.extend(
                     [
