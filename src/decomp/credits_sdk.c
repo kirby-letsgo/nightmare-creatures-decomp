@@ -1414,6 +1414,34 @@ bool nc_credits_cd_ready_callback(CPUState *c) {
     return exchange_cd_word(c, 0x80024760);
 }
 
+/* CdComstr and CdIntstr return guest pointers into the CD diagnostic strings. */
+static bool cd_lookup_name(CPUState *c, u32 table, u32 count) {
+    if (c->budget <= 13)
+        return false;
+    R(4) &= 0xff;
+    c->budget -= 4; /* mask, range check, branch and delay slot */
+    if (R(4) < count) {
+        u32 offset = R(4) * 4;
+        R(1) = 0x80020000 + offset;
+        c->budget -= 2;
+        R(2) = MEM_R32(table + offset);
+        c->budget -= NC_LOAD_CYCLES + 2; /* load and jump to the return */
+    } else {
+        R(2) = 0x8001874c;
+        c->budget -= 2;
+    }
+    c->budget -= 2; /* jr and delay slot */
+    return true;
+}
+
+bool nc_credits_cd_command_name(CPUState *c) {
+    return cd_lookup_name(c, 0x80024780, 28);
+}
+
+bool nc_credits_cd_interrupt_name(CPUState *c) {
+    return cd_lookup_name(c, 0x80024800, 7);
+}
+
 bool nc_credits_cd_last_position(CPUState *c) {
     if (c->budget <= 4)
         return false;

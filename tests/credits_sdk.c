@@ -953,6 +953,22 @@ static bool check_cd_setters(void) {
     return true;
 }
 
+static bool check_cd_names(void) {
+    const u32 inputs[] = {0, 1, 6, 7, 27, 28, 255, 0xffff0006, 0xffffff1b, 0xffffffff};
+    for (unsigned i = 0; i < sizeof inputs / sizeof inputs[0]; i++) {
+        u32 index = inputs[i] & 0xff;
+        CPUState state = arguments(inputs[i], 2, 3, 14);
+        u32 command = index < 28 ? MEM_R32(0x80024780 + index * 4) : 0x8001874c;
+        u32 interrupt = index < 7 ? MEM_R32(0x80024800 + index * 4) : 0x8001874c;
+        if (!compare(state, 0x8001fed4, nc_credits_cd_command_name, 13) ||
+            nc_cpu.r[2] != command ||
+            !compare(state, 0x8001ff08, nc_credits_cd_interrupt_name, 13) ||
+            nc_cpu.r[2] != interrupt)
+            return false;
+    }
+    return true;
+}
+
 static bool check_cd_state(void) {
     const u8 values[] = {0, 1, 0x7f, 0x80, 0xff};
     for (unsigned i = 0; i < sizeof values; i++) {
@@ -1072,6 +1088,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_setters();
+    pass = pass && check_cd_names();
     pass = pass && check_cd_state();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
