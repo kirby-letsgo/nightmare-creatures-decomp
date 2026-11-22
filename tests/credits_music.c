@@ -13,8 +13,15 @@ static void play(CPUState *c) {
     R(2) = 0xfedcba98;
 }
 
-const NcFuncEntry credits_exe_table[] = {{0x80022ccc, play}};
-const unsigned credits_exe_table_len = 1;
+static CPUState at_volume;
+static unsigned volume_calls;
+static void volume(CPUState *c) {
+    at_volume = *c;
+    volume_calls++;
+    R(2) = 0x369c;
+}
+const NcFuncEntry credits_exe_table[] = {{0x800192e4, volume}, {0x80022ccc, play}};
+const unsigned credits_exe_table_len = 2;
 static u8 before[RAM_SIZE], after[RAM_SIZE];
 
 static bool check_play(u32 track) {
@@ -48,6 +55,38 @@ static bool check_play(u32 track) {
            !memcmp(&guest, &native, sizeof native) && !memcmp(after, nc_ram, sizeof after);
 }
 
+/* Move gp and retain separate sentinels to distinguish the gp-relative
+ * first entry from the absolute second entry. */
+static bool check_reset(u32 gp) {
+    CPUState initial = {0};
+    for (unsigned i = 1; i < 32; i++)
+        initial.r[i] = 0x16bd5u * i;
+    initial.r[28] = gp;
+    initial.r[29] = 0x801fef00;
+    initial.r[31] = 0x80010000;
+    initial.budget = 5;
+    MEM_W32(gp + 0x34, 0x7dbf8u);
+    MEM_W32(0x80024ca0, 0x31ed);
+    memcpy(before, nc_ram, sizeof before);
+    CPUState native = initial;
+    if (nc_credits_reset_music(&native) || memcmp(&initial, &native, sizeof native) ||
+        memcmp(before, nc_ram, sizeof before))
+        return false;
+    native.budget = initial.budget = 4096;
+    volume_calls = 0;
+    if (!nc_credits_reset_music(&native) || volume_calls != 1 || at_volume.r[4] || at_volume.r[5] ||
+        MEM_R32(gp + 0x34) || MEM_R32(0x80024ca0))
+        return false;
+    CPUState args = at_volume;
+    memcpy(after, nc_ram, sizeof after);
+    memcpy(nc_ram, before, sizeof before);
+    CPUState guest = initial;
+    volume_calls = 0;
+    interp_call(&guest, 0x8001932c);
+    return volume_calls == 1 && !memcmp(&args, &at_volume, sizeof args) &&
+           !memcmp(&guest, &native, sizeof native) && !memcmp(after, nc_ram, sizeof after);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -62,6 +101,8 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof tracks / sizeof tracks[0]; i++)
         if (!check_play(tracks[i]))
             return 1;
+    if (!check_reset(0x80024c68) || !check_reset(0x80034000) || !check_reset(0x80024c6c))
+        return 1;
     disc_close();
     return 0;
 }
