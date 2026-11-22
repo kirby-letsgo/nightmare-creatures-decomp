@@ -696,6 +696,8 @@ class Emitter:
             targets.update((0x8006C714, 0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814, 0x8006C894))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
             targets.update((0x8006C904, 0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
+        if self.mod.name == "psx2_exe" and f.addr == 0x8006DE98:
+            targets.update((0x8006E014, 0x8006E04C))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
             targets.update((0x800587A0, 0x800587CC, 0x80058830))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
@@ -1463,6 +1465,19 @@ class Emitter:
                 )
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006DFE8:
+                out.append("    if (nc_prepare_paired_point_bearing(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_8006E014; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006E014, 0x8006E024):
+                store_heading = "true" if i.addr == 0x8006E014 else "false"
+                out.append(f"    if (nc_place_paired_point_actor(c, {store_heading})) {{")
+                out.append(f"        {self.call(0x80039F00)}")
+                out.append("        goto L_8006E04C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006E04C:
+                out.append("    if (nc_call_actor_coordinate_init(c)) {")
+                out.append(f"        {self.call(0x800470DC)}")
+                out.append("        goto L_8006E05C; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8005876C:
                 out.append("    if (nc_prepare_target_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
