@@ -381,3 +381,62 @@ bool nc_credits_graph_status(CPUState *c, bool debug_level) {
     c->budget -= NC_LOAD_CYCLES + 2; /* lbu, jr, delay slot */
     return true;
 }
+
+bool nc_credits_texture_page(CPUState *c) {
+    /* The longest path reads the graph type twice and uses the standard layout. */
+    if (c->budget <= 62)
+        return false;
+
+    R(29) -= 0x28;
+    c->budget--;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x18, R(18));
+    R(18) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(6);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x14, R(17));
+    c->budget--;
+    MEM_W32(R(29) + 0x20, R(31));
+    R(31) = 0x8001b574;
+    R(17) = R(7);
+    c->budget -= 3;
+
+    NC_FN_ENTER(c, 0x8001c1c8);
+    nc_credits_graph_status(c, false);
+    bool alternate_layout = R(2) == 1;
+    c->budget -= 3;
+    if (!alternate_layout) {
+        R(31) = 0x8001b588;
+        c->budget -= 2;
+        NC_FN_ENTER(c, 0x8001c1c8);
+        nc_credits_graph_status(c, false);
+        alternate_layout = R(2) == 2;
+        c->budget -= 3;
+    }
+
+    const u32 depth = R(16) & 3, blend = R(18) & 3;
+    const u32 page_x = (R(19) & 0x3ff) >> 6, y = R(17);
+    if (alternate_layout) {
+        R(3) = (depth << 9) | (blend << 7) | ((y & 0x300) >> 3);
+        R(2) = R(3) | page_x;
+        c->budget -= 11;
+    } else {
+        R(3) = (depth << 7) | (blend << 5) | ((y & 0x100) >> 4) | page_x;
+        R(2) = R(3) | ((y & 0x200) << 2);
+        c->budget -= 13;
+    }
+
+    R(31) = MEM_R32(R(29) + 0x20);
+    c->budget -= NC_LOAD_CYCLES;
+    for (int reg = 19; reg >= 16; reg--) {
+        R(reg) = MEM_R32(R(29) + 0x10 + (reg - 16) * 4);
+        c->budget -= NC_LOAD_CYCLES;
+    }
+    R(29) += 0x28;
+    c->budget -= 3;
+    return true;
+}
