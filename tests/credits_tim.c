@@ -1,3 +1,4 @@
+#include "credits_stubs.h"
 #include "decomp/credits.h"
 #include "port/disc.h"
 #include "port/exe.h"
@@ -42,15 +43,6 @@ static void release_file(CPUState *c) {
 const NcFuncEntry credits_exe_table[] = {
     {0x80018e28, load_file}, {0x800197e0, release_file}, {0x8001c5a4, upload}};
 const unsigned credits_exe_table_len = 3;
-#define EMPTY_MODULE(name)                                                                         \
-    const NcFuncEntry name##_table[1];                                                             \
-    const unsigned name##_table_len = 0
-EMPTY_MODULE(slus_005_82);
-EMPTY_MODULE(psx_exe);
-EMPTY_MODULE(psx2_exe);
-EMPTY_MODULE(stream1_exe);
-EMPTY_MODULE(stream2_exe);
-EMPTY_MODULE(stream3_exe);
 
 static bool check(bool palette) {
     CPUState initial = {0};
