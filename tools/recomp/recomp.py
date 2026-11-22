@@ -679,7 +679,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80026560:
             targets.update((0x80026634, 0x800266A4))
         if self.mod.name == "psx2_exe" and f.addr == 0x800266F4:
-            targets.update((0x80026784, 0x800267C8))
+            targets.update((0x80026784, 0x800267C8, 0x800267DC))
         if self.mod.name == "psx2_exe" and f.addr == 0x80026394:
             targets.add(0x80026414)
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
@@ -1034,10 +1034,20 @@ class Emitter:
                 out.append("        if (!R(2)) goto L_800266B4;")
                 out.append(f"        {self.call(0x8007A530)}")
                 out.append("        goto L_80026634; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800266B4:
-                out.append("    switch (nc_advance_node_transform(c)) {")
-                out.append("    case NC_NODE_NEXT: goto L_800265CC;")
-                out.append("    case NC_NODE_POP: goto L_800265AC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800267C8:
+                out.append("    if (nc_prepare_part_composition(c)) {")
+                out.append(f"        {self.call(0x8007A0E0)}")
+                out.append("        goto L_800267DC; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800267DC:
+                out.append("    if (nc_apply_part_matrix(c)) goto L_800267EC;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800266B4, 0x800267EC):
+                if i.addr == 0x800267EC:
+                    part, next_node, pop = "true", "L_80026754", "L_80026738"
+                else:
+                    part, next_node, pop = "false", "L_800265CC", "L_800265AC"
+                out.append(f"    switch (nc_advance_node_transform(c, {part})) {{")
+                out.append(f"    case NC_NODE_NEXT: goto {next_node};")
+                out.append(f"    case NC_NODE_POP: goto {pop};")
                 out.append("    case NC_NODE_RETURN: return;")
                 out.append("    case NC_NODE_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026634:

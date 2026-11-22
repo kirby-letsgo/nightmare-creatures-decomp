@@ -31,10 +31,12 @@ bool nc_begin_part_chain(CPUState *c);
 bool nc_append_part_parent(CPUState *c);
 bool nc_prepare_part_chain_rotation(CPUState *c);
 typedef enum { NC_NODE_FALLBACK, NC_NODE_NEXT, NC_NODE_POP, NC_NODE_RETURN } NcNodeContinuation;
-NcNodeContinuation nc_advance_node_transform(CPUState *c);
+NcNodeContinuation nc_advance_node_transform(CPUState *c, bool part_rotation);
 
 bool nc_start_node_traversal(CPUState *c);
 bool nc_restore_node_branch(CPUState *c);
+bool nc_prepare_part_composition(CPUState *c);
+bool nc_apply_part_matrix(CPUState *c);
 bool nc_apply_node_matrix(CPUState *c);
 bool nc_prepare_part_translation(CPUState *c);
 bool nc_select_part_rotation(CPUState *c);

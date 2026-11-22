@@ -790,8 +790,8 @@ bool nc_prepare_part_chain_rotation(CPUState *c) {
 
 /* The paired SetRotMatrix and SetTransMatrix calls also leave the
  * translation in t0-t2 and the last rotation words in t3-t4. */
-static void install_node_matrix(CPUState *c, u32 continuation) {
-    R(4) = R(18);
+static void install_node_matrix(CPUState *c, u32 matrix, u32 continuation) {
+    R(4) = matrix;
     for (unsigned reg = 0; reg < 8; ++reg) {
         const u32 word = MEM_R32(R(4) + 4 * reg);
         R(8 + (reg % 5)) = word;
@@ -817,7 +817,7 @@ bool nc_start_node_traversal(CPUState *c) {
     MEM_W32(frame + 0xc0, R(16));
     R(16) = MEM_R32(R(2) + 4);
     R(21) = MEM_R32(R(2) + 8);
-    install_node_matrix(c, 0x800265a4);
+    install_node_matrix(c, R(18), 0x800265a4);
     R(19) = frame + 16;
     R(17) = R(21);
     c->budget -= 60;
@@ -829,7 +829,7 @@ bool nc_restore_node_branch(CPUState *c) {
         return false;
     R(18) = MEM_R32(R(19));
     --R(20);
-    install_node_matrix(c, 0x800265c4);
+    install_node_matrix(c, R(18), 0x800265c4);
     R(16) = MEM_R32(R(19) + 4);
     R(17) = R(21);
     c->budget -= 48;
@@ -839,7 +839,26 @@ bool nc_restore_node_branch(CPUState *c) {
 bool nc_apply_node_matrix(CPUState *c) {
     if (c->budget <= 40)
         return false;
-    install_node_matrix(c, 0x800266b4);
+    install_node_matrix(c, R(18), 0x800266b4);
+    c->budget -= 40;
+    return true;
+}
+
+bool nc_prepare_part_composition(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(4) = R(16);
+    R(5) = R(20);
+    R(6) = R(16) = R(17) + 0x18;
+    R(31) = 0x800267dc;
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_apply_part_matrix(CPUState *c) {
+    if (c->budget <= 40)
+        return false;
+    install_node_matrix(c, R(16), 0x800267ec);
     c->budget -= 40;
     return true;
 }
@@ -928,23 +947,28 @@ bool nc_select_node_transform(CPUState *c) {
 
 /* Follow the next link, pop a saved branch, or return to the caller.
  * The stack cursor moves in the delay slot of the second branch. */
-NcNodeContinuation nc_advance_node_transform(CPUState *c) {
-    if (c->budget <= 32)
+NcNodeContinuation nc_advance_node_transform(CPUState *c, bool part_rotation) {
+    const int return_cycles = part_rotation ? 29 : 32;
+    if (c->budget <= return_cycles)
         return NC_NODE_FALLBACK;
-    R(16) = MEM_R32(R(16) + 4);
+    const unsigned node = part_rotation ? 17 : 16, cursor = part_rotation ? 18 : 19;
+    R(node) = MEM_R32(R(node) + 4);
     c->budget -= 6;
-    if (R(16))
+    if (R(node))
         return NC_NODE_NEXT;
-    R(19) -= 8;
+    R(cursor) -= 8;
     c->budget -= 2;
-    if (R(20))
+    if (R(cursor + 1))
         return NC_NODE_POP;
-    const u32 frame = R(29);
-    R(31) = MEM_R32(frame + 0xd8);
-    for (int reg = 21; reg >= 16; --reg)
-        R(reg) = MEM_R32(frame + 0xc0 + 4 * (reg - 16));
-    R(29) += 0xe0;
-    c->budget -= 24;
+    const u32 frame_size = part_rotation ? 0xd0 : 0xe0;
+    const u32 caller_sp = R(29) + frame_size;
+    const int last_saved = part_rotation ? 20 : 21;
+    R(31) = MEM_R32(caller_sp - (part_rotation ? 4 : 8));
+    const u32 saved = R(29) + (part_rotation ? 0xb8 : 0xc0);
+    for (int reg = last_saved; reg >= 16; --reg)
+        R(reg) = MEM_R32(saved + 4 * (reg - 16));
+    R(29) = caller_sp;
+    c->budget -= return_cycles - 8;
     return NC_NODE_RETURN;
 }
 
