@@ -575,3 +575,28 @@ bool nc_credits_init_shared_record(CPUState *c) {
     c->budget -= cost;
     return true;
 }
+
+/* The four legacy allocation entry points only print a diagnostic. The
+ * original messages are in the executable's data segment. */
+bool nc_credits_heap_warning(CPUState *c, NcHeapWarning warning) {
+    static const struct {
+        u32 message, resume;
+    } sites[] = {
+        [NC_WARN_CALLOC] = {0x8001800c, 0x800193cc},
+        [NC_WARN_MALLOC] = {0x80018038, 0x800193f4},
+        [NC_WARN_REALLOC] = {0x80018064, 0x8001941c},
+        [NC_WARN_FREE] = {0x80018090, 0x80019444},
+    };
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(4) = sites[warning].message;
+    R(31) = sites[warning].resume;
+    c->budget -= 6;
+    nc_call(c, 0x80019a60); /* printf */
+    load(c, 31, R(29) + 0x10);
+    assign(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

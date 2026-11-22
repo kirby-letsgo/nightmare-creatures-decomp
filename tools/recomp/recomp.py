@@ -29,25 +29,29 @@ LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
 CREDITS_ROUTINES = {
-    0x80018C8C: "nc_credits_skip_input",
-    0x80018CFC: "nc_credits_init_pad",
-    0x80018D4C: "nc_credits_stop_pad",
-    0x80018D6C: "nc_credits_read_sectors",
-    0x80018E28: "nc_credits_load_file",
-    0x80018EE4: "nc_credits_load_tim",
-    0x80018F94: "nc_credits_run",
-    0x80019220: "nc_credits_init_shared_record",
-    0x800192E4: "nc_credits_set_cd_volume",
-    0x8001932C: "nc_credits_reset_music",
-    0x8001935C: "nc_credits_empty_hook",
-    0x80019364: "nc_credits_play_track",
-    0x80019454: "nc_credits_init_heap",
-    0x8001949C: "nc_credits_resize",
-    0x80019680: "nc_credits_allocate",
-    0x800197E0: "nc_credits_free",
-    0x800198B0: "nc_credits_find_allocation",
-    0x800198EC: "nc_credits_allocation_size",
-    0x8002335C: "nc_credits_empty_hook",
+    0x80018C8C: "nc_credits_skip_input(c)",
+    0x80018CFC: "nc_credits_init_pad(c)",
+    0x80018D4C: "nc_credits_stop_pad(c)",
+    0x80018D6C: "nc_credits_read_sectors(c)",
+    0x80018E28: "nc_credits_load_file(c)",
+    0x80018EE4: "nc_credits_load_tim(c)",
+    0x80018F94: "nc_credits_run(c)",
+    0x80019220: "nc_credits_init_shared_record(c)",
+    0x800192E4: "nc_credits_set_cd_volume(c)",
+    0x8001932C: "nc_credits_reset_music(c)",
+    0x8001935C: "nc_credits_empty_hook(c)",
+    0x80019364: "nc_credits_play_track(c)",
+    0x800193B4: "nc_credits_heap_warning(c, NC_WARN_CALLOC)",
+    0x800193DC: "nc_credits_heap_warning(c, NC_WARN_MALLOC)",
+    0x80019404: "nc_credits_heap_warning(c, NC_WARN_REALLOC)",
+    0x8001942C: "nc_credits_heap_warning(c, NC_WARN_FREE)",
+    0x80019454: "nc_credits_init_heap(c)",
+    0x8001949C: "nc_credits_resize(c)",
+    0x80019680: "nc_credits_allocate(c)",
+    0x800197E0: "nc_credits_free(c)",
+    0x800198B0: "nc_credits_find_allocation(c)",
+    0x800198EC: "nc_credits_allocation_size(c)",
+    0x8002335C: "nc_credits_empty_hook(c)",
 }
 
 GPR = [
@@ -560,7 +564,7 @@ class Emitter:
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
-                out.append(f"    if ({CREDITS_ROUTINES[i.addr]}(c)) return;")
+                out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
             if i.addr in contact_blocks:
                 check, passed, rejected = contact_blocks[i.addr]
                 out.extend(
