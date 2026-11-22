@@ -761,6 +761,38 @@ u32 nc_menu_record_triangle(CPUState *c) {
     return 0x8006893c;
 }
 
+bool nc_menu_dispatch_record_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80068944;
+    R(5) += R(2); /* record address formed in the call delay slot */
+    c->budget -= 2;
+    nc_call(c, 0x80063b70);
+    return true;
+}
+
+/* Only record 10 handles a fresh Select press here. Each branch delay slot
+ * leaves 100 in v0, including when the special action is taken. */
+u32 nc_menu_record_select(CPUState *c) {
+    if (c->budget <= 19)
+        return 0x80068944;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 100;
+    c->budget -= 6;
+    if (R(3) != 10)
+        return 0x80068d00;
+    c->budget -= 3;
+    if (!(R(30) & 1))
+        return 0x80068d00;
+    c->budget -= 7;
+    if (MEM_R32(R(28) + 0x18c) & 1)
+        return 0x80068d00;
+    R(4) = R(22);
+    R(5) = 0x80088438;
+    c->budget -= 3;
+    return 0x80068980;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;

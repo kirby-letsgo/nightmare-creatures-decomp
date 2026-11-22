@@ -669,6 +669,42 @@ static bool menu_triangle_destination(CPUState *cpu) {
     return nc_menu_record_triangle(cpu) == cpu->r[31];
 }
 
+static bool menu_record_select_destination(CPUState *cpu) {
+    return nc_menu_record_select(cpu) == cpu->r[31];
+}
+
+static bool menu_record_dispatch_and_select(void) {
+    CPUState cpu = initial();
+    const u32 record = 0x80160000, item = 0x80170000;
+    cpu.r[2] = 0x800883c0;
+    cpu.r[5] = record - cpu.r[2];
+    cpu.r[6] = 0x80;
+    cpu.r[31] = 0x80068944;
+    MEM_W32(record, item);
+    MEM_W16(record + 4, 1);
+    MEM_W16(record + 10, 0);
+    MEM_W32(item + 4, 0);
+    if (!compare(cpu, 0x8006893c, nc_menu_dispatch_record_action, 2))
+        return false;
+
+    const u32 words[] = {0, 1, 0x1000, 0xabcd1001};
+    cpu.budget = 20;
+    for (unsigned record_index = 9; record_index <= 11; ++record_index) {
+        MEM_W32(gp + 0x190, record_index);
+        for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
+            cpu.r[30] = words[i];
+            for (unsigned held = 0; held < 2; ++held) {
+                MEM_W32(gp + 0x18c, 0x1200 | held);
+                bool fresh = record_index == 10 && (words[i] & 1) && !held;
+                cpu.r[31] = fresh ? 0x80068980 : 0x80068d00;
+                if (!compare(cpu, 0x80068944, menu_record_select_destination, 19))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool menu_record_triangle(void) {
     const u32 buttons[] = {0, 0x1000, 0x8000, 0xb0009090};
     const u32 actions[] = {0, 0x405};
@@ -1668,7 +1704,8 @@ int main(int argc, char **argv) {
               menu_sequence_matches() && menu_record_sequences() && menu_record_progress() &&
               menu_completed_sequence() && menu_enabled_records() && menu_scan_return() &&
               menu_navigation_history() && menu_scan_history() && menu_record_shoulders() &&
-              menu_record_button_pairs() && menu_record_triangle() && menu_direction_selections() &&
+              menu_record_button_pairs() && menu_record_triangle() &&
+              menu_record_dispatch_and_select() && menu_direction_selections() &&
               menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
               menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
               menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
