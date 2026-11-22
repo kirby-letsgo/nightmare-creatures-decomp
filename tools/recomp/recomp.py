@@ -793,6 +793,7 @@ class Emitter:
             targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067358:
             targets.add(0x80067830)
+            targets.add(0x80067804)
             targets.add(0x800677E0)
             targets.add(0x800676FC)
             targets.add(0x800676C4)
@@ -1043,6 +1044,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800677E0:
+                out.append("    if (nc_menu_record_37_action(c)) goto L_80067804;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006780C:
                 out.extend(
                     [

@@ -65,6 +65,7 @@ u32 nc_menu_record_29_thresholds(CPUState *c);
 bool nc_menu_advance_record_counter(CPUState *c);
 u32 nc_menu_check_count_130(CPUState *c);
 u32 nc_menu_dispatch_record_29(CPUState *c);
+bool nc_menu_record_37_action(CPUState *c);
 u32 nc_menu_record_37_read_stick(CPUState *c);
 u32 nc_menu_record_37_pad_type(CPUState *c);
 bool nc_menu_record_26_right(CPUState *c);
