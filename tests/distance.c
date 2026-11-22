@@ -210,6 +210,28 @@ static bool actor_coordinates(bool disc) {
     return true;
 }
 
+static bool actor_headings(bool disc) {
+    const u32 angles[] = {0,      1,      0x3fff,     0x4000,     0x7fff,    0x8000,
+                          0xc000, 0xffff, 0xffff8000, 0xffffffff, 0x80000000};
+    const u32 actor = SCRATCH_BASE, pose = actor + 128, linked = pose + 128;
+    CPUState input = initial(), result;
+    input.r[4] = actor;
+    MEM_W32(actor + 0x20, pose);
+    MEM_W32(pose + 4, linked);
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i)
+        for (unsigned j = 0; j < sizeof angles / sizeof angles[0]; ++j) {
+            MEM_W32(pose + 0x48, angles[i]);
+            MEM_W32(linked + 0x40, angles[j]);
+            memcpy(before, nc_scratch, sizeof before);
+            if (!compare(input, 0x800472D8, nc_actor_heading, disc, &result) ||
+                result.r[2] != (u32)(s32)(s16)(angles[i] + angles[j]) || result.r[3] != angles[j] ||
+                result.budget != input.budget - 18 || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    return true;
+}
+
 static bool point_headings(bool disc) {
     const s16 points[][2] = {{-4, -3}, {-4, -4},        {-5, -3},       {-3, -3},
                              {-4, -2}, {-32768, 32767}, {32767, -32768}};
@@ -343,7 +365,7 @@ int main(int argc, char **argv) {
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-              point_headings(disc);
+              point_headings(disc) && actor_headings(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
