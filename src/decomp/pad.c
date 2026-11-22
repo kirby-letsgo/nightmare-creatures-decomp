@@ -471,6 +471,44 @@ u32 nc_menu_button_scan_entry(CPUState *c) {
     return 0x8006718c;
 }
 
+/* Each scan record spans 50 bytes. The loop carries twice the index in v0.
+ * Type 10 matches the full button word against a signed halfword sequence. */
+u32 nc_menu_sequence_match(CPUState *c) {
+    if (c->budget <= 39)
+        return 0x8006718c;
+
+    u32 offset = ((R(2) + R(19)) * 8 + R(19)) * 2;
+    R(4) = offset;
+    R(1) = 0x80090000 + offset;
+    R(3) = MEM_R8(0x80088595 + offset);
+    R(2) = R(3) << 3;
+    c->budget -= 12;
+    if (R(3) != 10)
+        return 0x8006725c;
+
+    R(5) = MEM_R8(0x80088594 + offset);
+    R(3) = R(22) + offset;
+    u32 expected = (u32)(s32)(s16)MEM_R16(R(3) + 2 * R(5));
+    R(2) = 1;
+    c->budget -= 14;
+    if (R(20) != expected)
+        return 0x800672ec;
+
+    R(3) = R(5) + 1;
+    c->budget -= 2;
+    if (R(20) != 1)
+        return 0x800672e0;
+
+    R(18) = 0;
+    R(3) = MEM_R32(R(28) + 0x244);
+    R(17) = R(21);
+    R(2) = MEM_R32(R(3) + 4) | 0x2000;
+    R(16) = 0;
+    MEM_W32(R(3) + 4, R(2));
+    c->budget -= 11;
+    return 0x80067200;
+}
+
 /* Ordinary menu records process the direction before saving the button word. */
 bool nc_menu_apply_direction(CPUState *c) {
     if (c->budget <= 2)
