@@ -3165,6 +3165,33 @@ bool nc_select_point_update_row(CPUState *c) {
     return true;
 }
 
+/* The point stores reflected Z. The branch tests the signed low word of
+ * the dot product; HI and LO retain the final Z multiplication. */
+bool nc_project_record_point(CPUState *c) {
+    if (c->budget <= 30)
+        return false;
+    const u32 point = R(19), record = R(16);
+    const s32 dx = (s16)MEM_R16(point) - (s16)MEM_R16(record + 0x18);
+    const u32 x_term = (u32)dx * MEM_R32(0x800d7748);
+    const s32 dz = -(s32)(s16)MEM_R16(point + 4) - (s16)MEM_R16(record + 0x1c);
+    R(4) = MEM_R32(0x800d7750);
+    R(5) = x_term;
+    R(2) = dz;
+    nc_mult(c, R(2), R(4));
+    R(3) = x_term + c->lo;
+    c->budget -= 30;
+    return true;
+}
+
+bool nc_check_record_projection_limit(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    const u32 limit = MEM_R32(0x800d7c14) << 9;
+    R(2) = (s32)R(3) > (s32)limit;
+    c->budget -= 9;
+    return true;
+}
+
 bool nc_begin_record_point_heading(CPUState *c) {
     if (c->budget <= 12)
         return false;
