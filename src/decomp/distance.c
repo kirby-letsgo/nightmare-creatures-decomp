@@ -556,6 +556,38 @@ bool nc_scale_spatial_level(CPUState *c, bool actor) {
     return true;
 }
 
+/* The flagged entry either forces full levels or applies a signed 2400-unit
+ * cutoff. The ordinary entry always splits the level using the bearing. */
+NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged) {
+    const bool full = flagged && (R(3) & 4);
+    const bool distant = flagged && !full && (s32)R(17) > 2400;
+    const int cycles = distant ? 11 : flagged && !full ? 13 : 9;
+    if (c->budget <= cycles)
+        return NC_POINT_LEVEL_FALLBACK;
+    const u32 channel = (s32)(s16)R(20);
+    c->budget -= cycles;
+    if (distant) {
+        R(2) = 0;
+        R(4) = R(19);
+        R(5) = 0;
+        R(6) = channel;
+        R(31) = 0x8006ca34;
+        return NC_POINT_LEVEL_DISTANT;
+    }
+    R(4) = channel;
+    if (full) {
+        R(2) = 4;
+        R(5) = R(6) = 0x2fff;
+    } else {
+        if (flagged)
+            R(2) = 1;
+        R(5) = (s32)(s16)R(7);
+        R(6) = (s32)(s16)(R(6) - R(7));
+    }
+    R(31) = 0x8006ca60;
+    return NC_POINT_LEVEL_SET;
+}
+
 /* Both spatial callers scale their planar distance against 2400. Bit 1
  * squares the remaining distance first, with a separate truncated divide.
  * Keep each low-word product and the final reciprocal multiply's HI/LO. */

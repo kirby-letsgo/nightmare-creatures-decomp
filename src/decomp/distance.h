@@ -74,6 +74,12 @@ bool nc_finish_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_sample_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_store_target_vertical_velocity(CPUState *c);
 bool nc_call_spatial_attenuation(CPUState *c, bool actor);
+typedef enum {
+    NC_POINT_LEVEL_FALLBACK,
+    NC_POINT_LEVEL_SET,
+    NC_POINT_LEVEL_DISTANT
+} NcPointLevelAction;
+NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged);
 bool nc_scale_spatial_level(CPUState *c, bool actor);
 bool nc_spatial_attenuation(CPUState *c);
 bool nc_prepare_spatial_actor_bearing(CPUState *c);

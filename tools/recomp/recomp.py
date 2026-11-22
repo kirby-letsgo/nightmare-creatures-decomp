@@ -687,7 +687,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
             targets.update((0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
-            targets.update((0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8))
+            targets.update((0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
             targets.update((0x800587A0, 0x800587CC, 0x80058830))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
@@ -1346,6 +1346,16 @@ class Emitter:
                 out.append(f"    if (nc_scale_spatial_level(c, {'true' if actor else 'false'})) {{")
                 out.append(f"        if (R(2)) goto L_{flagged:08X};")
                 out.append(f"        goto L_{ordinary:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C9F8, 0x8006CA3C):
+                flagged = "true" if i.addr == 0x8006C9F8 else "false"
+                out.append(f"    switch (nc_select_point_levels(c, {flagged})) {{")
+                out.append("    case NC_POINT_LEVEL_SET:")
+                out.append(f"        {self.call(0x8006C524)}")
+                out.append("        goto L_8006CA60;")
+                out.append("    case NC_POINT_LEVEL_DISTANT:")
+                out.append(f"        {self.call(0x8006BFE8)}")
+                out.append("        goto L_8006CA34;")
+                out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
                 out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):
