@@ -1954,6 +1954,36 @@ static bool check_cd_data_callback(void) {
     return ok && !saved.error;
 }
 
+static bool check_cd_sync(void) {
+    const u32 scratch = 0x80061000, result = scratch + 9, response = 0x80024e30;
+    const u8 statuses[] = {0, 2, 5}; /* pending, complete, error */
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W16(0x8002341a, 0); /* interrupt handler is inactive */
+    MEM_W32(0x80023400, scratch);
+    MEM_W32(0x80023404, scratch + 4);
+    for (unsigned i = 0; i < 8; i++)
+        MEM_W8(response + i, 0x50 + i);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof statuses && ok; i++)
+        for (unsigned buffered = 0; buffered < 2 && ok; buffered++) {
+            u8 status = statuses[i];
+            MEM_W8(0x80024a38, status);
+            memset(nc_fast_ptr(result - 1), 0xcc, 10);
+            CPUState state = arguments(status ? 0 : 1, buffered ? result : 0, 3,
+                                       buffered ? 5 : 4096);
+            ok = compare(state, 0x8001ff3c, nc_credits_cd_sync, 4) &&
+                 nc_cpu.r[2] == status && MEM_R8(0x80024a38) == (status ? 2 : 0) &&
+                 MEM_R8(result - 1) == 0xcc && MEM_R8(result + 8) == 0xcc;
+            for (unsigned j = 0; j < 8 && ok; j++)
+                ok = MEM_R8(result + j) == (buffered && status ? 0x50 + j : 0xcc);
+        }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_cd_data_sync(void) {
     const u32 scratch = 0x80061000;
     StateIO saved = {0};
@@ -2729,6 +2759,7 @@ int main(int argc, char **argv) {
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);
     pass = pass && check_cd_data_callback();
+    pass = pass && check_cd_sync();
     pass = pass && check_cd_data_sync();
     pass = pass && check_dma_slot();
     pass = pass && check_vblank_dispatch();

@@ -2788,20 +2788,28 @@ bool nc_credits_cd_data_callback(CPUState *c) {
     return true;
 }
 
-/* Forward the wait mode to CD_datasync and preserve its status result. */
-bool nc_credits_cd_data_sync(CPUState *c) {
+/* Both sync wrappers forward their arguments and return the driver status. */
+static bool call_cd_sync_driver(CPUState *c, u32 driver, u32 return_pc) {
     if (c->budget <= 4)
         return false;
     R(29) -= 24;
     c->budget--;
     MEM_W32(R(29) + 16, R(31));
-    R(31) = 0x800203d0;
+    R(31) = return_pc;
     c->budget -= 3;
-    nc_call(c, 0x800218d8);
+    nc_call(c, driver);
     load_word(c, 31, R(29) + 16);
     set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2);
     return true;
+}
+
+bool nc_credits_cd_sync(CPUState *c) {
+    return call_cd_sync_driver(c, 0x80020adc, 0x8001ff4c);
+}
+
+bool nc_credits_cd_data_sync(CPUState *c) {
+    return call_cd_sync_driver(c, 0x800218d8, 0x800203d0);
 }
 
 /* Load a CD port pointer from the guest table, including the load delay nop. */
