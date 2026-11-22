@@ -543,6 +543,30 @@ u32 nc_menu_record_sequence(CPUState *c) {
     return 0x800672b4;
 }
 
+bool nc_menu_apply_sequence(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800672bc;
+    R(5) = 1;
+    c->budget -= 2;
+    nc_call(c, 0x80066ed0);
+    return true;
+}
+
+/* Completing an ordinary sequence clears all eleven progress bytes,
+ * starting with the last record. The common scan tail increments s3. */
+bool nc_menu_reset_sequences(CPUState *c) {
+    if (c->budget <= 69)
+        return false;
+    for (int offset = 500; offset >= 0; offset -= 50)
+        MEM_W8(0x80088594u + offset, 0);
+    R(1) = 0x80090000; /* last record address before the signed displacement */
+    R(2) = (u32)-50;
+    R(19) = 11;
+    c->budget -= 69;
+    return true;
+}
+
 /* A matching step saves the low byte of the next position. A mismatch
  * clears the position in the fixed record table. */
 bool nc_menu_store_progress(CPUState *c, bool matched) {
