@@ -95,6 +95,7 @@ CREDITS_ROUTINES = {
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
+    0x8001AE30: "nc_credits_bios_96_remove(c)",
     0x8001AE48: "nc_credits_return_from_exception(c)",
     0x8001AE58: "nc_credits_reset_irq_entry(c)",
     0x8001AE68: "nc_credits_hook_irq_entry(c)",
@@ -739,6 +740,8 @@ class Emitter:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
+        if self.mod.name == "psx2_exe" and f.addr == 0x8001A71C:
+            targets.update((0x8001A754, 0x8001A764))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AC70:
             targets.add(0x8002AC94)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B3D0:
@@ -1436,6 +1439,16 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x8004CE60, 0x8004CE68):
                 missing = "true" if i.addr == 0x8004CE68 else "false"
                 out.append(f"    if (nc_finish_actor_distance(c, {missing})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001A71C:
+                out.append("    if (nc_prepare_reference_bearing(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_8001A754; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001A754:
+                out.append("    if (nc_call_reference_facing(c)) {")
+                out.append(f"        {self.call(0x800472D8)}")
+                out.append("        goto L_8001A764; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001A764:
+                out.append("    if (nc_finish_reference_bearing(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004CE24:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:

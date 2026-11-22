@@ -928,6 +928,53 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* Bearing from the supplied actor to the reference actor. Subtract both
+ * 24.8 positions before shifting so negative fractional deltas round down. */
+bool nc_prepare_reference_bearing(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    const u32 reference = MEM_R32(0x800ce9c4);
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x14, R(31));
+    MEM_W32(R(29) + 0x10, R(16));
+    const u32 x = MEM_R32(R(4) + 0x27c);
+    R(3) = MEM_R32(reference + 0x27c) - x;
+    const u32 z = MEM_R32(reference + 0x284);
+    R(2) = MEM_R32(R(4) + 0x284);
+    R(4) = (s32)R(3) >> 8;
+    R(5) = (s32)(z - R(2)) >> 8;
+    R(31) = 0x8001a754;
+    c->budget -= 24;
+    return true;
+}
+
+bool nc_call_reference_facing(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(4) = MEM_R32(0x800ce9c4);
+    R(16) = R(2) << 4;
+    R(31) = 0x8001a764;
+    c->budget -= 6;
+    return true;
+}
+
+/* Reverse the bearing to compare both angles from the reference actor.
+ * The original wraps 0x7fff itself to -32769. */
+bool nc_finish_reference_bearing(CPUState *c) {
+    const u32 gap = (R(2) + 0x8000u - R(16)) & 0xffff;
+    const bool wrap = gap >= 0x7fff;
+    const int cycles = wrap ? 25 : 22;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = wrap ? gap - 0x10000u : gap;
+    R(2) = R(3);
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Keep the linked pose across the point-heading call. The actor and its
  * current pose are read again when the call returns. */
 bool nc_prepare_relative_heading(CPUState *c) {
