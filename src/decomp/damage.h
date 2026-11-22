@@ -3,6 +3,17 @@
 
 #include "port/recomp.h"
 
+typedef enum NcHitOutcome {
+    NC_HIT_TIMED,
+    NC_HIT_SURVIVED,
+    NC_HIT_PLAYER_DEATH,
+    NC_HIT_OTHER_DEATH,
+} NcHitOutcome;
+
+NcHitOutcome nc_check_lethal_hit(CPUState *c);
+bool nc_set_actor_state(CPUState *c);
+bool nc_enter_death_state(CPUState *c);
+
 /* Select table power and return damage in the game's 4096-point health scale. */
 bool nc_select_base_damage(CPUState *c);
 

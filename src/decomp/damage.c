@@ -124,3 +124,123 @@ bool nc_calculate_hit_health(CPUState *c, bool check_mode) {
     c->budget -= cycles;
     return true;
 }
+
+/* Health is a signed halfword here. Both death paths clamp it to zero in
+ * the branch delay slot before choosing the state-15 reaction. */
+NcHitOutcome nc_check_lethal_hit(CPUState *c) {
+    if (c->budget <= 13)
+        return NC_HIT_TIMED;
+    const u32 actor = R(17);
+    s16 health = (s16)MEM_R16(actor + ACTOR_HEALTH_OFFSET);
+    R(2) = 40;
+    c->budget -= 6;
+    if (health > 0)
+        return NC_HIT_SURVIVED;
+    R(2) = MEM_R32(actor + 0x2c8) & 1;
+    MEM_W16(actor + ACTOR_HEALTH_OFFSET, 0);
+    c->budget -= 7;
+    return R(2) ? NC_HIT_PLAYER_DEATH : NC_HIT_OTHER_DEATH;
+}
+
+/* Reset the animation fields before installing the new actor state. */
+bool nc_set_actor_state(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    const u32 actor = R(4);
+    R(2) = MEM_R32(actor + 0x330);
+    R(3) = ~0x18u;
+    MEM_W8(actor + 0x38a, 0);
+    MEM_W8(actor + 0x38e, 0);
+    MEM_W8(actor + 0x39a, 0);
+    MEM_W8(actor + 0x399, 0);
+    MEM_W8(actor + 0x3a3, 0);
+    MEM_W8(actor + 0x39c, 0);
+    MEM_W8(actor + 0x39b, R(5));
+    R(2) &= R(3);
+    MEM_W32(actor + 0x330, R(2));
+    c->budget -= 14;
+    return true;
+}
+
+/* The optional effect depends on the actor flags and a signed index into
+ * the level's table of 36-byte records. Delay slots leave constants in v0. */
+static bool death_effect_enabled(CPUState *c) {
+    R(4) = MEM_R32(R(17) + 0x2c8);
+    R(2) = 0x00200000;
+    c->budget -= 7;
+    if (!(R(4) & 1))
+        return false;
+    R(2) &= R(4);
+    c->budget -= 3;
+    if (R(2))
+        return false;
+
+    s32 index = (s16)MEM_R16(R(17) + 0x360);
+    u32 records = MEM_R32(0x8008f0c8);
+    R(3) = MEM_R32(records + (u32)index * 36);
+    R(2) = 0x48000000;
+    c->budget -= 19;
+    if (R(3) & 0x90000000)
+        return false;
+    R(2) = 0x00400000;
+    c->budget -= 3;
+    return (R(3) & 0x48000000) != 0;
+}
+
+bool nc_enter_death_state(CPUState *c) {
+    /* Prologue (12), fixed-cost state setter (14) and effect setup (up to 36).
+     * The effect calls can take arbitrary time. Poll each instruction from there. */
+    if (c->budget <= 62)
+        return false;
+    R(29) -= 32;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 0x18, R(31));
+    MEM_W32(R(29) + 0x10, R(16));
+    R(2) = MEM_R32(R(17) + 0x2c8);
+    MEM_W16(R(17) + ACTOR_HEALTH_OFFSET, 0);
+    R(2) |= R(6);
+    R(31) = 0x8004d0f4;
+    MEM_W32(R(17) + 0x2c8, R(2));
+    c->budget -= 12;
+    nc_call(c, 0x8004d1a0);
+
+    if (death_effect_enabled(c)) {
+        R(2) |= R(4);
+        MEM_W32(R(17) + 0x2c8, R(2));
+        R(16) = 2;
+        R(4) = R(17);
+        c->budget -= 4;
+        bool more;
+        do {
+            R(5) = 17;
+            NC_POLL(c, 1);
+            R(6) = 0x00800000;
+            NC_POLL(c, 1);
+            R(6) |= 0x8080;
+            NC_POLL(c, 1);
+            R(31) = 0x8004d178;
+            R(7) = R(16);
+            NC_POLL(c, 2);
+            nc_call(c, 0x80058b9c);
+            R(16)++;
+            NC_POLL(c, 1);
+            R(2) = (s32)R(16) < 48;
+            NC_POLL(c, 1);
+            more = R(2) != 0;
+            R(4) = R(17);
+            NC_POLL(c, 2);
+        } while (more);
+    }
+
+    R(31) = MEM_R32(R(29) + 0x18);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(17) = MEM_R32(R(29) + 0x14);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(16) = MEM_R32(R(29) + 0x10);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 32;
+    NC_POLL(c, 1);
+    NC_POLL(c, 2);
+    return true;
+}
