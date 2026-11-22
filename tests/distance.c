@@ -637,6 +637,35 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool matrix_planar_lengths(bool disc) {
+    static const struct {
+        s16 y, z;
+        s32 root_input;
+    } cases[] = {
+        {0, 0, 0},
+        {63, -1, 0},
+        {-64, 0, 1},
+        {0, 4096, 4096},
+        {4096, -4096, 8192},
+        {-32768, 32767, 524272},
+        {-32768, -32768, -524288},
+    };
+    CPUState input = initial(), native;
+    input.r[29] = SCRATCH_BASE + 64;
+    input.r[31] = 0x800475e4; /* stop at the root call */
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        MEM_W16(input.r[29] + 0x18, cases[i].y);
+        MEM_W16(input.r[29] + 0x1a, cases[i].z);
+        memcpy(before, nc_scratch, sizeof before);
+        if (!compare(input, 0x8003475c, nc_prepare_matrix_planar_length, disc, &native) ||
+            native.r[4] != (u32)cases[i].root_input || native.r[31] != 0x80034788 ||
+            native.budget != input.budget - 15 || memcmp(before, nc_scratch, sizeof before))
+            return false;
+    }
+    return true;
+}
+
 static bool matrix_headings(bool disc) {
     const s16 matrices[][9] = {
         {4096, 0, 0, 0, 4096, 0, 0, 0, 4096},
@@ -1165,7 +1194,7 @@ int main(int argc, char **argv) {
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
               facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
-              actor_point_placements(disc) && matrix_headings(disc);
+              actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
