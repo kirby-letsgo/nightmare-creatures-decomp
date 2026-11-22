@@ -1094,6 +1094,50 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool scaled_part_filters(bool disc) {
+    const u32 frame = SCRATCH_BASE, actor = frame + 128, part = frame + 928;
+    static const struct {
+        u8 index;
+        u16 flags, mask;
+        bool branch, selected;
+        int cycles;
+    } cases[] = {{0, 0xffff, 0, false, true, 18},     {0, 0, 0x100, true, false, 22},
+                 {255, 0x80ff, 0, false, true, 27},   {1, 0x8100, 0, true, false, 34},
+                 {3, 0x8100, 0x100, false, true, 26}, {7, 0x8400, 0x100, true, false, 31}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[10] = part;
+        input.r[17] = input.r[18] = frame + 8;
+        input.r[22] = cases[i].mask;
+        input.r[29] = frame;
+        input.r[31] = cases[i].selected ? 0x80026a28 : 0x80026f60;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(frame + 0xb0, actor);
+        MEM_W32(part + 12, cases[i].branch ? part + 64 : 0);
+        MEM_W8(part + 0x4c, cases[i].index);
+        MEM_W16(actor + 0x10a + 2 * cases[i].index, cases[i].flags);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 34;
+        CPUState native = input;
+        if (nc_filter_scaled_part(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_filter_scaled_part(&native) || native.budget != 35 - cases[i].cycles ||
+            (native.r[22] ? native.r[2] != 0 : native.r[2] == 0) != cases[i].selected)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x800269b4);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool scaled_part_walk(bool disc) {
     const u32 frame = SCRATCH_BASE, actor = frame + 256, part = frame + 768;
     const u32 matrix = frame + 64;
@@ -1918,21 +1962,22 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    bool ok =
-        roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-        projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-        point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-        heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-        record_projections(disc) && projected_heading_gaps(disc) &&
-        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
-        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
-        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
-        node_matrix_installation(disc) && part_composition(disc) &&
-        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
-        scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
-        part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);
+    bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
+              projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
+              point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
+              heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
+              record_projections(disc) && projected_heading_gaps(disc) &&
+              projected_heading_selection(disc) && saved_bearing_projections(disc) &&
+              facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
+              rotated_vector_setup(disc) && placed_actor_points(disc) &&
+              actor_point_placements(disc) && matrix_headings(disc) &&
+              matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
+              part_transform_calls(disc) && node_transform_selection(disc) &&
+              node_matrix_installation(disc) && part_composition(disc) &&
+              node_continuations(disc, false) && node_continuations(disc, true) &&
+              node_rotations(disc) && scaled_part_filters(disc) && scaled_part_walk(disc) &&
+              scaled_part_positions(disc) && part_offsets(disc) && part_matrix_composition(disc) &&
+              part_transform_setup(disc) && part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)

@@ -1044,6 +1044,10 @@ class Emitter:
                 out.append("    if (nc_start_scaled_part_position(c)) goto L_80026908;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026908:
                 out.append("    if (nc_begin_scaled_part_walk(c)) goto L_800269B4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800269B4:
+                out.append("    if (nc_filter_scaled_part(c)) {")
+                out.append("        if (R(22) ? R(2) != 0 : R(2) == 0) goto L_80026A28;")
+                out.append("        goto L_80026F60; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002695C:
                 out.append("    if (nc_resume_scaled_part_walk(c)) goto L_800269B4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800266F4:
