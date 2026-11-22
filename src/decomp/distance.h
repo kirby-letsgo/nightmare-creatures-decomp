@@ -72,6 +72,8 @@ typedef enum { NC_ROTATION_PART, NC_ROTATION_TRANSPOSED, NC_ROTATION_PACKED } Nc
 
 bool nc_finish_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_sample_part_rotation(CPUState *c, NcRotationInput input);
+bool nc_prepare_target_bearing(CPUState *c);
+bool nc_prepare_target_distance(CPUState *c);
 bool nc_prepare_planar_velocity(CPUState *c);
 bool nc_finish_planar_velocity(CPUState *c);
 bool nc_heading_cosine(CPUState *c);

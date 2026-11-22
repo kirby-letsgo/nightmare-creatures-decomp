@@ -673,6 +673,8 @@ class Emitter:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
+        if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
+            targets.update((0x800587A0, 0x800587CC))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
             targets.add(0x800588B0)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
@@ -1269,6 +1271,14 @@ class Emitter:
                 out.append("    if (nc_finish_matrix_headings(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8005876C:
+                out.append("    if (nc_prepare_target_bearing(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_800587A0; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800587A0:
+                out.append("    if (nc_prepare_target_distance(c)) {")
+                out.append(f"        {self.call(0x800475E4)}")
+                out.append("        goto L_800587CC; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80058868:
                 out.append("    if (nc_prepare_planar_velocity(c)) {")
                 out.append(f"        {self.call(0x80047684)}")

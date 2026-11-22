@@ -518,6 +518,40 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+/* The target is a signed whole-unit X/Z pair. Convert each actor coordinate
+ * from eight fractional bits before subtracting it from the target. */
+bool nc_prepare_target_bearing(CPUState *c) {
+    if (c->budget <= 21)
+        return false;
+    const s32 actor_x = (s32)MEM_R32(R(19) + 0x27c) >> 8;
+    const s32 target_x = (s16)MEM_R16(0x800d4ca0);
+    const s32 target_z = (s16)MEM_R16(0x800d4ca2);
+    R(17) = target_x - actor_x;
+    R(2) = (s32)MEM_R32(R(19) + 0x284) >> 8;
+    R(16) = (u32)target_z - R(2);
+    R(4) = R(17);
+    R(5) = R(16);
+    R(31) = 0x800587a0;
+    c->budget -= 21;
+    return true;
+}
+
+/* Store the reflected 16-bit turn and pass the low-word sum of squares
+ * to the distance root. HI/LO retain the signed Z square. */
+bool nc_prepare_target_distance(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(3) = R(17) * R(17);
+    nc_mult(c, R(16), R(16));
+    R(2) = -(R(2) << 4);
+    MEM_W16(R(18) + 0x34, R(2));
+    R(9) = c->lo;
+    R(4) = R(3) + R(9);
+    R(31) = 0x800587cc;
+    c->budget -= 11;
+    return true;
+}
+
 /* The record stores signed whole-unit X/Z, while the actor has eight
  * fractional bits. The bearing adds record X and subtracts record Z. */
 bool nc_prepare_planar_velocity(CPUState *c) {
