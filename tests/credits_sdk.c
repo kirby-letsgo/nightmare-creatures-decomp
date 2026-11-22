@@ -244,6 +244,28 @@ static bool check_link_writer(void) {
     return true;
 }
 
+static bool check_transfer_packets(void) {
+    const u32 packet = 0x80060500;
+    const u32 rects[] = {SCRATCH_BASE + 4, packet, 0xa0060504, packet + 8, packet + 12};
+    const s16 sizes[][2] = {{0, 0}, {0, 5}, {3, 0}, {1, 1}, {3, 7}, {4, 6}, {5, 5},
+                            {-1, 1}, {-3, 1}, {-3, -2}, {-32768, -32768}, {32767, -32768}};
+    for (unsigned load = 0; load <= 1; load++)
+        for (unsigned i = 0; i < sizeof rects / sizeof rects[0]; i++)
+            for (unsigned j = 0; j < sizeof sizes / sizeof sizes[0]; j++) {
+                memset(nc_fast_ptr(packet), 0xa5, 72);
+                MEM_W32(rects[i], 0xfedc1234);
+                MEM_W16(rects[i] + 4, (u16)sizes[j][0]);
+                MEM_W16(rects[i] + 6, (u16)sizes[j][1]);
+                int threshold = load ? 35 : 32;
+                CPUState state = arguments(packet, rects[i], 0x8765abcd, threshold + 1);
+                state.r[7] = 0x1234cdef;
+                if (!compare(state, load ? 0x8001bb70 : 0x8001bb10,
+                             load ? nc_credits_draw_load : nc_credits_draw_move, threshold))
+                    return false;
+            }
+    return true;
+}
+
 static bool check_merge_primitives(void) {
     const u32 first = 0x80060800;
     const u32 seconds[] = {first + 4, SCRATCH_BASE + 12, first, 0xa0060800};
@@ -410,6 +432,7 @@ int main(int argc, char **argv) {
     pass = pass && check_terminator();
     pass = pass && check_priority_packet();
     pass = pass && check_merge_primitives();
+    pass = pass && check_transfer_packets();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
