@@ -2134,6 +2134,10 @@ bool nc_credits_deliver_event(CPUState *c) {
     return bios_service(c, 0xb0, 7);
 }
 
+bool nc_credits_return_from_exception(CPUState *c) {
+    return bios_service(c, 0xb0, 0x17);
+}
+
 bool nc_credits_reset_irq_entry(CPUState *c) {
     return bios_service(c, 0xb0, 0x18);
 }

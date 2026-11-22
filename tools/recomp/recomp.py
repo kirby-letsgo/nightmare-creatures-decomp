@@ -95,6 +95,7 @@ CREDITS_ROUTINES = {
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
+    0x8001AE48: "nc_credits_return_from_exception(c)",
     0x8001AE58: "nc_credits_reset_irq_entry(c)",
     0x8001AE68: "nc_credits_hook_irq_entry(c)",
     0x8001AE78: "nc_credits_exit_critical_section(c)",
@@ -1454,6 +1455,8 @@ class Emitter:
                 )
                 out.append("        if (reproject) goto L_800475A8;")
                 out.append("        goto L_800475CC; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800473E8:
+                out.append("    if (nc_latch_placement_tick(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047420:
                 out.append(
                     "    { bool use_point; if (nc_begin_projected_point_update(c, &use_point)) {"

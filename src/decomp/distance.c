@@ -462,6 +462,28 @@ bool nc_prepare_actor_placement_target(CPUState *c) {
     return true;
 }
 
+/* Bit 5 latches the current tick in the global placement record. Repeated
+ * requests keep the original tick until the placement flags are reset. */
+bool nc_latch_placement_tick(CPUState *c) {
+    const u32 record = 0x800d7630;
+    const u16 flags = MEM_R16(record + 0x16c);
+    const bool latched = (flags & 0x20) != 0;
+    const int cycles = latched ? 11 : 18;
+    if (c->budget <= cycles)
+        return false;
+    R(5) = record + 0x16c;
+    R(4) = flags;
+    R(2) = flags | 0x20;
+    if (!latched) {
+        R(3) = MEM_R32(0x8008ef10);
+        MEM_W16(R(5), (u16)R(2));
+        R(1) = 0x800d0000;
+        MEM_W32(record + 0x168, R(3));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The branch tests bit 2. Its delay slot saves bits 4 and 6 for the
  * alternate path, even when the paired-angle update is selected. */
 bool nc_begin_placement_update(CPUState *c) {
