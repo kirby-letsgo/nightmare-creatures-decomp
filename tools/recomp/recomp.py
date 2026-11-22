@@ -570,6 +570,12 @@ class Emitter:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004260C:
                 out.append("    if (nc_player_attack_kind(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80041540:
+                out.append("    if (nc_attack_part(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042760:
+                out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
+                out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
                 out.append("    if (nc_select_base_damage(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):

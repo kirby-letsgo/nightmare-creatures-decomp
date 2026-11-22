@@ -1,5 +1,66 @@
 #include "decomp/contact.h"
 
+/* Resolve the part requested by either of the player's attack slots.
+ * The contact loop supplies a default part when this lookup returns zero. */
+bool nc_attack_part(CPUState *c) {
+    const u32 actor = R(4);
+    int cycles;
+    unsigned offset;
+    switch (R(5)) {
+    case 21:
+        offset = 0x88;
+        cycles = 10;
+        break;
+    case 19:
+        offset = 0x88;
+        cycles = 12;
+        break;
+    case 18:
+        offset = 0x84;
+        cycles = 12;
+        break;
+    case 20:
+        offset = 0x84;
+        cycles = 14;
+        break;
+    default:
+        offset = 0;
+        cycles = 11;
+        break;
+    }
+    if (c->budget <= cycles)
+        return false;
+    R(2) = offset ? MEM_R32(actor + offset) : 0;
+    c->budget -= cycles;
+    return true;
+}
+
+/* The primary slot can fall back to a separate part for selectors 33 and 34.
+ * The secondary slot falls back to the second part list. */
+bool nc_finish_attack_part(CPUState *c, bool primary) {
+    if (c->budget <= (primary ? 23 : 13))
+        return false;
+    unsigned part_reg = primary ? 30 : 9;
+    R(part_reg) = R(2);
+    R(8) = MEM_R32(R(29) + 0xf8);
+    c->budget -= 6;
+    if (R(part_reg))
+        return true;
+    const u32 actor = MEM_R32(R(29) + 0xc0);
+    R(11) = actor;
+    if (primary) {
+        u32 selector = MEM_R8(actor + 0x391);
+        bool alternate = selector == 33 || selector == 34;
+        R(2) = alternate;
+        R(part_reg) = MEM_R32(actor + (alternate ? 0xcc : 0x274));
+        c->budget -= alternate ? 17 : 15;
+    } else {
+        R(part_reg) = MEM_R32(actor + 0x278);
+        c->budget -= 7;
+    }
+    return true;
+}
+
 /* The caller has copied 24 primary (state, kind) pairs and two secondary
  * pairs to its stack. A zero result skips outgoing contact detection. */
 bool nc_player_attack_kind(CPUState *c) {

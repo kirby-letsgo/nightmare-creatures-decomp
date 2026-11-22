@@ -223,6 +223,71 @@ static bool check_attack_kinds(bool disc) {
     return true;
 }
 
+static bool check_attack_parts(bool disc) {
+    const u32 actor = 0x80120000;
+    for (unsigned present = 0; present < 4; present++) {
+        const u32 first = present & 1 ? 0x80130000u : 0;
+        const u32 second = present & 2 ? 0x80140000u : 0;
+        MEM_W32(actor + 0x84, first);
+        MEM_W32(actor + 0x88, second);
+        for (unsigned slot = 0; slot <= 256; slot++) {
+            CPUState c = initial_cpu(), native;
+            c.r[4] = actor;
+            c.r[5] = slot;
+            c.budget = 100;
+            native = c;
+            u32 want = slot == 18 || slot == 20 ? first : slot == 19 || slot == 21 ? second : 0;
+            if (!nc_attack_part(&native) || native.r[2] != want)
+                return false;
+            if (disc) {
+                CPUState guest = c;
+                interp_call(&guest, 0x80041540);
+                if (memcmp(&guest, &native, sizeof guest)) {
+                    fprintf(stderr, "attack part %u: budget %d/%d\n", slot, guest.budget,
+                            native.budget);
+                    return false;
+                }
+            }
+            c.budget -= native.budget;
+            CPUState cutoff = c;
+            if (nc_attack_part(&cutoff) || memcmp(&c, &cutoff, sizeof c))
+                return false;
+        }
+    }
+    MEM_W32(actor + 0xcc, 0x80140000);
+    MEM_W32(actor + 0x274, 0x80141000);
+    MEM_W32(actor + 0x278, 0x80142000);
+    for (unsigned slot = 0; slot < 256; ++slot)
+        for (unsigned option = 0; option < 4; ++option) {
+            bool primary = (option & 1) != 0;
+            CPUState c = initial_cpu();
+            c.r[2] = option & 2 ? 0x80144000 : 0;
+            c.r[29] = SCRATCH_BASE + 0x100;
+            c.r[31] = primary ? 0x800427A0 : 0x800427D0;
+            MEM_W8(actor + 0x391, slot);
+            MEM_W32(c.r[29] + 0xc0, actor);
+            MEM_W32(c.r[29] + 0xf8, 7);
+            c.budget = primary ? 23 : 13;
+            CPUState native = c;
+            if (nc_finish_attack_part(&native, primary) || memcmp(&native, &c, sizeof c))
+                return false;
+            native.budget = ++c.budget;
+            u32 want = primary ? (slot == 33 || slot == 34 ? 0x80140000 : 0x80141000) : 0x80142000;
+            if (!nc_finish_attack_part(&native, primary) ||
+                native.r[primary ? 30 : 9] != (c.r[2] ? c.r[2] : want))
+                return false;
+            if (disc) {
+                interp_call(&c, primary ? 0x80042760 : 0x800427B4);
+                if (memcmp(&native, &c, sizeof c)) {
+                    fprintf(stderr, "attack fallback slot %u, option %u: budget %d/%d\n", slot,
+                            option, c.budget, native.budget);
+                    return false;
+                }
+            }
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 1;
@@ -242,7 +307,7 @@ int main(int argc, char **argv) {
         }
     }
     bool ok = check_preparation(disc) && check_boxes(disc) && check_states(disc) &&
-              check_attack_kinds(disc);
+              check_attack_kinds(disc) && check_attack_parts(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

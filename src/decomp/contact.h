@@ -12,6 +12,8 @@ typedef enum NcContactResult {
 NcContactResult nc_attack_bounds(CPUState *c);
 bool nc_prepare_attack_box(CPUState *c, bool outgoing);
 bool nc_player_attack_kind(CPUState *c);
+bool nc_attack_part(CPUState *c);
+bool nc_finish_attack_part(CPUState *c, bool primary);
 NcContactResult nc_target_accepts_contact(CPUState *c);
 
 #endif
