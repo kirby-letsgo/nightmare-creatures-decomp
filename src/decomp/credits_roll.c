@@ -449,3 +449,36 @@ bool nc_credits_stop_pad(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+bool nc_credits_play_track(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    MEM_W32(R(29) + 0x14, R(31));
+    R(31) = 0x80019378;
+    R(16) = R(4);
+    c->budget -= 5;
+    nc_call(c, 0x8001935c);
+
+    /* Save the selected track in the two-word track list, then choose the
+     * CdPlay mode. Tracks 11 through 25 use mode 1. */
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, R(5) + 0x4c9c);
+    MEM_W32(R(28) + 0x34, R(16));
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 16, R(16) - 11);
+    set_reg(c, 16, R(16) < 15);
+    bool mode_one = R(16) != 0;
+    R(4) = 2;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (mode_one)
+        set_reg(c, 4, 1);
+    R(6) = 0;
+    call(c, 0x80022ccc, 0x800193a0);
+    load_word(c, 31, R(29) + 0x14);
+    load_word(c, 16, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
