@@ -314,6 +314,153 @@ bool nc_credits_link_packets(CPUState *c) {
     return true;
 }
 
+/* Both GPU layouts encode the draw-mode command, but move the flag bits. */
+static u32 draw_mode_word(bool alternate, bool display, bool dither, u32 page, u32 *opcode) {
+    *opcode = 0xe1000000u;
+    if (dither)
+        *opcode |= alternate ? 0x800 : 0x200;
+    u32 bits = page & (alternate ? 0x27ff : 0x9ff);
+    if (display)
+        bits |= alternate ? 0x1000 : 0x400;
+    return *opcode | bits;
+}
+
+bool nc_credits_draw_mode_word(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    c->budget -= 2;
+    u8 graph = MEM_R8(0x80024558);
+    bool alternate = graph == 1 || graph == 2;
+    bool display = R(4) != 0, dither = R(5) != 0;
+    R(2) = draw_mode_word(alternate, display, dither, R(6), &R(3));
+    c->budget -= NC_LOAD_CYCLES + 11 + dither + (display ? (alternate ? 2 : 1) : 0);
+    return true;
+}
+
+bool nc_credits_draw_tpage(CPUState *c) {
+    if (c->budget <= 60)
+        return false;
+    R(29) -= 0x28;
+    c->budget--;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x18, R(18));
+    R(18) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(6);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(7);
+    R(2) = 1;
+    c->budget -= 3;
+    MEM_W32(R(29) + 0x20, R(31));
+    c->budget--;
+    R(31) = 0x8001ba90;
+    MEM_W8(R(19) + 3, 1);
+    c->budget -= 2;
+    NC_FN_ENTER(c, 0x8001c1c8);
+    nc_credits_graph_status(c, false);
+    R(3) = 1;
+    bool alternate = R(2) == 1;
+    c->budget -= 3;
+    if (!alternate) {
+        R(31) = 0x8001baa4;
+        c->budget -= 2;
+        NC_FN_ENTER(c, 0x8001c1c8);
+        nc_credits_graph_status(c, false);
+        R(3) = 2;
+        alternate = R(2) == 2;
+        c->budget -= 3;
+    }
+
+    bool display = R(18) != 0, dither = R(16) != 0;
+    R(2) = draw_mode_word(alternate, display, dither, R(17), &R(alternate ? 3 : 7));
+    c->budget -= 5 + alternate + display + dither;
+    MEM_W32(R(19) + 4, R(2));
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 0x20);
+    c->budget -= NC_LOAD_CYCLES;
+    for (int reg = 19; reg >= 16; reg--) {
+        R(reg) = MEM_R32(R(29) + 0x10 + (reg - 16) * 4);
+        c->budget -= NC_LOAD_CYCLES;
+    }
+    R(29) += 0x28;
+    c->budget -= 3;
+    return true;
+}
+
+bool nc_credits_draw_move(CPUState *c) {
+    if (c->budget <= 32)
+        return false;
+
+    const u32 packet = R(8) = R(4);
+    const u32 rect = R(5);
+    c->budget--;
+    bool nonempty = MEM_R16(rect + 4) != 0;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (nonempty) {
+        nonempty = MEM_R16(rect + 6) != 0;
+        c->budget -= NC_LOAD_CYCLES + 3;
+    }
+    R(4) = nonempty ? 5 : 0;
+    if (!nonempty)
+        c->budget -= 2;
+
+    MEM_W32(packet + 4, 0x01000000); /* clear texture cache */
+    c->budget -= 2;
+    MEM_W32(packet + 8, 0x80000000); /* VRAM-to-VRAM copy */
+    R(3) = (u16)R(6);
+    c->budget -= 3;
+    MEM_W8(packet + 3, (u8)R(4));
+    c->budget--;
+    R(4) = MEM_R32(rect);
+    const u32 destination = (R(7) << 16) | R(3);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(packet + 16, destination);
+    c->budget--;
+    MEM_W32(packet + 12, R(4));
+    c->budget--;
+    R(2) = MEM_R32(rect + 4);
+    c->budget -= NC_LOAD_CYCLES;
+    MEM_W32(packet + 20, R(2));
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_credits_draw_load(CPUState *c) {
+    if (c->budget <= 35)
+        return false;
+
+    const u32 packet = R(4), rect = R(5);
+    s16 width = (s16)MEM_R16(rect + 4);
+    c->budget -= NC_LOAD_CYCLES;
+    s16 height = (s16)MEM_R16(rect + 6);
+    nc_mult(c, (u32)(s32)width, (u32)(s32)height);
+    /* Two 16-bit pixels per word, with space for at most twelve words. */
+    u32 pixel_words = (u32)(((s32)c->lo + 1) / 2);
+    u32 length = pixel_words <= 12 ? pixel_words + 4 : 0;
+    c->budget -= NC_LOAD_CYCLES + 11 + (length == 0);
+
+    MEM_W8(packet + 3, (u8)length);
+    c->budget--;
+    MEM_W32(packet + 4, 0xa0000000); /* CPU-to-VRAM copy */
+    c->budget--;
+    for (unsigned off = 0; off <= 4; off += 4) {
+        u32 word = MEM_R32(rect + off);
+        c->budget -= NC_LOAD_CYCLES + 1;
+        MEM_W32(packet + 8 + off, word);
+        c->budget--;
+    }
+    R(2) = packet + length * 4;
+    R(3) = 0x01000000; /* clear texture cache after the pixel data */
+    c->budget -= 3;
+    MEM_W32(R(2), R(3));
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_merge_primitives(CPUState *c) {
     if (c->budget <= 17)
         return false;
@@ -393,6 +540,25 @@ bool nc_credits_default_display(CPUState *c) {
         c->budget--;
     }
     MEM_W16(R(2) + 6, (u16)R(3));
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_credits_priority_packet(CPUState *c) {
+    bool check_mask = R(5) != 0;
+    if (c->budget <= (check_mask ? 10 : 9))
+        return false;
+
+    R(2) = 2;
+    c->budget--;
+    MEM_W8(R(4) + 3, 2); /* Two command words follow the DMA tag. */
+    R(3) = 0xe6000000u | (check_mask ? 2u : 0u);
+    c->budget -= check_mask ? 4 : 3;
+    R(2) = R(3) | (R(6) != 0); /* Set the mask bit on written pixels. */
+    c->budget -= 2;
+    MEM_W32(R(4) + 4, R(2));
+    c->budget--;
+    MEM_W32(R(4) + 8, 0);
     c->budget -= 2;
     return true;
 }

@@ -154,3 +154,213 @@ bool nc_decode_pad(CPUState *c) {
     c->budget -= cycles;
     return true;
 }
+
+/* Return zero on completion, or the first guest instruction still to run.
+ * Entry headroom covers selection, decoding and the return. The disconnect
+ * handlers are guest calls with independent budgets, so check again there. */
+u32 nc_read_pad(CPUState *c) {
+    if (c->budget <= 700)
+        return 0x80070050;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    MEM_W32(R(29) + 0x14, R(31));
+    R(31) = 0x80070064;
+    R(16) = R(4);
+    c->budget -= 5;
+    nc_call(c, 0x8006ff34);
+
+    const u32 gp = R(28);
+    bool have_pad = MEM_R16(gp + PAD_MASK) != 0;
+    c->budget -= 6;
+    if (have_pad) {
+        R(3) = (u32)(s32)(s16)MEM_R16(gp + PAD_INDEX);
+        R(2) = R(3) << 4;
+        c->budget -= 6;
+    }
+    if (have_pad && R(3) != 1) {
+        nc_decode_pad(c); /* entry headroom includes its 550-cycle guard */
+    } else {
+        R(3) = 0xc0000000;
+        c->budget -= 2;
+        if (R(16)) {
+            R(4) = MEM_R32(gp + 0x244);
+            R(3) = 0xc0009840;
+            bool suppressed = (MEM_R32(R(4)) & R(3)) != 0;
+            R(2) = 0;
+            c->budget -= 11;
+            if (suppressed)
+                goto restore;
+            R(3) = 0x03000040;
+            R(2) = MEM_R32(R(4) + 4) & R(3);
+            c->budget -= 8;
+            if (!R(2)) {
+                R(31) = 0x800700c8;
+                c->budget -= 2;
+                nc_call(c, 0x8006eae8);
+                if (c->budget <= 15)
+                    return 0x800700c8;
+                R(2) = MEM_R32(R(28) + 0x244);
+                R(1) = 0x80090000;
+                MEM_W32(0x8008ef30, 0x10);
+                R(4) = 0x80088480;
+                R(3) = MEM_R32(R(2) + 4) | 0x40;
+                R(5) = 0x10;
+                R(31) = 0x800700f4;
+                MEM_W32(R(2) + 4, R(3));
+                c->budget -= 15;
+                nc_call(c, 0x80063058);
+            }
+        }
+        R(2) = 0;
+        NC_POLL(c, 2);
+    }
+restore:
+    if (c->budget <= 9)
+        return 0x800705d8;
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 9;
+    return 0;
+}
+
+/* Player control calls 80062D2C instead of polling the controller when
+ * either input-sequence flag (0x30) is set. Each four-byte record has a
+ * button halfword, an unsigned repeat count, and a byte copied to 8008F04C. */
+enum { SEQUENCE_BASE = 0x184, SEQUENCE_INDEX = 0x188, SEQUENCE_REMAINING = 0x3f8 };
+
+/* Level setup clears the active sequence even when playback is disabled.
+ * With playback enabled it installs the records, resets the reader, and
+ * snapshots 8008EF18 between the two guest critical-section calls. */
+bool nc_init_pad_sequence(CPUState *c) {
+    if (c->budget <= 54)
+        return false;
+    const u32 gp = R(28);
+    R(3) = MEM_R32(gp + 0x244);
+    R(29) -= 0x98;
+    MEM_W32(R(29) + 0x90, R(31));
+    R(2) = MEM_R32(R(3)) & 0x30;
+    MEM_W32(gp + SEQUENCE_BASE, 0);
+    c->budget -= 12;
+    if (R(2)) {
+        u32 flags = MEM_R32(R(3) + 4);
+        R(3) = 0x40000;
+        bool alternate = (flags & R(3)) != 0;
+        MEM_W32(gp + 0x344, alternate ? 0x8000 : 0x200);
+        R(2) = MEM_R32(0x800d4190);
+        MEM_W32(gp + SEQUENCE_INDEX, 0);
+        MEM_W8(gp + SEQUENCE_REMAINING, 0);
+        R(1) = 0x80090000;
+        MEM_W32(0x8008f04c, 0);
+        MEM_W32(gp + SEQUENCE_BASE, R(2));
+        R(31) = 0x80062c88;
+        c->budget -= alternate ? 19 : 20;
+        nc_call(c, 0x80073d8c); /* EnterCriticalSection */
+        R(2) = MEM_R32(0x8008ef18);
+        R(1) = 0x80090000;
+        MEM_W32(0x8008ef1c, R(2));
+        R(31) = 0x80062ca0;
+        c->budget -= 8;
+        nc_call(c, 0x80073d9c); /* ExitCriticalSection */
+    }
+    R(31) = MEM_R32(R(29) + 0x90);
+    R(29) += 0x98;
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_stop_pad_sequence(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(2) = 5;
+    MEM_W32(R(28) + SEQUENCE_BASE, 0);
+    R(1) = 0x80090000;
+    MEM_W32(0x8008f164, R(2));
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_pad_sequence_ended(CPUState *c) {
+    if (c->budget <= 40)
+        return false;
+    R(3) = MEM_R32(R(28) + SEQUENCE_BASE);
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    c->budget -= 6;
+    if (!R(3)) {
+        R(2) = 1;
+        --c->budget;
+    } else {
+        R(4) = R(3) + 4 * MEM_R32(R(28) + SEQUENCE_INDEX);
+        R(3) = MEM_R16(R(4));
+        R(2) = 0;
+        c->budget -= 12;
+        if (R(3) == 0x4c41) {
+            R(3) = MEM_R16(R(4) + 2);
+            c->budget -= 6;
+            if (R(3) == 0x4e41) { /* "ALAN" in guest byte order */
+                R(31) = 0x80062d10;
+                c->budget -= 2;
+                nc_call(c, 0x80062cb0);
+                R(2) = 1;
+                c->budget -= 2;
+            }
+        }
+    }
+    R(31) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_read_pad_sequence(CPUState *c) {
+    if (c->budget <= 100)
+        return false;
+    const u32 gp = R(28);
+    R(4) = MEM_R32(gp + SEQUENCE_BASE);
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x14, R(31));
+    MEM_W32(R(29) + 0x10, R(16));
+    c->budget -= 7;
+    if (!R(4)) {
+        R(2) = 0;
+        --c->budget;
+    } else {
+        u32 remaining = MEM_R8(gp + SEQUENCE_REMAINING);
+        c->budget -= 6;
+        u32 index = MEM_R32(gp + SEQUENCE_INDEX);
+        if (remaining) {
+            R(3) = remaining - 1;
+            MEM_W8(gp + SEQUENCE_REMAINING, R(3));
+            R(16) = R(4) + 4 * index;
+            c->budget -= 6;
+        } else {
+            ++index;
+            R(3) = 4 * index;
+            MEM_W32(gp + SEQUENCE_INDEX, index);
+            R(16) = R(4) + R(3);
+            R(2) = index;
+            R(31) = 0x80062d6c;
+            c->budget -= 9;
+            nc_call(c, 0x80062cc8);
+            c->budget -= 2;
+            if (!R(2)) {
+                MEM_W8(gp + SEQUENCE_REMAINING, MEM_R8(R(16) + 2) - 1);
+                c->budget -= 8;
+            }
+        }
+        /* On the last repetition, copy the next record's fourth byte.
+         * Even the terminating call returns the current record's button word. */
+        remaining = MEM_R8(gp + SEQUENCE_REMAINING);
+        u32 side_byte = MEM_R8(R(16) + (remaining ? 3 : 7));
+        R(1) = 0x80090000;
+        MEM_W32(0x8008f04c, side_byte);
+        R(2) = MEM_R16(R(16));
+        c->budget -= 6 + (remaining ? 3 : 5) + 7;
+    }
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 9;
+    return true;
+}

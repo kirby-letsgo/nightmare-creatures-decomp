@@ -87,6 +87,11 @@ credits_exe  80019988    80019A30         credits_sdk.c
 credits_exe  80019A60    80019A9C         credits_sdk.c
 credits_exe  8001A128    8001A188         credits_sdk.c
 credits_exe  8001B874    8001BA5C         credits_sdk.c
+credits_exe  8001D14C    8001D174         credits_sdk.c
+credits_exe  8001BA5C    8001BB10         credits_sdk.c
+credits_exe  8001D470    8001D4CC         credits_sdk.c
+credits_exe  8001BB10    8001BB70         credits_sdk.c
+credits_exe  8001BB70    8001BBDC         credits_sdk.c
 credits_exe  8001BBDC    8001BC14         credits_sdk.c
 credits_exe  8001B824    8001B874         credits_sdk.c
 credits_exe  8001B770    8001B7E8         credits_sdk.c
@@ -100,6 +105,13 @@ credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
+# Four-byte input sequences: level setup, stop, end-marker check, and player-control read.
+psx2_exe     80062C28    80062CB0         pad.c
+psx2_exe     80062CB0    80062CC8         pad.c
+psx2_exe     80062CC8    80062D2C         pad.c
+psx2_exe     80062D2C    80062DE8         pad.c
 # PSX2 pad presence, packet decoding, and the second port's high button word.
 psx2_exe     8006FF34    8007001C         pad.c
+psx2_exe     80070050    800700FC         pad.c
 psx2_exe     800700FC    800705D8         pad.c
+psx2_exe     800705D8    800705EC         pad.c

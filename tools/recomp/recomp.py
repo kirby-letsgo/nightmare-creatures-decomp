@@ -94,9 +94,14 @@ CREDITS_ROUTINES = {
     0x8001BA08: "nc_credits_init_primitive(c, NC_LINE_F4)",
     0x8001BA28: "nc_credits_init_primitive(c, NC_LINE_G4)",
     0x8001BA48: "nc_credits_init_primitive(c, NC_BLOCK_FILL)",
+    0x8001BA5C: "nc_credits_draw_tpage(c)",
+    0x8001BB10: "nc_credits_draw_move(c)",
+    0x8001BB70: "nc_credits_draw_load(c)",
     0x8001BBDC: "nc_credits_merge_primitives(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
     0x8001C1D8: "nc_credits_graph_status(c, true)",
+    0x8001D14C: "nc_credits_priority_packet(c)",
+    0x8001D470: "nc_credits_draw_mode_word(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
@@ -587,6 +592,8 @@ class Emitter:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.update((0x80047254, 0x800472B8))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
+            targets.add(0x800700C8)
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -617,6 +624,24 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80070050:
+                out.extend(
+                    [
+                        "    switch (nc_read_pad(c)) {",
+                        "    case 0: return;",
+                        "    case 0x800700C8: goto L_800700C8;",
+                        "    case 0x800705D8: goto L_800705D8;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80062C28:
+                out.append("    if (nc_init_pad_sequence(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80062CB0:
+                out.append("    if (nc_stop_pad_sequence(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80062CC8:
+                out.append("    if (nc_pad_sequence_ended(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80062D2C:
+                out.append("    if (nc_read_pad_sequence(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
                 out.append("    if (nc_select_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800700FC:

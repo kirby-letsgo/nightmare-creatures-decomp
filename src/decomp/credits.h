@@ -88,6 +88,10 @@ bool nc_credits_packet_link(CPUState *c, bool check_end);
 
 bool nc_credits_link_packets(CPUState *c);
 
+bool nc_credits_draw_tpage(CPUState *c);
+bool nc_credits_draw_mode_word(CPUState *c);
+bool nc_credits_draw_move(CPUState *c);
+bool nc_credits_draw_load(CPUState *c);
 bool nc_credits_merge_primitives(CPUState *c);
 bool nc_credits_end_packet(CPUState *c);
 
@@ -96,6 +100,7 @@ bool nc_credits_palette_id(CPUState *c);
 
 bool nc_credits_video_mode(CPUState *c, bool replace);
 
+bool nc_credits_priority_packet(CPUState *c);
 bool nc_credits_graph_status(CPUState *c, bool debug_level);
 bool nc_credits_default_draw(CPUState *c);
 bool nc_credits_default_display(CPUState *c);
