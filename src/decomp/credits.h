@@ -129,6 +129,7 @@ bool nc_credits_priority_packet(CPUState *c);
 bool nc_credits_dump_draw(CPUState *c);
 bool nc_credits_dump_display(CPUState *c);
 bool nc_credits_set_display_mask(CPUState *c);
+bool nc_credits_draw_sync(CPUState *c);
 bool nc_credits_draw_sync_callback(CPUState *c);
 bool nc_credits_set_graph_debug(CPUState *c);
 bool nc_credits_tim_info(CPUState *c);
