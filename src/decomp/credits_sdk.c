@@ -1559,6 +1559,60 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
+/* ClearImage queues a VRAM fill using the low byte of each color argument. */
+bool nc_credits_clear_image(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 28, R(19));
+    R(19) = R(4);
+    R(4) = 0x800185a0; /* "ClearImage" */
+    c->budget -= 4;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(5);
+    R(5) = R(19);
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(6);
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 32, R(31));
+    R(31) = 0x8001c4ac;
+    R(16) = R(7);
+    c->budget -= 3;
+    nc_call(c, 0x8001c34c); /* checkRECT */
+
+    set_reg(c, 5, R(19));
+    set_reg(c, 16, R(16) & 0xff);
+    set_reg(c, 16, R(16) << 16);
+    set_reg(c, 17, R(17) & 0xff);
+    set_reg(c, 17, R(17) << 8);
+    set_reg(c, 16, R(16) | R(17));
+    set_reg(c, 18, R(18) & 0xff);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    set_reg(c, 6, 8);
+    load_word(c, 4, R(2) + 0x0c);
+    load_word(c, 2, R(2) + 8);
+    NC_POLL(c, 1);
+    u32 enqueue = R(2);
+    R(31) = 0x8001c4e8;
+    R(7) = R(16) | R(18);
+    NC_POLL(c, 2);
+    nc_call(c, enqueue);
+
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 19, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Validate the VRAM rectangle, then queue its eight bytes and the pixel buffer. */
 static bool queue_image_transfer(CPUState *c, bool store) {
     if (c->budget <= 10)
