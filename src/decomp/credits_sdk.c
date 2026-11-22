@@ -1705,6 +1705,33 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+/* The CD directory readers copy exactly the identifier length from the record. */
+bool nc_credits_cd_copy_identifier(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 8;
+    bool copying = R(6) != 0;
+    R(3) = R(6) - 1;
+    c->budget -= 3;
+    if (copying) {
+        set_reg(c, 6, UINT32_MAX);
+        do {
+            R(2) = MEM_R8(R(5));
+            NC_POLL(c, NC_LOAD_CYCLES);
+            set_reg(c, 5, R(5) + 1);
+            set_reg(c, 3, R(3) - 1);
+            MEM_W8(R(4), (u8)R(2));
+            NC_POLL(c, 1);
+            copying = R(3) != R(6);
+            R(4)++;
+            NC_POLL(c, 2);
+        } while (copying);
+    }
+    set_reg(c, 29, R(29) + 8);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_strcmp(CPUState *c) {
     if (c->budget <= 2)
         return false;

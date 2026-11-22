@@ -1216,6 +1216,22 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_cd_copy_identifier(void) {
+    const u32 src = 0x80060004;
+    const u32 dests[] = {SCRATCH_BASE + 1, src, src - 1, src + 1, 0xa0060005};
+    const u32 counts[] = {0, 1, 12, 31};
+    for (unsigned i = 0; i < sizeof dests / sizeof dests[0]; i++)
+        for (unsigned j = 0; j < sizeof counts / sizeof counts[0]; j++) {
+            memset(nc_fast_ptr(SCRATCH_BASE), 0xcc, 40);
+            for (unsigned k = 0; k < 40; k++)
+                MEM_W8(src - 2 + k, (u8)(k * 43));
+            CPUState state = arguments(dests[i], src, counts[j], i & 1 ? 4096 : 4);
+            if (!compare(state, 0x800225cc, nc_credits_cd_copy_identifier, 3))
+                return false;
+        }
+    return true;
+}
+
 static bool check_strcmp(void) {
     const u32 left = 0x80060001, right = SCRATCH_BASE + 5;
     const u8 a[] = {'C', 'D', 0xff, 0}, b[] = {'C', 'D', 0x80, 0};
@@ -1448,6 +1464,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_cd_copy_identifier();
     pass = pass && check_strcmp();
     pass = pass && check_strncmp();
     pass = pass && check_cd_names_equal();

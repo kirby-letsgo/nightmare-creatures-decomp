@@ -142,6 +142,7 @@ bool nc_credits_cd_ready_callback(CPUState *c);
 bool nc_credits_cd_command_name(CPUState *c);
 bool nc_credits_cd_interrupt_name(CPUState *c);
 bool nc_credits_cd_sector_to_position(CPUState *c);
+bool nc_credits_cd_copy_identifier(CPUState *c);
 bool nc_credits_strcmp(CPUState *c);
 bool nc_credits_strncmp(CPUState *c);
 bool nc_credits_cd_names_equal(CPUState *c);
