@@ -87,6 +87,35 @@ static bool target_vertical_velocities(bool disc) {
     return true;
 }
 
+static bool spatial_distances(bool disc, bool actor) {
+    const u16 offsets[] = {0, 1, 2046, 2047, 2048, 2049, 4095};
+    const u16 gaps[] = {0, 1, 2046, 2049, 2048, 2047, 1};
+    const u32 entry = actor ? 0x8006c750 : 0x8006c938;
+    for (unsigned i = 0; i < sizeof offsets / sizeof offsets[0]; ++i) {
+        CPUState input = initial();
+        const s16 reference = i % 2 ? INT16_MIN : INT16_MAX;
+        MEM_W16(0x800d763a, reference);
+        input.r[2] = (u32)(reference - 1024 + offsets[i]) & 4095;
+        input.r[actor ? 19 : 18] = i ? -65536 : 0;
+        input.r[17] = i ? -65537 : 1;
+        input.r[31] = 0x800475e4;
+        input.budget = offsets[i] >= 2047 ? 28 : 24;
+        CPUState native = input;
+        if (nc_prepare_spatial_distance(&native, actor) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_spatial_distance(&native, actor) || native.budget != 1 ||
+            native.r[16] != gaps[i] || native.r[4] != (i ? 131073u : 1u))
+            return false;
+        if (disc) {
+            interp_call(&input, entry);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool spatial_bearings(bool disc, bool actor) {
     const s16 points[][2] = {{-2, -3}, {-3, -3}, {-1, -3},
                              {-2, -4}, {-2, -2}, {INT16_MIN, INT16_MAX}};
@@ -2428,6 +2457,7 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
+        spatial_distances(disc, true) && spatial_distances(disc, false) &&
         spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
         target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
         roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&

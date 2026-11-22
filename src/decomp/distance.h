@@ -75,6 +75,7 @@ bool nc_sample_part_rotation(CPUState *c, NcRotationInput input);
 bool nc_store_target_vertical_velocity(CPUState *c);
 bool nc_prepare_spatial_actor_bearing(CPUState *c);
 bool nc_prepare_spatial_point_bearing(CPUState *c);
+bool nc_prepare_spatial_distance(CPUState *c, bool actor);
 bool nc_prepare_target_bearing(CPUState *c);
 bool nc_prepare_target_distance(CPUState *c);
 bool nc_prepare_planar_velocity(CPUState *c);

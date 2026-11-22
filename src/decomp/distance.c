@@ -554,6 +554,28 @@ bool nc_prepare_spatial_point_bearing(CPUState *c) {
     return true;
 }
 
+/* Fold the quarter-turn-adjusted bearing before computing planar distance.
+ * The guest starts reflecting at 2047, so that input yields a gap of 2049. */
+bool nc_prepare_spatial_distance(CPUState *c, bool actor) {
+    if (c->budget <= 24)
+        return false;
+    const s32 reference = (s16)MEM_R16(0x800d763a) - 1024;
+    const u32 offset = (R(2) - (u32)reference) & 4095;
+    const bool reflect = offset >= 2047;
+    const int cycles = reflect ? 28 : 24;
+    if (c->budget <= cycles)
+        return false;
+    R(16) = reflect ? 4096 - offset : offset;
+    const u32 x = R(actor ? 19 : 18);
+    R(2) = x * x;
+    nc_mult(c, R(17), R(17));
+    R(3) = c->lo;
+    R(4) = R(2) + R(3);
+    R(31) = actor ? 0x8006c7c8 : 0x8006c9b0;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The target is a signed whole-unit X/Z pair. Convert each actor coordinate
  * from eight fractional bits before subtracting it from the target. */
 bool nc_prepare_target_bearing(CPUState *c) {
