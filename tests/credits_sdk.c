@@ -1491,6 +1491,37 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_read_blocks(void) {
+    const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061000;
+    const int threshold = 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
+    const u32 blocks[] = {0, 1, 0x10002};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W32(0x80024678, spu);
+    MEM_W32(0x80024684, dma + 8);
+    MEM_W32(0x8002468c, dma + 12);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof blocks / sizeof blocks[0]; i++) {
+        /* Alias the base register to the block-register pointer on the last run. */
+        bool alias = i == 2;
+        u32 base_reg = alias ? 0x80024680 : dma;
+        MEM_W32(0x8002467c, base_reg);
+        MEM_W32(0x80024680, dma + 4);
+        MEM_W32(0x800246c8, 0);
+        MEM_W16(spu + 0x1aa, 0x8104);
+        memset(nc_fast_ptr(dma), 0xff, 16);
+        CPUState state = arguments(buffer, 0xabcd8123, blocks[i], i ? threshold + 1 : 4096);
+        ok = compare(state, 0x8001f65c, nc_credits_spu_read_blocks, threshold) &&
+             MEM_R16(spu + 0x1a6) == 0x8123 && MEM_R16(spu + 0x1aa) == 0x8134 &&
+             MEM_R32(base_reg) == buffer && MEM_R32(alias ? buffer : dma + 4) == (blocks[i] << 16 | 16) &&
+             MEM_R32(dma + 8) == 0x01000200 && MEM_R32(0x800246c8) == 1;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_spu_transfer(bool reading, bool io) {
     const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061000;
     const int threshold = reading ? 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES
@@ -3297,6 +3328,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_read_blocks();
     pass = pass && check_spu_transfer(true, false);
     pass = pass && check_spu_transfer(false, false);
     pass = pass && check_spu_transfer(false, true);
