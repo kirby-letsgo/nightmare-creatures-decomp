@@ -952,6 +952,36 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_read_address(void) {
+    const u32 slot = 0x80024678, shift_slot = 0x800246a0;
+    const u32 base = MEM_R32(slot), shift = MEM_R32(shift_slot);
+    const u32 bases[] = {base, 0x80060000, SCRATCH_BASE};
+    const u32 modes[] = {UINT32_MAX, 0, 1};
+    const u32 shifts[] = {3, 31, 32, 35};
+    if (base != 0x1f801c00 || shift != 3)
+        return false;
+    for (unsigned i = 0; i < sizeof bases / sizeof bases[0]; i++) {
+        MEM_W32(slot, bases[i]);
+        /* Voice 0 start address on the SPU register path. */
+        u32 addr = bases[i] + 6;
+        u16 old = MEM_R16(addr);
+        MEM_W16(addr, 0x8021);
+        for (unsigned j = 0; j < sizeof modes / sizeof modes[0]; j++)
+            for (unsigned k = 0; k < sizeof shifts / sizeof shifts[0]; k++) {
+                MEM_W32(shift_slot, shifts[k]);
+                CPUState state = arguments(3, modes[j], 7, k ? 21 : 4096);
+                u32 expected = modes[j] == UINT32_MAX ? 0x8021u : 0x8021u << (shifts[k] & 31);
+                if (!compare(state, 0x8001fb84, nc_credits_spu_read_address, 20) ||
+                    nc_cpu.r[2] != expected || MEM_R16(addr) != 0x8021)
+                    return false;
+            }
+        MEM_W16(addr, old);
+    }
+    MEM_W32(slot, base);
+    MEM_W32(shift_slot, shift);
+    return true;
+}
+
 static bool check_spu_delays(void) {
     const u32 slot = 0x8002468c, original = MEM_R32(slot);
     const u32 addresses[] = {original, 0x80060000, SCRATCH_BASE + 4};
@@ -1257,6 +1287,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_read_address();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
