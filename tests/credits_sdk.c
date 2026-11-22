@@ -72,6 +72,22 @@ static bool check_length(void) {
     return true;
 }
 
+static bool check_append(void) {
+    const u32 base = 0x80060010, other = SCRATCH_BASE + 32;
+    const u32 pairs[][2] = {
+        {0, other},        {base, 0},         {base, base}, {base, base + 1}, {base + 3, other + 4},
+        {base, other + 4}, {base + 3, other}, {base, other}};
+    for (unsigned i = 0; i < sizeof pairs / sizeof pairs[0]; i++)
+        for (int budget = 9; budget <= 140; budget += 3) {
+            memcpy(nc_fast_ptr(base), "abc", 4);
+            memcpy(nc_fast_ptr(other), "xyzw", 5);
+            if (!compare(arguments(pairs[i][0], pairs[i][1], 0, budget), 0x80019988,
+                         nc_credits_append_string, 8))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -85,6 +101,7 @@ int main(int argc, char **argv) {
     bool pass = check_copy();
     pass = pass && check_fill();
     pass = pass && check_length();
+    pass = pass && check_append();
     disc_close();
     return pass ? 0 : 1;
 }
