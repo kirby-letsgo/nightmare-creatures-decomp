@@ -400,6 +400,32 @@ static bool pad_select_edge(void) {
     return true;
 }
 
+static bool menu_confirm_destination(CPUState *cpu) {
+    return nc_menu_confirm_edge(cpu) == cpu->r[31];
+}
+
+static bool menu_confirm_edges(void) {
+    const u32 buttons[] = {0, 8, 0x4000, 0x4008};
+    CPUState cpu = initial();
+    cpu.budget = 18;
+    if (nc_menu_confirm_edge(&cpu) != 0x80068154)
+        return false;
+    cpu.budget = 19;
+    for (unsigned now = 0; now < 4; ++now) {
+        for (unsigned prev = 0; prev < 4; ++prev) {
+            for (unsigned triangle = 0; triangle < 2; ++triangle) {
+                cpu.r[30] = 0x40080000 | buttons[now] | (triangle << 12);
+                cpu.r[2] = buttons[now] & 8;
+                MEM_W32(gp + 0x18c, 0xabcd1000 | buttons[prev]);
+                cpu.r[31] = buttons[now] & ~buttons[prev] ? 0x8006818c : 0x80068304;
+                if (!compare(cpu, 0x80068154, menu_confirm_destination, 18))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool pad_inactivity(void) {
     const u32 buttons[] = {0, 1, 0x00400000, 0x80804010};
     CPUState cpu = initial();
@@ -953,10 +979,10 @@ int main(int argc, char **argv) {
         return 1;
     bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
               playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && pad_inactivity() && l2_direction_edges() &&
-              button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-              ports();
+              pad_select_edge() && pad_start_edge() && menu_confirm_edges() && pad_inactivity() &&
+              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
+              packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
