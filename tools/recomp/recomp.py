@@ -710,6 +710,12 @@ class Emitter:
                 out.append("        goto L_800473C0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800473C8:
                 out.append("    if (nc_store_projected_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047564:
+                out.append(
+                    "    { bool reproject; if (nc_select_projected_heading(c, &reproject)) {"
+                )
+                out.append("        if (reproject) goto L_800475A8;")
+                out.append("        goto L_800475CC; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047518:
                 out.append("    if (nc_projected_heading_gap(c)) goto L_80047564;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047300:

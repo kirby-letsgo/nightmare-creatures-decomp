@@ -359,6 +359,51 @@ static bool record_projections(bool disc) {
     return true;
 }
 
+static bool projected_heading_selection(bool disc) {
+    static const struct {
+        s32 gap;
+        u16 flags;
+        bool reproject;
+        int cycles;
+    } cases[] = {
+        {569, 0xa500, false, 9},  {4095, 0xa501, false, 9}, {568, 0xa500, true, 10},
+        {568, 0xa501, false, 13}, {456, 0xa501, false, 13}, {455, 0xa501, true, 11},
+        {-1, 0xa501, true, 11},   {0, 0xa500, true, 10},
+    };
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].gap < 569;
+        input.r[3] = cases[i].gap;
+        input.r[16] = SCRATCH_BASE;
+        input.r[17] = 0xffff8123;
+        input.r[31] = cases[i].reproject ? 0x800475a8 : 0x800475cc;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W16(SCRATCH_BASE + 0x16c, cases[i].flags);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 13;
+        CPUState native = input;
+        bool reproject = !cases[i].reproject;
+        if (nc_select_projected_heading(&native, &reproject) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_select_projected_heading(&native, &reproject) || reproject != cases[i].reproject ||
+            native.budget != input.budget - cases[i].cycles ||
+            MEM_R16(SCRATCH_BASE + 0x12) != (reproject ? 0xa5a5 : 0x8123) ||
+            MEM_R16(SCRATCH_BASE + 0x16c) != (cases[i].flags | (cases[i].gap >= 569)))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80047564);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool projected_heading_gaps(bool disc) {
     static const struct {
         s16 previous, projected;
@@ -679,7 +724,8 @@ int main(int argc, char **argv) {
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-              record_projections(disc) && projected_heading_gaps(disc);
+              record_projections(disc) && projected_heading_gaps(disc) &&
+              projected_heading_selection(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

@@ -174,6 +174,34 @@ bool nc_projected_heading_gap(CPUState *c) {
     return true;
 }
 
+/* A gap of 569 sets bit zero. Once set, gaps down to 456 keep
+ * the projected bearing. Smaller gaps resume projection from the old bearing. */
+bool nc_select_projected_heading(CPUState *c, bool *reproject) {
+    if (c->budget <= 13)
+        return false;
+    const u32 record = R(16);
+    const u16 flags = MEM_R16(record + 0x16c);
+    if (!R(2)) {
+        MEM_W16(record + 0x12, R(17));
+        R(2) = flags | 1u;
+        MEM_W16(record + 0x16c, R(2));
+        *reproject = false;
+        c->budget -= 9;
+        return true;
+    }
+
+    R(2) = (s32)R(3) < 456;
+    R(6) = record + 0x18;
+    int cycles = (flags & 1) ? 11 : 10;
+    *reproject = !(flags & 1) || R(2);
+    if (!*reproject) {
+        MEM_W16(record + 0x12, R(17));
+        cycles += 2;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
