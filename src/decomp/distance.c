@@ -900,6 +900,28 @@ bool nc_begin_scaled_part_walk(CPUState *c) {
     return true;
 }
 
+/* Follow the next part before popping a pending branch. The pop branch
+ * decrements its cursor in the delay slot, including on the return path. */
+NcNodeContinuation nc_advance_scaled_part_walk(CPUState *c) {
+    if (c->budget <= 38)
+        return NC_NODE_FALLBACK;
+    R(10) = MEM_R32(R(10) + 4);
+    c->budget -= 6;
+    if (R(10))
+        return NC_NODE_NEXT;
+    R(17) -= 8;
+    c->budget -= 2;
+    if (R(19))
+        return NC_NODE_POP;
+    const u32 frame = R(29);
+    R(30) = MEM_R32(frame + 0xe8);
+    for (int reg = 23; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0xc8 + 4 * (reg - 16));
+    R(29) += 0xf0;
+    c->budget -= 30;
+    return NC_NODE_RETURN;
+}
+
 bool nc_resume_scaled_part_walk(CPUState *c) {
     if (c->budget <= 42)
         return false;
