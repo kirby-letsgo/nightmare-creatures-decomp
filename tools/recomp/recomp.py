@@ -41,6 +41,7 @@ CREDITS_ROUTINES = {
     0x80019680: "nc_credits_allocate",
     0x800197E0: "nc_credits_free",
     0x800198B0: "nc_credits_find_allocation",
+    0x800198EC: "nc_credits_allocation_size",
 }
 
 GPR = [
@@ -190,7 +191,12 @@ def load_module(name: str, exe: str) -> Module:
             for i in f.insns:
                 if i.op == 3 and i.jump_target() == setjmp and i.addr + 8 < f.end:
                     mod.resumes[i.addr + 8] = f
-    for addr in pointer_targets(mod):
+    entries = pointer_targets(mod)
+    if name == "credits_exe":
+        # Splat may group standalone routines after the preceding return.
+        # Provide dispatcher entries even when no static pointer refers to them.
+        entries.update(CREDITS_ROUTINES)
+    for addr in entries:
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
             mod.resumes[addr] = owner

@@ -50,7 +50,7 @@ static bool check_init(u32 base, u32 size, u32 globals) {
     return compare(start, 0x80019454, nc_credits_init_heap, 18);
 }
 
-static bool check_lookup(unsigned count, unsigned match, int budget) {
+static bool check_lookup(unsigned count, unsigned match, int budget, bool query_size) {
     CPUState start = {0};
     for (unsigned i = 1; i < 32; i++)
         start.r[i] = i * 0x13579u;
@@ -63,7 +63,12 @@ static bool check_lookup(unsigned count, unsigned match, int budget) {
     for (unsigned i = 0; i < count; i++) {
         u32 record = head + i * 0x40;
         MEM_W32(record + 4, i ? record + 0x1c : 0);
+        MEM_W32(record + 8, i * 17);
         MEM_W32(record + 0x18, i + 1 == count ? 0 : record + 0x40);
+    }
+    if (query_size) {
+        start.r[29] = 0x801fef00;
+        return compare(start, 0x800198ec, nc_credits_allocation_size, 3);
     }
     return compare(start, 0x800198b0, nc_credits_find_allocation, 20);
 }
@@ -144,7 +149,7 @@ int main(int argc, char **argv) {
      * boundaries on the second and subsequent iterations. */
     for (int budget = 21; budget <= 95; budget++)
         for (unsigned match = 0; match <= 5; match++)
-            if (!check_lookup(5, match, budget)) {
+            if (!check_lookup(5, match, budget, false) || !check_lookup(5, match, budget, true)) {
                 fprintf(stderr, "heap lookup mismatch for index %u and budget %d\n", match, budget);
                 return 1;
             }

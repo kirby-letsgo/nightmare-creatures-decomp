@@ -344,3 +344,28 @@ bool nc_credits_free(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+bool nc_credits_allocation_size(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    c->budget -= 3;
+    bool found = false;
+    if (R(4)) {
+        R(31) = 0x80019900;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x800198b0);
+        found = branch(c, R(2) != 0);
+    }
+    if (found) {
+        load(c, 2, R(2) + REQUESTED);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } else {
+        assign(c, 2, 0);
+    }
+    load(c, 31, R(29) + 0x10);
+    assign(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

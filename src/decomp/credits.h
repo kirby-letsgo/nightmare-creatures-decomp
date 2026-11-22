@@ -27,4 +27,6 @@ bool nc_credits_allocate(CPUState *c);
 
 bool nc_credits_free(CPUState *c);
 
+bool nc_credits_allocation_size(CPUState *c);
+
 #endif
