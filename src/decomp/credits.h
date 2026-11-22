@@ -25,4 +25,6 @@ bool nc_credits_stop_pad(CPUState *c);
 
 bool nc_credits_allocate(CPUState *c);
 
+bool nc_credits_free(CPUState *c);
+
 #endif
