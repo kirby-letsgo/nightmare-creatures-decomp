@@ -1853,6 +1853,41 @@ bool nc_credits_save_irq_context(CPUState *c) {
     return true;
 }
 
+/* Initialize timer 1 and the VBlank callback table, then return its slot setter. */
+bool nc_credits_start_vsync(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    R(29) -= 24;
+    R(4) = 0x800244b4;
+    c->budget -= 4;
+    R(3) = MEM_R32(0x800244d8);
+    R(2) = 0x107;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    MEM_W32(R(3), R(2));
+    R(1) = 0x80020000;
+    c->budget -= 2;
+    MEM_W32(0x800244d4, 0); /* VBlank count */
+    R(31) = 0x8001aeb8;
+    R(5) = 8;
+    c->budget -= 3;
+    nc_call(c, 0x8001af84); /* clear the callback slots */
+
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x8001aee0); /* trapIntrVSync */
+    R(31) = 0x8001aec8;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a6c8); /* InterruptCallback */
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x8001af58); /* setIntrVSync */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* setIntrVSync returns the previous callback, including when it skips the store. */
 bool nc_credits_set_vsync_slot(CPUState *c) {
     if (c->budget <= NC_LOAD_CYCLES + 10)
