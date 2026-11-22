@@ -11,3 +11,4 @@ __pycache__/
 .DS_Store
 .ruff_cache/
 nightmare.log
+/state.html

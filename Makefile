@@ -1,6 +1,6 @@
 PYTHON := .venv/bin/python
 
-.PHONY: setup extract sigs configs split recomp build build-watch build-interp lint format clean
+.PHONY: setup extract sigs configs split recomp state build build-watch build-interp lint format clean
 
 setup:
 	python3 -m venv .venv
@@ -22,6 +22,10 @@ split:
 
 recomp:
 	$(PYTHON) tools/recomp/recomp.py
+	$(MAKE) state
+
+state:
+	python3 tools/decomp_state.py
 
 build:
 	cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo
