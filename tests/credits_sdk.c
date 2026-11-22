@@ -320,6 +320,23 @@ static bool check_graph_status(void) {
     return true;
 }
 
+static bool check_texture_page(void) {
+    const u8 modes[] = {0, 1, 2, 0xff};
+    const u32 coords[] = {0, 63, 64, 0x100, 0x200, 0x3ff, 0x400, 0xffffffff};
+    for (unsigned mode = 0; mode < sizeof modes; mode++)
+        for (unsigned i = 0; i < sizeof coords / sizeof coords[0]; i++) {
+            CPUState state = arguments(i, i >> 1, coords[i], 63);
+            state.r[7] = coords[(i + 3) % 8];
+            if (i & 1)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            memset(nc_fast_ptr(state.r[29] - 0x28), 0xcc, 0x28);
+            MEM_W8(0x80024558, modes[mode]);
+            if (!compare(state, 0x8001b548, nc_credits_texture_page, 62))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -346,6 +363,7 @@ int main(int argc, char **argv) {
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
     pass = pass && check_graph_status();
+    pass = pass && check_texture_page();
     disc_close();
     return pass ? 0 : 1;
 }
