@@ -3189,6 +3189,27 @@ bool nc_step_point_z(CPUState *c) {
     return true;
 }
 
+bool nc_store_point_pose_heading(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(3) = MEM_R32(R(19) + 0x20);
+    R(2) = (s16)MEM_R16(R(17));
+    MEM_W32(R(3) + 0x48, R(2));
+    c->budget -= 8;
+    return true;
+}
+
+bool nc_prepare_point_coordinate_query(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(4) = (s32)MEM_R32(R(19) + 0x27c) >> 8;
+    R(5) = (s32)R(5) >> 8;
+    R(6) = R(29) + 0x10;
+    R(31) = 0x8001ae20;
+    c->budget -= 7;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
