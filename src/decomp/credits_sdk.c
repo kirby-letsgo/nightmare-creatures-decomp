@@ -391,6 +391,74 @@ bool nc_credits_draw_tpage(CPUState *c) {
     return true;
 }
 
+bool nc_credits_texture_window_word(CPUState *c) {
+    const u32 rect = R(4);
+    if (c->budget <= (rect ? 39 : 7))
+        return false;
+
+    R(29) -= 16;
+    c->budget -= 2;
+    if (rect) {
+        /* The four five-bit fields are also spilled into the guest stack.
+         * Read each rectangle member in order in case it overlaps a spill. */
+        u32 x = MEM_R8(rect) >> 3;
+        c->budget -= NC_LOAD_CYCLES + 2;
+        MEM_W32(R(29), x);
+        c->budget--;
+        R(6) = ((0u - MEM_R16(rect + 4)) & 0xff) >> 3;
+        c->budget -= NC_LOAD_CYCLES + 4;
+        MEM_W32(R(29) + 8, R(6));
+        c->budget--;
+        u32 y = MEM_R8(rect + 2) >> 3;
+        c->budget -= NC_LOAD_CYCLES + 2;
+        MEM_W32(R(29) + 4, y);
+        c->budget -= 2;
+        R(3) = ((0u - MEM_R16(rect + 6)) & 0xff) >> 3;
+        R(5) = 0xe2000000u | (x << 10);
+        R(4) = R(3) << 5;
+        R(2) = R(5) | (y << 15) | R(4) | R(6);
+        c->budget -= NC_LOAD_CYCLES + 9;
+        MEM_W32(R(29) + 12, R(3));
+        c->budget--;
+    } else {
+        R(2) = 0;
+        c->budget -= 2;
+    }
+    R(29) += 16;
+    c->budget -= 3;
+    return true;
+}
+
+bool nc_credits_texture_window_packet(CPUState *c) {
+    if (c->budget <= (R(5) ? 58 : 26))
+        return false;
+
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = 2;
+    R(4) = R(5);
+    c->budget -= 4;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    R(31) = 0x8001d068;
+    MEM_W8(R(16) + 3, 2);
+    c->budget -= 2;
+    NC_FN_ENTER(c, 0x8001d6ac);
+    nc_credits_texture_window_word(c);
+    MEM_W32(R(16) + 4, R(2));
+    c->budget--;
+    MEM_W32(R(16) + 8, 0);
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 20);
+    c->budget -= NC_LOAD_CYCLES;
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_draw_move(CPUState *c) {
     if (c->budget <= 32)
         return false;
