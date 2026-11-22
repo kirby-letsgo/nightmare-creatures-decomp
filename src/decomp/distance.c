@@ -16,6 +16,32 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* The callers pass angles in 4096-unit turns and whole-world X, Y, -Z.
+ * Both placement poses start at the supplied position and orientation. */
+bool nc_init_placement_pose(CPUState *c) {
+    const u32 record = 0x800d7630;
+    if (c->budget <= 29)
+        return false;
+    R(3) = MEM_R16(R(29) + 0x10);
+    R(8) = MEM_R16(R(29) + 0x14);
+    R(2) = record + 8;
+    R(1) = 0x800d0000;
+    for (u32 offset = 8; offset <= 0x10; offset += 8) {
+        MEM_W16(record + offset, (u16)R(4));
+        MEM_W16(record + offset + 2, (u16)R(5));
+        MEM_W16(record + offset + 4, (u16)R(6));
+    }
+    MEM_W16(record, (u16)R(7));
+    MEM_W16(record + 0x18, (u16)R(7));
+    MEM_W16(record + 0x16c, 0);
+    MEM_W16(record + 2, (u16)R(3));
+    MEM_W16(record + 4, (u16)R(8));
+    MEM_W16(record + 0x1a, (u16)R(3));
+    MEM_W16(record + 0x1c, (u16)R(8));
+    c->budget -= 29;
+    return true;
+}
+
 /* Both placement routines stage XYZ before writing it, then copy the fourth word. */
 static void copy_placement_scales(CPUState *c, u32 destination) {
     for (u32 offset = 0; offset < 0x20; offset += 0x10) {

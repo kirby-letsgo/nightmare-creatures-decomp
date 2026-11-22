@@ -1000,6 +1000,52 @@ static bool transposed_placement_scales(bool disc) {
     return true;
 }
 
+static bool placement_pose_initializers(bool disc) {
+    const u32 record = 0x800d7630;
+    u8 *memory = &nc_ram[record & (RAM_SIZE - 1)];
+    u8 before[0x170], after[sizeof before];
+    static const struct {
+        u32 angles[3];
+        s16 point[3];
+    } cases[] = {{{0, 2048, 0}, {-17, 300, -1}},
+                 {{0x88, 0, 0}, {0, 500, INT16_MIN}},
+                 {{0xffff1000, 0xffffffff, 4095}, {INT16_MIN, -1, INT16_MAX}}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        memcpy(&input.r[4], cases[i].angles, sizeof cases[i].angles);
+        input.r[7] = (s32)cases[i].point[0];
+        /* In the last case the first angle stores overwrite the stack arguments. */
+        input.r[29] = i == 2 ? record - 8 : SCRATCH_BASE;
+        memset(memory, 0xa5, sizeof before);
+        MEM_W32(input.r[29] + 0x10, (s32)cases[i].point[1]);
+        MEM_W32(input.r[29] + 0x14, (s32)cases[i].point[2]);
+        memcpy(before, memory, sizeof before);
+        input.budget = 29;
+        CPUState native = input;
+        if (nc_init_placement_pose(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(memory, before, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_init_placement_pose(&native) || native.budget != 1 || MEM_R16(record + 0x16c))
+            return false;
+        for (unsigned axis = 0; axis < 3; ++axis) {
+            const u32 pos = record + 2 * axis;
+            if (MEM_R16(pos) != (u16)cases[i].point[axis] || MEM_R16(pos + 0x18) != MEM_R16(pos) ||
+                MEM_R16(pos + 8) != (u16)cases[i].angles[axis] ||
+                MEM_R16(pos + 0x10) != MEM_R16(pos + 8))
+                return false;
+        }
+        if (disc) {
+            memcpy(after, memory, sizeof after);
+            memcpy(memory, before, sizeof before);
+            interp_call(&input, 0x8002ad3c);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, memory, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_record_steps(bool disc) {
     const u32 record = SCRATCH_BASE;
     static const struct {
@@ -3717,7 +3763,7 @@ int main(int argc, char **argv) {
         !placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
         !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
         !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
-        !placement_record_steps(disc))
+        !placement_pose_initializers(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
