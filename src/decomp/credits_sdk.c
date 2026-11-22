@@ -1559,8 +1559,11 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
-/* ClearImage queues a VRAM fill using the low byte of each color argument. */
-bool nc_credits_clear_image(CPUState *c) {
+/* Both fills pack RGB from the low argument bytes. ClearImage2 also sets bit 31. */
+static bool queue_image_fill(CPUState *c, bool high_bit) {
+    const unsigned green = high_bit ? 16 : 17;
+    const unsigned blue = high_bit ? 17 : 16;
+    const unsigned driver = high_bit ? 3 : 2;
     if (c->budget <= 14)
         return false;
     R(29) -= 40;
@@ -1573,33 +1576,37 @@ bool nc_credits_clear_image(CPUState *c) {
     R(18) = R(5);
     R(5) = R(19);
     c->budget -= 3;
-    MEM_W32(R(29) + 20, R(17));
-    R(17) = R(6);
+    MEM_W32(R(29) + (high_bit ? 16 : 20), R(green));
+    R(green) = R(6);
     c->budget -= 2;
-    MEM_W32(R(29) + 16, R(16));
+    MEM_W32(R(29) + (high_bit ? 20 : 16), R(blue));
     c->budget--;
     MEM_W32(R(29) + 32, R(31));
-    R(31) = 0x8001c4ac;
-    R(16) = R(7);
+    R(31) = high_bit ? 0x8001c540 : 0x8001c4ac;
+    R(blue) = R(7);
     c->budget -= 3;
     nc_call(c, 0x8001c34c); /* checkRECT */
 
     set_reg(c, 5, R(19));
-    set_reg(c, 16, R(16) & 0xff);
-    set_reg(c, 16, R(16) << 16);
-    set_reg(c, 17, R(17) & 0xff);
-    set_reg(c, 17, R(17) << 8);
-    set_reg(c, 16, R(16) | R(17));
+    set_reg(c, blue, R(blue) & 0xff);
+    set_reg(c, blue, R(blue) << 16);
+    set_reg(c, green, R(green) & 0xff);
+    set_reg(c, green, R(green) << 8);
+    if (high_bit) {
+        set_reg(c, 2, 0x80000000);
+        set_reg(c, green, R(green) | R(2));
+    }
+    set_reg(c, blue, R(blue) | R(green));
     set_reg(c, 18, R(18) & 0xff);
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x80024550);
+    set_reg(c, driver, 0x80020000);
+    load_word(c, driver, 0x80024550);
     set_reg(c, 6, 8);
-    load_word(c, 4, R(2) + 0x0c);
-    load_word(c, 2, R(2) + 8);
+    load_word(c, 4, R(driver) + 0x0c);
+    load_word(c, 2, R(driver) + 8);
     NC_POLL(c, 1);
     u32 enqueue = R(2);
-    R(31) = 0x8001c4e8;
-    R(7) = R(16) | R(18);
+    R(31) = high_bit ? 0x8001c584 : 0x8001c4e8;
+    R(7) = R(blue) | R(18);
     NC_POLL(c, 2);
     nc_call(c, enqueue);
 
@@ -1611,6 +1618,14 @@ bool nc_credits_clear_image(CPUState *c) {
     set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2);
     return true;
+}
+
+bool nc_credits_clear_image(CPUState *c) {
+    return queue_image_fill(c, false);
+}
+
+bool nc_credits_clear_image2(CPUState *c) {
+    return queue_image_fill(c, true);
 }
 
 /* Validate the VRAM rectangle, then queue its eight bytes and the pixel buffer. */

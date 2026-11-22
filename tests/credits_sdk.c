@@ -619,7 +619,7 @@ static void defer_graphics_queue(u32 scratch) {
 }
 
 static bool check_image_queue(u32 entry, bool (*routine)(CPUState *), u32 method_offset) {
-    const bool clear = routine == nc_credits_clear_image;
+    const bool clear = method_offset == 0x0c;
     const int threshold = clear ? 14 : 10;
     const u32 scratch = 0x80060c00, rect = scratch + 32, pixels = 0x80062000;
     const u32 record = 0x80027488, driver = MEM_R32(0x80024550);
@@ -641,7 +641,7 @@ static bool check_image_queue(u32 entry, bool (*routine)(CPUState *), u32 method
             state.r[5] = 0xff001234;
             state.r[6] = 0xaa005678;
             state.r[7] = 0x11009abc;
-            queued_argument = 0xbc7834;
+            queued_argument = routine == nc_credits_clear_image2 ? 0x80bc7834u : 0xbc7834u;
         }
         ok = compare(state, entry, routine, threshold) &&
              MEM_R32(record) == MEM_R32(driver + method_offset) && MEM_R32(record + 4) == record + 12 &&
@@ -2811,6 +2811,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
     pass = pass && check_image_queue(0x8001c474, nc_credits_clear_image, 0x0c);
+    pass = pass && check_image_queue(0x8001c508, nc_credits_clear_image2, 0x0c);
     pass = pass && check_image_queue(0x8001c5a4, nc_credits_load_image, 0x20);
     pass = pass && check_image_queue(0x8001c608, nc_credits_store_image, 0x1c);
     pass = pass && check_draw_otag();
