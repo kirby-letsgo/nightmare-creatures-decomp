@@ -173,6 +173,43 @@ static bool projected_points(bool disc) {
     return true;
 }
 
+static bool actor_coordinates(bool disc) {
+    const u32 record = SCRATCH_BASE + 0x80;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    const u32 offsets[] = {0, 0xffffffff, 0x80001234};
+    for (unsigned i = 0; i < 3; ++i) {
+        CPUState input = initial();
+        input.r[4] = i == 2 ? record + 0x18 - 0x2dc : 0x80120000;
+        input.r[5] = record;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(input.r[4] + 0x2dc, 0xfffeffff);
+        MEM_W32(record + 0x138, offsets[i]);
+        MEM_W16(0x8008f0c0, 0x8123);
+        MEM_W16(0x8008f0bc, 0x3456);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        native.budget = 27;
+        CPUState cutoff = native;
+        if (nc_init_actor_coordinates(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native = input;
+        native.budget = input.budget = 28;
+        u32 y = (i == 2 ? 0xfffe3456u : 0xfffeffffu) + offsets[i];
+        if (!nc_init_actor_coordinates(&native) || native.r[3] != y || native.budget != 1 ||
+            MEM_R16(record + 2) != (u16)y || MEM_R32(record + 0x160) != input.r[4])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x800470dc);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_positions(bool disc) {
     const u32 matrices[][5] = {
         {0x1000, 0, 0x1000, 0, 0x1000}, /* identity */
@@ -247,7 +284,7 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-              projected_points(disc) && part_positions(disc);
+              projected_points(disc) && part_positions(disc) && actor_coordinates(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

@@ -10,5 +10,6 @@ bool nc_heading_cosine(CPUState *c);
 bool nc_heading_sine(CPUState *c);
 bool nc_transform_part_position(CPUState *c, bool quarter_scale);
 bool nc_project_heading_offset(CPUState *c);
+bool nc_init_actor_coordinates(CPUState *c);
 
 #endif

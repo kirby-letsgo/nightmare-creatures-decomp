@@ -1,6 +1,30 @@
 #include "decomp/distance.h"
 #include <limits.h>
 
+/* Initialize the two coordinate triples in the actor-linked record. The actor
+ * height is read after X and Z are stored, which matters for overlapping inputs. */
+bool nc_init_actor_coordinates(CPUState *c) {
+    if (c->budget <= 27)
+        return false;
+    const u32 actor = R(4), record = R(5);
+    const u32 z = 0u - MEM_R16(0x8008f0c0);
+    const u16 x = MEM_R16(0x8008f0bc);
+    R(6) = MEM_R32(record + 0x138);
+    MEM_W16(record + 0x18, x);
+    MEM_W16(record, x);
+    MEM_W16(record + 0x1c, z);
+    MEM_W16(record + 4, z);
+    R(3) = MEM_R32(actor + 0x2dc) + R(6);
+    R(2) = 45;
+    MEM_W16(record + 0x10, R(2));
+    MEM_W16(record + 8, R(2));
+    MEM_W32(record + 0x160, actor);
+    MEM_W16(record + 0x1a, R(3));
+    MEM_W16(record + 2, R(3));
+    c->budget -= 27;
+    return true;
+}
+
 /* The low 16 angle bits represent a full turn. The game disc supplies
  * 4096 signed Q14 samples per table, indexed by the upper 12 angle bits. */
 static bool heading_sample(CPUState *c, u32 table) {
