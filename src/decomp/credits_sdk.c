@@ -2491,6 +2491,78 @@ bool nc_credits_tim_info(CPUState *c) {
     return true;
 }
 
+/* _spu_r_ starts a DMA read using an SPU address and a count of 16-word blocks. */
+bool nc_credits_spu_read_blocks(CPUState *c) {
+    if (c->budget <= 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x80024678);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4); /* RAM destination */
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    MEM_W16(R(2) + 0x1a6, (u16)R(5));
+    R(31) = 0x8001f684;
+    R(16) = R(6); /* DMA block count */
+    c->budget -= 3;
+    nc_call(c, 0x8001fc78); /* _spu_FwaitFs */
+    R(31) = 0x8001f68c;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001fc78);
+
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024678);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = MEM_R16(R(3) + 0x1aa);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, R(2) | 0x30); /* SPU DMA read mode */
+    MEM_W16(R(3) + 0x1aa, (u16)R(2));
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(31) = 0x8001f6b0;
+    R(16) <<= 16;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001fc78);
+    R(31) = 0x8001f6b8;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001fc78);
+    R(31) = 0x8001f6c0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001fc4c); /* _spu_FsetDelayR */
+
+    set_reg(c, 4, 0x01000000);
+    set_reg(c, 4, 0x01000200);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x8002467c);
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(R(2), R(17)); /* DMA base address */
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024680);
+    set_reg(c, 16, R(16) | 16);
+    MEM_W32(R(2), R(16)); /* block count and words per block */
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024684);
+    set_reg(c, 2, 1);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x800246c8, R(2)); /* record read direction */
+    NC_POLL(c, NC_INSN_CYCLES);
+    MEM_W32(R(3), R(4)); /* start DMA */
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Send the caller's bytes to the SPU using programmed I/O or DMA. */
 bool nc_credits_spu_write(CPUState *c) {
     if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
