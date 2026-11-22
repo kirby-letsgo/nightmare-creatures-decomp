@@ -93,6 +93,7 @@ bool nc_credits_draw_mode_packet(CPUState *c);
 bool nc_credits_draw_mode_word(CPUState *c);
 bool nc_credits_draw_area_packet(CPUState *c);
 bool nc_credits_draw_corner(CPUState *c, bool bottom_right);
+bool nc_credits_display_x(CPUState *c);
 bool nc_credits_draw_offset_word(CPUState *c);
 bool nc_credits_draw_offset_packet(CPUState *c);
 bool nc_credits_texture_window_word(CPUState *c);

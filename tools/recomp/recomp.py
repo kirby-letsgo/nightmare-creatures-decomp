@@ -110,6 +110,7 @@ CREDITS_ROUTINES = {
     0x8001D598: "nc_credits_draw_corner(c, true)",
     0x8001D664: "nc_credits_draw_offset_word(c)",
     0x8001D6AC: "nc_credits_texture_window_word(c)",
+    0x8001D730: "nc_credits_display_x(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 

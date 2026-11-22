@@ -313,6 +313,25 @@ static bool check_draw_area(void) {
     return true;
 }
 
+static bool check_display_x(void) {
+    const u32 rects[] = {0x80060800, SCRATCH_BASE + 2};
+    const u8 graphs[] = {0, 1, 2, 3, 255};
+    const s16 values[] = {-32768, -33, -1, 0, 1, 255, 1024, 32767};
+    for (unsigned g = 0; g < sizeof graphs; g++)
+        for (unsigned reverse = 0; reverse < 2; reverse++)
+            for (unsigned i = 0; i < sizeof values / sizeof values[0]; i++)
+                for (unsigned j = 0; j < sizeof rects / sizeof rects[0]; j++) {
+                    MEM_W8(0x80024558, graphs[g]);
+                    MEM_W8(0x8002455b, reverse ? 0x80 : 0);
+                    MEM_W16(rects[j], (u16)values[i]);
+                    MEM_W16(rects[j] + 4, (u16)values[(i + 3) % 8]);
+                    CPUState state = arguments(rects[j], 0, 0, 38);
+                    if (!compare(state, 0x8001d730, nc_credits_display_x, 37))
+                        return false;
+                }
+    return true;
+}
+
 static bool check_draw_offset(void) {
     const u8 types[] = {0, 1, 2, 255};
     const u32 coords[] = {0, 0x7ff, 0x800, 0xfff, 0x1000, 0x80008000, 0xffffffff};
@@ -573,6 +592,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_mode_packet();
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
+    pass = pass && check_display_x();
     pass = pass && check_draw_area();
     pass = pass && check_draw_corners();
     pass = pass && check_draw_mode_words();
