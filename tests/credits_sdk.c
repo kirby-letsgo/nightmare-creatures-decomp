@@ -1903,6 +1903,30 @@ static bool check_cd_data_callback(void) {
     return ok && !saved.error;
 }
 
+static bool check_cd_data_sync(void) {
+    const u32 scratch = 0x80061000;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    /* Back the VSync counters and DMA status register with deterministic RAM. */
+    MEM_W32(0x80023400, scratch);
+    MEM_W32(0x80023404, scratch + 4);
+    MEM_W32(0x80024a64, scratch + 8);
+    MEM_W32(0x800244d4, 100);
+    bool ok = !saved.error;
+    for (unsigned busy = 0; busy < 2 && ok; busy++)
+        for (unsigned tight = 0; tight < 2 && ok; tight++) {
+            MEM_W32(scratch + 8, busy << 24);
+            CPUState state = arguments(busy, 2, 3, tight ? 5 : 4096);
+            ok = compare(state, 0x800203c0, nc_credits_cd_data_sync, 4) &&
+                 nc_cpu.r[2] == busy && MEM_R32(0x80024e48) == 1060 &&
+                 MEM_R32(0x80024e4c) == 1;
+        }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_dma_slot(void) {
     const u32 dicr = 0x1f8010f4, ram = 0x80061000, initial_control = 0x00410012;
     const struct {
@@ -2653,6 +2677,7 @@ int main(int argc, char **argv) {
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);
     pass = pass && check_cd_data_callback();
+    pass = pass && check_cd_data_sync();
     pass = pass && check_dma_slot();
     pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();

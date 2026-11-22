@@ -184,6 +184,7 @@ bool nc_credits_cd_init_interrupt(CPUState *c);
 bool nc_credits_cd_init_volume(CPUState *c);
 bool nc_credits_cd_volume(CPUState *c);
 bool nc_credits_cd_data_callback(CPUState *c);
+bool nc_credits_cd_data_sync(CPUState *c);
 bool nc_credits_cd_mix(CPUState *c);
 bool nc_credits_cd_flush_controller(CPUState *c);
 bool nc_credits_cd_flush(CPUState *c);
