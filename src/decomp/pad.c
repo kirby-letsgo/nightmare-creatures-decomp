@@ -347,6 +347,34 @@ u32 nc_pad_select_edge(CPUState *c) {
     return (previous & 1) ? 0x80042f54 : 0x80042f40;
 }
 
+/* Only menu records with a signed halfword of 6 take the horizontal
+ * input path here. Left also requires bit 27 of the configuration flags. */
+u32 nc_menu_left_input(CPUState *c) {
+    if (c->budget <= 29)
+        return 0x800683d0;
+
+    u32 index = MEM_R32(R(28) + 0x190);
+    R(6) = index * 12;
+    R(1) = 0x80090000 + R(6);
+    R(3) = (u32)(s32)(s16)MEM_R16(0x800883ca + R(6));
+    R(2) = R(30) & 0x10; /* Up mask in the branch delay slot */
+    c->budget -= 15;
+    if (R(3) != 6)
+        return 0x8006848c;
+
+    R(2) = R(30) & 0x80;
+    R(3) = 0x08000000;
+    c->budget -= 3;
+    if (!R(2))
+        return 0x80068438;
+
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(2) = MEM_R32(config + 4) & R(3);
+    R(4) = R(22);
+    c->budget -= 11;
+    return R(2) ? 0x80068424 : 0x80068438;
+}
+
 /* Menu state 0x1a switches flags according to the first packet's type
  * nibble. Each path writes only when its old mode bit is present. */
 bool nc_menu_pad_type_flags(CPUState *c) {
