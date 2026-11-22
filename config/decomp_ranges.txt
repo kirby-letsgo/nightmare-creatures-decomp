@@ -132,3 +132,8 @@ psx2_exe     800705D8    800705EC         pad.c
 # Psy-Q wrappers called by PSX2 pad driver startup.
 psx2_exe     80073EB4    80073F1C         pad.c
 psx2_exe     80073F1C    80073F44         pad.c
+# PSX2 pad BIOS tail calls, through the jump delay slots.
+psx2_exe     80073D7C    80073D88         pad.c
+psx2_exe     80073E3C    80073E48         pad.c
+psx2_exe     80073F44    80073F50         pad.c
+psx2_exe     80073F54    80073F60         pad.c

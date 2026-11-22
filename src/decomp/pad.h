@@ -3,6 +3,14 @@
 
 #include "port/recomp.h"
 
+typedef enum {
+    NC_BIOS_INIT_PAD = 0x12,
+    NC_BIOS_START_PAD = 0x13,
+    NC_BIOS_STOP_PAD = 0x14,
+    NC_BIOS_CHANGE_CLEAR_PAD = 0x5b
+} NcPadBiosService;
+
+bool nc_pad_bios_call(CPUState *c, NcPadBiosService service);
 bool nc_sdk_init_pad(CPUState *c);
 bool nc_sdk_start_pad(CPUState *c);
 bool nc_start_pad_driver(CPUState *c);

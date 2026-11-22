@@ -28,6 +28,13 @@ FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
+PSX2_PAD_BIOS_SERVICES = {
+    0x80073D7C: "NC_BIOS_STOP_PAD",
+    0x80073E3C: "NC_BIOS_CHANGE_CLEAR_PAD",
+    0x80073F44: "NC_BIOS_INIT_PAD",
+    0x80073F54: "NC_BIOS_START_PAD",
+}
+
 CREDITS_ROUTINES = {
     0x80018C8C: "nc_credits_skip_input(c)",
     0x80018CFC: "nc_credits_init_pad(c)",
@@ -651,6 +658,9 @@ class Emitter:
                 out.append("    if (nc_pad_sequence_ended(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80062D2C:
                 out.append("    if (nc_read_pad_sequence(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PAD_BIOS_SERVICES:
+                service = PSX2_PAD_BIOS_SERVICES[i.addr]
+                out.append(f"    if (nc_pad_bios_call(c, {service})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80073EB4:
                 out.append("    if (nc_sdk_init_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80073F1C:

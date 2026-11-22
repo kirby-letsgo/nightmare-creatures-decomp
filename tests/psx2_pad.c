@@ -150,6 +150,43 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
 }
 #endif
 
+static bool pad_bios_services(void) {
+    const struct {
+        u32 entry;
+        NcPadBiosService service;
+    } cases[] = {{0x80073f44, NC_BIOS_INIT_PAD},
+                 {0x80073f54, NC_BIOS_START_PAD},
+                 {0x80073e3c, NC_BIOS_CHANGE_CLEAR_PAD},
+                 {0x80073d7c, NC_BIOS_STOP_PAD}};
+    bios_init();
+    CPUState input = initial();
+    input.r[4] = packet;
+    input.r[5] = 34;
+    input.r[6] = packet + 34;
+    input.r[7] = 34;
+    memcpy(before, nc_ram, RAM_SIZE);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState low = input;
+        low.budget = 3;
+        CPUState native = low;
+        if (nc_pad_bios_call(&native, cases[i].service) || memcmp(&native, &low, sizeof low))
+            return false;
+        CPUState guest = input;
+        interp_call(&guest, cases[i].entry);
+        memcpy(after, nc_ram, RAM_SIZE);
+        native = input;
+        memcpy(nc_ram, before, RAM_SIZE);
+        if (!nc_pad_bios_call(&native, cases[i].service) || native.budget != input.budget - 3 ||
+            memcmp(&native, &guest, sizeof guest) || memcmp(nc_ram, after, RAM_SIZE))
+            return false;
+#ifdef NC_TEST_GENERATED_PAD
+        if (!compare_generated(input, cases[i].entry, 3))
+            return false;
+#endif
+    }
+    return true;
+}
+
 static bool sdk_pad(u32 first_size, u32 second_size) {
     CPUState cpu = initial();
     const u32 first = 0x80140100, second = 0x80141004;
@@ -371,8 +408,8 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-              packet_readers() && sequences() && ports();
+    bool ok = pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
+              pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
