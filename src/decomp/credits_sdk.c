@@ -1602,8 +1602,8 @@ bool nc_credits_draw_primitive(CPUState *c) {
     return true;
 }
 
-/* Both DrawSync entries save a0 in s0 and check the graphics debug level. */
-static void draw_sync_prologue(CPUState *c) {
+/* Save the graphics call argument and test the SDK debug level. */
+static void graphics_debug_prologue(CPUState *c) {
     c->budget--;
     R(2) = MEM_R8(0x8002455a);
     R(29) -= 24;
@@ -1616,22 +1616,52 @@ static void draw_sync_prologue(CPUState *c) {
     c->budget -= 2;
 }
 
-bool nc_credits_draw_sync(CPUState *c) {
-    if (c->budget <= 10)
-        return false;
-    draw_sync_prologue(c);
+static void graphics_diagnostic(CPUState *c, u32 format, u32 return_pc) {
     if (!R(2)) {
         set_reg(c, 4, 0x80020000);
-        set_reg(c, 4, 0x80018568);
+        set_reg(c, 4, format);
         set_reg(c, 2, 0x80020000);
         load_word(c, 2, 0x80024554);
         NC_POLL(c, 1);
         u32 diagnostic = R(2);
-        R(31) = 0x8001c31c;
+        R(31) = return_pc;
         R(5) = R(16);
         NC_POLL(c, 2);
         nc_call(c, diagnostic);
     }
+}
+
+/* DrawOTag queues the active driver's DMA-chain method with the ordering table. */
+bool nc_credits_draw_otag(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    graphics_debug_prologue(c);
+    graphics_diagnostic(c, 0x80018600, 0x8001c91c);
+    set_reg(c, 5, R(16));
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    set_reg(c, 6, 0);
+    load_word(c, 4, R(2) + 0x18);
+    load_word(c, 2, R(2) + 8);
+    NC_POLL(c, 1);
+    u32 enqueue = R(2);
+    R(31) = 0x8001c940;
+    R(7) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, enqueue);
+
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_draw_sync(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    graphics_debug_prologue(c);
+    graphics_diagnostic(c, 0x80018568, 0x8001c31c);
 
     /* The diagnostic can replace the active driver before this lookup. */
     set_reg(c, 2, 0x80020000);
@@ -1654,7 +1684,7 @@ bool nc_credits_draw_sync(CPUState *c) {
 bool nc_credits_draw_sync_callback(CPUState *c) {
     if (c->budget <= 10)
         return false;
-    draw_sync_prologue(c);
+    graphics_debug_prologue(c);
     if (!R(2)) {
         set_reg(c, 2, 0x80020000);
         load_word(c, 2, R(2) + 0x4554);

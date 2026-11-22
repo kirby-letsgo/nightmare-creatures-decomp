@@ -594,6 +594,50 @@ static bool check_draw_primitive(void) {
     return ok;
 }
 
+static bool check_draw_otag(void) {
+    const u32 scratch = 0x80060c00, diagnostic = scratch + 32, alternate = scratch + 64;
+    const u32 slot = 0x80024550, driver = MEM_R32(slot), ot = 0x80062000;
+    const u32 noop = 0x8001935c, record = 0x80027488;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    /* Keep DMA busy so the original driver records the submission in queue slot zero. */
+    MEM_W32(0x80023404, scratch);
+    MEM_W32(0x800244a8, scratch + 4);
+    MEM_W32(0x80024638, scratch + 8);
+    MEM_W32(scratch + 8, 1u << 24);
+    MEM_W32(0x800244a0, scratch + 16);
+    MEM_W32(scratch + 20, noop);
+    MEM_W8(0x80024559, 1);
+    MEM_W32(0x80024554, diagnostic);
+    MEM_W32(diagnostic, 0xad440000);      /* sw a0, 0(t2) */
+    MEM_W32(diagnostic + 4, 0x03e00008);  /* jr ra */
+    MEM_W32(diagnostic + 8, 0xad090000);  /* sw t1, 0(t0): replace the driver */
+    MEM_W32(alternate + 8, MEM_R32(driver + 8));
+    MEM_W32(alternate + 0x18, noop);
+    bool ok = !saved.error;
+    for (unsigned verbose = 0; verbose < 2 && ok; verbose++)
+        for (unsigned tight = 0; tight < 2 && ok; tight++) {
+            MEM_W8(0x8002455a, verbose ? 2 : 1);
+            MEM_W32(slot, driver);
+            MEM_W32(0x8002465c, 0);
+            MEM_W32(0x80024660, 0);
+            MEM_W32(scratch + 28, 0);
+            memset(nc_fast_ptr(record), 0xcc, 96);
+            CPUState state = arguments(ot, 2, 3, tight ? 11 : 4096);
+            state.r[8] = slot;
+            state.r[9] = alternate;
+            state.r[10] = scratch + 28;
+            ok = compare(state, 0x8001c8e0, nc_credits_draw_otag, 10) &&
+                 MEM_R32(record) == (verbose ? noop : MEM_R32(driver + 0x18)) &&
+                 MEM_R32(record + 4) == ot && MEM_R32(record + 8) == 0 &&
+                 MEM_R32(scratch + 28) == (verbose ? 0x80018600u : 0);
+        }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_draw_sync(void) {
     const u32 slot = 0x80024550, diagnostic = 0x80060c00, table = 0x80061000;
     const u32 driver = MEM_R32(slot), printer = MEM_R32(0x80024554);
@@ -2547,6 +2591,7 @@ int main(int argc, char **argv) {
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
     pass = pass && check_draw_primitive();
+    pass = pass && check_draw_otag();
     pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
     pass = pass && check_dump_environment(false, 0);
