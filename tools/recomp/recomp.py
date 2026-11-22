@@ -482,6 +482,19 @@ class Emitter:
             if self.mod.name == "psx2_exe"
             else {}
         )
+        box_builders = (
+            {
+                0x800420B4: (False, 0x8004212C),
+                0x800421A4: (False, 0x8004221C),
+                0x8004281C: (True, 0x80042894),
+                0x80042904: (True, 0x8004297C),
+            }
+            if self.mod.name == "psx2_exe"
+            else {}
+        )
+        for start, (_, resume) in box_builders.items():
+            if f.addr <= start < f.end:
+                targets.add(resume)
         for start, (_, passed, rejected) in contact_blocks.items():
             if f.addr <= start < f.end:
                 targets.update((passed, rejected))
@@ -525,6 +538,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if i.addr in box_builders:
+                outgoing, resume = box_builders[i.addr]
+                arg = "true" if outgoing else "false"
+                out.append(f"    if (nc_prepare_attack_box(c, {arg})) goto L_{resume:08X};")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:

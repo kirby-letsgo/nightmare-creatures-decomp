@@ -1,5 +1,39 @@
 #include "decomp/contact.h"
 
+/* Expand one center/extent record into the lower and upper corner arrays.
+ * Each of the four inlined copies takes 54 cycles. Preserve load/store order
+ * because guest pointers can alias, and leave each caller's cursors in place. */
+bool nc_prepare_attack_box(CPUState *c, bool outgoing) {
+    if (c->budget <= 54)
+        return false;
+    const u32 extent = R(4);
+    const u32 coords[] = {outgoing ? R(23) : R(5), extent - 8, extent - 4};
+    const u32 lower = outgoing ? R(5) : R(6);
+    const u32 upper = outgoing ? R(6) : R(7);
+    for (unsigned axis = 0; axis < 3; axis++) {
+        u32 center = MEM_R32(coords[axis]);
+        MEM_W16(lower + 2 * axis, center - MEM_R16(extent));
+    }
+    for (unsigned axis = 0; axis < 3; axis++) {
+        R(3) = MEM_R32(coords[axis]);
+        R(2) = R(3) + MEM_R16(extent);
+        MEM_W16(upper + 2 * axis, R(2));
+    }
+    if (outgoing) {
+        R(21)++;
+        R(8)++;
+        R(5) += 8;
+        R(4) += 16;
+    } else {
+        R(18)++;
+        R(23)++;
+        R(5) += 16;
+        R(6) += 8;
+    }
+    c->budget -= 54;
+    return true;
+}
+
 /* Shared by the incoming and outgoing attack loops. Each tests a center and
  * signed extent against inclusive bounds on three axes, returning on the first
  * separation. The path-specific debits and register writes include delay slots. */

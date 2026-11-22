@@ -10,6 +10,7 @@ typedef enum NcContactResult {
 } NcContactResult;
 
 NcContactResult nc_attack_bounds(CPUState *c);
+bool nc_prepare_attack_box(CPUState *c, bool outgoing);
 NcContactResult nc_target_accepts_contact(CPUState *c);
 
 #endif
