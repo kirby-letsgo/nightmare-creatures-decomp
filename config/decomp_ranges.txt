@@ -64,3 +64,4 @@ credits_exe  8001935C    80019364         credits_roll.c
 credits_exe  8002335C    80023364         credits_roll.c
 credits_exe  800193B4    80019454         credits.c
 credits_exe  80019928    8001995C         credits_sdk.c
+credits_exe  8001995C    80019988         credits_sdk.c
