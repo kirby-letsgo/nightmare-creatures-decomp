@@ -155,6 +155,7 @@ CREDITS_ROUTINES = {
     0x8001C1E8: "nc_credits_draw_sync_callback(c)",
     0x8001C244: "nc_credits_set_display_mask(c)",
     0x8001C2E0: "nc_credits_draw_sync(c)",
+    0x8001C880: "nc_credits_draw_primitive(c)",
     0x8001CAF4: "nc_credits_read_environment(c, false)",
     0x8001CFDC: "nc_credits_read_environment(c, true)",
     0x8001D014: "nc_credits_display_field(c)",
@@ -1727,6 +1728,8 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_call(c, R(16), 0x{resume:X})) {{")
                 out.append(f"        {self.call(callee)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B4E8:
+                out.append("    if (nc_apply_placement_preset(c)) goto L_8002B56C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
                 out.append("    if (nc_step_record_angle_pair(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:

@@ -542,6 +542,58 @@ static bool check_display_mask(void) {
     return ok;
 }
 
+static bool check_draw_primitive(void) {
+    const u32 slot = 0x80024550, table = 0x80061000, sync = 0x80060c00, packet = 0x80062000;
+    const u32 counts[] = {1, 0, 2, 255};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    gpu_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0] && ok; i++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; run < 2 && ok; run++) {
+            nc_cpu = arguments(packet, 2, 3, 17);
+            if (i) {
+                /* This sync clears the tag length and restores the disc driver before submission. */
+                nc_cpu.r[8] = slot;
+                nc_cpu.r[9] = MEM_R32(slot);
+                MEM_W32(slot, table);
+                MEM_W32(table + 0x3c, sync);
+                MEM_W32(table + 0x14, 0x8001935c); /* no-op if the stale table is used */
+                MEM_W32(sync, 0xa2040003); /* sb a0, 3(s0) */
+                MEM_W32(sync + 4, 0x03e00008);
+                MEM_W32(sync + 8, 0xad090000); /* sw t1, 0(t0) */
+            }
+            MEM_W32(packet, counts[i] << 24);
+            MEM_W32(0x1f801810, 0xe1000000); /* draw mode zero */
+            for (unsigned word = 0; word < counts[i]; word++)
+                MEM_W32(packet + 4 + 4 * word, 0xe1000000u | ((word + 1) & 15));
+            if (!run && nc_credits_draw_primitive(&nc_cpu))
+                ok = false;
+            nc_cpu.budget = i ? 18 : 4096;
+            if (run)
+                interp_call(&nc_cpu, 0x8001c880);
+            else
+                ok = nc_credits_draw_primitive(&nc_cpu) && ok;
+            StateIO *result = run ? &guest : &native;
+            cpu_serialize(result);
+            gpu_serialize(result);
+            ok = ok && (MEM_R32(0x1f801814) & 15) == (counts[i] & 15) &&
+                 MEM_R8(packet + 3) == (i ? 0 : counts[i]);
+            saved.loading = true;
+            saved.pos = 0;
+            cpu_serialize(&saved);
+            gpu_serialize(&saved);
+        }
+        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_draw_sync(void) {
     const u32 slot = 0x80024550, diagnostic = 0x80060c00, table = 0x80061000;
     const u32 driver = MEM_R32(slot), printer = MEM_R32(0x80024554);
@@ -2494,6 +2546,7 @@ int main(int argc, char **argv) {
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
+    pass = pass && check_draw_primitive();
     pass = pass && check_draw_sync();
     pass = pass && check_draw_sync_callback();
     pass = pass && check_dump_environment(false, 0);

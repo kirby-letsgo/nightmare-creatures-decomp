@@ -345,6 +345,33 @@ bool nc_begin_placement_update(CPUState *c) {
     return true;
 }
 
+/* Each 20-byte preset starts with two packed eight-byte groups: position
+ * and angles. Load both words of each group before writing the record. */
+bool nc_apply_placement_preset(CPUState *c) {
+    if (c->budget <= 55)
+        return false;
+    const u32 record = R(16);
+    for (unsigned offset = 0; offset <= 8; offset += 8) {
+        const s16 index = (s16)MEM_R16(record + 0x16e);
+        const u32 source = 0x800d00c0u + 20 * index + offset;
+        const u32 dest = record + offset;
+        R(3) = nc_lwr(c, source, nc_lwl(c, source + 3, (u32)(s32)index));
+        const u32 second = nc_lwr(c, source + 4, nc_lwl(c, source + 7, 0));
+        nc_swl(c, dest + 3, R(3));
+        nc_swr(c, dest, R(3));
+        nc_swl(c, dest + 7, second);
+        nc_swr(c, dest + 4, second);
+        if (offset == 0)
+            R(5) = second;
+        else
+            R(4) = second;
+    }
+    R(2) = MEM_R16(record + 0x16c) | 8;
+    MEM_W16(record + 0x16c, R(2));
+    c->budget -= 55;
+    return true;
+}
+
 /* Mode 1 passes the placement record and the linked actor's unsigned
  * byte at 0x398 to the update at 0x80047948. */
 bool nc_begin_placement_mode(CPUState *c, bool *update_actor) {
