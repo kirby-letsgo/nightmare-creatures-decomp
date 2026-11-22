@@ -2767,6 +2767,59 @@ static bool check_cd_mix(void) {
     return true;
 }
 
+static bool check_cd_audio_ready(void) {
+    const u32 trace = 0x80062000, response = trace + 32;
+    const u32 diagnostic = 0x80019a60, play = 0x80022f84;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Capture printf arguments and allow the diagnostic to change the response. */
+    MEM_W32(diagnostic, 0xaf040000);      /* sw a0, 0(t8) */
+    MEM_W32(diagnostic + 4, 0xaf050004);  /* sw a1, 4(t8) */
+    MEM_W32(diagnostic + 8, 0xaf060008);  /* sw a2, 8(t8) */
+    MEM_W32(diagnostic + 12, 0xaf07000c); /* sw a3, 12(t8) */
+    MEM_W32(diagnostic + 16, 0x03e00008);
+    MEM_W32(diagnostic + 20, 0xa2190000); /* sb t9, 0(s0) */
+    MEM_W32(play, 0x03e00008);
+    MEM_W32(play + 4, 0xaf1f0010); /* sw ra, 16(t8) */
+    MEM_W32(0x80023400, trace + 24);
+    MEM_W32(0x80023404, trace + 28);
+    MEM_W32(0x800244d4, 1234);
+    const struct { u32 irq; u8 status, after; bool log, play; } cases[] = {
+        {0x104, 1, 1, true, true}, {5, 1, 0, false, false},
+        {1, 0x10, 0x10, true, false}, {1, 0, 1, true, false}, {1, 0x10, 0, true, true},
+    };
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        bool end = (cases[i].irq & 0xff) == 4;
+        memset(nc_fast_ptr(trace), 0, 20);
+        MEM_W32(0x80024c34, UINT32_MAX);
+        MEM_W32(0x80024c38, 0);
+        MEM_W16(response, 0xab00 | cases[i].status);
+        CPUState state = arguments(cases[i].irq, response, 0, i ? 8 : 4096);
+        state.r[24] = trace;
+        state.r[25] = cases[i].after;
+        ok = compare(state, 0x80022ebc, nc_credits_cd_audio_ready, 7) &&
+             MEM_R32(0x80024c34) == (end ? 0 : UINT32_MAX) &&
+             MEM_R32(0x80024c38) == (!end && cases[i].log) &&
+             MEM_R32(trace + 16) == (cases[i].play ? 0x80022f70u : 0);
+        if (end)
+            ok = ok && MEM_R32(trace) == 0x80018bfc && MEM_R32(trace + 4) == UINT32_MAX &&
+                 MEM_R32(trace + 8) == 1234;
+        else if (cases[i].log)
+            ok = ok && MEM_R32(trace) == 0x80018c28 && MEM_R32(trace + 8) == cases[i].status &&
+                 MEM_R32(trace + 12) == 0xab;
+        else
+            ok = ok && MEM_R32(trace) == 0;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_get_toc(void) {
     const u32 driver = 0x800230d0;
     const u32 buffers[] = {0x80062000, SCRATCH_BASE + 16};
@@ -3410,6 +3463,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
+    pass = pass && check_cd_audio_ready();
     pass = pass && check_cd_get_toc();
     pass = pass && check_wait_vblank();
     pass = pass && check_cd_init();

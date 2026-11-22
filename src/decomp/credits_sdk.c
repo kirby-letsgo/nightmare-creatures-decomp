@@ -3853,6 +3853,87 @@ bool nc_credits_cd_flush_controller(CPUState *c) {
     return true;
 }
 
+/* Handle a CD audio interrupt and resume playback when the status allows it. */
+bool nc_credits_cd_audio_ready(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(5); /* drive response */
+    R(4) &= 0xff;
+    R(2) = 4;
+    c->budget -= 4;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget -= 2;
+    bool resume = false;
+    if (R(4) == 4) { /* CdlDataEnd */
+        R(31) = 0x80022ee0;
+        R(4) = UINT32_MAX;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001a454); /* VSync(-1) */
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018bfc);
+        set_reg(c, 5, 0x80020000);
+        load_word(c, 5, 0x80024c34);
+        R(31) = 0x80022ef8;
+        R(6) = R(2);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x80019a60); /* report track and frame */
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024c34);
+        NC_POLL(c, NC_INSN_CYCLES);
+        set_reg(c, 2, R(2) + 1);
+        set_reg(c, 1, 0x80020000);
+        MEM_W32(0x80024c34, R(2));
+        NC_POLL(c, NC_INSN_CYCLES);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        resume = true;
+    } else {
+        R(2) = MEM_R8(R(16));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, NC_INSN_CYCLES);
+        set_reg(c, 2, R(2) & 1);
+        const bool error = R(2) != 0;
+        R(2) = 1;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (!error) {
+            set_reg(c, 1, 0x80020000);
+            MEM_W32(0x80024c38, R(2));
+            NC_POLL(c, NC_INSN_CYCLES);
+            R(31) = 0x80022f3c;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x8001ff08); /* CdIntstr */
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x80018c28);
+            R(6) = MEM_R8(R(16));
+            NC_POLL(c, NC_LOAD_CYCLES);
+            R(7) = MEM_R8(R(16) + 1);
+            NC_POLL(c, NC_LOAD_CYCLES);
+            R(31) = 0x80022f54;
+            R(5) = R(2);
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            nc_call(c, 0x80019a60);
+            R(2) = MEM_R8(R(16));
+            NC_POLL(c, NC_LOAD_CYCLES);
+            NC_POLL(c, NC_INSN_CYCLES);
+            set_reg(c, 2, R(2) & 0x11); /* error or shell open */
+            resume = R(2) == 0;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+        }
+    }
+    if (resume) {
+        R(31) = 0x80022f70;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x80022f84); /* play */
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* CdGetToc forwards the caller's track-position buffer to CdGetToc2(1, buffer). */
 bool nc_credits_cd_get_toc(CPUState *c) {
     if (c->budget <= 5)
