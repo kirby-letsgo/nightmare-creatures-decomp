@@ -433,3 +433,19 @@ bool nc_credits_init_pad(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Although the signature list calls this GsSetProjection, its only call is
+ * the B0 StopPAD stub, immediately before credits callback shutdown. */
+bool nc_credits_stop_pad(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(31) = 0x80018d5c;
+    c->budget -= 4;
+    nc_call(c, 0x8001a28c);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

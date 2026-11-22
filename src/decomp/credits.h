@@ -21,4 +21,6 @@ bool nc_credits_read_sectors(CPUState *c);
 
 bool nc_credits_init_pad(CPUState *c);
 
+bool nc_credits_stop_pad(CPUState *c);
+
 #endif
