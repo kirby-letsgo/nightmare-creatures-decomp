@@ -6,7 +6,7 @@ psx2_exe     800362F8    80036358         contact.c
 psx2_exe     80036368    800363F0         contact.c
 psx2_exe     80034D2C    80034D68         contact.c
 psx2_exe     8003531C    80035354         distance.c
-psx2_exe     8004716C    800471AC         distance.c
+psx2_exe     80047128    800471E0         distance.c
 psx2_exe     800472D8    80047300         distance.c
 psx2_exe     80047220    80047268         distance.c
 psx2_exe     800470DC    80047128         distance.c

@@ -110,6 +110,47 @@ bool nc_project_heading_offset(CPUState *c) {
     return true;
 }
 
+/* Project a signed radius along a 16-bit heading. Reserve enough time for
+ * both Q14 lookups, the coordinate stores and the vector-heading call slot. */
+bool nc_prepare_heading_projection(CPUState *c) {
+    if (c->budget <= 57)
+        return false;
+    const u32 radius = R(4), angle = R(5), point = R(6);
+    R(29) -= 32;
+    MEM_W32(R(29) + 20, R(17));
+    MEM_W32(R(29) + 16, R(16));
+    MEM_W32(R(29) + 24, R(18));
+    MEM_W32(R(29) + 28, R(31));
+    R(17) = radius;
+    R(18) = point;
+
+    R(4) = angle;
+    nc_heading_cosine(c);
+    nc_mult(c, R(2), radius);
+    R(16) = (u32)((s32)c->lo >> 14);
+    R(4) = angle;
+    nc_heading_sine(c);
+    nc_project_heading_offset(c);
+    MEM_W16(point + 4, R(2));
+    R(31) = 0x800471B4;
+    c->budget -= 19; /* wrapper instructions outside the three helpers */
+    return true;
+}
+
+bool nc_finish_heading_projection(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    R(3) = (4096u - R(2)) << 16;
+    R(2) = (u32)((s32)R(3) >> 16);
+    R(31) = MEM_R32(R(29) + 28);
+    R(18) = MEM_R32(R(29) + 24);
+    R(17) = MEM_R32(R(29) + 20);
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 32;
+    c->budget -= 19;
+    return true;
+}
+
 /* Convert an X/Z displacement to the game's 4096-unit turn. The table
  * supplies one octant; the sign and dominant axis determine its reflection. */
 bool nc_vector_heading(CPUState *c) {

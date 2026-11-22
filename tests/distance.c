@@ -210,6 +210,64 @@ static bool actor_coordinates(bool disc) {
     return true;
 }
 
+static bool heading_projections(bool disc) {
+    const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
+    const s32 radii[] = {0, 1, -257, 32767, -32768};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i)
+        for (unsigned j = 0; j < sizeof radii / sizeof radii[0]; ++j) {
+            CPUState input = initial();
+            input.r[4] = (u32)radii[j];
+            input.r[5] = angles[i];
+            input.r[29] = SCRATCH_BASE + 0x100;
+            /* Also project onto the stack's saved s0/s1 words. */
+            input.r[6] = j & 1 ? input.r[29] - 16 : SCRATCH_BASE;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(0x800D7780, 0xfffffeff);
+            MEM_W32(0x800D7788, 0x7ff);
+            memcpy(before, nc_scratch, sizeof before);
+            CPUState cutoff = input;
+            cutoff.budget = 57;
+            CPUState native = cutoff;
+            if (nc_prepare_heading_projection(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            u32 offset = (angles[i] >> 4) * 2;
+            s32 sine = (s16)MEM_R16(0x80083be4 + offset);
+            s32 cosine = (s16)MEM_R16(0x80081be4 + offset);
+            s32 dx = (sine * radii[j]) >> 14;
+            s32 dz = (cosine * radii[j]) >> 14;
+            native.budget++;
+            if (!nc_prepare_heading_projection(&native) || native.budget != 1 ||
+                native.r[31] != 0x800471b4 || native.r[4] != (u32)dx || native.r[5] != (u32)dz ||
+                MEM_R16(input.r[6]) != (u16)(dx - 2) || MEM_R16(input.r[6] + 4) != (u16)(dz - 7))
+                return false;
+            native.budget = input.budget - 57;
+            if (!nc_vector_heading(&native))
+                return false;
+            memcpy(after, nc_scratch, sizeof after);
+            cutoff = native;
+            cutoff.budget = 19;
+            CPUState epilogue = cutoff;
+            if (nc_finish_heading_projection(&epilogue) ||
+                memcmp(&epilogue, &cutoff, sizeof cutoff) ||
+                memcmp(after, nc_scratch, sizeof after))
+                return false;
+            epilogue.budget++;
+            if (!nc_finish_heading_projection(&epilogue) || epilogue.budget != 1 ||
+                !nc_finish_heading_projection(&native))
+                return false;
+            if (disc) {
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x80047128);
+                if (memcmp(&input, &native, sizeof input) ||
+                    memcmp(nc_scratch, after, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool actor_headings(bool disc) {
     const u32 angles[] = {0,      1,      0x3fff,     0x4000,     0x7fff,    0x8000,
                           0xc000, 0xffff, 0xffff8000, 0xffffffff, 0x80000000};
@@ -365,7 +423,7 @@ int main(int argc, char **argv) {
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
-              point_headings(disc) && actor_headings(disc);
+              point_headings(disc) && actor_headings(disc) && heading_projections(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
