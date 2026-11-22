@@ -268,6 +268,31 @@ static bool check_draw_mode_words(void) {
     return true;
 }
 
+static bool top_left(CPUState *c) {
+    return nc_credits_draw_corner(c, false);
+}
+
+static bool bottom_right(CPUState *c) {
+    return nc_credits_draw_corner(c, true);
+}
+
+static bool check_draw_corners(void) {
+    const u32 bounds[] = {0x02000400, 0x10001000, 0x00010001, 0, 0x8000ffff};
+    const u32 coords[] = {0, 1, 511, 512, 1023, 1024, 4095, 4096, 0x1234ffff, 0x8000};
+    const u8 types[] = {0, 1, 2, 255};
+    for (unsigned g = 0; g < sizeof types; g++)
+        for (unsigned b = 0; b < sizeof bounds / sizeof bounds[0]; b++)
+            for (unsigned j = 0; j < sizeof coords / sizeof coords[0]; j++) {
+                MEM_W32(0x8002455c, bounds[b]);
+                MEM_W8(0x80024558, types[g]);
+                CPUState state = arguments(coords[j], coords[(j + 3) % 10], 0x87654321, 56);
+                if (!compare(state, 0x8001d4cc, top_left, 55) ||
+                    !compare(state, 0x8001d598, bottom_right, 55))
+                    return false;
+            }
+    return true;
+}
+
 static bool check_draw_offset(void) {
     const u8 types[] = {0, 1, 2, 255};
     const u32 coords[] = {0, 0x7ff, 0x800, 0xfff, 0x1000, 0x80008000, 0xffffffff};
@@ -528,6 +553,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_mode_packet();
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
+    pass = pass && check_draw_corners();
     pass = pass && check_draw_mode_words();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
