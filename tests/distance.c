@@ -769,6 +769,53 @@ static bool part_rotation_samples(bool disc) {
     return true;
 }
 
+static bool part_rotation_matrices(bool disc) {
+    const u32 frame = SCRATCH_BASE + 256;
+    const s32 samples[][6] = {{4096, 4096, 4096, 0, 0, 0},
+                              {0, 4096, 0, -4096, 0, 16384},
+                              {-1, 2371, -3241, 4095, -3340, -10003}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof samples / sizeof samples[0]; ++i) {
+        CPUState input = initial();
+        input.r[29] = frame;
+        input.r[19] = i == 2 ? frame : SCRATCH_BASE;
+        input.r[21] = samples[i][0];
+        input.r[20] = samples[i][1];
+        input.r[17] = samples[i][2];
+        input.r[18] = samples[i][3];
+        input.r[16] = samples[i][4];
+        input.r[2] = samples[i][5];
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(frame + 40, input.r[31]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 97;
+        CPUState native = input;
+        if (nc_finish_part_rotation(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_finish_part_rotation(&native) || native.budget != 1 || native.r[29] != frame + 48)
+            return false;
+        if (!i)
+            for (unsigned k = 0; k < 9; ++k)
+                if (MEM_R16(input.r[19] + 2 * k) != (k % 4 == 0 ? 4096 : 0))
+                    return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x8002607cu >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffd0); /* addiu sp, sp, -48 */
+            input.r[29] += 48;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_offsets(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 512;
     const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
@@ -1510,7 +1557,8 @@ int main(int argc, char **argv) {
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
               part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
-              part_chain_traversal(disc) && part_rotation_samples(disc);
+              part_chain_traversal(disc) && part_rotation_samples(disc) &&
+              part_rotation_matrices(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
