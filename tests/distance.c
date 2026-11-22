@@ -1699,6 +1699,38 @@ static bool roots(bool disc) {
     return true;
 }
 
+static bool reference_bearing_gaps(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100, stub = 0x80120000;
+    static const s32 gaps[] = {0, 32766, -32769, -32768, -1};
+    for (unsigned i = 0; i < sizeof gaps / sizeof gaps[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = 0xc000;
+        input.r[2] = (s32)(s16)(gaps[i] + 0x4000);
+        input.r[29] = frame;
+        MEM_W32(frame + 0x10, 0x98765432);
+        MEM_W32(frame + 0x14, input.r[31]);
+        input.budget = gaps[i] < 0 ? 25 : 22;
+        CPUState native = input;
+        if (nc_finish_reference_bearing(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_finish_reference_bearing(&native) || native.budget != 1 ||
+            (s32)native.r[2] != gaps[i] || native.r[16] != 0x98765432)
+            return false;
+        if (disc) {
+            /* Enter at the final block with an allocated frame. */
+            MEM_W32(stub, 0x08000000u | ((0x8001a764u >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffe8);
+            input.budget += 2;
+            input.r[29] += 0x18;
+            interp_call(&input, stub);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool actor_distances(bool disc) {
     const u32 from = 0x80120000, to = 0x80121000;
     static const struct {
@@ -3932,18 +3964,19 @@ int main(int argc, char **argv) {
         spatial_distances(disc, true) && spatial_distances(disc, false) &&
         spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
         target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
-        roots(disc) && actor_distances(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
-        actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
-        actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
-        relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
-        projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-        facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc) &&
-        rotated_vector_setup(disc) && placed_actor_points(disc) && actor_point_placements(disc) &&
-        matrix_headings(disc) && matrix_planar_lengths(disc) && heading_matrix_setup(disc) &&
-        part_translation(disc) && part_transform_calls(disc) && node_transform_selection(disc) &&
-        node_matrix_installation(disc) && part_composition(disc) &&
-        node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
+        roots(disc) && reference_bearing_gaps(disc) && actor_distances(disc) &&
+        displacements(disc) && headings(disc) && heading_samples(disc) && projected_points(disc) &&
+        part_positions(disc) && actor_coordinates(disc) && point_headings(disc, false) &&
+        point_headings(disc, true) && actor_headings(disc) && heading_projections(disc) &&
+        reference_distances(disc) && relative_headings(disc) && record_projections(disc) &&
+        projected_heading_gaps(disc) && projected_heading_selection(disc) &&
+        saved_bearing_projections(disc) && facing_offsets(disc) && projection_entries(disc) &&
+        rotated_point_offsets(disc) && rotated_vector_setup(disc) && placed_actor_points(disc) &&
+        actor_point_placements(disc) && matrix_headings(disc) && matrix_planar_lengths(disc) &&
+        heading_matrix_setup(disc) && part_translation(disc) && part_transform_calls(disc) &&
+        node_transform_selection(disc) && node_matrix_installation(disc) &&
+        part_composition(disc) && node_continuations(disc, false) &&
+        node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
         scaled_walk_continuations(disc) && traversal_rotation_composition(disc) &&
         traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&
