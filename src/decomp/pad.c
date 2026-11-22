@@ -441,6 +441,42 @@ static s32 increment_menu_repeat(CPUState *c) {
     return (s32)count;
 }
 
+/* For menu record 12, Left selects zero and Right selects one. A change
+ * records the full button word before the guest call. */
+u32 nc_menu_direction_selection(CPUState *c, bool right) {
+    if (c->budget <= (right ? 22 : 21))
+        return right ? 0x8006870c : 0x8006865c;
+
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 12;
+    R(4) = R(3) << 1;
+    c->budget -= 6;
+    if (R(3) != 12)
+        return right ? 0x8006879c : 0x800686b8;
+
+    const u32 address = 0x800d7c22;
+    u32 current = (u32)(s32)(s16)MEM_R16(address);
+    if (right) {
+        R(8) = address;
+        R(3) = current;
+        R(2) = 1;
+    } else {
+        R(3) = address;
+        R(2) = current;
+    }
+    R(5) = 0x2fff;
+    c->budget -= 8;
+    if (current == (u32)right)
+        return 0x800687cc;
+
+    R(6) = 2;
+    R(4) = (u32)(s32)(s16)MEM_R16(0x800d7c6e);
+    MEM_W16(address, right ? 1 : 0);
+    MEM_W32(R(28) + 0x18c, R(30));
+    c->budget -= right ? 8 : 7;
+    return right ? 0x8006874c : 0x80068698;
+}
+
 /* Left is tested first. Once a direction is selected, a held press
  * below the repeat threshold skips both actions. */
 u32 nc_menu_horizontal_repeat(CPUState *c) {
