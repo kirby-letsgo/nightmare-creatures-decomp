@@ -1871,6 +1871,32 @@ bool nc_menu_pad_type_flags(CPUState *c) {
     return true;
 }
 
+/* Each axis has independent byte-sized bounds, including before the
+ * first sample when the stored minimum can exceed the maximum. */
+static void extend_stick_bounds(CPUState *c, u8 sample, u32 minimum, u32 maximum) {
+    if (sample < MEM_R8(minimum)) {
+        MEM_W8(minimum, sample);
+        --c->budget;
+    }
+    if (sample > MEM_R8(maximum)) {
+        MEM_W8(maximum, sample);
+        --c->budget;
+    }
+}
+
+bool nc_menu_sample_stick_bounds(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    u32 gp = R(28);
+    extend_stick_bounds(c, MEM_R8(R(29) + 0x10), gp + 0x2f0, gp + 0x2fc);
+    R(3) = MEM_R8(R(29) + 0x11);
+    extend_stick_bounds(c, R(3), gp + 0x2f4, gp + 0x300);
+    R(4) = R(3);
+    R(2) = R(30) & 8; /* Start mask for the following edge check */
+    c->budget -= 34;
+    return true;
+}
+
 /* The preceding delay slot tested Start in the current word (fp).
  * A new Start takes priority over Cross. Each exit leaves the next
  * button mask in v0, including when both buttons are pressed. */

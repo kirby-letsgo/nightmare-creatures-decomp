@@ -91,6 +91,7 @@ u32 nc_menu_up_repeat(CPUState *c);
 u32 nc_menu_right_input(CPUState *c);
 u32 nc_menu_left_input(CPUState *c);
 bool nc_menu_pad_type_flags(CPUState *c);
+bool nc_menu_sample_stick_bounds(CPUState *c);
 u32 nc_menu_confirm_edge(CPUState *c);
 bool nc_pad_inactivity(CPUState *c);
 bool nc_player_l2_direction(CPUState *c, bool l2_held);
