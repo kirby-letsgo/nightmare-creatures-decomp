@@ -285,6 +285,7 @@ def load_module(name: str, exe: str) -> Module:
         # Splat groups these independent routines after preceding returns.
         entries.update(
             (
+                0x80034610,
                 0x80046E18,
                 0x80046EDC,
                 0x80046FA0,
@@ -817,6 +818,8 @@ class Emitter:
                 out.append("        goto L_8004720C; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
                 out.append("    if (nc_return_point_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80034788:
+                out.append("    if (nc_finish_matrix_headings(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8003531C:
