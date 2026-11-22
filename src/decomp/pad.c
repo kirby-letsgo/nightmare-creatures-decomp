@@ -992,6 +992,36 @@ u32 nc_menu_save_record_buttons(CPUState *c, bool load_record) {
     return 0x80068d30;
 }
 
+static void clear_menu_history_and_call(CPUState *c, u32 return_address) {
+    MEM_W32(R(28) + 0x18c, 0);
+    R(31) = return_address;
+    c->budget -= 3;
+    nc_call(c, 0x8006ebc4);
+}
+
+bool nc_menu_reset_record_100(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    clear_menu_history_and_call(c, 0x80068d3c);
+    return true;
+}
+
+/* Reload the record after the record 100 call. Record 101 takes the early
+ * exit with v0 set to one in the final jump's delay slot. */
+u32 nc_menu_check_record_101(CPUState *c) {
+    if (c->budget <= 9)
+        return 0x80068d3c;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 101;
+    c->budget -= 6;
+    if (R(3) != R(2))
+        return 0x80068d60;
+    clear_menu_history_and_call(c, 0x80068d58);
+    R(2) = 1;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return 0x80068fe4;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
