@@ -454,6 +454,38 @@ static bool check_set_graph_debug(void) {
     return true;
 }
 
+static bool check_display_field(void) {
+    const u32 driver = MEM_R32(0x80024550), status_port = MEM_R32(0x8002462c);
+    const u32 alternate_driver = 0xa0060a00, callback = 0x80060b00;
+    const u32 words[] = {0, 0x7fffffff, 0x80000000, 0xffffffff};
+    const int budgets[] = {13, 17, 24, 4096};
+    CPUState state = arguments(0, 0, 0, 4096);
+    /* Exercise the disc's original driver table and GPU status port first. */
+    if (!compare(state, 0x8001d7ec, nc_credits_graphics_status, 10) ||
+        !compare(state, 0x8001d014, nc_credits_display_field, 12))
+        return false;
+
+    MEM_W32(callback, 0x03e00008);     /* jr ra */
+    MEM_W32(callback + 4, 0x00801021); /* move v0, a0 */
+    MEM_W32(alternate_driver + 0x38, callback);
+    MEM_W32(0x8002462c, SCRATCH_BASE);
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++) {
+        MEM_W32(SCRATCH_BASE, words[i]);
+        if (!compare(arguments(0, 0, 0, 11), 0x8001d7ec, nc_credits_graphics_status, 10))
+            return false;
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++)
+            for (unsigned alternate = 0; alternate < 2; alternate++) {
+                MEM_W32(0x80024550, alternate ? alternate_driver : driver);
+                state = arguments(~words[i], 0, 0, budgets[j]);
+                if (!compare(state, 0x8001d014, nc_credits_display_field, 12))
+                    return false;
+            }
+    }
+    MEM_W32(0x80024550, driver);
+    MEM_W32(0x8002462c, status_port);
+    return true;
+}
+
 static bool check_display_x(void) {
     const u32 rects[] = {0x80060800, SCRATCH_BASE + 2};
     const u8 graphs[] = {0, 1, 2, 3, 255};
@@ -733,6 +765,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_mode_packet();
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
+    pass = pass && check_display_field();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_draw_sync_callback();
