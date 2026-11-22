@@ -345,6 +345,40 @@ bool nc_begin_placement_update(CPUState *c) {
     return true;
 }
 
+bool nc_begin_placement_refresh(CPUState *c, bool *refresh) {
+    if (c->budget <= 9)
+        return false;
+    R(2) = MEM_R16(R(16) + 0x16c) & 0x40;
+    *refresh = R(2) != 0;
+    if (*refresh) {
+        R(31) = 0x8002b588;
+        R(4) = R(16);
+    }
+    c->budget -= *refresh ? 9 : 7;
+    return true;
+}
+
+/* A failed target update clears the preset and target flags. Either result
+ * restarts a zero counter at one before the shared matrix update. */
+bool nc_finish_placement_refresh(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    const u32 record = R(16);
+    int cycles = 8;
+    if (!R(2)) {
+        MEM_W16(record + 0x16c, MEM_R16(record + 0x16c) & 0xffaf);
+        cycles += 6;
+    }
+    const u32 counter = MEM_R32(record + 0x170);
+    R(2) = 1;
+    if (!counter) {
+        MEM_W32(record + 0x170, R(2));
+        cycles += 2;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 NcPlacementCounterPath nc_check_placement_counter(CPUState *c) {
     if (c->budget <= 20)
         return NC_PLACEMENT_COUNTER_FALLBACK;
