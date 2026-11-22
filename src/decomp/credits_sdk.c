@@ -1442,6 +1442,27 @@ bool nc_credits_cd_interrupt_name(CPUState *c) {
     return cd_lookup_name(c, 0x80024800, 7);
 }
 
+/* CdPosToInt converts a packed BCD minute:second:frame position to an LBA. */
+bool nc_credits_cd_position_to_sector(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    u32 position = R(4);
+    u32 minute = MEM_R8(position);
+    c->budget -= NC_LOAD_CYCLES;
+    u32 second = MEM_R8(position + 1);
+    c->budget -= NC_LOAD_CYCLES + 19;
+    u32 frame = MEM_R8(position + 2);
+    u32 minutes = (minute >> 4) * 10 + (minute & 15);
+    R(6) = second & 15;
+    u32 seconds = (second >> 4) * 10 + R(6);
+    R(4) = frame >> 4;
+    R(5) = frame & 15;
+    R(3) = R(4) * 10 + R(5);
+    R(2) = (minutes * 60 + seconds) * 75 + R(3) - 150;
+    c->budget -= NC_LOAD_CYCLES + 10;
+    return true;
+}
+
 bool nc_credits_cd_last_position(CPUState *c) {
     if (c->budget <= 4)
         return false;
