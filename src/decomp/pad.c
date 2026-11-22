@@ -143,6 +143,30 @@ bool nc_player_l2_direction(CPUState *c, bool l2_held) {
     return true;
 }
 
+/* Playback skips the live pad read if either flag is set. The first
+ * check leaves s0 untouched. The second sets the mask used after polling. */
+u32 nc_pad_playback_poll_gate(CPUState *c) {
+    if (c->budget <= 19)
+        return 0x80042de4;
+
+    R(3) = MEM_R32(R(28) + 0x244);
+    u32 flags = MEM_R32(R(3));
+    R(2) = 1; /* both branch delay slots */
+    c->budget -= 11;
+    if (flags & 0x10)
+        return 0x80042f54;
+
+    u32 state = MEM_R32(R(3) + 4);
+    R(16) = 0x02000000;
+    c->budget -= 7;
+    if (state & R(16))
+        return 0x80042f54;
+
+    R(4) = 0;
+    --c->budget;
+    return 0x80042e18;
+}
+
 /* Live input goes straight to the flag check. With idle pads, the caller
  * tests the sequence-end result first. Both paths return 1 in v0. */
 bool nc_pad_playback_interrupt(CPUState *c, bool check_sequence_end) {
