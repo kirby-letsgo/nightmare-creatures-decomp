@@ -676,6 +676,8 @@ class Emitter:
             targets.add(0x80026248)
         if self.mod.name == "psx2_exe" and f.addr == 0x80026560:
             targets.update((0x80026634, 0x800266A4))
+        if self.mod.name == "psx2_exe" and f.addr == 0x800266F4:
+            targets.update((0x80026784, 0x800267C8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80026394:
             targets.add(0x80026414)
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
@@ -994,6 +996,15 @@ class Emitter:
                 out.append("    if (nc_restore_node_branch(c)) goto L_800265CC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800266A4:
                 out.append("    if (nc_apply_node_matrix(c)) goto L_800266B4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026754:
+                out.append("    if (nc_prepare_part_translation(c)) {")
+                out.append(f"        {self.call(0x8007A530)}")
+                out.append("        goto L_80026784; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026784:
+                out.append("    if (nc_select_part_rotation(c)) {")
+                out.append("        if (!R(2)) goto L_800267EC;")
+                out.append(f"        {self.call(0x80025FE4)}")
+                out.append("        goto L_800267C8; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800265CC:
                 out.append("    if (nc_select_node_transform(c)) {")
                 out.append("        if (!R(2)) goto L_800266B4;")

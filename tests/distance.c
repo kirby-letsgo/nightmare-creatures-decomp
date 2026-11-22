@@ -824,6 +824,53 @@ static bool part_rotation_matrices(bool disc, NcRotationInput variant) {
     return true;
 }
 
+static bool part_transform_calls(bool disc) {
+    const u32 node = SCRATCH_BASE, descriptor = node + 128;
+    static const struct {
+        bool translation, branch, child, flagged;
+        u32 stop;
+        int cycles;
+    } cases[] = {
+        {true, true, false, false, 0x8007a530, 14},  {true, false, false, false, 0x8007a530, 10},
+        {false, true, false, false, 0x80025fe4, 8},  {false, false, true, false, 0x80025fe4, 14},
+        {false, false, false, true, 0x80025fe4, 25}, {false, false, false, false, 0x800267ec, 23}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[17] = node;
+        input.r[18] = node + 256;
+        input.r[31] = cases[i].stop;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(node + 12, cases[i].branch ? node + 64 : 0);
+        MEM_W32(node + 4, cases[i].child ? node + 96 : 0);
+        MEM_W32(node + 0x38, descriptor);
+        MEM_W8(descriptor + 5, cases[i].flagged ? 0xff : 0xfd);
+        MEM_W16(node + 0x10, -32768);
+        MEM_W16(node + 0x12, 0);
+        MEM_W16(node + 0x14, 32767);
+        memcpy(before, nc_scratch, sizeof before);
+        bool (*run)(CPUState *) =
+            cases[i].translation ? nc_prepare_part_translation : nc_select_part_rotation;
+        input.budget = cases[i].translation ? 14 : 25;
+        CPUState native = input;
+        if (run(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!run(&native) || native.budget != input.budget - cases[i].cycles ||
+            (!cases[i].translation && (native.r[2] != 0) != (cases[i].stop == 0x80025fe4)))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, cases[i].translation ? 0x80026754 : 0x80026784);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool node_transform_selection(bool disc) {
     const u32 node = SCRATCH_BASE, descriptor = node + 256;
     static const struct {
@@ -1760,9 +1807,9 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              node_transform_selection(disc) && node_matrix_installation(disc) &&
-              node_continuations(disc) && node_rotations(disc) && part_offsets(disc) &&
-              part_matrix_composition(disc) && part_transform_setup(disc) &&
+              part_transform_calls(disc) && node_transform_selection(disc) &&
+              node_matrix_installation(disc) && node_continuations(disc) && node_rotations(disc) &&
+              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
               part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);

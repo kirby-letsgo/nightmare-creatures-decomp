@@ -844,6 +844,52 @@ bool nc_apply_node_matrix(CPUState *c) {
     return true;
 }
 
+/* This traversal translates every part, including leaves without rotation. */
+bool nc_prepare_part_translation(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    const u32 node = R(17);
+    R(2) = MEM_R32(node + 12);
+    R(4) = node + 0x10;
+    if (R(2)) {
+        MEM_W32(R(18) + 4, R(2));
+        MEM_W32(R(18), R(16));
+        R(18) += 8;
+        ++R(19);
+        c->budget -= 4;
+    }
+    R(5) = node + 0x2c;
+    R(6) = R(29) + 0xb0;
+    R(31) = 0x80026784;
+    c->budget -= 10;
+    return true;
+}
+
+bool nc_select_part_rotation(CPUState *c) {
+    if (c->budget <= 25)
+        return false;
+    const u32 node = R(17);
+    R(4) = node;
+    R(2) = MEM_R32(node + 12);
+    int cycles = 6;
+    if (!R(2)) {
+        R(2) = MEM_R32(node + 4);
+        cycles += 6;
+        if (!R(2)) {
+            const u32 descriptor = MEM_R32(node + 0x38);
+            R(2) = MEM_R8(descriptor + 5) & 2;
+            cycles += 11;
+        }
+    }
+    if (R(2)) {
+        R(5) = R(20);
+        R(31) = 0x800267c8;
+        cycles += 2;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Save a pending traversal branch, then select nodes that have links or
  * a flagged leaf descriptor. v0 retains the value that selected RotTrans. */
 bool nc_select_node_transform(CPUState *c) {

@@ -36,6 +36,8 @@ NcNodeContinuation nc_advance_node_transform(CPUState *c);
 bool nc_start_node_traversal(CPUState *c);
 bool nc_restore_node_branch(CPUState *c);
 bool nc_apply_node_matrix(CPUState *c);
+bool nc_prepare_part_translation(CPUState *c);
+bool nc_select_part_rotation(CPUState *c);
 bool nc_select_node_transform(CPUState *c);
 bool nc_prepare_node_rotation(CPUState *c);
 bool nc_transform_part_offset(CPUState *c);
