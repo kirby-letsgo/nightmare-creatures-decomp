@@ -969,6 +969,30 @@ static bool check_cd_names(void) {
     return true;
 }
 
+static bool check_cd_position_to_sector(void) {
+    const struct {
+        u8 minute, second, frame;
+        s32 sector;
+    } cases[] = {
+        {0, 0, 0, -150}, {0, 0x01, 0x74, -1}, {0, 0x02, 0, 0},
+        {0x01, 0, 0, 4350}, {0x99, 0x59, 0x74, 449849},
+        {0xff, 0xff, 0xff, (165 * 60 + 165) * 75 + 165 - 150},
+    };
+    const u32 addresses[] = {0x80060001, 0xa0060003, SCRATCH_BASE + 5};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++)
+        for (unsigned j = 0; j < sizeof addresses / sizeof addresses[0]; j++) {
+            u32 address = addresses[j];
+            MEM_W8(address, cases[i].minute);
+            MEM_W8(address + 1, cases[i].second);
+            MEM_W8(address + 2, cases[i].frame);
+            CPUState state = arguments(address, 2, 3, j ? 39 : 4096);
+            if (!compare(state, 0x800204e4, nc_credits_cd_position_to_sector, 38) ||
+                nc_cpu.r[2] != (u32)cases[i].sector)
+                return false;
+        }
+    return true;
+}
+
 static bool check_cd_state(void) {
     const u8 values[] = {0, 1, 0x7f, 0x80, 0xff};
     for (unsigned i = 0; i < sizeof values; i++) {
@@ -1089,6 +1113,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
+    pass = pass && check_cd_position_to_sector();
     pass = pass && check_cd_state();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
