@@ -204,6 +204,48 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool placement_matrix_scales(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100, flags = SCRATCH_BASE + 0x60;
+    const u32 masks[] = {0, 0x20000000, 0xdfffffff, 0xffffffff};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof masks / sizeof masks[0]; ++i) {
+        const bool wide = (masks[i] & 0x20000000) != 0;
+        CPUState input = initial();
+        input.r[4] = SCRATCH_BASE;
+        input.r[28] = SCRATCH_BASE;
+        input.r[29] = frame + 0x48;
+        input.r[31] = 0x8002b14c;
+        input.budget = 59;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(input.r[28] + 0x244, flags);
+        MEM_W32(flags, masks[i]);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_begin_placement_matrices(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_placement_matrices(&native) || native.budget != (wide ? 1 : 2) ||
+            native.r[20] != frame + (wide ? 0x20 : 0x10) || native.r[29] != frame)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Restore the caller's SP in the jump delay slot so the interpreter
+             * stops at the scale-selection join with the frame allocated. */
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x8002b0b0u >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bd0048);
+            input.r[29] = frame;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_vector_frame(bool disc, bool begin) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const u32 entry = begin ? 0x8002ae78 : 0x8002af68;
@@ -3101,9 +3143,10 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
-        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
-        !transposed_placement_scales(disc) || !placement_record_steps(disc))
+    if (!placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
+        !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
+        !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
+        !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&

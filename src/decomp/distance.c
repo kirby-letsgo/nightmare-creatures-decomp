@@ -16,18 +16,11 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
-/* Save the caller's frame and copy both four-word scale vectors. The game
- * stages XYZ before writing it, then reads and copies the padding word. */
-bool nc_begin_placement_vectors(CPUState *c) {
-    if (c->budget <= 42)
-        return false;
-    R(29) -= 0x68;
-    MEM_W32(R(29) + 0x60, R(16));
-    R(16) = R(4);
-    MEM_W32(R(29) + 0x64, R(31));
+/* Both placement routines stage XYZ before writing it, then copy the fourth word. */
+static void copy_placement_scales(CPUState *c, u32 destination) {
     for (u32 offset = 0; offset < 0x20; offset += 0x10) {
         R(5) = 0x800184d8 + offset;
-        const u32 dst = R(29) + 0x40 + offset;
+        const u32 dst = destination + offset;
         R(2) = MEM_R32(R(5));
         R(3) = MEM_R32(R(5) + 4);
         R(4) = MEM_R32(R(5) + 8);
@@ -37,6 +30,40 @@ bool nc_begin_placement_vectors(CPUState *c) {
         R(2) = MEM_R32(R(5) + 12);
         MEM_W32(dst + 12, R(2));
     }
+}
+
+bool nc_begin_placement_matrices(CPUState *c) {
+    if (c->budget <= 59)
+        return false;
+    R(29) -= 0x48;
+    MEM_W32(R(29) + 0x3c, R(19));
+    R(19) = R(4);
+    MEM_W32(R(29) + 0x44, R(31));
+    MEM_W32(R(29) + 0x40, R(20));
+    MEM_W32(R(29) + 0x38, R(18));
+    MEM_W32(R(29) + 0x34, R(17));
+    MEM_W32(R(29) + 0x30, R(16));
+    copy_placement_scales(c, R(29) + 0x10);
+
+    R(20) = R(29) + 0x10;
+    const u32 flags = MEM_R32(R(28) + 0x244);
+    R(3) = 0x20000000;
+    R(2) = MEM_R32(flags) & R(3);
+    R(4) = R(29) + 0x20;
+    if (R(2))
+        R(20) = R(4); /* The second vector doubles the X scale. */
+    c->budget -= R(2) ? 59 : 58;
+    return true;
+}
+
+bool nc_begin_placement_vectors(CPUState *c) {
+    if (c->budget <= 42)
+        return false;
+    R(29) -= 0x68;
+    MEM_W32(R(29) + 0x60, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x64, R(31));
+    copy_placement_scales(c, R(29) + 0x40);
     c->budget -= 42;
     return true;
 }
