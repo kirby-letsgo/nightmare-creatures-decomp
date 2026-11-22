@@ -435,6 +435,12 @@ u32 nc_menu_face_press(CPUState *c) {
     return 0x800685fc;
 }
 
+static s32 increment_menu_repeat(CPUState *c) {
+    u32 count = MEM_R32(R(28) + 0x194) + 1u;
+    MEM_W32(R(28) + 0x194, count);
+    return (s32)count;
+}
+
 /* Start arrives in v0 from the Up check. A fresh Start takes priority
  * over Down and leaves the repeat counter untouched. */
 u32 nc_menu_start_down(CPUState *c) {
@@ -457,9 +463,7 @@ u32 nc_menu_start_down(CPUState *c) {
     c->budget -= 2;
     if (!R(2))
         return 0x8006851c;
-    u32 count = MEM_R32(R(28) + 0x194) + 1u;
-    MEM_W32(R(28) + 0x194, count);
-    R(2) = (s32)count < 11;
+    R(2) = increment_menu_repeat(c) < 11;
     c->budget -= 8;
     return 0x800685d8;
 }
@@ -481,6 +485,23 @@ u32 nc_menu_down_repeat(CPUState *c) {
     return 0x800685fc;
 }
 
+static u32 dispatch_menu_up(CPUState *c, s32 threshold) {
+    s32 count = increment_menu_repeat(c);
+    R(4) = R(22);
+    c->budget -= 9;
+    if (count < threshold) {
+        R(2) = MEM_R32(R(28) + 0x18c) & 0x10;
+        c->budget -= 7;
+        if (R(2))
+            return 0x800687cc;
+    }
+
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 4;
+    c->budget -= 5;
+    return 0x800685fc;
+}
+
 /* v0 carries the Up mask from the preceding path. A held Up starts
  * repeating when the incremented signed counter reaches 11. */
 u32 nc_menu_up_repeat(CPUState *c) {
@@ -493,21 +514,26 @@ u32 nc_menu_up_repeat(CPUState *c) {
     if (!up)
         return 0x800684d0;
 
-    u32 count = MEM_R32(R(28) + 0x194) + 1u;
-    MEM_W32(R(28) + 0x194, count);
-    R(4) = R(22);
-    c->budget -= 9;
-    if ((s32)count < 11) {
-        R(2) = MEM_R32(R(28) + 0x18c) & 0x10;
-        c->budget -= 7;
-        if (R(2))
-            return 0x800687cc;
-    }
+    return dispatch_menu_up(c, 11);
+}
 
-    R(2) = MEM_R32(R(28) + 0x190);
-    R(6) = 4;
-    c->budget -= 5;
-    return 0x800685fc;
+/* After the face-button checks, the same counter uses a threshold of six.
+ * Up takes priority over Down, including on a suppressed repeat. */
+u32 nc_menu_vertical_repeat(CPUState *c) {
+    if (c->budget <= 23)
+        return 0x80068578;
+    c->budget -= 2;
+    if (R(2))
+        return dispatch_menu_up(c, 6);
+
+    bool down = (R(30) & 0x40) != 0;
+    R(2) = R(30) & 0x80; /* Left mask in the Down branch delay slot */
+    c->budget -= 2;
+    if (!down)
+        return 0x80068624;
+    R(2) = increment_menu_repeat(c) < 6;
+    c->budget -= 7;
+    return 0x800685d8;
 }
 
 /* Menu state 0x1a switches flags according to the first packet's type
