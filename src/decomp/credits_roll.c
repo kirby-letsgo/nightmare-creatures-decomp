@@ -504,3 +504,9 @@ bool nc_credits_reset_music(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Both the display startup and the music player call an empty hook. */
+bool nc_credits_empty_hook(CPUState *c) {
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

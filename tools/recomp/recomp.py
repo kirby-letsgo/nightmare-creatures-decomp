@@ -39,6 +39,7 @@ CREDITS_ROUTINES = {
     0x80019220: "nc_credits_init_shared_record",
     0x800192E4: "nc_credits_set_cd_volume",
     0x8001932C: "nc_credits_reset_music",
+    0x8001935C: "nc_credits_empty_hook",
     0x80019364: "nc_credits_play_track",
     0x80019454: "nc_credits_init_heap",
     0x8001949C: "nc_credits_resize",
@@ -46,6 +47,7 @@ CREDITS_ROUTINES = {
     0x800197E0: "nc_credits_free",
     0x800198B0: "nc_credits_find_allocation",
     0x800198EC: "nc_credits_allocation_size",
+    0x8002335C: "nc_credits_empty_hook",
 }
 
 GPR = [
