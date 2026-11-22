@@ -441,6 +441,27 @@ static s32 increment_menu_repeat(CPUState *c) {
     return (s32)count;
 }
 
+/* Ordinary menu records process the direction before saving the button word. */
+bool nc_menu_apply_direction(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800687bc;
+    c->budget -= 2;
+    nc_call(c, 0x80063ccc);
+    MEM_W32(R(28) + 0x18c, R(30));
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
+bool nc_menu_clear_repeat(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    MEM_W32(R(28) + 0x194, 0);
+    c->budget--;
+    return true;
+}
+
 /* For menu record 12, Left selects zero and Right selects one. A change
  * records the full button word before the guest call. */
 u32 nc_menu_direction_selection(CPUState *c, bool right) {

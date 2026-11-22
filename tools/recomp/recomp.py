@@ -787,6 +787,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800687B4:
+                out.append("    if (nc_menu_apply_direction(c)) goto L_800687CC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800687C8:
+                out.append("    if (nc_menu_clear_repeat(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006865C, 0x8006870C):
                 right = i.addr == 0x8006870C
                 change = 0x8006874C if right else 0x80068698
