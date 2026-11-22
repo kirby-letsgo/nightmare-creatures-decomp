@@ -326,3 +326,12 @@ bool nc_credits_end_packet(CPUState *c) {
     c->budget -= 2;
     return true;
 }
+
+bool nc_credits_palette_id(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(4) = (R(4) >> 4) & 0x3f;
+    R(2) = (u16)((R(5) << 6) | R(4));
+    c->budget -= 6;
+    return true;
+}
