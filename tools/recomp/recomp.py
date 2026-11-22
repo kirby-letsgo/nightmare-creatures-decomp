@@ -889,11 +889,15 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800689A8:
+            if self.mod.name == "psx2_exe" and i.addr in (0x800689A8, 0x80068ADC):
+                if i.addr == 0x800689A8:
+                    routine, next_check = "nc_menu_record_direction_repeat", "80068ADC"
+                else:
+                    routine, next_check = "nc_menu_record_shoulder_repeat", "80068B74"
                 out.extend(
                     [
-                        "    switch (nc_menu_record_direction_repeat(c)) {",
-                        "    case 0x80068ADC: goto L_80068ADC;",
+                        f"    switch ({routine}(c)) {{",
+                        f"    case 0x{next_check}: goto L_{next_check};",
                         "    case 0x80068CE0: goto L_80068CE0;",
                         "    case 0x80068CF8: goto L_80068CF8;",
                         "    }",
