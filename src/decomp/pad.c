@@ -704,6 +704,34 @@ u32 nc_menu_record_shoulders(CPUState *c) {
     return 0x8006885c;
 }
 
+/* Each pair contributes at most one action. The second button is tested
+ * only when the first is clear. An empty pair leaves t2 untouched. */
+static void menu_action_pair(CPUState *c, u32 first, u32 second, u32 first_action,
+                             u32 second_action) {
+    u32 action = first_action;
+    c->budget -= 2;
+    if (!first) {
+        c->budget -= 2;
+        if (!second)
+            return;
+        action = second_action;
+    }
+    R(10) = MEM_R32(R(29) + 0x18) | action;
+    MEM_W32(R(29) + 0x18, R(10));
+    c->budget -= 7;
+}
+
+bool nc_menu_record_button_pairs(CPUState *c) {
+    if (c->budget <= 33)
+        return false;
+    const u32 buttons = R(30);
+    menu_action_pair(c, R(2), buttons & 0x40, 0x4, 0x8);             /* Up, Down */
+    menu_action_pair(c, buttons & 0x80, buttons & 0x20, 0x80, 0x40); /* Left, Right */
+    menu_action_pair(c, buttons & 0x8000, buttons & 0x2000, 0x400, 0x800);
+    R(2) = buttons & 0x1000;
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
