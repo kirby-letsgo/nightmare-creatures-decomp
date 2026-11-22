@@ -314,6 +314,28 @@ static bool check_texture_window(void) {
     return true;
 }
 
+static bool check_draw_mode_packet(void) {
+    const u32 packet = 0x80060500;
+    const u32 rects[] = {0, SCRATCH_BASE + 8, packet, 0xa0060504, 0x801feed0};
+    const u8 types[] = {0, 1, 2, 255};
+    for (unsigned i = 0; i < sizeof types; i++)
+        for (unsigned flags = 0; flags < 4; flags++)
+            for (unsigned j = 0; j < sizeof rects / sizeof rects[0]; j++) {
+                CPUState state = arguments(packet, flags & 1, flags & 2, 89);
+                state.r[7] = 0xf00d8f21;
+                memset(nc_fast_ptr(packet), 0xa5, 16);
+                if (rects[j]) {
+                    MEM_W32(rects[j], 0x80ff00fe);
+                    MEM_W32(rects[j] + 4, 0x00100040);
+                }
+                MEM_W8(0x80024558, types[i]);
+                MEM_W32(state.r[29] + 16, rects[j]);
+                if (!compare(state, 0x8001d174, nc_credits_draw_mode_packet, 88))
+                    return false;
+            }
+    return true;
+}
+
 static bool check_transfer_packets(void) {
     const u32 packet = 0x80060500;
     const u32 rects[] = {SCRATCH_BASE + 4, packet, 0xa0060504, packet + 8, packet + 12};
@@ -503,6 +525,7 @@ int main(int argc, char **argv) {
     pass = pass && check_priority_packet();
     pass = pass && check_merge_primitives();
     pass = pass && check_transfer_packets();
+    pass = pass && check_draw_mode_packet();
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
     pass = pass && check_draw_mode_words();
