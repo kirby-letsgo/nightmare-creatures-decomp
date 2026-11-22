@@ -1494,6 +1494,46 @@ bool nc_credits_spu_set_dma_priority(CPUState *c) {
     return true;
 }
 
+/* SPU initialization and PIO use this 240-iteration delay. The two stack
+ * words remain visible to the guest throughout the wait. */
+bool nc_credits_spu_wait(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 8;
+    R(2) = 13;
+    c->budget -= 2;
+    MEM_W32(R(29) + 4, R(2));
+    c->budget--;
+    MEM_W32(R(29), 0);
+    c->budget -= 3;
+
+    for (;;) {
+        load_word(c, 2, R(29));
+        NC_POLL(c, 1);
+        set_reg(c, 2, (s32)R(2) < 240);
+        bool again = R(2) != 0;
+        NC_POLL(c, 2);
+        if (!again)
+            break;
+
+        load_word(c, 3, R(29) + 4);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(3) * 2);
+        set_reg(c, 2, R(2) + R(3));
+        MEM_W32(R(29) + 4, R(2));
+        NC_POLL(c, 1);
+        load_word(c, 2, R(29));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) + 1);
+        MEM_W32(R(29), R(2));
+        NC_POLL(c, 1);
+        load_word(c, 2, R(29)); /* the loop test performs a second load */
+    }
+    set_reg(c, 29, R(29) + 8);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* _spu_FsetDelayW and _spu_FsetDelayR update the SPU bus delay register. */
 bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     if (c->budget <= 15)

@@ -126,6 +126,7 @@ credits_exe  8001FB84    8001FBC0         credits_sdk.c
 credits_exe  8001FBC0    8001FC20         credits_sdk.c
 credits_exe  8001FC20    8001FC4C         credits_sdk.c
 credits_exe  8001FC4C    8001FC78         credits_sdk.c
+credits_exe  8001FC78    8001FCD8         credits_sdk.c
 credits_exe  8001FDF0    8001FE00         credits_sdk.c
 credits_exe  8001FE00    8001FE10         credits_sdk.c
 credits_exe  8001FE10    8001FE20         credits_sdk.c

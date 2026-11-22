@@ -142,6 +142,7 @@ CREDITS_ROUTINES = {
     0x8001FBC0: "nc_credits_spu_set_dma_priority(c)",
     0x8001FC20: "nc_credits_spu_set_delay(c, false)",
     0x8001FC4C: "nc_credits_spu_set_delay(c, true)",
+    0x8001FC78: "nc_credits_spu_wait(c)",
     0x8001FDF0: "nc_credits_cd_status(c)",
     0x8001FE00: "nc_credits_cd_mode(c)",
     0x8001FE10: "nc_credits_cd_last_command(c)",
