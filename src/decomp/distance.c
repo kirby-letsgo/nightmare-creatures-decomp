@@ -3249,6 +3249,34 @@ bool nc_advance_point_index(CPUState *c) {
     return true;
 }
 
+bool nc_finish_point_update(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const s32 state = MEM_R32(R(19) + 0x2cc);
+    const int cycles = state < 0 ? 6 : 8;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = state;
+    R(4) = R(19);
+    if (state >= 0) {
+        R(5) = 5;
+        R(31) = 0x8001aeac;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_restore_point_update_frame(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x40);
+    for (unsigned reg = 21; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 0x28 + 4 * (reg - 16));
+    R(29) += 0x48;
+    c->budget -= 24;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
