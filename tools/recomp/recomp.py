@@ -203,6 +203,7 @@ CREDITS_ROUTINES = {
     0x8001FED4: "nc_credits_cd_command_name(c)",
     0x8001FF08: "nc_credits_cd_interrupt_name(c)",
     0x8001FF3C: "nc_credits_cd_sync(c)",
+    0x8001FF5C: "nc_credits_cd_ready(c)",
     0x8001FF7C: "nc_credits_cd_sync_callback(c)",
     0x8001FF94: "nc_credits_cd_ready_callback(c)",
     0x80020354: "nc_credits_cd_mix(c)",
@@ -733,6 +734,8 @@ class Emitter:
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B22C:
             targets.update((0x8002B260, 0x8002B304))
+        if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
+            targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AC70:
             targets.add(0x8002AC94)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B3D0:
@@ -1684,6 +1687,8 @@ class Emitter:
                 out.append("        goto L_8002AC94; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AC94:
                 out.append("    if (nc_finish_placement_defaults(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002ADA0:
+                out.append("    if (nc_sample_placement_axes(c)) goto L_8002AE1C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AE1C:
                 out.append("    if (nc_store_placement_axes(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AD3C:

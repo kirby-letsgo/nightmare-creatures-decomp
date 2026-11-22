@@ -2788,8 +2788,8 @@ bool nc_credits_cd_data_callback(CPUState *c) {
     return true;
 }
 
-/* Both sync wrappers forward their arguments and return the driver status. */
-static bool call_cd_sync_driver(CPUState *c, u32 driver, u32 return_pc) {
+/* Forward the caller's arguments and return the CD driver status. */
+static bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc) {
     if (c->budget <= 4)
         return false;
     R(29) -= 24;
@@ -2805,11 +2805,15 @@ static bool call_cd_sync_driver(CPUState *c, u32 driver, u32 return_pc) {
 }
 
 bool nc_credits_cd_sync(CPUState *c) {
-    return call_cd_sync_driver(c, 0x80020adc, 0x8001ff4c);
+    return call_cd_status_driver(c, 0x80020adc, 0x8001ff4c);
+}
+
+bool nc_credits_cd_ready(CPUState *c) {
+    return call_cd_status_driver(c, 0x80020d5c, 0x8001ff6c);
 }
 
 bool nc_credits_cd_data_sync(CPUState *c) {
-    return call_cd_sync_driver(c, 0x800218d8, 0x800203d0);
+    return call_cd_status_driver(c, 0x800218d8, 0x800203d0);
 }
 
 /* Load a CD port pointer from the guest table, including the load delay nop. */
