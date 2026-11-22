@@ -8,7 +8,8 @@ enum {
     DRAIN_INTERVAL = 0x800D4C10u,
     LEVEL_FLAGS = 0x800D779Cu,
     DISPLAYED_HEALTH = 0x800CC004u,
-    HUD_FLAGS = 0x800CBFF8u
+    HUD_FLAGS = 0x800CBFF8u,
+    HUD_COUNTER = 0x800CBFFEu
 };
 
 /* PSX2.EXE 80055DD4..80055F48, after drawing the gauge. Each debit is the original
@@ -95,5 +96,53 @@ bool nc_update_adrenaline(CPUState *c) {
     R(2) = MEM_R16(HUD_FLAGS) | 0x28;
     MEM_W16(HUD_FLAGS, R(2));
     c->budget -= 9;
+    return true;
+}
+
+/* The same HUD reset is also called directly by the gauge update. */
+bool nc_clear_adrenaline_hud(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(2) = MEM_R16(HUD_FLAGS);
+    R(1) = 0x800d0000;
+    MEM_W16(HUD_COUNTER, 0);
+    R(2) &= 0xff9f;
+    MEM_W16(HUD_FLAGS, R(2));
+    c->budget -= 11;
+    return true;
+}
+
+/* US 80052B80. An absent actor is eligible for the reward. The player
+ * and hit kinds 40 and 41 skip it, keeping the HUD and meter intact. */
+bool nc_refill_hit_adrenaline(CPUState *c) {
+    if (c->budget <= 37)
+        return false;
+    const u32 actor = R(4), kind = R(5);
+    R(29) -= 24;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget -= 3;
+    if (actor) {
+        R(2) = MEM_R32(actor + 0x2c8) & 1;
+        c->budget -= 7;
+    }
+    if (!actor || !R(2)) {
+        R(2) = 40; /* Delay slot of the comparison with kind 41. */
+        c->budget -= 3;
+        if (kind != 41) {
+            c->budget -= 2;
+            if (kind != 40) {
+                R(31) = 0x80052bbc;
+                c->budget -= 2;
+                nc_clear_adrenaline_hud(c);
+                R(2) = 256;
+                R(1) = 0x800d0000;
+                MEM_W16(ADDR_ADRENALINE, R(2));
+                c->budget -= 3;
+            }
+        }
+    }
+    R(31) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= 6;
     return true;
 }

@@ -20,10 +20,12 @@ psx2_exe     800422DC    80042360         contact.c
 psx2_exe     80042AA0    80042B24         contact.c
 psx2_exe     80042BF0    80042C14         contact.c
 psx2_exe     8004E510    8004E570         contact.c
-psx2_exe     8004EC68    8004EC8C         damage.c
+psx2_exe     8004EC68    8004ECD0         damage.c
 psx2_exe     8004D0CC    8004D1D0         damage.c
 psx2_exe     8004E6E0    8004E9EC         damage.c
 psx2_exe     8004EB30    8004EB78         damage.c
+psx2_exe     80052B80    80052BD8         adrenaline.c
+psx2_exe     800562A0    800562C4         adrenaline.c
 # The death callbacks at 80055EDC..80055EF4 still run the original instructions.
 psx2_exe     80055DD4    80055EDC         adrenaline.c
 psx2_exe     80055EF4    80055F48         adrenaline.c
