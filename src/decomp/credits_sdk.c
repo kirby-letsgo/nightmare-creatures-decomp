@@ -167,3 +167,27 @@ bool nc_credits_append_string(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Pack the variadic register arguments into the caller's argument area and
+ * call the guest formatter with stdout, the format and the argument cursor. */
+bool nc_credits_printf(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 0x18;
+    R(2) = R(4);
+    R(4) = 1;
+    MEM_W32(R(29) + 0x1c, R(5));
+    R(5) = R(2);
+    MEM_W32(R(29) + 0x20, R(6));
+    R(6) = R(29) + 0x1c;
+    MEM_W32(R(29) + 0x10, R(31));
+    MEM_W32(R(29) + 0x18, R(2));
+    R(31) = 0x80019a8c;
+    MEM_W32(R(29) + 0x24, R(7));
+    c->budget -= 11;
+    nc_call(c, 0x80019a9c);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

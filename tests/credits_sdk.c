@@ -88,6 +88,22 @@ static bool check_append(void) {
     return true;
 }
 
+static bool check_printf(void) {
+    const char *formats[] = {"", "NC", "%d %s %x", "%02x:%%:%c"};
+    const u32 fmt = 0x80060000, string = 0x80060400;
+    memcpy(nc_fast_ptr(string), "test", 5);
+    for (unsigned i = 0; i < sizeof formats / sizeof formats[0]; i++) {
+        strcpy((char *)nc_fast_ptr(fmt), formats[i]);
+        for (int budget = 12; budget < 64; budget += 7) {
+            CPUState state = arguments(fmt, (u32)-12, string, budget);
+            state.r[7] = 0xcafe;
+            if (!compare(state, 0x80019a60, nc_credits_printf, 11))
+                return false;
+        }
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -102,6 +118,7 @@ int main(int argc, char **argv) {
     pass = pass && check_fill();
     pass = pass && check_length();
     pass = pass && check_append();
+    pass = pass && check_printf();
     disc_close();
     return pass ? 0 : 1;
 }
