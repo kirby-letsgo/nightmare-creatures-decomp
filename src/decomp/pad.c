@@ -18,6 +18,54 @@ static void pad_driver_call(CPUState *c, u32 target, u32 return_address) {
     nc_call(c, target);
 }
 
+/* Psy-Q InitPAD preserves both buffer/length pairs across _patch_pad and
+ * ChangeClearPad before passing them on to BIOS B0(12h). */
+bool nc_sdk_init_pad(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 0x28;
+    for (unsigned i = 0; i < 4; ++i) {
+        MEM_W32(R(29) + 0x10 + 4 * i, R(16 + i));
+        R(16 + i) = R(4 + i);
+    }
+    MEM_W32(R(29) + 0x20, R(31));
+    R(31) = 0x80073ee0;
+    c->budget -= 11;
+    nc_call(c, 0x80073f74); /* _patch_pad */
+    R(4) = 0;
+    pad_driver_call(c, 0x80073e3c, 0x80073ee8); /* ChangeClearPad */
+    for (unsigned i = 0; i < 3; ++i) {
+        R(4 + i) = R(16 + i);
+        NC_POLL(c, NC_INSN_CYCLES);
+    }
+    R(7) = R(19); /* fourth argument in the delay slot */
+    pad_driver_call(c, 0x80073f44, 0x80073efc);
+    R(31) = MEM_R32(R(29) + 0x20);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    for (int i = 3; i >= 0; --i) {
+        R(16 + i) = MEM_R32(R(29) + 0x10 + 4 * i);
+        NC_POLL(c, NC_LOAD_CYCLES);
+    }
+    R(29) += 0x28;
+    NC_POLL(c, NC_INSN_CYCLES);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
+bool nc_sdk_start_pad(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(31) = 0x80073f2c;
+    c->budget -= 4;
+    nc_call(c, 0x80073f54); /* BIOS StartPAD */
+    R(4) = 0;
+    pad_driver_call(c, 0x80073e3c, 0x80073f34); /* ChangeClearPad */
+    return_from_pad_driver(c);
+    return true;
+}
+
 bool nc_start_pad_driver(CPUState *c) {
     if (c->budget <= 8)
         return false;

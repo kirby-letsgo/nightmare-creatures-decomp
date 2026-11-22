@@ -3,6 +3,8 @@
 
 #include "port/recomp.h"
 
+bool nc_sdk_init_pad(CPUState *c);
+bool nc_sdk_start_pad(CPUState *c);
 bool nc_start_pad_driver(CPUState *c);
 bool nc_stop_pad_driver(CPUState *c);
 bool nc_pad_packet_type(CPUState *c);
