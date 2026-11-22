@@ -1169,6 +1169,44 @@ u32 nc_menu_mode_up(CPUState *c) {
     return 0x80068f0c;
 }
 
+/* v0 holds the current Down bit from the preceding Up check. */
+u32 nc_menu_mode_down(CPUState *c) {
+    if (c->budget <= 13)
+        return 0x80068ee8;
+    c->budget -= 2;
+    if (!R(2)) {
+        R(2) = R(30) & 0x4000;
+        return 0x80068f38;
+    }
+
+    R(2) = MEM_R32(R(28) + 0x18c) & 0x40;
+    R(4) = R(22);
+    c->budget -= 7;
+    if (R(2))
+        return 0x80068f34;
+
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 8;
+    c->budget -= 4;
+    return 0x80068f0c;
+}
+
+/* Up and Down share the selected-record call and save the full button word. */
+bool nc_menu_dispatch_direction(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(5) = 0x800883c0 + 12 * R(2);
+    R(2) = 0x800883c0;
+    R(31) = 0x80068f28;
+    c->budget -= 7;
+    nc_call(c, 0x80063b70);
+    MEM_W32(R(28) + 0x18c, R(30));
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;

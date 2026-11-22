@@ -337,6 +337,9 @@ psx2_exe     80068E18    80068E50         pad.c
 psx2_exe     80068E50    80068E84         pad.c
 # Mode 0x8000 status update and fresh Up dispatch.
 psx2_exe     80068E84    80068EE8         pad.c
+# Mode 0x8000 Down edge and shared Up/Down record dispatch.
+psx2_exe     80068EE8    80068F0C         pad.c
+psx2_exe     80068F0C    80068F34         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
