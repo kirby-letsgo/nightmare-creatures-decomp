@@ -264,6 +264,8 @@ psx2_exe     800687C8    800687CC         pad.c
 psx2_exe     800687CC    800687D8         pad.c
 # Menu record mode and shoulder action bits.
 psx2_exe     800687D8    8006885C         pad.c
+# Menu record directional and face button pairs.
+psx2_exe     8006885C    800688EC         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.

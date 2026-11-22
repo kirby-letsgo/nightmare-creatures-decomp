@@ -876,6 +876,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006885C:
+                out.append("    if (nc_menu_record_button_pairs(c)) goto L_800688EC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687CC:
                 out.append("    if (nc_menu_scan_and_save_buttons(c)) goto L_800687D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687B4:
