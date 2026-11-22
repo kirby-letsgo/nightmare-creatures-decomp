@@ -28,6 +28,7 @@ u32 nc_menu_sequence_match(CPUState *c);
 u32 nc_menu_record_sequence(CPUState *c);
 bool nc_menu_store_progress(CPUState *c, bool matched);
 u32 nc_menu_next_record(CPUState *c, bool increment);
+bool nc_leave_menu_button_scan(CPUState *c);
 bool nc_menu_apply_direction(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
 u32 nc_menu_direction_selection(CPUState *c, bool right);

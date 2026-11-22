@@ -570,6 +570,18 @@ u32 nc_menu_next_record(CPUState *c, bool increment) {
     return (s32)R(19) < 11 ? 0x8006718c : 0x80067308;
 }
 
+bool nc_leave_menu_button_scan(CPUState *c) {
+    if (c->budget <= 30)
+        return false;
+
+    R(31) = MEM_R32(R(29) + 0x30);
+    for (int i = 7; i >= 0; --i)
+        R(16 + i) = MEM_R32(R(29) + 0x10 + 4 * i);
+    R(29) += 0x38;
+    c->budget -= 30;
+    return true;
+}
+
 /* Ordinary menu records process the direction before saving the button word. */
 bool nc_menu_apply_direction(CPUState *c) {
     if (c->budget <= 2)
