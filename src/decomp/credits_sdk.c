@@ -391,6 +391,49 @@ bool nc_credits_draw_tpage(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_corner(CPUState *c, bool bottom_right) {
+    if (c->budget <= 55)
+        return false;
+
+    s32 x = (s16)R(4), y = (s16)R(5);
+    c->budget -= 4;
+    if (x < 0) {
+        x = 0;
+    } else {
+        c->budget -= 2;
+        s32 max_x = (s16)MEM_R16(0x8002455c) - 1;
+        R(6) = (u32)max_x;
+        c->budget -= NC_LOAD_CYCLES + 7;
+        if (x > max_x) {
+            x = max_x;
+            c->budget -= 2;
+        }
+    }
+    c->budget -= 5;
+    if (y < 0) {
+        y = 0;
+    } else {
+        c->budget -= 2;
+        s32 max_y = (s16)MEM_R16(0x8002455e) - 1;
+        c->budget -= NC_LOAD_CYCLES + 8;
+        if (y > max_y) {
+            y = max_y;
+            c->budget--;
+        }
+    }
+
+    c->budget -= 2;
+    u8 graph = MEM_R8(0x80024558);
+    bool wide = graph == 1 || graph == 2;
+    u32 mask = wide ? 0xfff : 0x3ff;
+    R(4) = bottom_right ? 0xe4000000u : 0xe3000000u;
+    R(5) = (u32)y;
+    R(3) = (R(5) & mask) << (wide ? 12 : 10);
+    R(2) = R(4) | R(3) | ((u32)x & mask);
+    c->budget -= wide ? 14 : 16;
+    return true;
+}
+
 bool nc_credits_draw_offset_word(CPUState *c) {
     if (c->budget <= 18)
         return false;
