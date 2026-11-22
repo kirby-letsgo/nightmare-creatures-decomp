@@ -252,6 +252,40 @@ bool nc_prepare_transposed_placement_scale(CPUState *c) {
     return true;
 }
 
+/* Offset the actor's whole-unit X/Z by 100 units along its 16-bit heading.
+ * The Q14 components are multiplied by 25 and shifted by 12 in the game. */
+bool nc_prepare_actor_placement_target(CPUState *c) {
+    if (c->budget <= 71)
+        return false;
+    const u32 record = R(17);
+    R(16) = (s32)(s16)R(2);
+    R(31) = 0x8002b270;
+    R(4) = R(16);
+    nc_heading_sine(c);
+    R(4) = R(16);
+    const u32 x_actor = MEM_R32(record + 0x164);
+    const s32 x = (s32)MEM_R32(x_actor + 0x27c) >> 8;
+    R(5) = x + ((25 * (s16)R(2)) >> 12);
+    R(31) = 0x8002b2a8;
+    MEM_W32(record + 0x150, R(5));
+    nc_heading_cosine(c);
+
+    R(4) = 300;
+    R(5) = 0x8000u - R(16);
+    const u32 z_actor = MEM_R32(record + 0x164);
+    const s32 z = (s32)MEM_R32(z_actor + 0x284) >> 8;
+    const s32 offset_z = (25 * (s16)R(2)) >> 12;
+    R(2) = MEM_R32(record + 0x150) << 8;
+    MEM_W32(record + 0x158, z + offset_z);
+    R(3) = MEM_R32(record + 0x158) << 8;
+    R(6) = record;
+    MEM_W32(record + 0x150, R(2));
+    R(31) = 0x8002b304;
+    MEM_W32(record + 0x158, R(3));
+    c->budget -= 53; /* Both table lookups have charged their own nine cycles. */
+    return true;
+}
+
 /* Mode 3 moves each signed coordinate toward its target by a power-of-two
  * fraction. The shift at 0x148 independently controls the three angle steps. */
 bool nc_step_placement_record(CPUState *c) {

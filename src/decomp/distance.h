@@ -128,6 +128,7 @@ bool nc_prepare_placement_light_scale(CPUState *c);
 bool nc_prepare_placement_call(CPUState *c, u32 argument, u32 resume);
 bool nc_prepare_placement_transpose(CPUState *c);
 bool nc_prepare_transposed_placement_scale(CPUState *c);
+bool nc_prepare_actor_placement_target(CPUState *c);
 bool nc_step_placement_record(CPUState *c);
 bool nc_step_record_angle_pair(CPUState *c);
 bool nc_prepare_paired_point_bearing(CPUState *c);
