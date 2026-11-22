@@ -1312,6 +1312,8 @@ class Emitter:
                 out.append("    if (nc_finish_matrix_headings(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
+                out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):
                 actor = i.addr == 0x8006C714
                 source = "actor" if actor else "point"
