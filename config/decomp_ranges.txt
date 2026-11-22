@@ -51,3 +51,4 @@ credits_exe  80018E28    80018EE4         credits_roll.c
 credits_exe  80018D6C    80018E28         credits_roll.c
 credits_exe  80018CFC    80018D4C         credits_roll.c
 credits_exe  80018D4C    80018D6C         credits_roll.c
+credits_exe  80019680    800197E0         credits.c

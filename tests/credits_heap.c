@@ -68,6 +68,31 @@ static bool check_lookup(unsigned count, unsigned match, int budget) {
     return compare(start, 0x800198b0, nc_credits_find_allocation, 20);
 }
 
+static bool check_allocation(u32 size, const u32 free_bytes[3], int budget) {
+    const u32 head = 0x80060000, gp = 0x80024c68;
+    CPUState start = {0};
+    for (unsigned i = 1; i < 32; i++)
+        start.r[i] = i * 0x13579u;
+    start.r[4] = size;
+    start.r[28] = gp;
+    start.r[29] = 0x801fef00;
+    start.r[31] = 0x80010000;
+    start.budget = budget;
+    memset(nc_fast_ptr(head), 0xac, 0x400);
+    MEM_W32(gp + 0x0c, 2);
+    MEM_W32(gp + 0x10, 34);
+    MEM_W32(gp + 0x14, 512);
+    MEM_W32(gp + 0x2c, head);
+    for (unsigned i = 0; i < 3; i++) {
+        u32 record = head + 0x100 * i;
+        MEM_W32(record + 0x0c, free_bytes[i] ? record + 0x23 : 0);
+        MEM_W32(record + 0x10, free_bytes[i]);
+        MEM_W32(record + 0x14, i ? record - 0x100 : 0);
+        MEM_W32(record + 0x18, i == 2 ? 0 : record + 0x100);
+    }
+    return compare(start, 0x80019680, nc_credits_allocate, 4);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -95,6 +120,20 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "heap lookup mismatch for index %u and budget %d\n", match, budget);
                 return 1;
             }
+    const u32 spans[][3] = {{0, 28, 29}, {64, 32, 64}, {64, 64, 48}, {96, 80, 0}};
+    const u32 requests[] = {0, 1, 4, 5, 20, 36, 68, 69, 0xffffffe5};
+    for (unsigned i = 0; i < sizeof spans / sizeof spans[0]; i++)
+        for (unsigned j = 0; j < sizeof requests / sizeof requests[0]; j++)
+            if (!check_allocation(requests[j], spans[i], 4096)) {
+                fprintf(stderr, "allocator mismatch, layout %u, request %08x\n", i, requests[j]);
+                return 1;
+            }
+    /* Cross scheduler boundaries throughout a successful split and insertion. */
+    for (int budget = 5; budget <= 160; budget++)
+        if (!check_allocation(5, spans[1], budget)) {
+            fprintf(stderr, "allocator timing mismatch, budget %d\n", budget);
+            return 1;
+        }
     disc_close();
     return 0;
 }
