@@ -313,3 +313,16 @@ bool nc_credits_link_packets(CPUState *c) {
     c->budget -= 2;
     return true;
 }
+
+bool nc_credits_end_packet(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    c->budget--;
+    u32 tag = MEM_R32(R(4));
+    R(3) = 0x00ffffff;
+    R(2) = tag | R(3);
+    c->budget -= NC_LOAD_CYCLES + 2;
+    MEM_W32(R(4), R(2));
+    c->budget -= 2;
+    return true;
+}

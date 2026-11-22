@@ -244,6 +244,18 @@ static bool check_link_writer(void) {
     return true;
 }
 
+static bool check_terminator(void) {
+    const u32 tags[] = {0, 0x11100000, 0xa5ffffff, 0x01400000, 0xffabcdef};
+    for (unsigned i = 0; i < sizeof tags / sizeof tags[0]; i++)
+        for (unsigned j = 0; j < 2; j++) {
+            u32 base = j ? SCRATCH_BASE : 0x80060300;
+            MEM_W32(base, tags[i]);
+            if (!compare(arguments(base, 0, 0, 9), 0x8001b80c, nc_credits_end_packet, 8))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -265,6 +277,7 @@ int main(int argc, char **argv) {
     pass = pass && check_prepend();
     pass = pass && check_link();
     pass = pass && check_link_writer();
+    pass = pass && check_terminator();
     disc_close();
     return pass ? 0 : 1;
 }

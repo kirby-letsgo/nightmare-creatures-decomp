@@ -88,4 +88,6 @@ bool nc_credits_packet_link(CPUState *c, bool check_end);
 
 bool nc_credits_link_packets(CPUState *c);
 
+bool nc_credits_end_packet(CPUState *c);
+
 #endif
