@@ -1410,6 +1410,27 @@ static bool menu_record_input_gate(void) {
     return true;
 }
 
+static bool menu_record_24_destination(CPUState *cpu) {
+    u32 stop = cpu->r[31];
+    return nc_menu_dispatch_record_24(cpu) == stop;
+}
+
+static bool menu_record_24_dispatch(void) {
+    const u32 buttons[] = {0, 0x1000, 0x4000, 0xabcd5010};
+    MEM_W8(gp + 0x1dd, 7);
+    for (unsigned record = 23; record <= 25; ++record) {
+        MEM_W32(gp + 0x190, record);
+        for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
+            CPUState cpu = initial();
+            cpu.r[30] = buttons[i];
+            cpu.r[31] = record == 24 ? 0x80068fe4 : 0x800676e4;
+            if (!compare(cpu, 0x800676c4, menu_record_24_destination, 8))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool menu_input_return(void) {
     const u32 results[] = {0, 1, 2, 4};
     for (unsigned i = 0; i < sizeof results / sizeof results[0]; ++i) {
@@ -2450,13 +2471,13 @@ int main(int argc, char **argv) {
         menu_mode_face_buttons() && menu_mode_face_result() && menu_input_entry() &&
         menu_mode_record_call() && menu_mode_record_selection() && menu_record_timeout() &&
         menu_record_29_gate() && menu_counter_updates() && menu_record_29_thresholds() &&
-        menu_count_130() && menu_record_input_gate() && menu_input_return() &&
-        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
-        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        menu_count_130() && menu_record_input_gate() && menu_record_24_dispatch() &&
+        menu_input_return() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

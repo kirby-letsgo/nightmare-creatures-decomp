@@ -1506,6 +1506,26 @@ u32 nc_menu_record_input_gate(CPUState *c, bool check_primary) {
     return (R(4) & 0x03000000) ? 0x80068fe4 : 0x800676c4;
 }
 
+/* Record 24 passes the full button word to its handler. Other records
+ * continue with v0 already set to 29 by the branch delay slot. */
+u32 nc_menu_dispatch_record_24(CPUState *c) {
+    if (c->budget <= 8)
+        return 0x800676c4;
+    R(3) = MEM_R32(R(28) + 0x190);
+    R(2) = 29;
+    c->budget -= 6;
+    if (R(3) != 24)
+        return 0x800676e4;
+
+    R(4) = R(30);
+    R(31) = 0x800676dc;
+    c->budget -= 2;
+    nc_call(c, 0x80065f60);
+    R(2) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return 0x80068fe4;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
