@@ -268,6 +268,29 @@ static bool check_draw_mode_words(void) {
     return true;
 }
 
+static bool check_draw_offset(void) {
+    const u8 types[] = {0, 1, 2, 255};
+    const u32 coords[] = {0, 0x7ff, 0x800, 0xfff, 0x1000, 0x80008000, 0xffffffff};
+    const u32 packet = 0x80060400;
+    const u32 points[] = {SCRATCH_BASE + 2, 0xa0060400, packet + 2, packet + 4};
+    for (unsigned g = 0; g < sizeof types; g++)
+        for (unsigned i = 0; i < sizeof coords / sizeof coords[0]; i++) {
+            u32 x = coords[i], y = coords[(i + 3) % 7];
+            MEM_W8(0x80024558, types[g]);
+            if (!compare(arguments(x, y, 0, 19), 0x8001d664, nc_credits_draw_offset_word, 18))
+                return false;
+            for (unsigned j = 0; j < sizeof points / sizeof points[0]; j++) {
+                memset(nc_fast_ptr(packet), 0xa5, 16);
+                MEM_W16(points[j], (u16)x);
+                MEM_W16(points[j] + 2, (u16)y);
+                if (!compare(arguments(packet, points[j], 0, 44), 0x8001d108,
+                             nc_credits_draw_offset_packet, 43))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool check_texture_window(void) {
     const u32 packet = 0x80060500, sp = 0x801fef00;
     const u32 rects[] = {0, SCRATCH_BASE + 4, packet, 0xa0060504, sp - 16, sp - 40};
@@ -481,6 +504,7 @@ int main(int argc, char **argv) {
     pass = pass && check_merge_primitives();
     pass = pass && check_transfer_packets();
     pass = pass && check_texture_window();
+    pass = pass && check_draw_offset();
     pass = pass && check_draw_mode_words();
     pass = pass && check_palette();
     pass = pass && check_video_mode();

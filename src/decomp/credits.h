@@ -90,6 +90,8 @@ bool nc_credits_link_packets(CPUState *c);
 
 bool nc_credits_draw_tpage(CPUState *c);
 bool nc_credits_draw_mode_word(CPUState *c);
+bool nc_credits_draw_offset_word(CPUState *c);
+bool nc_credits_draw_offset_packet(CPUState *c);
 bool nc_credits_texture_window_word(CPUState *c);
 bool nc_credits_texture_window_packet(CPUState *c);
 bool nc_credits_draw_move(CPUState *c);
