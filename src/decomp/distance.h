@@ -136,6 +136,7 @@ bool nc_prepare_transposed_placement_scale(CPUState *c);
 bool nc_begin_actor_placement_target(CPUState *c, bool *has_pose);
 bool nc_finish_actor_placement_target(CPUState *c, bool has_pose);
 bool nc_prepare_actor_placement_target(CPUState *c);
+bool nc_latch_placement_tick(CPUState *c);
 bool nc_begin_placement_update(CPUState *c);
 typedef enum {
     NC_PLACEMENT_COUNTER_FALLBACK,

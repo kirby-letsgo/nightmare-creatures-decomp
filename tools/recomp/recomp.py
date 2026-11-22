@@ -1445,6 +1445,8 @@ class Emitter:
                 )
                 out.append("        if (reproject) goto L_800475A8;")
                 out.append("        goto L_800475CC; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800473E8:
+                out.append("    if (nc_latch_placement_tick(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047420:
                 out.append(
                     "    { bool use_point; if (nc_begin_projected_point_update(c, &use_point)) {"
