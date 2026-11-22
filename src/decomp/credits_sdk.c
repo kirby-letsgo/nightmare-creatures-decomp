@@ -1810,6 +1810,65 @@ bool nc_credits_store_image(CPUState *c) {
     return queue_image_transfer(c, true);
 }
 
+/* Build a reverse ordering table through the driver, then link its first tag
+ * to the SDK terminator and return the original table address. */
+bool nc_credits_clear_otag_reverse(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    c->budget--;
+    R(2) = MEM_R8(0x8002455a);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(5);
+    R(2) = R(2) < 2;
+    c->budget -= 3;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget -= 2;
+
+    if (!R(2)) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x800185e8);
+        set_reg(c, 5, R(16));
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        NC_POLL(c, 1);
+        u32 diagnostic = R(2);
+        R(31) = 0x8001c830;
+        R(6) = R(17);
+        NC_POLL(c, 2);
+        nc_call(c, diagnostic);
+    }
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    set_reg(c, 4, R(16));
+    load_word(c, 2, R(2) + 0x2c);
+    NC_POLL(c, 1);
+    u32 clear_table = R(2);
+    R(31) = 0x8001c84c;
+    R(5) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, clear_table);
+
+    set_reg(c, 4, 0xff0000);
+    set_reg(c, 4, 0xffffff);
+    set_reg(c, 2, R(16));
+    set_reg(c, 3, 0x80020000);
+    set_reg(c, 3, 0x80024614);
+    set_reg(c, 3, R(3) & R(4));
+    MEM_W32(R(2), R(3));
+    NC_POLL(c, 1);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* DrawPrim saves the packet length before synchronizing, then submits its payload. */
 bool nc_credits_draw_primitive(CPUState *c) {
     if (c->budget <= 17)
