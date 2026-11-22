@@ -148,6 +148,7 @@ CREDITS_ROUTINES = {
     0x800203E0: "nc_credits_cd_sector_to_position(c)",
     0x800204E4: "nc_credits_cd_position_to_sector(c)",
     0x80021F14: "nc_credits_cd_names_equal(c)",
+    0x80022664: "nc_credits_strncmp(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
