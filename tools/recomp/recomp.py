@@ -756,7 +756,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
-            targets.update((0x8001AD2C, 0x8001AD3C, 0x8001ADA4))
+            targets.update((0x8001AD2C, 0x8001AD3C, 0x8001ADA4, 0x8001ADCC, 0x8001ADFC))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001BD08:
             targets.update(
                 (
@@ -1530,6 +1530,14 @@ class Emitter:
                 out.append("    if (nc_turn_toward_point(c)) {")
                 out.append(f"        {self.call(0x80035338)}")
                 out.append("        goto L_8001ADA4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001ADA4:
+                out.append("    if (nc_step_point_x(c)) {")
+                out.append(f"        {self.call(0x8003531C)}")
+                out.append("        goto L_8001ADCC; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001ADCC:
+                out.append("    if (nc_step_point_z(c)) {")
+                out.append("        if (R(2)) goto L_8001ADFC;")
+                out.append("        goto L_8001AE0C; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
                 out.append("    if (nc_begin_part_pose_heading(c)) {")
                 out.append("        if (R(2)) goto L_8001BE98;")
