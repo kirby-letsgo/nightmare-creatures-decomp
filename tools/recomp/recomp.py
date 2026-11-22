@@ -53,9 +53,11 @@ CREDITS_ROUTINES = {
     0x800198EC: "nc_credits_allocation_size(c)",
     0x80019928: "nc_credits_copy_bytes(c)",
     0x8001995C: "nc_credits_fill_bytes(c)",
-    0x80019A30: "nc_credits_string_length(c)",
     0x80019988: "nc_credits_append_string(c)",
+    0x80019A30: "nc_credits_string_length(c)",
     0x80019A60: "nc_credits_printf(c)",
+    0x8001A128: "nc_credits_change_case(c, true)",
+    0x8001A158: "nc_credits_change_case(c, false)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
