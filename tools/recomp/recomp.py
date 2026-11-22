@@ -92,6 +92,8 @@ CREDITS_ROUTINES = {
     0x8001BA08: "nc_credits_init_primitive(c, NC_LINE_F4)",
     0x8001BA28: "nc_credits_init_primitive(c, NC_LINE_G4)",
     0x8001BA48: "nc_credits_init_primitive(c, NC_BLOCK_FILL)",
+    0x8001C1C8: "nc_credits_graph_status(c, false)",
+    0x8001C1D8: "nc_credits_graph_status(c, true)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 

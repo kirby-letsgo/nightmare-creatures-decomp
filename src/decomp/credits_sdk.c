@@ -372,3 +372,12 @@ bool nc_credits_default_display(CPUState *c) {
     c->budget -= 2;
     return true;
 }
+
+bool nc_credits_graph_status(CPUState *c, bool debug_level) {
+    if (c->budget <= 6)
+        return false;
+    c->budget--; /* lui */
+    R(2) = MEM_R8(debug_level ? 0x8002455a : 0x80024558);
+    c->budget -= NC_LOAD_CYCLES + 2; /* lbu, jr, delay slot */
+    return true;
+}
