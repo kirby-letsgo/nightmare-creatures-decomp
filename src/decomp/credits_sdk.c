@@ -3517,6 +3517,54 @@ bool nc_credits_cd_flush_controller(CPUState *c) {
     return true;
 }
 
+/* Mode 2 only reinstalls interrupts. Mode 1 also initializes CD audio volume. */
+bool nc_credits_cd_reset(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = 2;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget -= 2;
+    if (R(16) == 2) {
+        R(31) = 0x8001fe50;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8002169c); /* CD_initintr */
+        R(2) = 1;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } else {
+        R(31) = 0x8001fe60;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x800216ec); /* CD_init */
+        const bool initialized = R(2) == 0;
+        R(2) = 0;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (initialized) {
+            set_reg(c, 2, 1);
+            const bool init_volume = R(16) == 1;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (init_volume) {
+                R(31) = 0x8001fe7c;
+                NC_POLL(c, 2 * NC_INSN_CYCLES);
+                nc_call(c, 0x800215a8); /* CD_initvol */
+                const bool volume_ready = R(2) == 0;
+                R(2) = 0;
+                NC_POLL(c, 2 * NC_INSN_CYCLES);
+                if (volume_ready)
+                    set_reg(c, 2, 1);
+            }
+        }
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_cd_flush(CPUState *c) {
     if (c->budget <= 4)
         return false;
