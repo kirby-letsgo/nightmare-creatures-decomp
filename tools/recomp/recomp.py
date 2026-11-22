@@ -157,6 +157,7 @@ CREDITS_ROUTINES = {
     0x800204E4: "nc_credits_cd_position_to_sector(c)",
     0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
     0x80021F14: "nc_credits_cd_names_equal(c)",
+    0x80022214: "nc_credits_cd_search_directory(c)",
     0x800225CC: "nc_credits_cd_copy_identifier(c)",
     0x80022600: "nc_credits_strcmp(c)",
     0x80022664: "nc_credits_strncmp(c)",

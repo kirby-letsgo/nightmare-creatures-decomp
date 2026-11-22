@@ -1705,6 +1705,80 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+/* Find a named child of the requested parent in the cached CD path table. */
+bool nc_credits_cd_search_directory(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 28, R(19));
+    R(19) = R(4); /* parent directory number */
+    c->budget -= 2;
+    MEM_W32(R(29) + 32, R(20));
+    R(20) = R(5); /* name to find */
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = 0;
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = 0x80025460; /* name in the first record */
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = 0;
+    c->budget -= 2;
+    MEM_W32(R(29) + 36, R(31));
+    c->budget--;
+
+    for (;;) {
+        set_reg(c, 1, 0x80020000);
+        set_reg(c, 1, R(1) + R(17));
+        load_word(c, 2, R(1) + 0x5458);
+        NC_POLL(c, 1);
+        bool end = R(2) == 0;
+        NC_POLL(c, 2);
+        if (end)
+            break;
+
+        bool same_parent = R(2) == R(19);
+        R(4) = R(20);
+        NC_POLL(c, 2);
+        if (same_parent) {
+            R(31) = 0x80022270;
+            R(5) = R(18);
+            NC_POLL(c, 2);
+            nc_call(c, 0x80022600); /* strcmp */
+            bool match = R(2) == 0;
+            R(18) += 44;
+            NC_POLL(c, 2);
+            if (match) {
+                R(2) = R(16) + 1; /* directory numbers start at one */
+                NC_POLL(c, 2);
+                goto restore;
+            }
+        } else {
+            set_reg(c, 18, R(18) + 44);
+        }
+        set_reg(c, 16, R(16) + 1);
+        set_reg(c, 2, (s32)R(16) < 128);
+        bool more = R(2) != 0;
+        R(17) += 44;
+        NC_POLL(c, 2);
+        if (!more)
+            break;
+    }
+    set_reg(c, 2, UINT32_MAX);
+restore:
+    load_word(c, 31, R(29) + 36);
+    load_word(c, 20, R(29) + 32);
+    load_word(c, 19, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* The CD directory readers copy exactly the identifier length from the record. */
 bool nc_credits_cd_copy_identifier(CPUState *c) {
     if (c->budget <= 3)
