@@ -94,12 +94,14 @@ CREDITS_ROUTINES = {
     0x8001BA08: "nc_credits_init_primitive(c, NC_LINE_F4)",
     0x8001BA28: "nc_credits_init_primitive(c, NC_LINE_G4)",
     0x8001BA48: "nc_credits_init_primitive(c, NC_BLOCK_FILL)",
+    0x8001BA5C: "nc_credits_draw_tpage(c)",
     0x8001BB10: "nc_credits_draw_move(c)",
     0x8001BB70: "nc_credits_draw_load(c)",
     0x8001BBDC: "nc_credits_merge_primitives(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
     0x8001C1D8: "nc_credits_graph_status(c, true)",
     0x8001D14C: "nc_credits_priority_packet(c)",
+    0x8001D470: "nc_credits_draw_mode_word(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 

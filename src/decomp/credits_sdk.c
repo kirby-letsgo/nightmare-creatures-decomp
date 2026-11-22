@@ -314,6 +314,83 @@ bool nc_credits_link_packets(CPUState *c) {
     return true;
 }
 
+/* Both GPU layouts encode the draw-mode command, but move the flag bits. */
+static u32 draw_mode_word(bool alternate, bool display, bool dither, u32 page, u32 *opcode) {
+    *opcode = 0xe1000000u;
+    if (dither)
+        *opcode |= alternate ? 0x800 : 0x200;
+    u32 bits = page & (alternate ? 0x27ff : 0x9ff);
+    if (display)
+        bits |= alternate ? 0x1000 : 0x400;
+    return *opcode | bits;
+}
+
+bool nc_credits_draw_mode_word(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    c->budget -= 2;
+    u8 graph = MEM_R8(0x80024558);
+    bool alternate = graph == 1 || graph == 2;
+    bool display = R(4) != 0, dither = R(5) != 0;
+    R(2) = draw_mode_word(alternate, display, dither, R(6), &R(3));
+    c->budget -= NC_LOAD_CYCLES + 11 + dither + (display ? (alternate ? 2 : 1) : 0);
+    return true;
+}
+
+bool nc_credits_draw_tpage(CPUState *c) {
+    if (c->budget <= 60)
+        return false;
+    R(29) -= 0x28;
+    c->budget--;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x18, R(18));
+    R(18) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(6);
+    c->budget -= 2;
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(7);
+    R(2) = 1;
+    c->budget -= 3;
+    MEM_W32(R(29) + 0x20, R(31));
+    c->budget--;
+    R(31) = 0x8001ba90;
+    MEM_W8(R(19) + 3, 1);
+    c->budget -= 2;
+    NC_FN_ENTER(c, 0x8001c1c8);
+    nc_credits_graph_status(c, false);
+    R(3) = 1;
+    bool alternate = R(2) == 1;
+    c->budget -= 3;
+    if (!alternate) {
+        R(31) = 0x8001baa4;
+        c->budget -= 2;
+        NC_FN_ENTER(c, 0x8001c1c8);
+        nc_credits_graph_status(c, false);
+        R(3) = 2;
+        alternate = R(2) == 2;
+        c->budget -= 3;
+    }
+
+    bool display = R(18) != 0, dither = R(16) != 0;
+    R(2) = draw_mode_word(alternate, display, dither, R(17), &R(alternate ? 3 : 7));
+    c->budget -= 5 + alternate + display + dither;
+    MEM_W32(R(19) + 4, R(2));
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 0x20);
+    c->budget -= NC_LOAD_CYCLES;
+    for (int reg = 19; reg >= 16; reg--) {
+        R(reg) = MEM_R32(R(29) + 0x10 + (reg - 16) * 4);
+        c->budget -= NC_LOAD_CYCLES;
+    }
+    R(29) += 0x28;
+    c->budget -= 3;
+    return true;
+}
+
 bool nc_credits_draw_move(CPUState *c) {
     if (c->budget <= 32)
         return false;

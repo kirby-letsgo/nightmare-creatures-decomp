@@ -244,6 +244,30 @@ static bool check_link_writer(void) {
     return true;
 }
 
+static bool check_draw_mode_words(void) {
+    const u32 packets[] = {0x80060400, SCRATCH_BASE + 4, 0x801feee4};
+    const u32 pages[] = {0, 0xffff, 0xa5a527ff, 0xffffd800};
+    const u8 types[] = {0, 1, 2, 255};
+    for (unsigned g = 0; g < sizeof types; g++)
+        for (unsigned f = 0; f < 4; f++)
+            for (unsigned p = 0; p < sizeof pages / sizeof pages[0]; p++) {
+                u32 display = (f & 1) ? 0x80000000 : 0;
+                u32 dither = f & 2;
+                MEM_W8(0x80024558, types[g]);
+                CPUState state = arguments(display, dither, pages[p], 20);
+                if (!compare(state, 0x8001d470, nc_credits_draw_mode_word, 19))
+                    return false;
+                for (unsigned j = 0; j < sizeof packets / sizeof packets[0]; j++) {
+                    memset(nc_fast_ptr(packets[j]), 0xab, 8);
+                    state = arguments(packets[j], display, dither, 61);
+                    state.r[7] = pages[p];
+                    if (!compare(state, 0x8001ba5c, nc_credits_draw_tpage, 60))
+                        return false;
+                }
+            }
+    return true;
+}
+
 static bool check_transfer_packets(void) {
     const u32 packet = 0x80060500;
     const u32 rects[] = {SCRATCH_BASE + 4, packet, 0xa0060504, packet + 8, packet + 12};
@@ -433,6 +457,7 @@ int main(int argc, char **argv) {
     pass = pass && check_priority_packet();
     pass = pass && check_merge_primitives();
     pass = pass && check_transfer_packets();
+    pass = pass && check_draw_mode_words();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
