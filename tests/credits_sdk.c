@@ -1322,6 +1322,24 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_save_irq_context(void) {
+    const u32 buffers[] = {0x80061004, 0xa0061004, SCRATCH_BASE + 4};
+    const unsigned registers[] = {31, 29, 30, 16, 17, 18, 19, 20, 21, 22, 23, 28};
+    for (unsigned i = 0; i < sizeof buffers / sizeof buffers[0]; i++) {
+        u32 buffer = buffers[i];
+        memset(nc_fast_ptr(buffer - 4), 0xa5, 56);
+        CPUState state = arguments(buffer, 0, 0, i == 0 ? 16 : 4096);
+        if (!compare(state, 0x8001ada8, nc_credits_save_irq_context, 15) ||
+            nc_cpu.r[2] != 0 || MEM_R32(buffer - 4) != 0xa5a5a5a5 ||
+            MEM_R32(buffer + 48) != 0xa5a5a5a5)
+            return false;
+        for (unsigned word = 0; word < sizeof registers / sizeof registers[0]; word++)
+            if (MEM_R32(buffer + 4 * word) != state.r[registers[word]])
+                return false;
+    }
+    return true;
+}
+
 static bool check_vsync_slot(void) {
     const struct {
         u32 index, previous, replacement;
@@ -1976,6 +1994,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_save_irq_context();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
     pass = pass && check_clear_irq_words(0x8001af84);
