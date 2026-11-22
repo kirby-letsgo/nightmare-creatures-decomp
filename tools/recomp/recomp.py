@@ -685,9 +685,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
-            targets.update((0x8006C750, 0x8006C7C8))
+            targets.update((0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
-            targets.update((0x8006C938, 0x8006C9B0))
+            targets.update((0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
             targets.update((0x800587A0, 0x800587CC, 0x80058830))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
@@ -1332,6 +1332,20 @@ class Emitter:
                 out.append("    if (nc_finish_matrix_headings(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C7C8, 0x8006C9B0):
+                actor = i.addr == 0x8006C7C8
+                resume = 0x8006C7DC if actor else 0x8006C9C4
+                out.append(
+                    f"    if (nc_call_spatial_attenuation(c, {'true' if actor else 'false'})) {{"
+                )
+                out.append(f"        {self.call(0x8006C63C)}")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C7DC, 0x8006C9C4):
+                actor = i.addr == 0x8006C7DC
+                flagged, ordinary = (0x8006C814, 0x8006C89C) if actor else (0x8006C9F8, 0x8006CA3C)
+                out.append(f"    if (nc_scale_spatial_level(c, {'true' if actor else 'false'})) {{")
+                out.append(f"        if (R(2)) goto L_{flagged:08X};")
+                out.append(f"        goto L_{ordinary:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
                 out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):

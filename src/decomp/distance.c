@@ -518,6 +518,44 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+bool nc_call_spatial_attenuation(CPUState *c, bool actor) {
+    if (c->budget <= 9)
+        return false;
+    R(3) = MEM_R32(R(actor ? 18 : 19));
+    R(17) = R(2);
+    R(4) = MEM_R16(R(3) + 8);
+    R(5) = R(17);
+    R(31) = actor ? 0x8006c7dc : 0x8006c9c4;
+    c->budget -= 9;
+    return true;
+}
+
+/* Scale the level by the bearing gap. The actor path uses a signed
+ * halfword level and a logical shift; the point path uses signed words. */
+bool nc_scale_spatial_level(CPUState *c, bool actor) {
+    const u32 level = actor ? (u32)(s32)(s16)R(2) : R(2);
+    const bool negative = (s32)(R(16) * level) < 0;
+    const int cycles = (actor ? 17 : 16) + negative;
+    if (c->budget <= cycles)
+        return false;
+    R(6) = R(2);
+    nc_mult(c, R(16), level);
+    const u32 adjusted = c->lo + (negative ? 2047 : 0);
+    const u32 descriptor = MEM_R32(R(actor ? 18 : 19));
+    const u32 flags = MEM_R16(descriptor + 8);
+    R(2) = flags & 2;
+    if (actor) {
+        R(3) = adjusted;
+        R(7) = adjusted >> 11;
+    } else {
+        R(3) = flags;
+        R(5) = adjusted;
+        R(7) = (s32)adjusted >> 11;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both spatial callers scale their planar distance against 2400. Bit 1
  * squares the remaining distance first, with a separate truncated divide.
  * Keep each low-word product and the final reciprocal multiply's HI/LO. */
