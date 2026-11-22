@@ -1138,6 +1138,37 @@ u32 nc_menu_check_record_103(CPUState *c) {
     return 0x80068fe4;
 }
 
+/* In mode 0x8000, mark the menu status and dispatch a fresh Up before
+ * considering Down. The Down test consumes its bit already masked in v0. */
+u32 nc_menu_mode_up(CPUState *c) {
+    if (c->budget <= 34)
+        return 0x80068e84;
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(2) = 0;
+    c->budget -= 11;
+    if (!(MEM_R32(config) & 0x8000))
+        return 0x80068fe4;
+
+    R(3) = MEM_R16(0x800cbff8) | 8;
+    MEM_W16(0x800cbff8, R(3));
+    R(2) = R(30) & 0x40;
+    c->budget -= 11;
+    if (!(R(30) & 0x10))
+        return 0x80068ee8;
+
+    R(4) = R(22);
+    c->budget -= 7;
+    if (MEM_R32(R(28) + 0x18c) & 0x10) {
+        c->budget--;
+        return 0x80068ee8;
+    }
+
+    R(2) = MEM_R32(R(28) + 0x190);
+    R(6) = 4;
+    c->budget -= 5;
+    return 0x80068f0c;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
