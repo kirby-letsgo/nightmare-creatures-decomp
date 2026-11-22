@@ -1322,6 +1322,54 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_start_pad(void) {
+    const struct {
+        u32 entry;
+        int threshold;
+        u32 expected_return;
+        bool (*routine)(CPUState *);
+    } cases[] = {
+        {0x8001a38c, 4, 0, nc_credits_start_pad},
+        {0x8001a3c4, 3, 1, nc_credits_bios_start_pad},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    bios_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++)
+        for (unsigned started = 0; started < 2 && ok; started++) {
+            StateIO native = {0}, guest = {0};
+            for (unsigned run = 0; run < 2 && ok; run++) {
+                nc_cpu = arguments(7, 2, 3, cases[i].threshold);
+                nc_cpu.r[9] = started ? 0x13 : 0x14;
+                bios_call(&nc_cpu, 0xb0);
+                nc_cpu.r[2] = UINT32_MAX;
+                if (!run && cases[i].routine(&nc_cpu))
+                    ok = false;
+                nc_cpu.budget = started ? 4096 : cases[i].threshold + 1;
+                if (run)
+                    interp_call(&nc_cpu, cases[i].entry);
+                else
+                    ok = cases[i].routine(&nc_cpu) && ok;
+                StateIO *result = run ? &guest : &native;
+                cpu_serialize(result);
+                bios_serialize(result);
+                ok = ok && nc_cpu.r[2] == cases[i].expected_return &&
+                     (nc_cpu.cop0[12] & 0x401) == 0x401;
+                saved.loading = true;
+                saved.pos = 0;
+                cpu_serialize(&saved);
+                bios_serialize(&saved);
+            }
+            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+                 !memcmp(native.buf, guest.buf, guest.len);
+            free(native.buf);
+            free(guest.buf);
+        }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_interrupt_auto_clear(void) {
     for (u32 flag = 0; flag <= 1; flag++) {
         CPUState pad = arguments(flag, 0x12345678, 3, 4);
@@ -2268,6 +2316,7 @@ int main(int argc, char **argv) {
     pass = pass && check_callback_controls();
     pass = pass && check_interrupt_driver_control(false);
     pass = pass && check_interrupt_driver_control(true);
+    pass = pass && check_start_pad();
     pass = pass && check_interrupt_auto_clear();
     pass = pass && check_irq_entry_hooks();
     pass = pass && check_critical_sections();

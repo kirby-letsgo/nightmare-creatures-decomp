@@ -1675,6 +1675,30 @@ bool nc_credits_bios_gpu_command(CPUState *c) {
     return bios_service(c, 0xa0, 0x49);
 }
 
+bool nc_credits_bios_start_pad(CPUState *c) {
+    return bios_service(c, 0xb0, 0x13);
+}
+
+/* Start the BIOS pad driver, then turn off automatic pad interrupt clearing. */
+bool nc_credits_start_pad(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x8001a39c;
+    c->budget -= 3;
+    nc_call(c, 0x8001a3c4); /* BIOS StartPAD */
+    R(31) = 0x8001a3a4;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a2ac); /* ChangeClearPad */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_change_clear_pad(CPUState *c) {
     return bios_service(c, 0xb0, 0x5b);
 }
