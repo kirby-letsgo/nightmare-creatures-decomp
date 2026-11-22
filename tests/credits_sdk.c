@@ -1456,6 +1456,35 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_read(void) {
+    const u32 spu = 0x80060000, dma = 0x80060400, dest = 0x80061000;
+    const int threshold = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    const u32 sizes[] = {0, 64, 65};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    /* RAM-backed register banks expose the driver's writes to the comparison. */
+    MEM_W32(0x80024678, spu);
+    MEM_W32(0x8002467c, dma);
+    MEM_W32(0x80024680, dma + 4);
+    MEM_W32(0x80024684, dma + 8);
+    MEM_W32(0x8002468c, dma + 12);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof sizes / sizeof sizes[0]; i++) {
+        MEM_W16(0x80024690, 0x1234);
+        MEM_W32(0x800246a0, i ? 35 : 3);
+        memset(nc_fast_ptr(dma), 0xff, 16);
+        CPUState state = arguments(dest, sizes[i], 0x1234, i ? threshold + 1 : 4096);
+        ok = compare(state, 0x8001fa30, nc_credits_spu_read, threshold) &&
+             nc_cpu.r[2] == sizes[i] && MEM_R16(spu + 0x1a6) == 0x1234 &&
+             MEM_R32(dma) == dest && MEM_R32(dma + 8) == 0x01000200 &&
+             MEM_R32(dma + 4) == (((sizes[i] + 63) / 64) << 16 | 16);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_spu_write_register(void) {
     const u32 slot = 0x80024678, shift_slot = 0x800246a0;
     const u32 original = MEM_R32(slot), old_shift = MEM_R32(shift_slot);
@@ -3026,6 +3055,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_read();
     pass = pass && check_spu_write_register();
     pass = pass && check_spu_set_address();
     pass = pass && check_spu_read_address();
