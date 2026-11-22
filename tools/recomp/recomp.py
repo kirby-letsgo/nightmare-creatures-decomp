@@ -472,6 +472,19 @@ class Emitter:
                 targets.add(i.jump_target())
             elif i.op == 0 and i.funct == 8 and i.rs != 31:
                 jump_tables = True
+        # Continuations for the two inline attack-box checks and the target-state check.
+        contact_blocks = (
+            {
+                0x800422DC: ("nc_attack_bounds", 0x80042360, 0x800424AC),
+                0x80042AA0: ("nc_attack_bounds", 0x80042B24, 0x80042D10),
+                0x8004E510: ("nc_target_accepts_contact", 0x8004E570, 0x8004E6AC),
+            }
+            if self.mod.name == "psx2_exe"
+            else {}
+        )
+        for start, (_, passed, rejected) in contact_blocks.items():
+            if f.addr <= start < f.end:
+                targets.update((passed, rejected))
         targets = {t for t in targets if f.addr <= t < f.end}
         table_cases: list[int] = []
         if jump_tables:
@@ -501,6 +514,17 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if i.addr in contact_blocks:
+                check, passed, rejected = contact_blocks[i.addr]
+                out.extend(
+                    [
+                        f"    switch ({check}(c)) {{",
+                        f"    case NC_CONTACT_PASS: goto L_{passed:08X};",
+                        f"    case NC_CONTACT_REJECT: goto L_{rejected:08X};",
+                        "    case NC_CONTACT_TIMED: break;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
@@ -606,6 +630,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == "psx2_exe":
         header.append('#include "decomp/adrenaline.h"')
         header.append('#include "decomp/damage.h"')
+        header.append('#include "decomp/contact.h"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)

@@ -250,6 +250,25 @@ registers, RAM and remaining cycles, and exercises the movement replay with adre
 disabled. To compare both gameplay builds directly, add `--no-adrenaline` to
 `tools/test_first_level.py ... --compare ...`.
 
+### Attack contact
+
+The recompiled build uses `src/decomp/contact.c` in both attack loops. Each loop
+compares a center and extent with a box on three axes. Touching the boundary counts
+as overlap. Separation on any axis advances the loop to its next candidate.
+
+After an overlap, `func_8004E2A0` evaluates whether the target can take this hit.
+The native block at `0x8004E510` first checks the preceding callback's result.
+On the normal path, target states 16 and 23 reject the contact. State 15 requires
+bit `0x8000` at actor offset `0x330`. Other states pass this check when both bits in
+mask `0x00280000` at offset `0x2C8` are clear. Further mode-specific rules and hit
+responses run in the original code.
+
+In `first_combat.movie`, six contacts reach the target handler. Five cause damage.
+At frame 288 the player's attack overlaps the enemy, which is now in state 15 with
+the required bit clear. The handler returns before damage selection. Run
+`ctest -R contact` for boundary and state cases, including comparison with the US
+disc instructions when the disc is available.
+
 ### Native hit damage
 
 In the recompiled build, `src/decomp/damage.c` selects base damage and calculates the
@@ -268,8 +287,8 @@ After selection, the entry at `0x8004EB6C`
 subtracts base damage directly. The entry at `0x8004EB30` doubles it when bit
 `0x08000000` in the rules word at offset 4 and bits `0x30` in the first word are all clear.
 Both paths resume at the original health store at `0x8004EB78`, where the combat replay
-counts hits. The original code handles hit detection and death
-reactions. Near a scheduled interrupt, the recompiled build executes the instruction-timed path.
+counts hits. The original code handles death reactions. Near a scheduled interrupt,
+the recompiled build executes the instruction-timed path.
 
 `ctest -R damage` checks the arithmetic, scratch registers and cycle counts. With the US
 disc present it compares the selector's registers, output word and cycle count against
