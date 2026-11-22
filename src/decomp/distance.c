@@ -327,6 +327,40 @@ bool nc_prepare_actor_placement_target(CPUState *c) {
     return true;
 }
 
+/* The dispatcher reads the current mode only when flag bit 1 is set.
+ * Mode 3 advances both the signed XYZ coordinates and the record angles. */
+bool nc_select_placement_step(CPUState *c, bool *step) {
+    if (c->budget <= 20)
+        return false;
+    const u32 flags = MEM_R32(R(28) + 0x244);
+    const bool enabled = (MEM_R32(flags) & 2) != 0;
+    R(2) = 3;
+    *step = false;
+    int cycles = 11;
+    if (enabled) {
+        R(3) = (s32)(s16)MEM_R16(0x800d7c28);
+        cycles += 7;
+        if (R(3) == 3) {
+            R(31) = 0x8002b3bc;
+            R(4) = R(16);
+            *step = true;
+            cycles += 2;
+        }
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_finish_placement_mode(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 9;
+    return true;
+}
+
 /* Mode 3 moves each signed coordinate toward its target by a power-of-two
  * fraction. The shift at 0x148 independently controls the three angle steps. */
 bool nc_step_placement_record(CPUState *c) {

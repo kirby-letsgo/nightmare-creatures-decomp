@@ -316,6 +316,68 @@ static bool placement_matrix_scales(bool disc) {
     return true;
 }
 
+static bool placement_step_selection(bool disc) {
+    static const struct {
+        u32 flags;
+        s16 mode;
+        int cycles;
+    } cases[] = {{0, 3, 11}, {2, -1, 18}, {0xffffffff, 3, 20}};
+    const u32 record = SCRATCH_BASE, frame = record + 0x300, flags = record + 0x260;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = record;
+        input.r[28] = record;
+        input.r[29] = frame;
+        input.budget = 1024;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(record + 0x244, flags);
+        MEM_W32(flags, cases[i].flags);
+        MEM_W16(0x800d7c28, cases[i].mode);
+        MEM_W32(frame + 0x10, 0x12345678);
+        MEM_W32(frame + 0x14, input.r[31]);
+        MEM_W16(record, -32768);
+        MEM_W16(record + 0x18, 32767);
+        MEM_W16(record + 0x1a, 0);
+        MEM_W32(record + 0x14c, 1);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        native.budget = 20;
+        CPUState saved = native;
+        bool step = false;
+        if (nc_select_placement_step(&native, &step) || memcmp(&saved, &native, sizeof saved))
+            return false;
+        native.budget = input.budget;
+        if (!nc_select_placement_step(&native, &step) || step != (cases[i].cycles == 20) ||
+            native.budget != input.budget - cases[i].cycles)
+            return false;
+        if (step && !nc_step_placement_record(&native))
+            return false;
+        saved = native;
+        saved.budget = 9;
+        CPUState cutoff = saved;
+        if (nc_finish_placement_mode(&cutoff) || memcmp(&saved, &cutoff, sizeof saved))
+            return false;
+        if (!nc_finish_placement_mode(&native) || native.r[29] != frame + 0x18 ||
+            native.r[16] != 0x12345678 || native.r[31] != input.r[31])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Enter with the frame allocated and stop at the restored caller SP. */
+            const u32 stub = 0x80120000;
+            MEM_W32(stub, 0x08000000u | ((0x8002b384u >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, 0x27bdffe8);
+            input.r[29] += 0x18;
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool actor_placement_paths(bool disc) {
     const u32 record = SCRATCH_BASE, actor = 0x80128000;
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -3360,12 +3422,12 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!actor_placement_paths(disc) || !actor_placement_targets(disc) ||
-        !placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
-        !placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
-        !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
-        !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
-        !placement_record_steps(disc))
+    if (!placement_step_selection(disc) || !actor_placement_paths(disc) ||
+        !actor_placement_targets(disc) || !placement_matrix_return(disc) ||
+        !placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||
+        !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
+        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
+        !transposed_placement_scales(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
