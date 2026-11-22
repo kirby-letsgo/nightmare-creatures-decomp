@@ -1591,6 +1591,10 @@ class Emitter:
                 out.append("    if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800296B0:
                 out.append("    if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800292D4:
+                out.append("    if (nc_check_placement_point(c)) {")
+                out.append("        if (!R(6) || R(2)) goto L_80029310;")
+                out.append("        goto L_80029460; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029310:
                 out.append("    if (nc_place_record_pose(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002959C)} }}")
