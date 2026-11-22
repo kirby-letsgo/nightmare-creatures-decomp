@@ -2264,6 +2264,53 @@ static bool actor_distances(bool disc) {
     return true;
 }
 
+static bool point_strides(bool disc) {
+    static const struct {
+        u32 position, sample;
+        s32 step;
+    } cases[] = {{0xfffffd00, 0, 0},
+                 {0x7fffffff, 16384, 5120},
+                 {0x80000000, 0xffffc000, -5120},
+                 {0, 0xabcdffff, -1},
+                 {10, 3, 0},
+                 {10, 4, 1}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        for (unsigned axis = 0; axis < 2; ++axis) {
+            CPUState input = initial();
+            const u32 coord = SCRATCH_BASE + (axis ? 0x284 : 0x27c);
+            const u32 flags = i % 2 ? 0x40001 : 1;
+            const u32 pc = axis ? 0x8001adcc : 0x8001ada4;
+            input.r[31] = axis ? (flags & 0x40000 ? 0x8001adfc : 0x8001ae0c) : 0x8003531c;
+            input.r[19] = SCRATCH_BASE;
+            input.r[2] = cases[i].sample;
+            input.budget = axis ? 16 : 12;
+            bool (*step)(CPUState *) = axis ? nc_step_point_z : nc_step_point_x;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(coord, cases[i].position);
+            MEM_W32(SCRATCH_BASE + 0x2c8, flags);
+            memcpy(before, nc_scratch, sizeof before);
+            CPUState native = input;
+            if (step(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!step(&native) || native.budget != 1 ||
+                MEM_R32(coord) != cases[i].position + cases[i].step)
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, pc);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool point_heading_turns(bool disc) {
     const u32 headings = 0x800d4c9a;
     const u16 gaps[] = {0, 7, 8, 0x7ffe, 0x7fff, 0x8000, 0xfff7, 0xffff};
@@ -4537,9 +4584,9 @@ int main(int argc, char **argv) {
         part_search_exits(disc) && part_heading_windows(disc) && part_bearing_calls(disc) &&
         part_point_bearings(disc) && bearing_point_selection(disc) &&
         selected_point_returns(disc) && selected_point_bearings(disc) &&
-        reference_bearing_gaps(disc) && actor_distances(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        reference_bearing_gaps(disc) && actor_distances(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
