@@ -482,3 +482,25 @@ bool nc_credits_play_track(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Silence both CD channels, then clear both entries of the track list. */
+bool nc_credits_reset_music(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 0x18;
+    R(4) = 0;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(31) = 0x80019340;
+    R(5) = 0;
+    c->budget -= 5;
+    nc_call(c, CD_VOLUME);
+    MEM_W32(R(28) + 0x34, 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(R(1) + 0x4ca0, 0);
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
