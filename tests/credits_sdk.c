@@ -104,6 +104,31 @@ static bool check_printf(void) {
     return true;
 }
 
+static bool upper(CPUState *c) {
+    return nc_credits_change_case(c, true);
+}
+static bool lower(CPUState *c) {
+    return nc_credits_change_case(c, false);
+}
+
+static bool check_case(void) {
+    for (unsigned byte = 0; byte < 256; byte++) {
+        CPUState state = arguments(0xabcdef00 | byte, 0, 0, 15);
+        if (!compare(state, 0x8001a128, upper, 14) || !compare(state, 0x8001a158, lower, 14))
+            return false;
+    }
+    u32 table_byte = 0x80023375 + '!';
+    u8 original = MEM_R8(table_byte);
+    for (unsigned flags = 0; flags < 4; flags++) {
+        MEM_W8(table_byte, (u8)flags);
+        CPUState state = arguments('!', 0, 0, 100);
+        if (!compare(state, 0x8001a128, upper, 14) || !compare(state, 0x8001a158, lower, 14))
+            return false;
+    }
+    MEM_W8(table_byte, original);
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -119,6 +144,7 @@ int main(int argc, char **argv) {
     pass = pass && check_length();
     pass = pass && check_append();
     pass = pass && check_printf();
+    pass = pass && check_case();
     disc_close();
     return pass ? 0 : 1;
 }

@@ -191,3 +191,19 @@ bool nc_credits_printf(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* The SDK indexes its writable character-class table with the low byte.
+ * v1 retains the full input (possibly adjusted); v0 returns only its low byte. */
+bool nc_credits_change_case(CPUState *c, bool uppercase) {
+    if (c->budget <= 14)
+        return false;
+    R(3) = R(4);
+    R(1) = 0x80020000 + (R(4) & 0xff);
+    const u8 flags = MEM_R8(R(1) + 0x3375);
+    const bool change = (flags & (uppercase ? 2 : 1)) != 0;
+    if (change)
+        R(3) += uppercase ? (u32)-32 : 32;
+    R(2) = (u8)R(3);
+    c->budget -= change ? 14 : 13;
+    return true;
+}

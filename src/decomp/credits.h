@@ -52,4 +52,6 @@ bool nc_credits_append_string(CPUState *c);
 
 bool nc_credits_printf(CPUState *c);
 
+bool nc_credits_change_case(CPUState *c, bool uppercase);
+
 #endif
