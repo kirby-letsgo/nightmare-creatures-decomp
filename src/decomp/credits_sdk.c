@@ -1367,6 +1367,30 @@ bool nc_credits_set_graph_debug(CPUState *c) {
     return true;
 }
 
+/* _spu_FgetRXXa reads a raw SPU register or expands it to a byte address. */
+bool nc_credits_spu_read_address(CPUState *c) {
+    if (c->budget <= 20)
+        return false;
+    c->budget--;
+    u32 base = MEM_R32(0x80024678);
+    R(4) = base + R(4) * 2;
+    R(2) = UINT32_MAX;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    R(4) = MEM_R16(R(4));
+    c->budget -= NC_LOAD_CYCLES + 2;
+    if (R(5) == UINT32_MAX) {
+        R(2) = R(4);
+        c->budget--;
+    } else {
+        c->budget--;
+        u32 shift = MEM_R32(0x800246a0);
+        R(2) = R(4) << (shift & 31);
+        c->budget -= NC_LOAD_CYCLES + 2;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* _spu_FsetDelayW and _spu_FsetDelayR update the SPU bus delay register. */
 bool nc_credits_spu_set_delay(CPUState *c, bool reading) {
     if (c->budget <= 15)
