@@ -316,6 +316,71 @@ static bool placement_matrix_scales(bool disc) {
     return true;
 }
 
+static bool placement_clocks(bool disc) {
+    const u32 addresses[] = {0x800cc044, 0x800cc048, 0x800cc04c, 0x800cc050, 0x800d77a8};
+    const u32 clocks[] = {0, 0, 0xfffffff0, 0x80000000};
+    for (unsigned i = 0; i < 4; ++i) {
+        const u32 before[] = {1, 0x80000000, 0xffffffff, 0x7fffffff, 0xfffffff0};
+        CPUState input = initial();
+        input.r[2] = i ? 0x50 : 0;
+        input.r[31] = i ? 0x8002b4b0 : 0x8002b5d8;
+        input.budget = i ? 41 : 2;
+        MEM_W32(0x8008ef10, clocks[i]);
+        for (unsigned j = 0; j < 5; ++j)
+            MEM_W32(addresses[j], before[j]);
+        CPUState native = input;
+        if (nc_update_placement_clock(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        for (unsigned j = 0; j < 5; ++j)
+            if (MEM_R32(addresses[j]) != before[j])
+                return false;
+        native.budget = ++input.budget;
+        if (!nc_update_placement_clock(&native) || native.budget != 1)
+            return false;
+        u32 after[5];
+        for (unsigned j = 0; j < 5; ++j) {
+            after[j] = MEM_R32(addresses[j]);
+            if (after[j] != before[j] + (i ? clocks[i] - before[4] : 0))
+                return false;
+            MEM_W32(addresses[j], before[j]);
+        }
+        if (disc) {
+            interp_call(&input, 0x8002b43c);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+            for (unsigned j = 0; j < 5; ++j)
+                if (MEM_R32(addresses[j]) != after[j])
+                    return false;
+        }
+    }
+    return true;
+}
+
+static bool placement_reset(bool disc) {
+    CPUState input = initial(), result;
+    input.r[16] = SCRATCH_BASE;
+    input.r[31] = 0x8006070c;
+    if (!compare(input, 0x8002b5b8, nc_call_placement_reset, disc, &result))
+        return false;
+    input.r[31] = 0x8002b5e0;
+    input.budget = 8;
+    MEM_W16(SCRATCH_BASE + 0x16c, 0xf4ff);
+    result = input;
+    if (nc_finish_placement_reset(&result) || memcmp(&result, &input, sizeof input) ||
+        MEM_R16(SCRATCH_BASE + 0x16c) != 0xf4ff)
+        return false;
+    result.budget = ++input.budget;
+    if (!nc_finish_placement_reset(&result) || result.budget != 1 ||
+        MEM_R16(SCRATCH_BASE + 0x16c) != 0xf72f)
+        return false;
+    if (disc) {
+        MEM_W16(SCRATCH_BASE + 0x16c, 0xf4ff);
+        interp_call(&input, 0x8002b5c0);
+        return !memcmp(&result, &input, sizeof input) && MEM_R16(SCRATCH_BASE + 0x16c) == 0xf72f;
+    }
+    return true;
+}
+
 static bool placement_refreshes(bool disc) {
     const u32 record = SCRATCH_BASE;
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -3644,14 +3709,15 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_refreshes(disc) || !placement_counters(disc) || !placement_presets(disc) ||
-        !placement_update_entry(disc) || !placement_mode_entry(disc) ||
-        !placement_step_selection(disc) || !actor_placement_paths(disc) ||
-        !actor_placement_targets(disc) || !placement_matrix_return(disc) ||
-        !placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||
-        !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
-        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
-        !transposed_placement_scales(disc) || !placement_record_steps(disc))
+    if (!placement_clocks(disc) || !placement_reset(disc) || !placement_refreshes(disc) ||
+        !placement_counters(disc) || !placement_presets(disc) || !placement_update_entry(disc) ||
+        !placement_mode_entry(disc) || !placement_step_selection(disc) ||
+        !actor_placement_paths(disc) || !actor_placement_targets(disc) ||
+        !placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
+        !placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
+        !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
+        !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
+        !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
