@@ -213,6 +213,7 @@ CREDITS_ROUTINES = {
     0x8001FE00: "nc_credits_cd_mode(c)",
     0x8001FE10: "nc_credits_cd_last_command(c)",
     0x8001FE20: "nc_credits_cd_last_position(c)",
+    0x8001FE30: "nc_credits_cd_reset(c)",
     0x8001FE9C: "nc_credits_cd_flush(c)",
     0x8001FEBC: "nc_credits_cd_set_debug(c)",
     0x8001FED4: "nc_credits_cd_command_name(c)",
