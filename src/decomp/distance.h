@@ -20,6 +20,7 @@ typedef enum {
 } NcPartSearchStep;
 NcPartSearchStep nc_advance_part_heading_search(CPUState *c, bool matched);
 bool nc_restore_part_search_frame(CPUState *c);
+bool nc_advance_part_pose_heading(CPUState *c, bool *search);
 bool nc_begin_part_heading_search(CPUState *c);
 bool nc_test_part_heading(CPUState *c);
 bool nc_select_part_bearing_point(CPUState *c);

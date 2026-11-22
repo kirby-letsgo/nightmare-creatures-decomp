@@ -928,6 +928,30 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* Every entry at 0x8001BEAC has v0 = 2*s0. The shift/add sequence
+ * advances the pose heading by 364 units per step in a 65536-unit turn. */
+bool nc_advance_part_pose_heading(CPUState *c, bool *search) {
+    const bool start_search = R(18) == 0;
+    const int cycles = start_search ? 33 : 25;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = MEM_R32(R(17) + 0x20);
+    MEM_W32(R(4) + 0x48, MEM_R32(R(4) + 0x48) + 364u * R(16));
+    R(3) = 0x800d4c9c;
+    MEM_W16(R(3), (u16)(MEM_R16(R(3)) + 1));
+    R(2) = 0;
+    if (start_search) {
+        R(19) = 0;
+        R(21) = 0xb60b60b7;
+        R(18) = 0x8008eea8;
+        R(22) = 0x80081a58;
+        R(20) = R(22);
+    }
+    *search = start_search;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The loop sets s5 to the signed reciprocal multiplier for division by 360.
  * Keep the multiply results as well as the angle truncated toward zero. */
 static u32 part_degrees_to_heading(CPUState *c, u32 address) {
