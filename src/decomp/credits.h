@@ -42,4 +42,6 @@ bool nc_credits_empty_hook(CPUState *c);
 typedef enum { NC_WARN_CALLOC, NC_WARN_MALLOC, NC_WARN_REALLOC, NC_WARN_FREE } NcHeapWarning;
 bool nc_credits_heap_warning(CPUState *c, NcHeapWarning warning);
 
+bool nc_credits_copy_bytes(CPUState *c);
+
 #endif
