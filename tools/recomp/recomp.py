@@ -644,6 +644,21 @@ class Emitter:
                 out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
                 out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004EC68:
+                out.extend(
+                    [
+                        "    switch (nc_check_lethal_hit(c)) {",
+                        "    case NC_HIT_SURVIVED: goto L_8004ECD0;",
+                        "    case NC_HIT_PLAYER_DEATH: goto L_8004EC8C;",
+                        "    case NC_HIT_OTHER_DEATH: goto L_8004ECAC;",
+                        "    case NC_HIT_TIMED: break;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004D0CC:
+                out.append("    if (nc_enter_death_state(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004D1A0:
+                out.append("    if (nc_set_actor_state(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
                 out.append("    if (nc_select_base_damage(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):
