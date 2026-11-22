@@ -280,7 +280,9 @@ def load_module(name: str, exe: str) -> Module:
         entries.update(CREDITS_ROUTINES)
     if name == "psx2_exe":
         # Splat groups these independent routines after preceding returns.
-        entries.update((0x800471E0, 0x80047268, 0x80047300, 0x8004737C, 0x80047420))
+        entries.update(
+            (0x80046E18, 0x80046EDC, 0x800471E0, 0x80047268, 0x80047300, 0x8004737C, 0x80047420)
+        )
     for addr in entries:
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
@@ -813,6 +815,9 @@ class Emitter:
                 out.append("    if (nc_finish_heading_projection(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80046E68, 0x80046F2C):
+                subtract_x = "true" if i.addr == 0x80046E68 else "false"
+                out.append(f"    if (nc_apply_rotated_point_offset(c, {subtract_x})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800470DC:
                 out.append("    if (nc_init_actor_coordinates(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80052B80:

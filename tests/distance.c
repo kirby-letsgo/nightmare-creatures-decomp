@@ -412,6 +412,64 @@ static bool projection_entries(bool disc) {
     return true;
 }
 
+static bool rotated_point_offsets(bool disc) {
+    const s32 components[][2] = {
+        {0, 0}, {511, -511}, {-512, 513}, {-513, -1025}, {0x40000001, -0x40000001}};
+    const s16 scales[] = {1, -1, 32767};
+    const u32 frame = SCRATCH_BASE + 128;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned dir = 0; dir < 2; ++dir)
+        for (unsigned i = 0; i < sizeof components / sizeof components[0]; ++i)
+            for (unsigned j = 0; j < sizeof scales / sizeof scales[0]; ++j) {
+                CPUState input = initial();
+                const u32 record = j == 2 ? frame + 8 : SCRATCH_BASE + 512;
+                input.r[29] = frame;
+                input.r[16] = 0xabcd0000u | (u16)scales[j];
+                input.r[17] = record;
+                memset(nc_scratch, 0xa5, sizeof before);
+                MEM_W16(record + 0x18, 1);
+                MEM_W16(record + 0x1c, 0xffff);
+                MEM_W32(frame + 0x18, components[i][0]);
+                MEM_W32(frame + 0x20, components[i][1]);
+                MEM_W32(frame + 0x30, input.r[31]);
+                MEM_W32(frame + 0x2c, 0x12345678);
+                MEM_W32(frame + 0x28, 0x87654321);
+                memcpy(before, nc_scratch, sizeof before);
+                input.budget = 43;
+                CPUState native = input;
+                if (nc_apply_rotated_point_offset(&native, dir) ||
+                    memcmp(&native, &input, sizeof input) ||
+                    memcmp(before, nc_scratch, sizeof before))
+                    return false;
+                native.budget = ++input.budget;
+                const s32 dx = (s32)((u32)components[i][0] * (u32)scales[j]) / 512;
+                const u16 x = MEM_R16(record + 0x18);
+                if (!nc_apply_rotated_point_offset(&native, dir) ||
+                    MEM_R16(record + 0x18) != (u16)(dir ? x - dx : x + dx) ||
+                    native.r[29] != frame + 56 || native.r[31] != input.r[31])
+                    return false;
+                const s32 dz = (s32)(MEM_R32(frame + 0x20) * (u32)scales[j]) / 512;
+                if (native.r[3] != (u32)dz ||
+                    MEM_R16(record + 0x1c) != (u16)(dir ? 65535 + dz : 65535 - dz))
+                    return false;
+                if (disc) {
+                    memcpy(after, nc_scratch, sizeof after);
+                    memcpy(nc_scratch, before, sizeof before);
+                    /* Enter with the caller's sp so the oracle recognizes the return. */
+                    const u32 stub = 0x80120000, pc = dir ? 0x80046e68 : 0x80046f2c;
+                    MEM_W32(stub, 0x08000000u | ((pc >> 2) & 0x03ffffffu));
+                    MEM_W32(stub + 4, 0x27bdffc8); /* addiu sp, sp, -56 */
+                    input.r[29] += 56;
+                    input.budget += 2;
+                    interp_call(&input, stub);
+                    if (memcmp(&native, &input, sizeof input) ||
+                        memcmp(after, nc_scratch, sizeof after))
+                        return false;
+                }
+            }
+    return true;
+}
+
 static bool facing_offsets(bool disc) {
     const u32 record = SCRATCH_BASE + 0x80;
     const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
@@ -885,7 +943,7 @@ int main(int argc, char **argv) {
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
               record_projections(disc) && projected_heading_gaps(disc) &&
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-              facing_offsets(disc) && projection_entries(disc);
+              facing_offsets(disc) && projection_entries(disc) && rotated_point_offsets(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
