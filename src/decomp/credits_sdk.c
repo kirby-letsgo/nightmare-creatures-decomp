@@ -397,6 +397,25 @@ bool nc_credits_default_display(CPUState *c) {
     return true;
 }
 
+bool nc_credits_priority_packet(CPUState *c) {
+    bool check_mask = R(5) != 0;
+    if (c->budget <= (check_mask ? 10 : 9))
+        return false;
+
+    R(2) = 2;
+    c->budget--;
+    MEM_W8(R(4) + 3, 2); /* Two command words follow the DMA tag. */
+    R(3) = 0xe6000000u | (check_mask ? 2u : 0u);
+    c->budget -= check_mask ? 4 : 3;
+    R(2) = R(3) | (R(6) != 0); /* Set the mask bit on written pixels. */
+    c->budget -= 2;
+    MEM_W32(R(4) + 4, R(2));
+    c->budget--;
+    MEM_W32(R(4) + 8, 0);
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_credits_graph_status(CPUState *c, bool debug_level) {
     if (c->budget <= 6)
         return false;

@@ -97,6 +97,7 @@ CREDITS_ROUTINES = {
     0x8001BBDC: "nc_credits_merge_primitives(c)",
     0x8001C1C8: "nc_credits_graph_status(c, false)",
     0x8001C1D8: "nc_credits_graph_status(c, true)",
+    0x8001D14C: "nc_credits_priority_packet(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 

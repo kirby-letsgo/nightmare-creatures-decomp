@@ -259,6 +259,21 @@ static bool check_merge_primitives(void) {
     return true;
 }
 
+static bool check_priority_packet(void) {
+    const u32 locations[] = {0x80060300, 0xa0060310, SCRATCH_BASE + 4};
+    const u32 flags[] = {0, 1, 2, 0x80000000, 0xffffffff};
+    for (unsigned i = 0; i < sizeof locations / sizeof locations[0]; i++)
+        for (unsigned j = 0; j < sizeof flags / sizeof flags[0]; j++)
+            for (unsigned k = 0; k < sizeof flags / sizeof flags[0]; k++) {
+                memset(nc_fast_ptr(locations[i]), 0xa5, 16);
+                int cost = flags[j] ? 10 : 9;
+                CPUState state = arguments(locations[i], flags[j], flags[k], cost + 1);
+                if (!compare(state, 0x8001d14c, nc_credits_priority_packet, cost))
+                    return false;
+            }
+    return true;
+}
+
 static bool check_terminator(void) {
     const u32 tags[] = {0, 0x11100000, 0xa5ffffff, 0x01400000, 0xffabcdef};
     for (unsigned i = 0; i < sizeof tags / sizeof tags[0]; i++)
@@ -393,6 +408,7 @@ int main(int argc, char **argv) {
     pass = pass && check_link();
     pass = pass && check_link_writer();
     pass = pass && check_terminator();
+    pass = pass && check_priority_packet();
     pass = pass && check_merge_primitives();
     pass = pass && check_palette();
     pass = pass && check_video_mode();
