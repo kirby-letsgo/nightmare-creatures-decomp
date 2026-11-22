@@ -3517,6 +3517,24 @@ bool nc_credits_cd_flush_controller(CPUState *c) {
     return true;
 }
 
+/* CdGetToc forwards the caller's track-position buffer to CdGetToc2(1, buffer). */
+bool nc_credits_cd_get_toc(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(5) = R(4);
+    R(31) = 0x800230c0;
+    R(4) = 1;
+    c->budget -= 4;
+    nc_call(c, 0x800230d0);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Mode 2 only reinstalls interrupts. Mode 1 also initializes CD audio volume. */
 bool nc_credits_cd_reset(CPUState *c) {
     if (c->budget <= 6)
