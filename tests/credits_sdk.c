@@ -985,6 +985,49 @@ static bool check_spu_write_register(void) {
     return true;
 }
 
+static bool check_spu_set_address(void) {
+    const u32 slot = 0x80024678, config = 0x8002469c;
+    const u32 base = MEM_R32(slot);
+    u32 saved[4];
+    for (unsigned i = 0; i < 4; i++)
+        saved[i] = MEM_R32(config + i * 4);
+    const struct {
+        u32 align, shift, unit, mask, address;
+    } cases[] = {
+        {0, 3, 8, 7, 0x12345}, {1, 3, 8, 7, 0x12348},
+        {1, 3, 8, 7, 0x12345}, {1, 35, 8, 7, 0xfffffffe},
+        {1, 1, 0, 3, 5}, {1, 31, 0, 3, 0},
+    };
+    const u32 indices[] = {3, (u32)-1, (u32)-2};
+    u16 old = MEM_R16(base + 6);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W32(config, cases[i].align);
+        MEM_W32(config + 4, cases[i].shift);
+        MEM_W32(config + 8, cases[i].unit);
+        MEM_W32(config + 12, cases[i].mask);
+        u32 aligned = cases[i].address;
+        if (cases[i].align && (cases[i].unit ? aligned % cases[i].unit : aligned))
+            aligned = (aligned + cases[i].unit) & ~cases[i].mask;
+        u16 units = (u16)(aligned >> (cases[i].shift & 31));
+        for (unsigned j = 0; j < sizeof indices / sizeof indices[0]; j++) {
+            CPUState state = arguments(indices[j], cases[i].address, 7, i & 1 ? 48 : 4096);
+            u16 initial = (u16)~units;
+            MEM_W16(base + 6, initial);
+            nc_cpu = state;
+            if (!nc_credits_spu_set_address(&nc_cpu) || MEM_R16(base + 6) != (j ? initial : units))
+                return false;
+            MEM_W16(base + 6, initial);
+            if (!compare(state, 0x8001fae0, nc_credits_spu_set_address, 47) ||
+                nc_cpu.r[2] != (j == 1 ? units : aligned))
+                return false;
+        }
+    }
+    MEM_W16(base + 6, old);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(config + i * 4, saved[i]);
+    return true;
+}
+
 static bool check_spu_read_address(void) {
     const u32 slot = 0x80024678, shift_slot = 0x800246a0;
     const u32 base = MEM_R32(slot), shift = MEM_R32(shift_slot);
@@ -1321,6 +1364,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
     pass = pass && check_spu_write_register();
+    pass = pass && check_spu_set_address();
     pass = pass && check_spu_read_address();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
