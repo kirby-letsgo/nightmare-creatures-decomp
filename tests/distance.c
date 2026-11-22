@@ -316,6 +316,38 @@ static bool placement_matrix_scales(bool disc) {
     return true;
 }
 
+static bool placement_tick_latch(bool disc) {
+    const u32 record = 0x800d7630;
+    u8 *memory = &nc_ram[record & (RAM_SIZE - 1)];
+    u8 before[0x17c], after[sizeof before];
+    memset(memory, 0xa5, sizeof before);
+    MEM_W16(record + 0x16c, 0xffdf);
+    for (unsigned call = 0; call < 2; ++call) {
+        CPUState input = initial();
+        input.r[4] = call ? (u32)-32768 : 0;
+        input.r[5] = call ? 0 : 0x80121000;
+        input.budget = call ? 11 : 18;
+        MEM_W32(0x8008ef10, call ? 0 : UINT32_MAX);
+        memcpy(before, memory, sizeof before);
+        CPUState native = input;
+        if (nc_latch_placement_tick(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(memory, before, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_latch_placement_tick(&native) || native.budget != 1 ||
+            MEM_R16(record + 0x16c) != 0xffff || MEM_R32(record + 0x168) != UINT32_MAX)
+            return false;
+        if (disc) {
+            memcpy(after, memory, sizeof after);
+            memcpy(memory, before, sizeof before);
+            interp_call(&input, 0x800473e8);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, memory, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_clocks(bool disc) {
     const u32 addresses[] = {0x800cc044, 0x800cc048, 0x800cc04c, 0x800cc050, 0x800d77a8};
     const u32 clocks[] = {0, 0, 0xfffffff0, 0x80000000};
@@ -3836,12 +3868,13 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_clocks(disc) || !placement_reset(disc) || !placement_refreshes(disc) ||
-        !placement_counters(disc) || !placement_presets(disc) || !placement_update_entry(disc) ||
-        !placement_mode_entry(disc) || !placement_step_selection(disc) ||
-        !actor_placement_paths(disc) || !actor_placement_targets(disc) ||
-        !placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
-        !placement_matrix_scales(disc) || !placement_axis_samples(disc) || !placement_axes(disc) ||
+    if (!placement_tick_latch(disc) || !placement_clocks(disc) || !placement_reset(disc) ||
+        !placement_refreshes(disc) || !placement_counters(disc) || !placement_presets(disc) ||
+        !placement_update_entry(disc) || !placement_mode_entry(disc) ||
+        !placement_step_selection(disc) || !actor_placement_paths(disc) ||
+        !actor_placement_targets(disc) || !placement_matrix_return(disc) ||
+        !placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||
+        !placement_axis_samples(disc) || !placement_axes(disc) ||
         !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
         !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
         !transposed_placement_scales(disc) || !placement_pose_initializers(disc) ||
