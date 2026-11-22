@@ -345,6 +345,55 @@ bool nc_begin_placement_update(CPUState *c) {
     return true;
 }
 
+/* The entry delay slot leaves flags 0x50 in v0. While either is active,
+ * advance four saved timestamps by the elapsed game ticks, modulo 2^32. */
+bool nc_update_placement_clock(CPUState *c) {
+    if (!R(2)) {
+        if (c->budget <= 2)
+            return false;
+        c->budget -= 2;
+        return true;
+    }
+    if (c->budget <= 41)
+        return false;
+    R(7) = 0x800d77a8;
+    R(5) = 0x800cc044;
+    R(6) = MEM_R32(0x8008ef10);
+    const u32 previous = MEM_R32(R(7));
+    R(2) = MEM_R32(R(5));
+    R(3) = MEM_R32(0x800cc04c);
+    R(4) = R(6) - previous;
+    MEM_W32(R(5), R(2) + R(4));
+    R(2) = MEM_R32(0x800cc048);
+    MEM_W32(0x800cc04c, R(3) + R(4));
+    R(3) = MEM_R32(0x800cc050);
+    R(2) += R(4);
+    R(3) += R(4);
+    R(1) = 0x800d0000;
+    MEM_W32(0x800cc048, R(2));
+    MEM_W32(0x800cc050, R(3));
+    MEM_W32(R(7), R(6));
+    c->budget -= 41;
+    return true;
+}
+
+bool nc_call_placement_reset(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x8002b5c0;
+    c->budget -= 2;
+    return true;
+}
+
+bool nc_finish_placement_reset(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(2) = (MEM_R16(R(16) + 0x16c) | 0x300u) & 0xff2fu;
+    MEM_W16(R(16) + 0x16c, R(2));
+    c->budget -= 8;
+    return true;
+}
+
 bool nc_begin_placement_refresh(CPUState *c, bool *refresh) {
     if (c->budget <= 9)
         return false;
