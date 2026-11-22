@@ -143,6 +143,7 @@ bool nc_credits_spu_set_dma_priority(CPUState *c);
 bool nc_credits_spu_wait(CPUState *c);
 bool nc_credits_spu_set_delay(CPUState *c, bool reading);
 bool nc_credits_bios_gpu_command(CPUState *c);
+bool nc_credits_bios_96_remove(CPUState *c);
 bool nc_credits_return_from_exception(CPUState *c);
 bool nc_credits_reset_irq_entry(CPUState *c);
 bool nc_credits_hook_irq_entry(CPUState *c);
