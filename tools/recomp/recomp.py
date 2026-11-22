@@ -928,6 +928,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068DBC:
+                out.append("    if (nc_menu_dispatch_timed_record(c)) goto L_80068DD4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80068DD4:
+                out.append("    if (nc_menu_record_cross(c)) goto L_80068E18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068D60:
                 out.extend(
                     [

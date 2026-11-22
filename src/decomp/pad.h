@@ -50,6 +50,8 @@ bool nc_menu_dispatch_and_save_buttons(CPUState *c);
 u32 nc_menu_save_record_buttons(CPUState *c, bool load_record);
 bool nc_menu_reset_record_100(CPUState *c);
 u32 nc_menu_check_record_101(CPUState *c);
+bool nc_menu_dispatch_timed_record(CPUState *c);
+bool nc_menu_record_cross(CPUState *c);
 u32 nc_menu_record_four_timing(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
 u32 nc_menu_direction_selection(CPUState *c, bool right);
