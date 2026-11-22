@@ -276,3 +276,8 @@ if(TARGET nc_gen)
         set_tests_properties(credits_roll_${scenario} PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
     endforeach()
 endif()
+
+add_executable(test_credits_tim tests/credits_tim.c src/decomp/credits_roll.c)
+target_link_libraries(test_credits_tim PRIVATE nc_runtime)
+add_test(NAME credits_tim_disc COMMAND test_credits_tim "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(credits_tim_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
