@@ -247,6 +247,7 @@ CREDITS_ROUTINES = {
     0x80022664: "nc_credits_strncmp(c)",
     0x80022CB4: "nc_credits_cd_read_callback(c)",
     0x80022EBC: "nc_credits_cd_audio_ready(c)",
+    0x80022F84: "nc_credits_cd_play_track(c)",
     0x800230AC: "nc_credits_cd_get_toc(c)",
     0x800232F4: "nc_credits_entry(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
