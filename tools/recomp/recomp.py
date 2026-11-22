@@ -719,6 +719,8 @@ class Emitter:
                     0x8002AF68,
                 )
             )
+        if self.mod.name == "psx2_exe" and f.addr == 0x8002B22C:
+            targets.add(0x8002B304)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
             targets.update(
                 (
@@ -1653,6 +1655,10 @@ class Emitter:
                 out.append("    if (nc_prepare_transposed_placement_scale(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
                 out.append("        goto L_8002B200; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002B260:
+                out.append("    if (nc_prepare_actor_placement_target(c)) {")
+                out.append(f"        {self.call(0x80047128)}")
+                out.append("        goto L_8002B304; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
                 out.append("    if (nc_step_record_angle_pair(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:

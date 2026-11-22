@@ -316,6 +316,45 @@ static bool placement_matrix_scales(bool disc) {
     return true;
 }
 
+static bool actor_placement_targets(bool disc) {
+    const u32 record = SCRATCH_BASE, actor = 0x80128000;
+    const u32 headings[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0x1234ffff};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof headings / sizeof headings[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = headings[i];
+        input.r[17] = record;
+        input.r[31] = 0x80047128;
+        input.budget = 71;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(record + 0x164, actor);
+        MEM_W32(actor + 0x27c, -257);
+        MEM_W32(actor + 0x284, 255);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_prepare_actor_placement_target(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_actor_placement_target(&native) || native.budget != 1)
+            return false;
+        const u32 offset = (headings[i] >> 3) & 0x1ffe;
+        const s32 sine = (s16)MEM_R16(0x80083be4 + offset);
+        const s32 cosine = (s16)MEM_R16(0x80081be4 + offset);
+        if ((s32)MEM_R32(record + 0x150) != 256 * (-2 + ((25 * sine) >> 12)) ||
+            (s32)MEM_R32(record + 0x158) != 256 * ((25 * cosine) >> 12))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x8002b260);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_matrix_return(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x200;
     CPUState input = initial();
@@ -3264,11 +3303,11 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_matrix_return(disc) || !placement_matrix_calls(disc) ||
-        !placement_matrix_scales(disc) || !placement_vector_frame(disc, true) ||
-        !placement_vector_frame(disc, false) || !placement_vector_pairs(disc) ||
-        !placement_heading_calls(disc) || !transposed_placement_scales(disc) ||
-        !placement_record_steps(disc))
+    if (!actor_placement_targets(disc) || !placement_matrix_return(disc) ||
+        !placement_matrix_calls(disc) || !placement_matrix_scales(disc) ||
+        !placement_vector_frame(disc, true) || !placement_vector_frame(disc, false) ||
+        !placement_vector_pairs(disc) || !placement_heading_calls(disc) ||
+        !transposed_placement_scales(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
