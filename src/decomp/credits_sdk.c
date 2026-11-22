@@ -1711,6 +1711,94 @@ bool nc_credits_cd_default_read(CPUState *c) {
     return cd_default_event(c, 0x40, 0x8001fde0);
 }
 
+/* Load a CD port pointer from the guest table, including the load delay nop. */
+static void cd_flush_port(CPUState *c, u32 slot) {
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, slot);
+    NC_POLL(c, 1);
+}
+
+static bool cd_flush_pending(CPUState *c, bool first) {
+    cd_flush_port(c, 0x80024a2c);
+    R(2) = MEM_R8(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 7);
+    bool pending = R(2) != 0;
+    if (first)
+        R(3) = 7;
+    NC_POLL(c, 2);
+    return pending;
+}
+
+bool nc_credits_cd_flush_controller(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    c->budget--;
+    R(3) = MEM_R32(0x80024a20);
+    R(2) = 1;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W8(R(3), 1); /* select the interrupt bank */
+    c->budget--;
+    if (cd_flush_pending(c, true)) {
+        set_reg(c, 4, 1);
+        do {
+            cd_flush_port(c, 0x80024a20);
+            MEM_W8(R(2), (u8)R(4));
+            NC_POLL(c, 1);
+            cd_flush_port(c, 0x80024a2c);
+            MEM_W8(R(2), (u8)R(3)); /* acknowledge pending interrupts */
+            NC_POLL(c, 1);
+            cd_flush_port(c, 0x80024a28);
+            MEM_W8(R(2), (u8)R(3)); /* enable the next interrupt */
+            NC_POLL(c, 1);
+        } while (cd_flush_pending(c, false));
+    }
+    set_reg(c, 1, 0x80020000);
+    MEM_W8(0x80024a3a, 0);
+    NC_POLL(c, 1);
+    set_reg(c, 3, 0x80020000);
+    R(3) = MEM_R8(0x80024a3a);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x80024a39);
+    MEM_W8(R(2), (u8)R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024a20);
+    set_reg(c, 2, 2);
+    set_reg(c, 1, 0x80020000);
+    MEM_W8(0x80024a38, (u8)R(2));
+    NC_POLL(c, 1);
+    MEM_W8(R(3), 0);
+    NC_POLL(c, 1);
+    cd_flush_port(c, 0x80024a2c);
+    MEM_W8(R(2), 0); /* clear the data request */
+    NC_POLL(c, 1);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024a30);
+    set_reg(c, 2, 0x1325);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_cd_flush(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x8001feac;
+    c->budget -= 3;
+    nc_call(c, 0x800214c8);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* CdStatus, CdMode and CdLastCom each return one cached unsigned byte. */
 static bool cd_state_byte(CPUState *c, u32 address) {
     if (c->budget <= 6)

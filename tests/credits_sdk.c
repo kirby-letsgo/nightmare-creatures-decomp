@@ -3,6 +3,7 @@
 #include "port/bios.h"
 #include "port/disc.h"
 #include "port/exe.h"
+#include "port/hw/hw.h"
 #include <stdio.h>
 
 static CPUState arguments(u32 destination, u32 source, u32 count, int budget) {
@@ -1277,6 +1278,65 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_cd_flush(void) {
+    const u32 slots = 0x80024a20, ram = 0x80061000;
+    u8 saved[0x40];
+    memcpy(saved, nc_fast_ptr(slots - 0x20), sizeof saved);
+    for (unsigned pending = 0; pending < 2; pending++)
+        for (unsigned wrapper = 0; wrapper < 2; wrapper++)
+            for (unsigned low = 0; low < 2; low++) {
+                MEM_W32(slots, ram);
+                MEM_W32(slots + 8, ram + 2);
+                /* Acknowledge through the pointer itself to redirect the next status read. */
+                MEM_W32(slots + 12, pending ? slots + 12 : ram + 3);
+                MEM_W8(0x80024a07, 0);
+                MEM_W32(slots + 16, SCRATCH_BASE + 4);
+                MEM_W32(ram, 0);
+                MEM_W32(0x80024a38, UINT32_MAX);
+                CPUState state = arguments(9, 2, 3, low ? 7 : 4096);
+                if (!compare(state, wrapper ? 0x8001fe9c : 0x800214c8,
+                             wrapper ? nc_credits_cd_flush : nc_credits_cd_flush_controller,
+                             wrapper ? 4 : 6) || MEM_R32(SCRATCH_BASE + 4) != 0x1325 ||
+                    MEM_R32(0x80024a38) != 0xff000002 || MEM_R8(ram + 2) != (pending ? 7 : 0))
+                    return false;
+            }
+    memcpy(nc_fast_ptr(slots - 0x20), saved, sizeof saved);
+
+    StateIO before = {0}, native = {0}, guest = {0};
+    cdrom_serialize(&before);
+    irq_serialize(&before);
+    bool ok = !before.error;
+    for (unsigned run = 0; run < 2 && ok; run++) {
+        cdrom_tick(0);
+        cdrom_write(0, 0);
+        cdrom_write(1, 1); /* queue two Getstat acknowledgements */
+        cdrom_write(1, 1);
+        cdrom_tick(25000);
+        cdrom_write(0, 1);
+        ok = (cdrom_read(3) & 7) != 0;
+        nc_cpu = arguments(9, 2, 3, 4096);
+        if (run)
+            interp_call(&nc_cpu, 0x800214c8);
+        else
+            ok = nc_credits_cd_flush_controller(&nc_cpu) && ok;
+        StateIO *result = run ? &guest : &native;
+        cdrom_serialize(result);
+        irq_serialize(result);
+        cdrom_write(0, 1);
+        ok = ok && (cdrom_read(3) & 7) == 0;
+        before.loading = true;
+        before.pos = 0;
+        cdrom_serialize(&before);
+        irq_serialize(&before);
+    }
+    ok = ok && !before.error && !native.error && !guest.error && native.len == guest.len &&
+         !memcmp(native.buf, guest.buf, guest.len);
+    free(before.buf);
+    free(native.buf);
+    free(guest.buf);
+    return ok;
+}
+
 static bool check_cd_setters(void) {
     const struct {
         u32 entry, slot;
@@ -1613,6 +1673,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
