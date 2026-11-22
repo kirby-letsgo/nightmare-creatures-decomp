@@ -1367,6 +1367,33 @@ bool nc_credits_set_graph_debug(CPUState *c) {
     return true;
 }
 
+/* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */
+bool nc_credits_spu_write_register(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(2) = R(4) * 2;
+    c->budget -= 3; /* branch, delay slot and base-address lui */
+    u32 base = MEM_R32(0x80024678);
+    if (R(6) == 0) {
+        R(3) = base;
+        R(2) += base;
+        c->budget -= NC_LOAD_CYCLES + 2;
+        MEM_W16(R(2), (u16)R(5));
+        c->budget -= 3; /* store and jump to the return */
+    } else {
+        R(4) = base;
+        c->budget -= NC_LOAD_CYCLES + 1;
+        u32 shift = MEM_R32(0x800246a0);
+        R(2) += base;
+        R(3) = R(5) >> (shift & 31);
+        c->budget -= NC_LOAD_CYCLES + 2;
+        MEM_W16(R(2), (u16)R(3));
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* _spu_FgetRXXa reads a raw SPU register or expands it to a byte address. */
 bool nc_credits_spu_read_address(CPUState *c) {
     if (c->budget <= 20)

@@ -952,6 +952,39 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_write_register(void) {
+    const u32 slot = 0x80024678, shift_slot = 0x800246a0;
+    const u32 original = MEM_R32(slot), old_shift = MEM_R32(shift_slot);
+    const u32 bases[] = {original, 0x80060000, SCRATCH_BASE};
+    const u32 shifts[] = {0, 3, 31, 35};
+    const u32 modes[] = {0, 1, UINT32_MAX};
+    for (unsigned i = 0; i < sizeof bases / sizeof bases[0]; i++) {
+        MEM_W32(slot, bases[i]);
+        u32 addr = bases[i] + 6; /* voice 0 start address for the hardware case */
+        u16 saved = MEM_R16(addr);
+        for (unsigned j = 0; j < sizeof modes / sizeof modes[0]; j++)
+            for (unsigned k = 0; k < sizeof shifts / sizeof shifts[0]; k++) {
+                u32 value = 0x89abcdef;
+                u16 expected = (u16)(value >> (modes[j] ? shifts[k] & 31 : 0));
+                MEM_W32(shift_slot, shifts[k]);
+                MEM_W16(addr, (u16)~expected);
+                CPUState state = arguments(3, value, modes[j], k ? 16 : 4096);
+                /* CPU snapshots omit SPU registers. Check the native store directly. */
+                nc_cpu = state;
+                if (!nc_credits_spu_write_register(&nc_cpu) || MEM_R16(addr) != expected)
+                    return false;
+                MEM_W16(addr, (u16)~expected);
+                if (!compare(state, 0x8001fa98, nc_credits_spu_write_register, 15) ||
+                    MEM_R16(addr) != expected)
+                    return false;
+            }
+        MEM_W16(addr, saved);
+    }
+    MEM_W32(slot, original);
+    MEM_W32(shift_slot, old_shift);
+    return true;
+}
+
 static bool check_spu_read_address(void) {
     const u32 slot = 0x80024678, shift_slot = 0x800246a0;
     const u32 base = MEM_R32(slot), shift = MEM_R32(shift_slot);
@@ -1287,6 +1320,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_write_register();
     pass = pass && check_spu_read_address();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_setters();
