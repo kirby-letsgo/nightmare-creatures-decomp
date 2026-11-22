@@ -760,7 +760,7 @@ class Emitter:
                 )
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
-            targets.add(0x8004CE58)
+            targets.update((0x8004CE24, 0x8004CE58, 0x8004CE60))
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
@@ -1413,6 +1413,17 @@ class Emitter:
                 outgoing, resume = box_builders[i.addr]
                 arg = "true" if outgoing else "false"
                 out.append(f"    if (nc_prepare_attack_box(c, {arg})) goto L_{resume:08X};")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004CE18:
+                out.append("    if (nc_begin_actor_distance(c)) {")
+                out.append("        if (!R(5)) goto L_8004CE68;")
+                out.append("        goto L_8004CE24; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004CE58:
+                out.append("    if (nc_call_actor_distance_root(c)) {")
+                out.append(f"        {self.call(0x800475E4)}")
+                out.append("        goto L_8004CE60; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8004CE60, 0x8004CE68):
+                missing = "true" if i.addr == 0x8004CE68 else "false"
+                out.append(f"    if (nc_finish_actor_distance(c, {missing})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004CE24:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
