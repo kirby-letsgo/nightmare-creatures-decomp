@@ -375,6 +375,33 @@ u32 nc_menu_left_input(CPUState *c) {
     return R(2) ? 0x80068424 : 0x80068438;
 }
 
+/* Right uses the opposite configuration flag sense from Left. Reload the
+ * record index here because the intervening Left action can change it. */
+u32 nc_menu_right_input(CPUState *c) {
+    if (c->budget <= 24)
+        return 0x80068438;
+
+    R(2) = R(30) & 0x20;
+    R(3) = 0x08000000;
+    c->budget -= 3;
+    if (!R(2))
+        return 0x80068488;
+
+    u32 config = MEM_R32(R(28) + 0x244);
+    u32 flags = MEM_R32(config + 4);
+    R(2) = R(30) & 0x10; /* delay slot prepares the Up check */
+    c->budget -= 11;
+    if (flags & R(3))
+        return 0x8006848c;
+
+    R(4) = R(22);
+    R(5) = MEM_R32(R(28) + 0x190) * 12;
+    R(6) = 0x10;
+    R(2) = 0x800883c0; /* added to the offset in the upcoming call's delay slot */
+    c->budget -= 10;
+    return 0x80068480;
+}
+
 /* Menu state 0x1a switches flags according to the first packet's type
  * nibble. Each path writes only when its old mode bit is present. */
 bool nc_menu_pad_type_flags(CPUState *c) {

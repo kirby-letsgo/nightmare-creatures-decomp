@@ -400,6 +400,34 @@ static bool pad_select_edge(void) {
     return true;
 }
 
+static bool menu_right_destination(CPUState *cpu) {
+    return nc_menu_right_input(cpu) == cpu->r[31];
+}
+
+static bool menu_right_inputs(void) {
+    CPUState cpu = initial();
+    cpu.budget = 24;
+    if (nc_menu_right_input(&cpu) != 0x80068438)
+        return false;
+    cpu.budget = 25;
+    MEM_W32(gp + 0x244, config);
+    const u32 buttons[] = {0, 0x20, 0x80, 0xb0, 0x00200010};
+    const u32 indices[] = {0, 0x1a, 0xffffffff};
+    for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
+        MEM_W32(gp + 0x190, indices[i]);
+        for (unsigned j = 0; j < sizeof buttons / sizeof buttons[0]; ++j) {
+            cpu.r[30] = buttons[j];
+            for (unsigned set = 0; set <= 1; ++set) {
+                MEM_W32(config + 4, 0x81000004 | (set << 27));
+                cpu.r[31] = !(buttons[j] & 0x20) ? 0x80068488 : set ? 0x8006848c : 0x80068480;
+                if (!compare(cpu, 0x80068438, menu_right_destination, 24))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool menu_left_destination(CPUState *cpu) {
     return nc_menu_left_input(cpu) == cpu->r[31];
 }
@@ -1028,7 +1056,7 @@ int main(int argc, char **argv) {
         return 1;
     bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
               playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && menu_left_inputs() &&
+              pad_select_edge() && pad_start_edge() && menu_right_inputs() && menu_left_inputs() &&
               menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
               l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
               sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
