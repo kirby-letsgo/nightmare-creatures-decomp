@@ -1650,6 +1650,25 @@ bool nc_menu_calibration_action(CPUState *c) {
     return true;
 }
 
+/* Returning from calibration saves the current buttons. The direct entry
+ * already has the Triangle mask in v0 from the confirmation check. */
+u32 nc_menu_calibration_triangle(CPUState *c, bool after_action) {
+    if (c->budget <= (after_action ? 15 : 13))
+        return after_action ? 0x800682fc : 0x80068304;
+    if (after_action) {
+        MEM_W32(R(28) + 0x18c, R(30));
+        R(2) = R(30) & 0x1000;
+        c->budget -= 2;
+    }
+    R(4) = R(22);
+    c->budget -= 2;
+    if (!R(2))
+        return 0x80068334;
+    R(6) = 0x20;
+    call_record_37_action(c, 0x80068330);
+    return 0x80068330;
+}
+
 /* On the type-7 path, sample both stick bytes before testing the counter. */
 u32 nc_menu_record_37_read_stick(CPUState *c) {
     if (c->budget <= 24)
