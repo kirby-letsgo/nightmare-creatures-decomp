@@ -76,6 +76,8 @@ CREDITS_ROUTINES = {
     0x8001A7FC: "nc_credits_interrupt_mask(c, false)",
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
+    0x8001AF84: "nc_credits_clear_irq_words(c)",
+    0x8001B22C: "nc_credits_clear_irq_words(c)",
     0x8001B414: "nc_credits_default_draw(c)",
     0x8001B4E4: "nc_credits_default_display(c)",
     0x8001B520: "nc_credits_video_mode(c, true)",
