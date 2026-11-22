@@ -986,6 +986,31 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_strncmp(void) {
+    const u32 left = 0x80060001, right = SCRATCH_BASE + 5;
+    const struct {
+        u32 left, right, limit;
+        s32 difference;
+    } cases[] = {
+        {0, 0, 0, 0}, {0, right, 0, -1}, {left, 0, 0, 1},
+        {left, right, 0, 0}, {left, right, 2, 0}, {left, right, 3, 127},
+        {right, left, 4, -127}, {left, left, 99, 0},
+        {left, right, 0xffffffff, 0}, {left, right, 0x80000000, 127},
+    };
+    const int budgets[] = {3, 8, 17, 4096};
+    const u8 a[] = {'C', 'D', 0xff, 0}, b[] = {'C', 'D', 0x80, 0};
+    memcpy(nc_fast_ptr(left), a, sizeof a);
+    memcpy(nc_fast_ptr(right), b, sizeof b);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++)
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            CPUState state = arguments(cases[i].left, cases[i].right, cases[i].limit, budgets[j]);
+            if (!compare(state, 0x80022664, nc_credits_strncmp, 2) ||
+                nc_cpu.r[2] != (u32)cases[i].difference)
+                return false;
+        }
+    return true;
+}
+
 static bool check_cd_names_equal(void) {
     const u32 left = 0x80060001, right = SCRATCH_BASE + 5;
     const struct {
@@ -1161,6 +1186,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_strncmp();
     pass = pass && check_cd_names_equal();
     pass = pass && check_cd_position_to_sector();
     pass = pass && check_cd_state();

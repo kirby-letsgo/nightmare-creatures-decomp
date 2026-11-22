@@ -1475,6 +1475,81 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+/* The credits strncmp orders null pointers before checking the byte limit. */
+bool nc_credits_strncmp(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    bool left = R(4) != 0;
+    c->budget -= 2;
+    bool right = false;
+    if (left) {
+        right = R(5) != 0;
+        NC_POLL(c, 2);
+    }
+    if (!left || !right) {
+        bool equal = R(4) == R(5);
+        NC_POLL(c, 2);
+        if (equal)
+            goto equal_strings;
+        left = R(4) != 0;
+        R(2) = 1;
+        NC_POLL(c, 2);
+        if (!left) {
+            R(2) = UINT32_MAX;
+            NC_POLL(c, 2);
+        }
+        goto done;
+    }
+
+    set_reg(c, 6, R(6) - 1);
+    bool exhausted = (s32)R(6) < 0;
+    R(2) = 0;
+    NC_POLL(c, 2);
+    if (exhausted)
+        goto done;
+
+    for (;;) {
+        R(3) = MEM_R8(R(4));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        R(2) = MEM_R8(R(5));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        bool different = R(3) != R(2);
+        R(5)++;
+        NC_POLL(c, 2);
+        if (different)
+            break;
+        bool terminator = R(3) == 0;
+        R(4)++;
+        NC_POLL(c, 2);
+        if (terminator)
+            goto equal_strings;
+        set_reg(c, 6, R(6) - 1);
+        exhausted = (s32)R(6) < 0;
+        NC_POLL(c, 2);
+        if (exhausted)
+            break;
+    }
+
+    exhausted = (s32)R(6) < 0;
+    NC_POLL(c, 2);
+    if (!exhausted) {
+        /* The original rereads both bytes to compute their unsigned-byte difference. */
+        R(3) = MEM_R8(R(4));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        R(2) = MEM_R8(R(5) - 1);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        R(2) = R(3) - R(2);
+        NC_POLL(c, 2);
+        goto done;
+    }
+equal_strings:
+    set_reg(c, 2, 0);
+done:
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* CdSearchFile uses _cmp to compare the first twelve bytes of two names. */
 bool nc_credits_cd_names_equal(CPUState *c) {
     if (c->budget <= 4)
