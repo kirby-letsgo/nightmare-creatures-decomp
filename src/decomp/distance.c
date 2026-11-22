@@ -928,6 +928,39 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* Select the part to transform and its point record. The preceding branch
+ * supplies the output vector at sp+0x18 in a1. */
+bool nc_select_part_bearing_point(CPUState *c) {
+    if (c->budget <= 22)
+        return false;
+    const u32 part_index = MEM_R8(R(18));
+    R(1) = 0x80090000u + R(6);
+    R(3) = MEM_R8(0x8008eeb0u + R(6));
+    const u32 points = MEM_R32(0x8008f0c8);
+    R(4) = MEM_R32(R(17) + 0x4c + 4 * part_index);
+    R(2) = R(3) * 36;
+    R(16) = points + R(2);
+    R(31) = 0x8001bfd0;
+    c->budget -= 22;
+    return true;
+}
+
+/* Both vectors are signed halfwords in whole units. The heading uses
+ * transformed X minus point X, and point Z minus transformed Z. */
+bool nc_prepare_part_point_bearing(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(3) = (s32)(s16)MEM_R16(R(16) + 0xa);
+    R(4) = (s32)(s16)MEM_R16(R(29) + 0x18);
+    R(2) = (s32)(s16)MEM_R16(R(16) + 0xc);
+    R(5) = (s32)(s16)MEM_R16(R(29) + 0x1c);
+    R(4) -= R(3);
+    R(5) = R(2) - R(5);
+    R(31) = 0x8001bfec;
+    c->budget -= 15;
+    return true;
+}
+
 /* The cursor uses a signed remainder. A negative remainder selects a
  * halfword immediately before the four point indices copied to the frame. */
 bool nc_select_bearing_point(CPUState *c) {
