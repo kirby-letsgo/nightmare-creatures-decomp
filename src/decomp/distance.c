@@ -928,6 +928,37 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* The cursor uses a signed remainder. A negative remainder selects a
+ * halfword immediately before the four point indices copied to the frame. */
+bool nc_select_bearing_point(CPUState *c) {
+    if (c->budget <= 52)
+        return false;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x18, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x20, R(18));
+    R(18) = R(5);
+    MEM_W32(R(29) + 0x1c, R(17));
+    R(17) = 0x800d4c9a;
+    MEM_W32(R(29) + 0x24, R(31));
+    const s16 cursor = (s16)MEM_R16(R(17));
+    R(6) = (s32)cursor;
+    R(5) = 0x8008eeb8;
+    const u32 first = MEM_R32(R(5));
+    const u32 second = MEM_R32(R(5) + 4);
+    const u32 indices = R(29) + 0x10;
+    nc_swl(c, indices + 3, first);
+    nc_swr(c, indices, first);
+    nc_swl(c, indices + 7, second);
+    nc_swr(c, indices + 4, second);
+
+    const s16 point = (s16)MEM_R16(indices + 2 * (cursor % 4));
+    R(2) = point * 36;
+    R(3) = MEM_R32(0x8008f0c8) + R(2);
+    c->budget -= cursor < 0 ? 52 : 51;
+    return true;
+}
+
 /* The selected record stores -X and Z in whole units. Publish the target
  * halfwords, then reread the record before subtracting the actor position. */
 bool nc_prepare_selected_point_bearing(CPUState *c) {

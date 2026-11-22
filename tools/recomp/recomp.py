@@ -743,7 +743,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8001C19C:
-            targets.add(0x8001C27C)
+            targets.update((0x8001C234, 0x8001C27C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001A71C:
             targets.update((0x8001A754, 0x8001A764))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AC70:
@@ -1443,6 +1443,8 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x8004CE60, 0x8004CE68):
                 missing = "true" if i.addr == 0x8004CE68 else "false"
                 out.append(f"    if (nc_finish_actor_distance(c, {missing})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001C19C:
+                out.append("    if (nc_select_bearing_point(c)) goto L_8001C234;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001C234:
                 out.append("    if (nc_prepare_selected_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
