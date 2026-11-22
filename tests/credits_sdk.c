@@ -1,5 +1,6 @@
 #include "credits_compare.h"
 #include "decomp/credits.h"
+#include "port/bios.h"
 #include "port/disc.h"
 #include "port/exe.h"
 #include <stdio.h>
@@ -1158,6 +1159,45 @@ static bool check_spu_delays(void) {
     return true;
 }
 
+static bool check_cd_default_callbacks(void) {
+    const struct {
+        u32 entry, spec;
+        bool (*callback)(CPUState *);
+    } cases[] = {
+        {0x8001fd78, 0x20, nc_credits_cd_default_sync},
+        {0x8001fda0, 0x40, nc_credits_cd_default_ready},
+        {0x8001fdc8, 0x40, nc_credits_cd_default_read},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        CPUState event = arguments(0xf0000003, cases[i].spec, 0x2000, 4096);
+        event.r[9] = 8; /* OpenEvent, polling mode */
+        bios_call(&event, 0xb0);
+        event.r[4] = event.r[2];
+        if (event.r[4] == UINT32_MAX)
+            return false;
+        event.r[9] = 12; /* EnableEvent */
+        bios_call(&event, 0xb0);
+        for (unsigned j = 0; j < 2; j++) {
+            CPUState state = arguments(1, 2, 3, j ? 7 : 4096);
+            if (j)
+                state.r[29] = SCRATCH_BASE + 0x100;
+            nc_cpu = state;
+            if (!cases[i].callback(&nc_cpu))
+                return false;
+            event.r[9] = 11; /* TestEvent consumes the notification. */
+            bios_call(&event, 0xb0);
+            if (!event.r[2] || !compare(state, cases[i].entry, cases[i].callback, 6))
+                return false;
+            bios_call(&event, 0xb0);
+            if (!event.r[2])
+                return false;
+        }
+        event.r[9] = 9; /* CloseEvent */
+        bios_call(&event, 0xb0);
+    }
+    return true;
+}
+
 static bool check_cd_setters(void) {
     const struct {
         u32 entry, slot;
@@ -1491,6 +1531,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_wait();
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
+    pass = pass && check_cd_default_callbacks();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
     pass = pass && check_cd_sector_to_position();
