@@ -454,6 +454,45 @@ static bool check_set_graph_debug(void) {
     return true;
 }
 
+static bool check_gpu_control(void) {
+    const u32 cache = 0x80024d30, port = MEM_R32(0x8002462c);
+    const u32 outputs[] = {SCRATCH_BASE + 4, 0xa0060500, cache + 4};
+    const u32 words[] = {0, 0x03123480, 0x04ff00aa, 0x078040ff, 0xffffffff};
+    for (unsigned i = 0; i < sizeof outputs / sizeof outputs[0]; i++)
+        for (unsigned j = 0; j < sizeof words / sizeof words[0]; j++) {
+            MEM_W32(0x8002462c, outputs[i]);
+            MEM_W32(outputs[i], 0xabcdef12);
+            MEM_W8(cache + (words[j] >> 24), 0x5a);
+            if (!compare(arguments(words[j], 0, 0, 13), 0x8001e04c, nc_credits_gpu_control, 12))
+                return false;
+        }
+    MEM_W32(0x8002462c, port);
+    const u32 indices[] = {0, 4, 255, 256, 0xffffffff, SCRATCH_BASE - cache};
+    for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; i++) {
+        MEM_W8(cache + indices[i], (u8)(0x90 + i));
+        if (!compare(arguments(indices[i], 0, 0, 8), 0x8001e074, nc_credits_gpu_control_byte, 7))
+            return false;
+    }
+
+    /* Exercise the real GP1 port from identical initial DMA directions. */
+    u32 old_direction = (MEM_R32(port) >> 29) & 3;
+    for (u32 dir = 0; dir < 4; dir++) {
+        CPUState start = arguments(0x04000000 | dir, 0, 0, 13);
+        MEM_W32(port, 0x04000000 | (dir ^ 3));
+        nc_cpu = start;
+        if (!nc_credits_gpu_control(&nc_cpu))
+            return false;
+        u32 native_direction = (MEM_R32(port) >> 29) & 3;
+        MEM_W32(port, 0x04000000 | (dir ^ 3));
+        nc_cpu = start;
+        interp_call(&nc_cpu, 0x8001e04c);
+        if (native_direction != dir || ((MEM_R32(port) >> 29) & 3) != dir)
+            return false;
+    }
+    MEM_W32(port, 0x04000000 | old_direction);
+    return true;
+}
+
 static bool check_display_field(void) {
     const u32 driver = MEM_R32(0x80024550), status_port = MEM_R32(0x8002462c);
     const u32 alternate_driver = 0xa0060a00, callback = 0x80060b00;
@@ -766,6 +805,7 @@ int main(int argc, char **argv) {
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
     pass = pass && check_display_field();
+    pass = pass && check_gpu_control();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_draw_sync_callback();

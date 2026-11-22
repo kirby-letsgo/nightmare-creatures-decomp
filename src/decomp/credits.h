@@ -94,6 +94,8 @@ bool nc_credits_draw_mode_word(CPUState *c);
 bool nc_credits_draw_area_packet(CPUState *c);
 bool nc_credits_draw_corner(CPUState *c, bool bottom_right);
 bool nc_credits_read_environment(CPUState *c, bool display);
+bool nc_credits_gpu_control(CPUState *c);
+bool nc_credits_gpu_control_byte(CPUState *c);
 bool nc_credits_graphics_status(CPUState *c);
 bool nc_credits_display_field(CPUState *c);
 bool nc_credits_display_x(CPUState *c);
