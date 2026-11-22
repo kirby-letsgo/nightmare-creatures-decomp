@@ -137,6 +137,8 @@ bool nc_credits_spu_set_delay(CPUState *c, bool reading);
 bool nc_credits_bios_gpu_command(CPUState *c);
 bool nc_credits_reset_irq_entry(CPUState *c);
 bool nc_credits_hook_irq_entry(CPUState *c);
+bool nc_credits_start_pad(CPUState *c);
+bool nc_credits_bios_start_pad(CPUState *c);
 bool nc_credits_change_clear_pad(CPUState *c);
 bool nc_credits_change_clear_counter(CPUState *c);
 bool nc_credits_deliver_event(CPUState *c);
