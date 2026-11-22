@@ -1367,6 +1367,36 @@ bool nc_credits_set_graph_debug(CPUState *c) {
     return true;
 }
 
+/* CdStatus, CdMode and CdLastCom each return one cached unsigned byte. */
+static bool cd_state_byte(CPUState *c, u32 address) {
+    if (c->budget <= 6)
+        return false;
+    c->budget--; /* lui */
+    R(2) = MEM_R8(address);
+    c->budget -= NC_LOAD_CYCLES + 2; /* lbu, jr and its delay slot */
+    return true;
+}
+
+bool nc_credits_cd_status(CPUState *c) {
+    return cd_state_byte(c, 0x8002476c);
+}
+
+bool nc_credits_cd_mode(CPUState *c) {
+    return cd_state_byte(c, 0x8002477c);
+}
+
+bool nc_credits_cd_last_command(CPUState *c) {
+    return cd_state_byte(c, 0x8002477d);
+}
+
+bool nc_credits_cd_last_position(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(2) = 0x80024778; /* Address of the cached CD position. */
+    c->budget -= 4;
+    return true;
+}
+
 bool nc_credits_graph_status(CPUState *c, bool debug_level) {
     if (c->budget <= 6)
         return false;

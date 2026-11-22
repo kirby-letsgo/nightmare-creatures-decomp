@@ -928,6 +928,27 @@ static bool graph_debug(CPUState *c) {
     return nc_credits_graph_status(c, true);
 }
 
+static bool check_cd_state(void) {
+    const u8 values[] = {0, 1, 0x7f, 0x80, 0xff};
+    for (unsigned i = 0; i < sizeof values; i++) {
+        MEM_W8(0x8002476c, values[i]);
+        MEM_W8(0x8002477c, values[(i + 1) % sizeof values]);
+        MEM_W8(0x8002477d, values[(i + 2) % sizeof values]);
+        MEM_W32(0x80024778, 0x12345678);
+        for (int extra = 1; extra <= 2; extra++) {
+            CPUState state = arguments(1, 2, 3, 6 + extra);
+            if (!compare(state, 0x8001fdf0, nc_credits_cd_status, 6) ||
+                !compare(state, 0x8001fe00, nc_credits_cd_mode, 6) ||
+                !compare(state, 0x8001fe10, nc_credits_cd_last_command, 6))
+                return false;
+            state.budget = 4 + extra;
+            if (!compare(state, 0x8001fe20, nc_credits_cd_last_position, 4))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_graph_status(void) {
     const u32 words[] = {0xff010000, 0x807fff01, 0x018000ff, 0x00ff0280};
     for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++) {
@@ -1025,6 +1046,7 @@ int main(int argc, char **argv) {
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
+    pass = pass && check_cd_state();
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
     pass = pass && check_gpu_fill_bytes();

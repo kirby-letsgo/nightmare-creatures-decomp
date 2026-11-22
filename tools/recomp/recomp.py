@@ -136,6 +136,10 @@ CREDITS_ROUTINES = {
     0x8001E154: "nc_credits_queue_command(c)",
     0x8001E9FC: "nc_credits_set_queue_alarm(c)",
     0x8001EC78: "nc_credits_gpu_fill_bytes(c)",
+    0x8001FDF0: "nc_credits_cd_status(c)",
+    0x8001FE00: "nc_credits_cd_mode(c)",
+    0x8001FE10: "nc_credits_cd_last_command(c)",
+    0x8001FE20: "nc_credits_cd_last_position(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
 }
 
