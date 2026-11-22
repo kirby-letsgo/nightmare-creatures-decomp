@@ -93,6 +93,34 @@ static bool check_allocation(u32 size, const u32 free_bytes[3], int budget) {
     return compare(start, 0x80019680, nc_credits_allocate, 4);
 }
 
+static bool check_free(unsigned match, u32 left_free, u32 right_free, int budget) {
+    const u32 head = 0x80060000, gp = 0x80024c68;
+    CPUState start = {0};
+    for (unsigned i = 1; i < 32; i++)
+        start.r[i] = 0x1000u * i;
+    start.r[4] = match ? head + match * 0x100 + 0x1c : 0;
+    start.r[28] = gp;
+    start.r[29] = 0x801fef00;
+    start.r[31] = 0x80010000;
+    start.budget = budget;
+    MEM_W32(gp + 0x0c, 2);
+    MEM_W32(gp + 0x10, 56);
+    MEM_W32(gp + 0x14, 500);
+    MEM_W32(gp + 0x2c, head);
+    for (unsigned i = 0; i < 3; i++) {
+        u32 record = head + i * 0x100;
+        u32 free_bytes = i + 1 == match ? left_free : right_free;
+        MEM_W32(record, 0x44);
+        MEM_W32(record + 4, i ? record + 0x1c : 0);
+        MEM_W32(record + 8, i * 7 + 8);
+        MEM_W32(record + 0x0c, free_bytes ? record + 0x44 : 0);
+        MEM_W32(record + 0x10, free_bytes);
+        MEM_W32(record + 0x14, i ? record - 0x100 : 0);
+        MEM_W32(record + 0x18, i == 2 ? 0 : record + 0x100);
+    }
+    return compare(start, 0x800197e0, nc_credits_free, 3);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -132,6 +160,15 @@ int main(int argc, char **argv) {
     for (int budget = 5; budget <= 160; budget++)
         if (!check_allocation(5, spans[1], budget)) {
             fprintf(stderr, "allocator timing mismatch, budget %d\n", budget);
+            return 1;
+        }
+    for (unsigned match = 0; match <= 3; match++)
+        for (unsigned gaps = 0; gaps < 4; gaps++)
+            if (!check_free(match, gaps & 1 ? 60 : 0, gaps & 2 ? 40 : 0, 4096))
+                return 1;
+    for (int budget = 4; budget < 160; budget++)
+        if (!check_free(1, 60, 40, budget)) {
+            fprintf(stderr, "credits free timing mismatch, budget %d\n", budget);
             return 1;
         }
     disc_close();

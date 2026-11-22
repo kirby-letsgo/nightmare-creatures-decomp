@@ -39,6 +39,7 @@ CREDITS_ROUTINES = {
     0x800192E4: "nc_credits_set_cd_volume",
     0x80019454: "nc_credits_init_heap",
     0x80019680: "nc_credits_allocate",
+    0x800197E0: "nc_credits_free",
     0x800198B0: "nc_credits_find_allocation",
 }
 
