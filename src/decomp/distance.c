@@ -16,6 +16,26 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* After TransposeMatrix, quarter the selected XYZ scale in place. The
+ * ScaleMatrixL call stores Y in its delay slot, after the X and Z writes. */
+bool nc_prepare_transposed_placement_scale(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    R(4) = R(16);
+    R(5) = R(20);
+    const s32 x = (s32)MEM_R32(R(5));
+    const s32 z = (s32)MEM_R32(R(5) + 8);
+    MEM_W32(R(5), x >> 2);
+    const s32 y = (s32)MEM_R32(R(5) + 4);
+    R(3) = z >> 2;
+    MEM_W32(R(5) + 8, R(3));
+    R(2) = y >> 2;
+    R(31) = 0x8002b200;
+    MEM_W32(R(5) + 4, R(2));
+    c->budget -= 18;
+    return true;
+}
+
 /* Mode 3 moves each signed coordinate toward its target by a power-of-two
  * fraction. The shift at 0x148 independently controls the three angle steps. */
 bool nc_step_placement_record(CPUState *c) {
