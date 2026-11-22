@@ -46,4 +46,6 @@ bool nc_credits_copy_bytes(CPUState *c);
 
 bool nc_credits_fill_bytes(CPUState *c);
 
+bool nc_credits_string_length(CPUState *c);
+
 #endif

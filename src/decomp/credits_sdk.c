@@ -60,3 +60,32 @@ bool nc_credits_fill_bytes(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+bool nc_credits_string_length(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    const bool has_string = R(4) != 0;
+    R(3) = 0;
+    c->budget -= 2;
+    if (has_string) {
+        for (;;) {
+            R(2) = MEM_R8(R(4));
+            NC_POLL(c, NC_LOAD_CYCLES);
+            NC_POLL(c, NC_INSN_CYCLES);
+            const bool more = R(2) != 0;
+            R(4)++; /* Includes the terminator. */
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            if (!more)
+                break;
+            R(3)++;
+            NC_POLL(c, NC_INSN_CYCLES);
+        }
+        R(2) = R(3);
+        NC_POLL(c, NC_INSN_CYCLES);
+    } else {
+        R(2) = 0;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
