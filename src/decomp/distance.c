@@ -1,6 +1,52 @@
 #include "decomp/distance.h"
 #include <limits.h>
 
+/* The paired points use unsigned halfwords. Their differences are full
+ * words, including negative displacements across the signed-halfword edge. */
+bool nc_prepare_paired_point_bearing(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    R(3) = MEM_R16(0x8008f078);
+    R(4) = MEM_R16(0x8008f0bc);
+    R(2) = MEM_R16(0x8008f07c);
+    R(5) = MEM_R16(0x8008f0c0);
+    R(4) = R(3) - R(4);
+    R(5) = R(2) - R(5);
+    R(31) = 0x8006e014;
+    c->budget -= 19;
+    return true;
+}
+
+bool nc_place_paired_point_actor(CPUState *c, bool store_heading) {
+    const int cycles = store_heading ? 20 : 14;
+    if (c->budget <= cycles)
+        return false;
+    const u32 actor = R(16);
+    if (store_heading) {
+        const u32 pose = MEM_R32(actor + 0x20);
+        MEM_W32(pose + 0x48, R(2) << 4);
+        R(4) = actor;
+    }
+    R(5) = 0;
+    R(2) = (u32)MEM_R16(0x8008f078) << 8;
+    R(3) = (u32)MEM_R16(0x8008f07c) << 8;
+    MEM_W32(actor + 0x27c, R(2));
+    MEM_W32(actor + 0x284, R(3));
+    R(31) = 0x8006e04c;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_actor_coordinate_init(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(5) = 0x800d7630;
+    R(4) = R(16);
+    R(31) = 0x8006e05c;
+    c->budget -= 4;
+    return true;
+}
+
 /* Initialize the two coordinate triples in the actor-linked record. The actor
  * height is read after X and Z are stored, which matters for overlapping inputs. */
 bool nc_init_actor_coordinates(CPUState *c) {
