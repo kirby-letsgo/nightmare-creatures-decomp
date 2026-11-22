@@ -5,6 +5,8 @@
 
 bool nc_actor_distance_terms(CPUState *c);
 bool nc_distance_root(CPUState *c);
+bool nc_prepare_point_heading(CPUState *c);
+bool nc_return_point_heading(CPUState *c);
 bool nc_vector_heading(CPUState *c);
 bool nc_heading_cosine(CPUState *c);
 bool nc_heading_sine(CPUState *c);
