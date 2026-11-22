@@ -3710,6 +3710,53 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return true;
 }
 
+/* Seek to a sector, request a read, then wait for it to finish. */
+bool nc_credits_cd_read_sectors(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 28, R(17));
+    R(17) = R(4); /* sector count */
+    R(4) = R(5);  /* starting sector */
+    R(5) = R(29) + 16;
+    c->budget -= 4;
+    MEM_W32(R(29) + 24, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 32, R(31));
+    R(31) = 0x80022584;
+    R(16) = R(6); /* destination */
+    c->budget -= 3;
+    nc_call(c, 0x800203e0); /* CdIntToPos */
+
+    set_reg(c, 4, 2); /* CdlSetloc */
+    set_reg(c, 5, R(29) + 16);
+    R(31) = 0x80022594;
+    R(6) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x8001ffac); /* CdControl */
+
+    set_reg(c, 4, R(17));
+    set_reg(c, 5, R(16));
+    R(31) = 0x800225a4;
+    R(6) = 0x80; /* double speed */
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x80022ae0); /* CdRead */
+
+    set_reg(c, 4, 0);
+    R(31) = 0x800225b0;
+    R(5) = 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x80022be8); /* CdReadSync */
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Find a named child of the requested parent in the cached CD path table. */
 bool nc_credits_cd_search_directory(CPUState *c) {
     if (c->budget <= 13)

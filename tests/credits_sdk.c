@@ -2827,6 +2827,47 @@ static bool check_cd_names(void) {
     return true;
 }
 
+static bool check_cd_read_sectors(void) {
+    const u32 drivers[] = {0x8001ffac, 0x80022ae0, 0x80022be8};
+    const u32 trace = 0x80062000, dest = 0x80064000;
+    const u32 results[] = {0, 1, UINT32_MAX};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Run the disc's sector conversion. Capture the three drive calls in RAM
+     * and supply a sync result through t9 so each outcome is reproducible. */
+    for (unsigned i = 0; i < 3; i++) {
+        u32 offset = 16 * i, driver = drivers[i];
+        MEM_W32(driver, 0xaf040000 + offset);     /* sw a0, offset(t8) */
+        MEM_W32(driver + 4, 0xaf050004 + offset); /* sw a1, offset+4(t8) */
+        MEM_W32(driver + 8, 0xaf060008 + offset); /* sw a2, offset+8(t8) */
+        MEM_W32(driver + 12, 0x03e00008);         /* jr ra */
+        /* Only CdReadSync returns t9. Earlier calls return (t9 == 0). */
+        MEM_W32(driver + 16, i == 2 ? 0x03201021 : 0x2f220001);
+    }
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof results / sizeof results[0]; i++) {
+        CPUState state = arguments(i + 1, 75, dest, i ? 10 : 4096);
+        state.r[24] = trace;
+        state.r[25] = results[i];
+        u32 position = state.r[29] - 40 + 16;
+        memset(nc_fast_ptr(trace), 0xff, 48);
+        ok = compare(state, 0x80022560, nc_credits_cd_read_sectors, 9) &&
+             nc_cpu.r[2] == (results[i] == 0) && MEM_R32(trace) == 2 &&
+             MEM_R32(trace + 4) == position && MEM_R32(trace + 8) == 0 &&
+             (MEM_R32(position) & 0xffffff) == 0x000300 &&
+             MEM_R32(trace + 16) == i + 1 && MEM_R32(trace + 20) == dest &&
+             MEM_R32(trace + 24) == 0x80 && MEM_R32(trace + 32) == 0 &&
+             MEM_R32(trace + 36) == 0;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_sector_to_position(void) {
     const u32 sectors[] = {0, 74, 75, 4349, 4350, 449849, 449850, (u32)-150,
                            (u32)-151, (u32)-4651, 0x7fffffff, 0x80000000};
@@ -3178,6 +3219,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();
     pass = pass && check_cd_names();
+    pass = pass && check_cd_read_sectors();
     pass = pass && check_cd_sector_to_position();
     pass = pass && check_cd_search_directory();
     pass = pass && check_cd_copy_identifier();
