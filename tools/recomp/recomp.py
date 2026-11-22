@@ -63,6 +63,7 @@ CREDITS_ROUTINES = {
     0x8001B770: "nc_credits_prepend_packets(c, false)",
     0x8001B7AC: "nc_credits_prepend_packets(c, true)",
     0x8001B7E8: "nc_credits_link_packets(c)",
+    0x8001B80C: "nc_credits_end_packet(c)",
     0x8001B824: "nc_credits_packet_flag(c, 2)",
     0x8001B84C: "nc_credits_packet_flag(c, 1)",
     0x8001B874: "nc_credits_init_primitive(c, NC_POLY_F3)",
