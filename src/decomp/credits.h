@@ -219,6 +219,7 @@ bool nc_credits_cd_ready_callback(CPUState *c);
 bool nc_credits_cd_read_callback(CPUState *c);
 bool nc_credits_cd_command_name(CPUState *c);
 bool nc_credits_cd_interrupt_name(CPUState *c);
+bool nc_credits_cd_read_sectors(CPUState *c);
 bool nc_credits_cd_sector_to_position(CPUState *c);
 bool nc_credits_cd_search_directory(CPUState *c);
 bool nc_credits_cd_copy_identifier(CPUState *c);
