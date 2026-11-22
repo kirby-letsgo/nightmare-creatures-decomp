@@ -266,6 +266,25 @@ static bool check_palette(void) {
     return true;
 }
 
+static bool read_video_mode(CPUState *c) {
+    return nc_credits_video_mode(c, false);
+}
+static bool write_video_mode(CPUState *c) {
+    return nc_credits_video_mode(c, true);
+}
+static bool check_video_mode(void) {
+    const u32 modes[] = {0, 1, 2, 0x807f8000, 0xffffffff};
+    for (unsigned i = 0; i < 5; i++)
+        for (unsigned j = 0; j < 5; j++) {
+            MEM_W32(0x80024504, modes[i]);
+            CPUState state = arguments(modes[j], 0, 0, 9);
+            if (!compare(state, 0x8001b538, read_video_mode, 6) ||
+                !compare(state, 0x8001b520, write_video_mode, 8))
+                return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -289,6 +308,7 @@ int main(int argc, char **argv) {
     pass = pass && check_link_writer();
     pass = pass && check_terminator();
     pass = pass && check_palette();
+    pass = pass && check_video_mode();
     disc_close();
     return pass ? 0 : 1;
 }
