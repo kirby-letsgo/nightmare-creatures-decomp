@@ -779,6 +779,25 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800684D0:
+                out.extend(
+                    [
+                        "    switch (nc_menu_start_down(c)) {",
+                        "    case 0x8006851C: goto L_8006851C;",
+                        "    case 0x800685D8: goto L_800685D8;",
+                        "    case 0x800685FC: goto L_800685FC;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800685D8:
+                out.extend(
+                    [
+                        "    switch (nc_menu_down_repeat(c)) {",
+                        "    case 0x800685FC: goto L_800685FC;",
+                        "    case 0x800687CC: goto L_800687CC;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x8006848C:
                 out.extend(
                     [
