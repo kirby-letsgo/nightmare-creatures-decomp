@@ -30,6 +30,39 @@ static void pad_driver_call(CPUState *c, u32 target, u32 return_address) {
     nc_call(c, target);
 }
 
+/* InitPAD's SDK patch clears eleven instruction words relative to an entry
+ * in the guest B0 table. The runtime supplies a RAM-backed table. */
+bool nc_sdk_patch_pad(CPUState *c) {
+    /* Includes EnterCriticalSection (4 cycles) and the FlushCache stub (3). */
+    if (c->budget <= 71)
+        return false;
+    R(1) = 0x80090000;
+    MEM_W32(0x8008efe8, R(31));
+    R(31) = 0x80073f84;
+    c->budget -= 4;
+    nc_call(c, 0x80073d8c); /* EnterCriticalSection */
+
+    R(10) = 0xb0;
+    R(31) = 0x80073f90;
+    R(9) = 0x57; /* GetB0Table */
+    c->budget -= 3;
+    nc_call(c, R(10));
+
+    R(2) = MEM_R32(R(2) + 0x16c);
+    R(9) = 11;
+    while (R(9)) {
+        --R(9);
+        MEM_W32(R(2) + 0x594, 0);
+        R(2) += 4;
+    }
+    R(31) = 0x80073fb0;
+    c->budget -= 4 + 11 * 4 + 2;
+    nc_call(c, 0x80073fc4); /* FlushCache */
+    R(31) = MEM_R32(0x8008efe8);
+    c->budget -= 7;
+    return true;
+}
+
 /* Psy-Q InitPAD preserves both buffer/length pairs across _patch_pad and
  * ChangeClearPad before passing them on to BIOS B0(12h). */
 bool nc_sdk_init_pad(CPUState *c) {
