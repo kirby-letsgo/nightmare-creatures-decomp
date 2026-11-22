@@ -1812,6 +1812,34 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 24, 0x8001a7dc);
 }
 
+bool nc_credits_check_callback(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    c->budget--;
+    R(2) = MEM_R16(0x8002341a);
+    c->budget -= NC_LOAD_CYCLES + 2;
+    return true;
+}
+
+/* Both mask accessors return the old unsigned halfword. SetIntrMask also
+ * leaves the port pointer in v1 and stores the low half of a0. */
+bool nc_credits_interrupt_mask(CPUState *c, bool write) {
+    if (c->budget <= (write ? 11 : 10))
+        return false;
+    c->budget--;
+    u32 port = MEM_R32(0x800244a8);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R16(port);
+    c->budget -= NC_LOAD_CYCLES;
+    if (write) {
+        R(3) = port;
+        MEM_W16(port, (u16)R(4));
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* Clear the CD callbacks and cached status, then install the IRQ 2 handler. */
 bool nc_credits_cd_init_interrupt(CPUState *c) {
     if (c->budget <= 12)

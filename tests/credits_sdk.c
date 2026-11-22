@@ -1314,6 +1314,54 @@ static bool check_callback_controls(void) {
     return true;
 }
 
+static bool read_irq_mask(CPUState *c) {
+    return nc_credits_interrupt_mask(c, false);
+}
+
+static bool write_irq_mask(CPUState *c) {
+    return nc_credits_interrupt_mask(c, true);
+}
+
+static bool check_irq_accessors(void) {
+    const u32 slot = 0x800244a8, original = MEM_R32(slot), flag = 0x8002341a;
+    const u16 saved = MEM_R16(flag), old_mask = MEM_R16(original);
+    const u16 values[] = {0, 1, 0x8000, 0xffff};
+    const u32 ports[] = {0x80061002, SCRATCH_BASE + 6};
+    for (unsigned i = 0; i < sizeof values / sizeof values[0]; i++) {
+        MEM_W16(flag, values[i]);
+        CPUState state = arguments(0xabcd5432, 2, 3, i ? 12 : 4096);
+        if (!compare(state, 0x8001a7ec, nc_credits_check_callback, 6) || nc_cpu.r[2] != values[i])
+            return false;
+        for (unsigned j = 0; j < sizeof ports / sizeof ports[0]; j++) {
+            MEM_W32(slot, ports[j]);
+            MEM_W16(ports[j], values[i]);
+            if (!compare(state, 0x8001a7fc, read_irq_mask, 10) ||
+                !compare(state, 0x8001a814, write_irq_mask, 11) ||
+                nc_cpu.r[2] != values[i] || MEM_R16(ports[j]) != 0x5432)
+                return false;
+        }
+    }
+    MEM_W16(flag, saved);
+    MEM_W32(slot, original);
+    for (unsigned native = 0; native < 2; native++) {
+        MEM_W16(original, 0x307);
+        nc_cpu = arguments(0x1234ffff, 2, 3, 12);
+        if (native) {
+            if (!write_irq_mask(&nc_cpu))
+                return false;
+        } else {
+            interp_call(&nc_cpu, 0x8001a814);
+        }
+        if (nc_cpu.r[2] != 0x307 || MEM_R16(original) != 0x7ff)
+            return false;
+        nc_cpu.budget = 11;
+        if (!read_irq_mask(&nc_cpu) || nc_cpu.r[2] != 0x7ff)
+            return false;
+    }
+    MEM_W16(original, old_mask);
+    return true;
+}
+
 static bool check_interrupt_driver_calls(void) {
     const u32 slot = 0x800244a0, original = MEM_R32(slot);
     const u32 table = 0x80061000, flag = 0x80023418, handler = 0x80023424;
@@ -1881,6 +1929,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_irq_accessors();
     pass = pass && check_interrupt_driver_calls();
     pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();
