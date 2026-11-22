@@ -1279,6 +1279,20 @@ bool nc_menu_mode_record_result(CPUState *c) {
     return true;
 }
 
+/* All menu input results leave through this 0x48-byte frame. */
+bool nc_leave_menu_input(CPUState *c) {
+    if (c->budget <= 33)
+        return false;
+    u32 sp = R(29);
+    R(31) = MEM_R32(sp + 0x44);
+    R(30) = MEM_R32(sp + 0x40);
+    for (unsigned i = 0; i < 8; ++i)
+        R(23 - i) = MEM_R32(sp + 0x3c - 4 * i);
+    R(29) = sp + 0x48;
+    c->budget -= 33;
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
