@@ -122,3 +122,152 @@ bool nc_credits_find_allocation(CPUState *c) {
         }
     }
 }
+
+/* Allocation record layout. Each live record owns the free span immediately
+ * following its payload. The sentinel participates in best-fit selection. */
+enum {
+    SPAN = 0,
+    PAYLOAD = 4,
+    REQUESTED = 8,
+    FREE_START = 12,
+    FREE_SIZE = 16,
+    PREV = 20,
+    NEXT = 24,
+    HEADER_SIZE = 28
+};
+enum { CURSOR = 4, NEW_RECORD = 5, BEST = 6, NEEDED = 7, REQUEST = 8 };
+
+static void assign(CPUState *c, unsigned reg, u32 value) {
+    R(reg) = value;
+    NC_POLL(c, NC_INSN_CYCLES);
+}
+static void load(CPUState *c, unsigned reg, u32 addr) {
+    R(reg) = MEM_R32(addr);
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+static void store(CPUState *c, u32 addr, u32 value) {
+    MEM_W32(addr, value);
+    NC_POLL(c, NC_INSN_CYCLES);
+}
+/* Capture the branch condition before polling its delay slot. */
+static bool branch(CPUState *c, bool taken) {
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return taken;
+}
+
+static bool better_fit(CPUState *c) {
+    load(c, 2, R(CURSOR) + FREE_START);
+    NC_POLL(c, NC_INSN_CYCLES);
+    if (branch(c, !R(2)))
+        return false;
+    load(c, 3, R(CURSOR) + FREE_SIZE);
+    NC_POLL(c, NC_INSN_CYCLES);
+    assign(c, 2, R(3) < R(NEEDED));
+    if (branch(c, R(2) != 0))
+        return false;
+    if (branch(c, !R(BEST)))
+        return true;
+    load(c, 2, R(BEST) + FREE_SIZE);
+    NC_POLL(c, NC_INSN_CYCLES);
+    assign(c, 2, R(3) < R(2));
+    return branch(c, R(2) != 0);
+}
+
+static bool find_space(CPUState *c) {
+    load(c, CURSOR, R(28) + 0x2c);
+    assign(c, 2, R(REQUEST) + 3);
+    assign(c, 3, ~3u);
+    assign(c, 2, R(2) & R(3));
+    assign(c, NEEDED, R(2) + HEADER_SIZE);
+    assign(c, BEST, 0);
+    do {
+        if (better_fit(c))
+            assign(c, BEST, R(CURSOR));
+        load(c, CURSOR, R(CURSOR) + NEXT);
+        NC_POLL(c, NC_INSN_CYCLES);
+    } while (branch(c, R(CURSOR) != 0));
+    if (branch(c, !R(BEST)))
+        return false;
+    /* Recheck the selected span after the scan. */
+    load(c, 2, R(BEST) + FREE_SIZE);
+    NC_POLL(c, NC_INSN_CYCLES);
+    assign(c, 2, R(2) < R(NEEDED));
+    bool fits = !R(2);
+    R(3) = ~3u;
+    return branch(c, fits);
+}
+
+static void insert_allocation(CPUState *c) {
+    load(c, 2, R(BEST) + FREE_START);
+    load(c, CURSOR, R(BEST) + NEXT);
+    assign(c, 2, R(2) + 3);
+    assign(c, NEW_RECORD, R(2) & R(3));
+    bool has_next = R(CURSOR) != 0;
+    MEM_W32(R(NEW_RECORD) + NEXT, R(CURSOR));
+    if (branch(c, has_next)) {
+        load(c, 2, R(BEST) + NEXT);
+        NC_POLL(c, NC_INSN_CYCLES);
+        store(c, R(2) + PREV, R(NEW_RECORD));
+    }
+    assign(c, 2, R(NEW_RECORD) + HEADER_SIZE);
+    store(c, R(BEST) + NEXT, R(NEW_RECORD));
+    store(c, R(NEW_RECORD) + PREV, R(BEST));
+    store(c, R(NEW_RECORD) + PAYLOAD, R(2));
+    store(c, R(NEW_RECORD) + REQUESTED, R(REQUEST));
+    store(c, R(NEW_RECORD) + SPAN, R(NEEDED));
+
+    load(c, 2, R(BEST) + FREE_SIZE);
+    NC_POLL(c, NC_INSN_CYCLES);
+    bool exact_fit = R(2) == R(NEEDED);
+    R(2) = R(NEW_RECORD) + R(NEEDED);
+    if (branch(c, exact_fit)) {
+        store(c, R(NEW_RECORD) + FREE_START, 0);
+        store(c, R(NEW_RECORD) + FREE_SIZE, 0);
+    } else {
+        store(c, R(NEW_RECORD) + FREE_START, R(2));
+        load(c, 2, R(BEST) + FREE_SIZE);
+        NC_POLL(c, NC_INSN_CYCLES);
+        assign(c, 2, R(2) - R(NEEDED));
+        MEM_W32(R(NEW_RECORD) + FREE_SIZE, R(2));
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+
+    load(c, 3, R(28) + 0x10);
+    store(c, R(BEST) + FREE_START, 0);
+    store(c, R(BEST) + FREE_SIZE, 0);
+    load(c, 2, R(NEW_RECORD) + PAYLOAD);
+    load(c, 4, R(28) + 0x0c);
+    assign(c, 3, R(3) + R(REQUEST));
+    store(c, R(28) + 0x10, R(3));
+    load(c, 3, R(28) + 0x14);
+    assign(c, 4, R(4) + 1);
+    store(c, R(28) + 0x0c, R(4));
+    assign(c, 3, R(3) - R(REQUEST));
+    store(c, R(28) + 0x14, R(3));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+bool nc_credits_allocate(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 0x18;
+    R(REQUEST) = R(4);
+    MEM_W32(R(29) + 0x10, R(31));
+    c->budget -= 4;
+    if (!R(REQUEST)) {
+        assign(c, 2, 0);
+    } else if (find_space(c)) {
+        insert_allocation(c);
+    } else {
+        assign(c, 4, 0x80020000);
+        assign(c, 4, R(4) - 0x7f48); /* out-of-memory message */
+        R(31) = 0x800197cc;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x80019a60);
+        assign(c, 2, 0);
+    }
+    load(c, 31, R(29) + 0x10);
+    assign(c, 29, R(29) + 0x18);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
