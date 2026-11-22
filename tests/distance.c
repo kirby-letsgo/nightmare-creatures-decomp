@@ -359,6 +359,52 @@ static bool record_projections(bool disc) {
     return true;
 }
 
+static bool facing_offsets(bool disc) {
+    const u32 record = SCRATCH_BASE + 0x80;
+    const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i)
+        for (unsigned alias = 0; alias < 2; ++alias) {
+            CPUState input = initial();
+            input.r[16] = record;
+            input.r[17] = angles[i];
+            input.r[29] = SCRATCH_BASE + 0x300;
+            input.r[31] = 0x80047128; /* compare up to entry into the projection call */
+            const u32 actor = alias ? record + 0x150 - 0x284 : 0x80120000;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(record + 0x160, actor);
+            MEM_W32(record + 0x130, (u32)-257);
+            MEM_W32(record + 0x128, 0xffff0123);
+            MEM_W32(actor + 0x27c, (u32)-769);
+            MEM_W32(actor + 0x284, 1023);
+            memcpy(before, nc_scratch, sizeof before);
+            const u32 offset = (angles[i] >> 4) * 2;
+            const s32 x = -4 + (((s16)MEM_R16(0x80083be4 + offset) * 130) >> 14);
+            const s32 z = (alias ? x >> 8 : 3) + (((s16)MEM_R16(0x80081be4 + offset) * 130) >> 14);
+            input.budget = 70;
+            CPUState native = input;
+            if (nc_prepare_facing_offset(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_prepare_facing_offset(&native) || native.budget != 1 ||
+                native.r[31] != 0x80047518 || native.r[4] != (u32)-257 ||
+                native.r[5] != 0xfff01230u - angles[i] || native.r[6] != input.r[29] + 16 ||
+                native.r[7] != (u32)z || MEM_R32(record + 0x150) != ((u32)x << 8) ||
+                MEM_R32(record + 0x158) != ((u32)z << 8))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x80047488);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool saved_bearing_projections(bool disc) {
     const s16 bearings[] = {-32768, -1, 0, 1024, 2048, 3072, 4095, 4096, 32767};
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -785,7 +831,8 @@ int main(int argc, char **argv) {
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
               record_projections(disc) && projected_heading_gaps(disc) &&
-              projected_heading_selection(disc) && saved_bearing_projections(disc);
+              projected_heading_selection(disc) && saved_bearing_projections(disc) &&
+              facing_offsets(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

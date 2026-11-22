@@ -229,6 +229,39 @@ bool nc_finish_projected_point_update(CPUState *c) {
     return true;
 }
 
+/* Offset the actor by 130 world units along its facing. The original
+ * multiplies each Q14 sample by 65 and shifts right 13, rounding down.
+ * X is visible in whole units before the Z coordinate is read. */
+bool nc_prepare_facing_offset(CPUState *c) {
+    if (c->budget <= 70)
+        return false;
+    const u32 record = R(16), facing = R(17);
+    R(4) = facing;
+    nc_heading_sine(c);
+    const u32 actor_x = MEM_R32(record + 0x160);
+    const s32 x = (s32)MEM_R32(actor_x + 0x27c) >> 8;
+    const s32 dx = ((s16)R(2) * 65) >> 13;
+    MEM_W32(record + 0x150, (u32)(x + dx));
+
+    R(4) = facing;
+    nc_heading_cosine(c);
+    const s32 dz = ((s16)R(2) * 65) >> 13;
+    R(6) = R(29) + 16;
+    R(4) = MEM_R32(record + 0x130);
+    R(5) = (MEM_R32(record + 0x128) << 4) - facing;
+    const u32 actor_z = MEM_R32(record + 0x160);
+    const s32 z = (s32)MEM_R32(actor_z + 0x284) >> 8;
+    R(2) = MEM_R32(record + 0x150) << 8;
+    R(7) = z + dz;
+    MEM_W32(record + 0x158, R(7));
+    R(3) = MEM_R32(record + 0x158) << 8;
+    MEM_W32(record + 0x150, R(2));
+    MEM_W32(record + 0x158, R(3));
+    R(31) = 0x80047518;
+    c->budget -= 52; /* the two table lookups charged nine cycles each */
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
