@@ -62,6 +62,41 @@ bool nc_finish_placement_defaults(CPUState *c) {
     return true;
 }
 
+/* Select the two placement angles in 65536-unit turns. The four guest
+ * lookups return signed Q14 values; the stores use their Q8 components. */
+bool nc_sample_placement_axes(CPUState *c) {
+    if (c->budget <= 71)
+        return false;
+    const u32 flags = MEM_R32(R(28) + 0x244);
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(19));
+    R(19) = R(4);
+    MEM_W32(R(29) + 0x10, R(16));
+    MEM_W32(R(29) + 0x20, R(20));
+    MEM_W32(R(29) + 0x24, R(31));
+    MEM_W32(R(29) + 0x18, R(18));
+    MEM_W32(R(29) + 0x14, R(17));
+    R(3) = 0x20000000;
+    const bool wide = (MEM_R32(flags) & R(3)) != 0;
+    R(16) = wide ? 0x2aaa : 0x1555;
+    R(20) = wide ? 0x2e38 : 0x18e3;
+    c->budget -= wide ? 35 : 33; /* The four lookups charge nine cycles each. */
+
+    R(4) = R(16);
+    nc_heading_cosine(c);
+    R(17) = (s16)R(2) >> 6;
+    R(4) = R(16);
+    nc_heading_sine(c);
+    R(18) = (s16)R(2) >> 6;
+    R(4) = R(20);
+    nc_heading_cosine(c);
+    R(16) = (s16)R(2) >> 6;
+    R(4) = R(20);
+    R(31) = 0x8002ae1c;
+    nc_heading_sine(c);
+    return true;
+}
+
 /* Each angle supplies two X/Z vectors with opposite X components.
  * The first three signed table samples have already been shifted by six. */
 bool nc_store_placement_axes(CPUState *c) {
