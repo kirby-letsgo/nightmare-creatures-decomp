@@ -2771,6 +2771,22 @@ bool nc_credits_cd_data_callback(CPUState *c) {
     return true;
 }
 
+/* Forward the wait mode to CD_datasync and preserve its status result. */
+bool nc_credits_cd_data_sync(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = 0x800203d0;
+    c->budget -= 3;
+    nc_call(c, 0x800218d8);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Load a CD port pointer from the guest table, including the load delay nop. */
 static void cd_flush_port(CPUState *c, u32 slot) {
     set_reg(c, 2, 0x80020000);
