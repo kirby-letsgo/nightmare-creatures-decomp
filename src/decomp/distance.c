@@ -262,6 +262,41 @@ bool nc_prepare_facing_offset(CPUState *c) {
     return true;
 }
 
+/* Select the record's existing point when the linked actor's state is
+ * below two and bit 0x40 is set. Otherwise project along the combined facing. */
+bool nc_begin_projected_point_update(CPUState *c, bool *use_point) {
+    if (c->budget <= 40)
+        return false;
+    R(29) -= 40;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(5);
+    MEM_W32(R(29) + 32, R(31));
+    MEM_W32(R(29) + 28, R(17));
+    const u32 pose = MEM_R32(R(4) + 0x20);
+    R(5) = MEM_R32(R(16) + 0x160);
+    const u32 linked_pose = MEM_R32(pose + 4);
+    R(4) = MEM_R32(pose + 0x48);
+    R(2) = MEM_R8(R(5) + 0x388) < 2;
+    R(3) = MEM_R32(linked_pose + 0x40);
+    R(17) = R(4) + R(3);
+    int cycles = 26;
+    *use_point = false;
+    if (R(2)) {
+        R(2) = MEM_R32(R(5) + 0x330) & 0x40;
+        R(4) = R(16) + 0x18;
+        cycles += 7;
+        if (R(2)) {
+            R(2) = MEM_R16(R(16) + 0x16c) & 0xfffe;
+            R(31) = 0x80047480;
+            MEM_W16(R(16) + 0x16c, R(2));
+            *use_point = true;
+            cycles += 7;
+        }
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */

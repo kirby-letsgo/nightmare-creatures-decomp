@@ -359,6 +359,59 @@ static bool record_projections(bool disc) {
     return true;
 }
 
+static bool projection_entries(bool disc) {
+    const u32 record = SCRATCH_BASE, actor = 0x80121000, linked_actor = 0x80122000;
+    const u32 pose = 0x80123000, linked_pose = 0x80124000;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned state = 0; state <= 2; ++state)
+        for (unsigned flag = 0; flag <= 1; ++flag) {
+            const bool expected_point = state < 2 && flag;
+            CPUState input = initial();
+            input.r[4] = actor;
+            input.r[5] = record;
+            input.r[29] = SCRATCH_BASE + 896;
+            input.r[31] = expected_point ? 0x80047220 : 0x80047488;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(actor + 0x20, pose);
+            MEM_W32(record + 0x160, linked_actor);
+            MEM_W32(pose + 4, linked_pose);
+            MEM_W32(pose + 0x48, 0xffff8000);
+            MEM_W32(linked_pose + 0x40, 0x4000);
+            MEM_W8(linked_actor + 0x388, state);
+            MEM_W32(linked_actor + 0x330, flag ? 0xc0 : 0x80);
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 40;
+            CPUState native = input;
+            bool use_point = !expected_point;
+            if (nc_begin_projected_point_update(&native, &use_point) ||
+                memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_begin_projected_point_update(&native, &use_point) ||
+                use_point != expected_point || native.r[17] != 0xffffc000 ||
+                native.r[16] != record ||
+                native.budget != 41 - (state >= 2 ? 26 : (flag ? 40 : 33)) ||
+                MEM_R16(record + 0x16c) != (expected_point ? 0xa5a4 : 0xa5a5))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                /* Start the oracle with the post-prologue stack pointer so it
+                 * stops at either continuation. Undo that adjustment in the slot. */
+                const u32 stub = 0x80120000;
+                MEM_W32(stub, 0x08000000u | ((0x80047420u >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bd0028); /* addiu sp, sp, 40 */
+                input.r[29] -= 40;
+                input.budget += 2;
+                interp_call(&input, stub);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool facing_offsets(bool disc) {
     const u32 record = SCRATCH_BASE + 0x80;
     const u32 angles[] = {0, 0x3fff, 0x4000, 0x8000, 0xc000, 0xffff};
@@ -832,7 +885,7 @@ int main(int argc, char **argv) {
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
               record_projections(disc) && projected_heading_gaps(disc) &&
               projected_heading_selection(disc) && saved_bearing_projections(disc) &&
-              facing_offsets(disc);
+              facing_offsets(disc) && projection_entries(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

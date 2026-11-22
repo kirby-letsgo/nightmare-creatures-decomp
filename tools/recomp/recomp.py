@@ -620,7 +620,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
             targets.update((0x80047328, 0x800473C0))
         if self.mod.name == "psx2_exe" and f.addr == 0x800473E8:
-            targets.add(0x80047518)
+            targets.update((0x80047480, 0x80047518))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -754,6 +754,13 @@ class Emitter:
                 )
                 out.append("        if (reproject) goto L_800475A8;")
                 out.append("        goto L_800475CC; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047420:
+                out.append(
+                    "    { bool use_point; if (nc_begin_projected_point_update(c, &use_point)) {"
+                )
+                out.append("        if (!use_point) goto L_80047488;")
+                out.append(f"        {self.call(0x80047220)}")
+                out.append("        goto L_80047480; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047488:
                 out.append("    if (nc_prepare_facing_offset(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
