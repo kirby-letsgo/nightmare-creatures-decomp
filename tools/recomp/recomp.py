@@ -95,6 +95,7 @@ CREDITS_ROUTINES = {
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
+    0x8001AE30: "nc_credits_bios_96_remove(c)",
     0x8001AE48: "nc_credits_return_from_exception(c)",
     0x8001AE58: "nc_credits_reset_irq_entry(c)",
     0x8001AE68: "nc_credits_hook_irq_entry(c)",

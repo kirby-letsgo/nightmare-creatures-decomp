@@ -2134,6 +2134,10 @@ bool nc_credits_deliver_event(CPUState *c) {
     return bios_service(c, 0xb0, 7);
 }
 
+bool nc_credits_bios_96_remove(CPUState *c) {
+    return bios_service(c, 0xa0, 0x72);
+}
+
 bool nc_credits_return_from_exception(CPUState *c) {
     return bios_service(c, 0xb0, 0x17);
 }
