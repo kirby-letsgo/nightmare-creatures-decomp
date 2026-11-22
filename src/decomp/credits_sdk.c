@@ -2753,6 +2753,24 @@ bool nc_credits_cd_mix(CPUState *c) {
     return true;
 }
 
+/* Register the CD data handler on DMA channel 3 and return its predecessor. */
+bool nc_credits_cd_data_callback(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(5) = R(4);
+    R(31) = 0x800203b0;
+    R(4) = 3;
+    c->budget -= 4;
+    nc_call(c, 0x8001a6f8); /* DMACallback */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Load a CD port pointer from the guest table, including the load delay nop. */
 static void cd_flush_port(CPUState *c, u32 slot) {
     set_reg(c, 2, 0x80020000);
