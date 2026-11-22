@@ -1094,6 +1094,57 @@ static bool node_rotations(bool disc) {
     return true;
 }
 
+static bool traversal_rotation_composition(bool disc) {
+    const u32 frame = SCRATCH_BASE, local = frame + 0x80;
+    const u32 root = frame + 256, current = root + 32;
+    const s16 inputs[] = {-32768, 0, 32767, 0, 4096, 0, -1, 0, 1};
+    const s16 quarter_turn[] = {0, 0, -4096, 0, 4096, 0, 4096, 0, 0};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned root_flag = 0; root_flag < 2; ++root_flag) {
+        for (unsigned overlap = 0; overlap < 2; ++overlap) {
+            const u32 output = overlap ? local + 4 : current + 32;
+            CPUState input = initial();
+            input.r[10] = output - 0x18;
+            input.r[13] = 0x80 | (root_flag << 3);
+            input.r[15] = current;
+            input.r[30] = root;
+            input.r[29] = frame;
+            input.r[31] = 0x80026f60;
+            input.budget = root_flag ? 127 : 125;
+            memset(nc_scratch, 0xa5, sizeof before);
+            for (unsigned k = 0; k < 9; ++k) {
+                MEM_W16(root + 2 * k, quarter_turn[k]);
+                MEM_W16(current + 2 * k, k % 4 == 0 ? 4096 : 0);
+                MEM_W16(local + 2 * k, inputs[k]);
+            }
+            for (unsigned axis = 0; axis < 3; ++axis)
+                MEM_W32(output + 20 + 4 * axis, axis - 1);
+            memcpy(before, nc_scratch, sizeof before);
+            CPUState native = input;
+            if (nc_compose_traversal_rotation(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_compose_traversal_rotation(&native) || native.budget != 1 ||
+                native.r[15] != output)
+                return false;
+            if (!root_flag && !overlap)
+                for (unsigned k = 0; k < 9; ++k)
+                    if (MEM_R16(output + 2 * k) != (u16)inputs[k])
+                        return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x80026cdc);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool traversal_matrices(bool disc) {
     const s32 samples[][6] = {{4096, 4096, 4096, 0, 0, 0},
                               {0, 4096, 0, -4096, 0, 4096},
@@ -2137,10 +2188,10 @@ int main(int argc, char **argv) {
         node_matrix_installation(disc) && part_composition(disc) &&
         node_continuations(disc, false) && node_continuations(disc, true) && node_rotations(disc) &&
         traversal_angle_samples(disc, true) && traversal_angle_samples(disc, false) &&
-        traversal_matrices(disc) && part_heading_sources(disc) && child_positions(disc) &&
-        scaled_part_filters(disc) && scaled_part_walk(disc) && scaled_part_positions(disc) &&
-        part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
-        part_chain_traversal(disc);
+        traversal_rotation_composition(disc) && traversal_matrices(disc) &&
+        part_heading_sources(disc) && child_positions(disc) && scaled_part_filters(disc) &&
+        scaled_part_walk(disc) && scaled_part_positions(disc) && part_offsets(disc) &&
+        part_matrix_composition(disc) && part_transform_setup(disc) && part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
     if (disc)
