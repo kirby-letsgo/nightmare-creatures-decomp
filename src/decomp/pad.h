@@ -10,6 +10,8 @@ typedef enum {
     NC_BIOS_CHANGE_CLEAR_PAD = 0x5b
 } NcPadBiosService;
 
+bool nc_enter_player_input(CPUState *c);
+bool nc_leave_player_input(CPUState *c, bool store_buttons);
 u32 nc_player_input_source(CPUState *c);
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service);
 bool nc_sdk_patch_pad(CPUState *c);

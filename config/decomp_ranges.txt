@@ -125,8 +125,10 @@ credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
-# Player control selects live or sequenced input before the modern-controls hook.
+# Player-control input gate, source selection, button store and shared return.
+psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    80044780         pad.c
+psx2_exe     800451E8    80045208         pad.c
 # Four-byte input sequences: level setup, stop, end-marker check, and player-control read.
 psx2_exe     80062C28    80062CB0         pad.c
 psx2_exe     80062CB0    80062CC8         pad.c
