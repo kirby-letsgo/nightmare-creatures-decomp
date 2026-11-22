@@ -862,6 +862,8 @@ class Emitter:
                 )
             if self.mod.name == "psx2_exe" and i.addr == 0x80067308:
                 out.append("    if (nc_leave_menu_button_scan(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800687CC:
+                out.append("    if (nc_menu_scan_and_save_buttons(c)) goto L_800687D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687B4:
                 out.append("    if (nc_menu_apply_direction(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687C8:

@@ -653,6 +653,20 @@ bool nc_menu_apply_direction(CPUState *c) {
     return true;
 }
 
+/* The scan detects edges against the previous word. Publish this frame's
+ * full word only after the scan returns. */
+bool nc_menu_scan_and_save_buttons(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800687d4;
+    R(4) = R(30);
+    c->budget -= 2;
+    nc_call(c, 0x80067130);
+    MEM_W32(R(28) + 0x18c, R(30));
+    NC_POLL(c, NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;

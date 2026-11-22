@@ -256,6 +256,8 @@ psx2_exe     8006879C    800687B4         pad.c
 # Apply ordinary menu navigation and save button history, or clear the idle repeat counter.
 psx2_exe     800687B4    800687C8         pad.c
 psx2_exe     800687C8    800687CC         pad.c
+# Pass the full menu button word to the scan before updating button history.
+psx2_exe     800687CC    800687D8         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.

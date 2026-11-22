@@ -627,6 +627,40 @@ static bool menu_record_progress(void) {
     return true;
 }
 
+static bool menu_scan_history(void) {
+    const u32 records = 0x80088594;
+    u16 headers[11];
+    for (unsigned i = 0; i < 11; ++i) {
+        headers[i] = MEM_R16(records + 50 * i);
+        MEM_W16(records + 50 * i, 0);
+    }
+    u16 saved_step = MEM_R16(records + 4);
+    u32 saved_flags = MEM_R32(0x80088178);
+    MEM_W32(0x80088178, 0); /* skip ordinary records */
+    MEM_W16(records + 4, 0x100);
+    const struct {
+        u32 previous, buttons;
+        u8 progress;
+    } cases[] = {
+        {0xffffffff, 0, 1}, {0, 0x100, 2}, {0x100, 0x100, 1}, {0x100, 0x300, 0}, {0, 0x80000100, 0},
+    };
+    CPUState cpu = initial();
+    cpu.r[31] = 0x800687d8;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        MEM_W16(records, 0x0a01); /* type 10, waiting for sequence step one */
+        MEM_W32(gp + 0x18c, cases[i].previous);
+        cpu.r[30] = cases[i].buttons;
+        if (!compare(cpu, 0x800687cc, nc_menu_scan_and_save_buttons, 2) ||
+            MEM_R8(records) != cases[i].progress || MEM_R32(gp + 0x18c) != cases[i].buttons)
+            return false;
+    }
+    MEM_W32(0x80088178, saved_flags);
+    MEM_W16(records + 4, saved_step);
+    for (unsigned i = 0; i < 11; ++i)
+        MEM_W16(records + 50 * i, headers[i]);
+    return true;
+}
+
 static bool menu_navigation_history(void) {
     const u32 record = 0x80160000, item = 0x80170000;
     const u32 buttons[] = {0, 0x80, 0x20, 0xbeef00a0};
@@ -1559,7 +1593,7 @@ int main(int argc, char **argv) {
               pad_select_edge() && pad_start_edge() && menu_button_scan_edges() &&
               menu_sequence_matches() && menu_record_sequences() && menu_record_progress() &&
               menu_completed_sequence() && menu_enabled_records() && menu_scan_return() &&
-              menu_navigation_history() && menu_direction_selections() &&
+              menu_navigation_history() && menu_scan_history() && menu_direction_selections() &&
               menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
               menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
               menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
