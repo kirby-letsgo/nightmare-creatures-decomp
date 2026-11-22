@@ -204,6 +204,48 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool transposed_placement_scales(bool disc) {
+    static const struct {
+        s32 input[3], expected[3];
+    } cases[] = {
+        {{8192, 8192, 8192}, {2048, 2048, 2048}},
+        {{16384, 8192, 8192}, {4096, 2048, 2048}},
+        {{-1, 0, 3}, {-1, 0, 0}},
+        {{INT32_MIN, -5, INT32_MAX}, {-536870912, -2, 536870911}},
+    };
+    const u32 scale = SCRATCH_BASE + 0x10;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE + 0x58;
+        input.r[20] = scale;
+        input.r[31] = 0x8007a1f0; /* Stop at ScaleMatrixL after its call delay slot. */
+        input.budget = 18;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W32(scale + 4 * axis, cases[i].input[axis]);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_prepare_transposed_placement_scale(&native) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_transposed_placement_scale(&native) || native.budget != 1)
+            return false;
+        for (unsigned axis = 0; axis < 3; ++axis)
+            if ((s32)MEM_R32(scale + 4 * axis) != cases[i].expected[axis])
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x8002b1d0);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_record_steps(bool disc) {
     const u32 record = SCRATCH_BASE;
     static const struct {
@@ -2913,7 +2955,7 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
-    if (!placement_record_steps(disc))
+    if (!transposed_placement_scales(disc) || !placement_record_steps(disc))
         return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
