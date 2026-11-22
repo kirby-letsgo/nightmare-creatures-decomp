@@ -1142,6 +1142,47 @@ static bool menu_mode_face_result(void) {
     return true;
 }
 
+static bool menu_input_entry(void) {
+    const u32 buttons[] = {0, 0x4000, 0x1000, 0x5010};
+    const u32 flags[] = {0, 0x10, 0x40, 0x50, 0x8000, 0x40000000};
+    for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
+        for (unsigned j = 0; j < sizeof flags / sizeof flags[0]; ++j) {
+            CPUState cpu = initial();
+            cpu.r[5] = buttons[i];
+            cpu.budget = 31;
+            u32 primary = j < 4 ? 1 : flags[j];
+            u32 destination = (primary & 0xc0009840) || (flags[j] & 0x40) ? 0x800673bc : 0x80067400;
+            MEM_W32(gp + 0x244, config);
+            MEM_W32(config, primary);
+            MEM_W32(config + 4, flags[j]);
+            memset(nc_ram + ((cpu.r[29] - 0x48) & (RAM_SIZE - 1)), 0xa5, 0x48);
+            memcpy(before, nc_ram, RAM_SIZE);
+            CPUState native = cpu;
+            if (nc_enter_menu_input(&native) != 0x80067358 || memcmp(&native, &cpu, sizeof cpu) ||
+                memcmp(before, nc_ram, RAM_SIZE))
+                return false;
+            cpu.budget = 64;
+            native = cpu;
+            if (nc_enter_menu_input(&native) != destination)
+                return false;
+            memcpy(after, nc_ram, RAM_SIZE);
+            memcpy(nc_ram, before, RAM_SIZE);
+            /* Stop immediately after the selected branch with jr zero; nop.
+             * Both instructions are outside the range under test. */
+            u32 saved_jump = MEM_R32(destination), saved_delay = MEM_R32(destination + 4);
+            MEM_W32(destination, 8);
+            MEM_W32(destination + 4, 0);
+            interp_resume_exe(&cpu, 0x80067358);
+            MEM_W32(destination, saved_jump);
+            MEM_W32(destination + 4, saved_delay);
+            cpu.budget += 2;
+            if (memcmp(&cpu, &native, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool menu_input_return(void) {
     const u32 results[] = {0, 1, 2, 4};
     for (unsigned i = 0; i < sizeof results / sizeof results[0]; ++i) {
@@ -2179,13 +2220,13 @@ int main(int argc, char **argv) {
         menu_record_start_and_dispatch() && menu_record_button_history() &&
         menu_record_history_resets() && menu_record_four_timing() && menu_record_cross() &&
         menu_record_modes() && menu_mode_up() && menu_mode_directions() &&
-        menu_mode_face_buttons() && menu_mode_face_result() && menu_input_return() &&
-        menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
-        menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-        menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        menu_mode_face_buttons() && menu_mode_face_result() && menu_input_entry() &&
+        menu_input_return() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
