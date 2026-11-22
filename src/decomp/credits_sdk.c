@@ -1812,7 +1812,7 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 24, 0x8001a7dc);
 }
 
-/* startIntr clears its work area in words, advancing a0 after each store. */
+/* The IRQ, VSync and DMA initializers use identical word-clear loops. */
 bool nc_credits_clear_irq_words(CPUState *c) {
     if (c->budget <= 3)
         return false;
