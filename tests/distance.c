@@ -113,6 +113,46 @@ static bool spatial_attenuation(bool disc) {
     return true;
 }
 
+static bool spatial_point_frames(bool disc) {
+    const u32 frame = SCRATCH_BASE + 128, stub = 0x80120000;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned path = 0; path < 3; ++path) {
+        const bool begin = path == 0, distant = path == 2;
+        const u32 entry = begin ? 0x8006c8e4 : distant ? 0x8006ca34 : 0x8006ca60;
+        CPUState input = initial();
+        input.r[29] = begin ? frame + 40 : frame;
+        input.r[31] = begin ? 0x8006c904 : 0x80010000;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned reg = 16; reg <= 20; ++reg)
+            MEM_W32(frame + 16 + 4 * (reg - 16), 0x80000000u + reg);
+        MEM_W32(frame + 36, input.r[31]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = begin ? 8 : distant ? 23 : 21;
+        CPUState native = input;
+        if ((begin ? nc_begin_spatial_point(&native) : nc_finish_spatial_point(&native, distant)) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!(begin ? nc_begin_spatial_point(&native)
+                    : nc_finish_spatial_point(&native, distant)) ||
+            native.budget != 1 || native.r[29] != (begin ? frame : frame + 40))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            /* Match the interpreter's stop stack at the continuation. */
+            MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
+            MEM_W32(stub + 4, begin ? 0x27bd0028 : 0x27bdffd8);
+            input.r[29] = native.r[29];
+            input.budget += 2;
+            interp_call(&input, stub);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool point_level_selection(bool disc) {
     static const struct {
         bool flagged;
@@ -2571,8 +2611,8 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
-        point_level_selection(disc) && spatial_levels(disc, true) && spatial_levels(disc, false) &&
-        spatial_attenuation(disc) && spatial_distances(disc, true) &&
+        spatial_point_frames(disc) && point_level_selection(disc) && spatial_levels(disc, true) &&
+        spatial_levels(disc, false) && spatial_attenuation(disc) && spatial_distances(disc, true) &&
         spatial_distances(disc, false) && spatial_bearings(disc, true) &&
         spatial_bearings(disc, false) && target_vertical_velocities(disc) &&
         target_displacements(disc) && planar_velocities(disc) && roots(disc) &&

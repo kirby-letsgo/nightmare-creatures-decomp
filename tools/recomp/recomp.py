@@ -689,7 +689,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
             targets.update((0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
-            targets.update((0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
+            targets.update((0x8006C904, 0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
             targets.update((0x800587A0, 0x800587CC, 0x80058830))
         if self.mod.name == "psx2_exe" and f.addr == 0x80058868:
@@ -1372,6 +1372,11 @@ class Emitter:
                 out.append(f"        {self.call(0x8006BFE8)}")
                 out.append("        goto L_8006CA34;")
                 out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006C8E4:
+                out.append("    if (nc_begin_spatial_point(c)) goto L_8006C904;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006CA34, 0x8006CA60):
+                distant = "true" if i.addr == 0x8006CA34 else "false"
+                out.append(f"    if (nc_finish_spatial_point(c, {distant})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
                 out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):
