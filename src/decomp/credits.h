@@ -131,6 +131,7 @@ bool nc_credits_dump_draw(CPUState *c);
 bool nc_credits_dump_display(CPUState *c);
 bool nc_credits_set_display_mask(CPUState *c);
 bool nc_credits_load_clut(CPUState *c);
+bool nc_credits_load_clut2(CPUState *c);
 bool nc_credits_clear_image(CPUState *c);
 bool nc_credits_clear_image2(CPUState *c);
 bool nc_credits_load_image(CPUState *c);
