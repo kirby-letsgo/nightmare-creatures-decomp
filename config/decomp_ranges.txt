@@ -74,6 +74,7 @@ psx2_exe     80046EDC    80046FA0         distance.c
 psx2_exe     80046FA0    800470DC         distance.c
 psx2_exe     800470DC    80047128         distance.c
 psx2_exe     8001A71C    8001A7B8         distance.c
+psx2_exe     8001ACF0    8001AD3C         distance.c
 psx2_exe     8001BD08    8001BD84         distance.c
 psx2_exe     8001BD84    8001BE6C         distance.c
 psx2_exe     8001BE6C    8001BEAC         distance.c
@@ -237,6 +238,7 @@ credits_exe  8001EB9C    8001EC78         credits_sdk.c
 credits_exe  8001EC78    8001ECA4         credits_sdk.c
 credits_exe  8001ECA4    8001ECB0         credits_sdk.c
 credits_exe  8001ECB4    8001ED98         credits_sdk.c
+credits_exe  8001F9A8    8001FA30         credits_sdk.c
 credits_exe  8001FA30    8001FA98         credits_sdk.c
 credits_exe  8001FA98    8001FAE0         credits_sdk.c
 credits_exe  8001FAE0    8001FB84         credits_sdk.c

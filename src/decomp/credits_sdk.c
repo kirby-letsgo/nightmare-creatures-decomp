@@ -2310,6 +2310,63 @@ bool nc_credits_tim_info(CPUState *c) {
     return true;
 }
 
+/* Send the caller's bytes to the SPU using programmed I/O or DMA. */
+bool nc_credits_spu_write(CPUState *c) {
+    if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(0x80024694);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4); /* source */
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(5); /* byte count */
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget -= 2;
+    if (R(2)) {
+        set_reg(c, 4, R(17));
+        R(31) = 0x8001fa14;
+        R(5) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001f3c0); /* _spu_writeByIO */
+        set_reg(c, 2, R(16));
+    } else {
+        set_reg(c, 2, 0x80020000);
+        R(2) = MEM_R16(0x80024690);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 5, 0x80020000);
+        load_word(c, 5, 0x800246a0);
+        set_reg(c, 4, 2); /* set transfer address */
+        R(31) = 0x8001f9e8;
+        R(5) = R(2) << (R(5) & 31);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001f718);
+
+        R(31) = 0x8001f9f0;
+        R(4) = 1; /* select write mode */
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001f718);
+
+        set_reg(c, 4, 3); /* start DMA */
+        set_reg(c, 5, R(17));
+        R(31) = 0x8001fa00;
+        R(6) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001f718);
+        R(2) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    }
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Start an SPU-to-RAM DMA transfer and return the requested byte count. */
 bool nc_credits_spu_read(CPUState *c) {
     if (c->budget <= 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES)
