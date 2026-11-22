@@ -883,6 +883,19 @@ class Emitter:
                 out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8003433C:
                 out.append("    if (nc_init_part_transform(c)) goto L_800343D8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800343D8:
+                out.append("    if (nc_begin_part_chain(c)) {")
+                out.append("        if (R(2)) goto L_800343F4;")
+                out.append("        goto L_80034410; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800343F4:
+                out.append("    if (nc_append_part_parent(c)) {")
+                out.append("        if (R(2)) goto L_800343F4;")
+                out.append("        goto L_80034410; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80034410:
+                out.append("    { bool have_parts = R(16) != 0;")
+                out.append("      if (nc_prepare_part_chain_rotation(c)) {")
+                out.append("          if (have_parts) goto L_80034430;")
+                out.append("          goto L_800345BC; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034430:
                 out.append("    if (nc_transform_part_offset(c)) {")
                 out.append(f"        {self.call(0x80025FE4)}")

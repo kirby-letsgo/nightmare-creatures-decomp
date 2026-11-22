@@ -675,6 +675,60 @@ static bool part_transform_setup(bool disc) {
     return true;
 }
 
+static bool part_chain_traversal(bool disc) {
+    const u32 frame = SCRATCH_BASE, part = frame + 512;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned count = 0; count <= 3; ++count) {
+        CPUState input = initial();
+        input.r[29] = frame;
+        input.r[5] = part;
+        input.r[7] = frame + 384;
+        input.r[16] = 0;
+        input.r[31] = count ? 0x80034430 : 0x800345bc;
+        memset(nc_scratch, 0xa5, sizeof before);
+        for (unsigned i = 0; i < count; ++i)
+            MEM_W32(part + 32 * i, i + 1 < count ? part + 32 * (i + 1) : 0);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (count) {
+            if (!nc_begin_part_chain(&native))
+                return false;
+            for (unsigned i = 1; i < count; ++i)
+                if (!native.r[2] || !nc_append_part_parent(&native))
+                    return false;
+            if (native.r[2] || native.r[16] != count)
+                return false;
+        }
+        if (!nc_prepare_part_chain_rotation(&native) || native.r[16] != (count ? count - 1 : 0))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, count ? 0x800343d8 : 0x80034410);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    CPUState input = initial();
+    input.r[5] = input.r[4] = part;
+    input.r[29] = input.r[3] = frame;
+    input.r[7] = frame + 384;
+    memcpy(before, nc_scratch, sizeof before);
+    bool (*const stages[])(CPUState *) = {nc_begin_part_chain, nc_append_part_parent,
+                                          nc_prepare_part_chain_rotation,
+                                          nc_prepare_part_chain_rotation};
+    const int cutoffs[] = {9, 11, 8, 5};
+    for (unsigned i = 0; i < 4; ++i) {
+        input.r[16] = i == 3 ? 0 : 1;
+        input.budget = cutoffs[i];
+        CPUState native = input;
+        if (stages[i](&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+    }
+    return true;
+}
+
 static bool part_offsets(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 512;
     const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
@@ -1415,7 +1469,8 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc);
+              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
+              part_chain_traversal(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
