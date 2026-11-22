@@ -1670,15 +1670,27 @@ bool nc_credits_bios_gpu_command(CPUState *c) {
     return true;
 }
 
-/* DeliverEvent selects BIOS B0 service 7 in the tail jump's delay slot. */
-bool nc_credits_deliver_event(CPUState *c) {
+/* These Psy-Q stubs select the B0 service in the tail jump's delay slot. */
+static bool bios_b0_service(CPUState *c, u32 service) {
     if (c->budget <= 3)
         return false;
     R(10) = 0xb0;
-    R(9) = 7;
+    R(9) = service;
     c->budget -= 3;
     nc_jump(c, R(10));
     return true;
+}
+
+bool nc_credits_deliver_event(CPUState *c) {
+    return bios_b0_service(c, 7);
+}
+
+bool nc_credits_reset_irq_entry(CPUState *c) {
+    return bios_b0_service(c, 0x18);
+}
+
+bool nc_credits_hook_irq_entry(CPUState *c) {
+    return bios_b0_service(c, 0x19);
 }
 
 /* The default callbacks notify the BIOS CD event class through DeliverEvent. */
