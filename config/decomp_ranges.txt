@@ -12,3 +12,4 @@ psx2_exe     8004EB30    8004EB78         damage.c
 # The death callbacks at 80055EDC..80055EF4 still run the original instructions.
 psx2_exe     80055DD4    80055EDC         adrenaline.c
 psx2_exe     80055EF4    80055F48         adrenaline.c
+credits_exe  80018C8C    80018CFC         credits.c
