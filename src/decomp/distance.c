@@ -3160,6 +3160,35 @@ bool nc_turn_toward_point(CPUState *c) {
     return true;
 }
 
+/* Sine and cosine use 16384 for one unit. Scaling by 5/16 advances the
+ * actor twenty whole units along the heading in its 24.8 coordinate system. */
+static s32 point_stride_component(u32 sample) {
+    return ((s16)sample * 5) >> 4;
+}
+
+bool nc_step_point_x(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(4) = R(16);
+    R(3) = point_stride_component(R(2));
+    R(2) = MEM_R32(R(19) + 0x27c) + R(3);
+    R(31) = 0x8001adcc;
+    MEM_W32(R(19) + 0x27c, R(2));
+    c->budget -= 12;
+    return true;
+}
+
+bool nc_step_point_z(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    R(5) = MEM_R32(R(19) + 0x284) + point_stride_component(R(2));
+    R(3) = 0x40000;
+    R(2) = MEM_R32(R(19) + 0x2c8) & R(3);
+    MEM_W32(R(19) + 0x284, R(5));
+    c->budget -= 16;
+    return true;
+}
+
 /* Horizontal displacement is measured after subtracting the 24.8 positions.
  * The caller adds the low words of the squares in the root call's delay slot. */
 bool nc_actor_distance_terms(CPUState *c) {
