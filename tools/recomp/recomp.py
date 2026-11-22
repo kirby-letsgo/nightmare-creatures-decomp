@@ -84,6 +84,7 @@ CREDITS_ROUTINES = {
     0x8001AF58: "nc_credits_set_vsync_slot(c)",
     0x8001AF84: "nc_credits_clear_irq_words(c)",
     0x8001AFB0: "nc_credits_start_dma(c)",
+    0x8001B184: "nc_credits_set_dma_slot(c)",
     0x8001B22C: "nc_credits_clear_irq_words(c)",
     0x8001B414: "nc_credits_default_draw(c)",
     0x8001B4E4: "nc_credits_default_display(c)",

@@ -1853,6 +1853,50 @@ bool nc_credits_save_irq_context(CPUState *c) {
     return true;
 }
 
+/* Change one DMA callback and update its DICR enable without acknowledging pending IRQs. */
+bool nc_credits_set_dma_slot(CPUState *c) {
+    if (c->budget <= 34)
+        return false;
+    R(6) = R(4);
+    R(2) = R(6) << 2;
+    R(3) = 0x800244e0u + R(2);
+    c->budget -= 5;
+    R(7) = MEM_R32(R(3));
+    R(4) = R(5);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (R(4) != R(7)) {
+        R(2) = 0x00ff0000;
+        R(5) = 0x80020000;
+        c->budget -= 3;
+        R(5) = MEM_R32(0x800244dc);
+        R(2) = 0x00ffffff;
+        c->budget -= NC_LOAD_CYCLES + 1;
+        MEM_W32(R(3), R(4));
+        c->budget--;
+        u32 control = MEM_R32(R(5)) & 0x00ffffff;
+        u32 shift = R(6) + 16;
+        u32 enable = 1u << (shift & 31);
+        if (R(4)) {
+            R(3) = 0x00800000;
+            R(2) = enable | R(3);
+            R(4) = control | R(2);
+            c->budget -= NC_LOAD_CYCLES + 7;
+            MEM_W32(R(5), R(4));
+            c->budget -= 3;
+        } else {
+            R(4) = shift;
+            R(2) = ~enable;
+            R(3) = (control | 0x00800000) & R(2);
+            c->budget -= NC_LOAD_CYCLES + 8;
+            MEM_W32(R(5), R(3));
+            c->budget--;
+        }
+    }
+    R(2) = R(7);
+    c->budget -= 2;
+    return true;
+}
+
 /* Clear the DMA callback table and DICR, then register the channel IRQ handler. */
 bool nc_credits_start_dma(CPUState *c) {
     if (c->budget <= 6)
