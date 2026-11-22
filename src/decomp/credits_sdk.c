@@ -964,6 +964,58 @@ bool nc_credits_priority_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_dump_display(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 28, R(31));
+    c->budget--;
+
+    /* Report the display and screen rectangles. The fourth signed coordinate
+     * is the fifth argument to the diagnostic callback, passed on the stack. */
+    for (unsigned i = 0; i < 2; i++) {
+        u32 rect = R(16) + i * 8;
+        for (unsigned j = 0; j < 3; j++) {
+            R(5 + j) = (u32)(s32)(s16)MEM_R16(rect + j * 2);
+            NC_POLL(c, NC_LOAD_CYCLES);
+        }
+        R(2) = (u32)(s32)(s16)MEM_R16(rect + 6);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 3, 0x80020000);
+        load_word(c, 3, R(3) + 0x4554);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, i ? 0x80018444 : 0x80018428);
+        u32 callback = R(3);
+        R(31) = i ? 0x8001bdf4 : 0x8001bdcc;
+        MEM_W32(R(29) + 16, R(2));
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, callback);
+    }
+
+    /* The interlace and RGB24 flags have separate format strings. */
+    for (unsigned i = 0; i < 2; i++) {
+        R(5) = MEM_R8(R(16) + 16 + i);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, R(2) + 0x4554);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, i ? 0x8001846c : 0x80018460);
+        u32 callback = R(2);
+        R(31) = i ? 0x8001be2c : 0x8001be10;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, callback);
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_set_graph_debug(CPUState *c) {
     if (c->budget <= 31)
         return false;
