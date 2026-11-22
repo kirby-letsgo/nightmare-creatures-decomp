@@ -391,6 +391,54 @@ bool nc_credits_draw_tpage(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_offset_word(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    c->budget -= 2;
+    u8 graph = MEM_R8(0x80024558);
+    bool wide = graph == 1 || graph == 2;
+    u32 mask = wide ? 0xfff : 0x7ff;
+    R(3) = (R(5) & mask) << (wide ? 12 : 11);
+    u32 x = R(4) & mask;
+    R(4) = 0xe5000000u;
+    R(2) = R(4) | R(3) | x;
+    c->budget -= wide ? 14 : 16;
+    return true;
+}
+
+bool nc_credits_draw_offset_packet(CPUState *c) {
+    if (c->budget <= 43)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = 2;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    /* Write the tag first: its length byte may overlap the input coordinates. */
+    MEM_W8(R(16) + 3, 2);
+    c->budget--;
+    R(4) = (u32)(s32)(s16)MEM_R16(R(5));
+    c->budget -= NC_LOAD_CYCLES;
+    R(5) = (u32)(s32)(s16)MEM_R16(R(5) + 2);
+    R(31) = 0x8001d130;
+    c->budget -= NC_LOAD_CYCLES + 2;
+    NC_FN_ENTER(c, 0x8001d664);
+    nc_credits_draw_offset_word(c);
+    MEM_W32(R(16) + 4, R(2));
+    c->budget--;
+    MEM_W32(R(16) + 8, 0);
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 20);
+    c->budget -= NC_LOAD_CYCLES;
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_texture_window_word(CPUState *c) {
     const u32 rect = R(4);
     if (c->budget <= (rect ? 39 : 7))
