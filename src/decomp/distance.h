@@ -12,6 +12,14 @@ bool nc_actor_heading(CPUState *c);
 bool nc_prepare_local_point_heading(CPUState *c);
 bool nc_prepare_reference_distance(CPUState *c);
 bool nc_store_reference_distance(CPUState *c);
+typedef enum {
+    NC_PART_SEARCH_FALLBACK,
+    NC_PART_SEARCH_NEXT_HEADING,
+    NC_PART_SEARCH_NEXT_PART,
+    NC_PART_SEARCH_DONE,
+} NcPartSearchStep;
+NcPartSearchStep nc_advance_part_heading_search(CPUState *c, bool matched);
+bool nc_restore_part_search_frame(CPUState *c);
 bool nc_begin_part_heading_search(CPUState *c);
 bool nc_test_part_heading(CPUState *c);
 bool nc_select_part_bearing_point(CPUState *c);
