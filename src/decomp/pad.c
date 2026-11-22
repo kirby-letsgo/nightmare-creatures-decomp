@@ -667,6 +667,43 @@ bool nc_menu_scan_and_save_buttons(CPUState *c) {
     return true;
 }
 
+/* Config bit 0x40 enables this menu input path. Records flagged 0x4000
+ * accumulate actions on the stack, with the first shoulder taking priority. */
+u32 nc_menu_record_shoulders(CPUState *c) {
+    if (c->budget <= 42)
+        return 0x800687d8;
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(2) = MEM_R32(config) & 0x40;
+    c->budget -= 11;
+    if (!R(2))
+        return 0x80068d60;
+
+    R(3) = MEM_R32(R(28) + 0x190) * 12u;
+    R(1) = 0x80090000 + R(3);
+    u32 item = MEM_R32(0x800883c0 + R(3));
+    u32 flags = MEM_R32(item + 4);
+    R(2) = R(30) & 0x400;
+    c->budget -= 20;
+    if (!(flags & 0x4000))
+        return 0x800689a8;
+
+    u32 action = 0x100;
+    c->budget -= 2;
+    if (!R(2)) {
+        action = 0x200;
+        c->budget -= 2;
+        if (!(R(30) & 0x800)) {
+            R(2) = R(30) & 0x10;
+            return 0x8006885c;
+        }
+    }
+    R(10) = MEM_R32(R(29) + 0x18) | action;
+    MEM_W32(R(29) + 0x18, R(10));
+    R(2) = R(30) & 0x10;
+    c->budget -= 7;
+    return 0x8006885c;
+}
+
 bool nc_menu_clear_repeat(CPUState *c) {
     if (c->budget <= 1)
         return false;
