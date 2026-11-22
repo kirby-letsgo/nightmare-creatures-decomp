@@ -110,6 +110,7 @@ bool nc_credits_palette_id(CPUState *c);
 bool nc_credits_video_mode(CPUState *c, bool replace);
 
 bool nc_credits_priority_packet(CPUState *c);
+bool nc_credits_set_graph_debug(CPUState *c);
 bool nc_credits_graph_status(CPUState *c, bool debug_level);
 bool nc_credits_default_draw(CPUState *c);
 bool nc_credits_default_display(CPUState *c);
