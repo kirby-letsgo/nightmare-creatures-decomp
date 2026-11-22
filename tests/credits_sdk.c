@@ -39,6 +39,19 @@ static bool check_copy(void) {
     return true;
 }
 
+static bool check_bios_init_heap(void) {
+    const int budgets[] = {4, 4096};
+    for (unsigned i = 0; i < sizeof budgets / sizeof budgets[0]; i++) {
+        CPUState state = arguments(0x80062000, 0x1000, 3, budgets[i]);
+        if (!compare(state, 0x80023364, nc_credits_bios_init_heap, 3) ||
+            nc_cpu.r[10] != 0xa0 || nc_cpu.r[9] != 0x39 ||
+            nc_cpu.r[4] != state.r[4] || nc_cpu.r[5] != state.r[5] ||
+            nc_cpu.r[31] != state.r[31])
+            return false;
+    }
+    return true;
+}
+
 static bool check_bios_write(void) {
     const u32 buffer = 0x80061001;
     const struct {
@@ -2723,6 +2736,7 @@ int main(int argc, char **argv) {
         return 1;
     bool pass = check_copy();
     pass = pass && check_cd_get_sector();
+    pass = pass && check_bios_init_heap();
     pass = pass && check_bios_write();
     pass = pass && check_put_char();
     pass = pass && check_put_string();
