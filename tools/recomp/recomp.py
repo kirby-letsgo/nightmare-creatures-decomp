@@ -584,6 +584,8 @@ class Emitter:
                 out.append("    if (nc_player_attack_kind(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80041540:
                 out.append("    if (nc_attack_part(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80034D2C:
+                out.append("    if (nc_mark_actor_noninteractive(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042760:
                 out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
