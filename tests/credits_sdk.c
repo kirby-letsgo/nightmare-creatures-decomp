@@ -2214,7 +2214,10 @@ static void cd_transfer_state(StateIO *io) {
     cdrom_serialize(io);
 }
 
-static bool check_cd_get_sector(void) {
+static bool check_cd_get_sector(bool driver) {
+    const u32 entry = driver ? 0x80021a44 : 0x80020378;
+    bool (*routine)(CPUState *) = driver ? nc_credits_cd_sector_dma : nc_credits_cd_get_sector;
+    const int threshold = driver ? 3 * NC_INSN_CYCLES + NC_LOAD_CYCLES : 4;
     const u32 dest = 0x80062000;
     u8 sector[DISC_DATA_SECTOR];
     if (!disc_read_data(16, sector))
@@ -2236,15 +2239,15 @@ static bool check_cd_get_sector(void) {
             cdrom_write(1, 6); /* ReadN */
             cdrom_tick(150000 + PSX_CPU_HZ / 75);
             memset(nc_fast_ptr(dest - 1), 0xa5, sizeof sector + 2);
-            nc_cpu = arguments(dest, counts[i], 3, 4);
-            if (!run && nc_credits_cd_get_sector(&nc_cpu))
+            nc_cpu = arguments(dest, counts[i], 3, threshold);
+            if (!run && routine(&nc_cpu))
                 ok = false;
-            nc_cpu.budget = i ? 5 : 4096;
+            nc_cpu.budget = i ? threshold + 1 : 4096;
             if (run)
-                interp_call(&nc_cpu, 0x80020378);
+                interp_call(&nc_cpu, entry);
             else
-                ok = nc_credits_cd_get_sector(&nc_cpu) && ok;
-            ok = ok && nc_cpu.r[2] == 1 && !memcmp(nc_fast_ptr(dest), sector, 4 * counts[i]) &&
+                ok = routine(&nc_cpu) && ok;
+            ok = ok && nc_cpu.r[2] == (driver ? 0u : 1u) && !memcmp(nc_fast_ptr(dest), sector, 4 * counts[i]) &&
                  MEM_R8(dest - 1) == 0xa5 && MEM_R8(dest + 4 * counts[i]) == 0xa5;
             cd_transfer_state(run ? &guest : &native);
             saved.loading = true;
@@ -3606,7 +3609,8 @@ int main(int argc, char **argv) {
     pass = pass && check_clear_otag();
     pass = pass && check_clear_ot_dma();
     pass = pass && check_clear_otag_reverse();
-    pass = pass && check_cd_get_sector();
+    pass = pass && check_cd_get_sector(false);
+    pass = pass && check_cd_get_sector(true);
     pass = pass && check_bios_a0_stub(0x80023364, 0x39, nc_credits_bios_init_heap);
     pass = pass && check_bios_a0_stub(0x8001ae30, 0x72, nc_credits_bios_96_remove);
     pass = pass && check_bios_write();
