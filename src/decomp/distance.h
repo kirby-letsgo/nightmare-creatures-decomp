@@ -6,6 +6,8 @@
 bool nc_begin_actor_distance(CPUState *c);
 bool nc_call_actor_distance_root(CPUState *c);
 bool nc_finish_actor_distance(CPUState *c, bool missing_target);
+bool nc_prepare_point_distance_root(CPUState *c);
+bool nc_call_point_distance_bearing(CPUState *c);
 bool nc_actor_distance_terms(CPUState *c);
 bool nc_distance_root(CPUState *c);
 bool nc_actor_heading(CPUState *c);
