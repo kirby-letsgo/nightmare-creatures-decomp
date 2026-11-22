@@ -239,6 +239,8 @@ psx2_exe     8006870C    8006874C         pad.c
 psx2_exe     80067130    8006718C         pad.c
 # Menu scan record lookup and type 10 button sequence match.
 psx2_exe     8006718C    80067200         pad.c
+# Type 10 completion scans ten records and calls enabled actions.
+psx2_exe     80067200    8006725C         pad.c
 # Descriptor flag and sequence check for other menu records.
 psx2_exe     8006725C    800672B4         pad.c
 # Completed menu sequence action call and reset of all eleven progress bytes.
