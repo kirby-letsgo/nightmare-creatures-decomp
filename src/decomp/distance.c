@@ -68,6 +68,17 @@ bool nc_begin_placement_vectors(CPUState *c) {
     return true;
 }
 
+bool nc_finish_placement_matrices(CPUState *c) {
+    if (c->budget <= 21)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x44);
+    for (int reg = 20; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 0x30 + 4 * (reg - 16));
+    R(29) += 0x48;
+    c->budget -= 21;
+    return true;
+}
+
 bool nc_finish_placement_vectors(CPUState *c) {
     if (c->budget <= 9)
         return false;
@@ -200,12 +211,12 @@ bool nc_prepare_placement_light_scale(CPUState *c) {
     return true;
 }
 
-/* All three GTE setters receive their matrix pointer in the call delay slot. */
-bool nc_prepare_placement_matrix_setter(CPUState *c, u32 matrix, u32 resume) {
+/* The matrix setters and final vector update pass their argument in the delay slot. */
+bool nc_prepare_placement_call(CPUState *c, u32 argument, u32 resume) {
     if (c->budget <= 2)
         return false;
     R(31) = resume;
-    R(4) = matrix;
+    R(4) = argument;
     c->budget -= 2;
     return true;
 }
