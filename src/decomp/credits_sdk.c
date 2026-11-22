@@ -208,6 +208,42 @@ bool nc_credits_change_case(CPUState *c, bool uppercase) {
     return true;
 }
 
+/* The credits memchr takes a signed count and advances a0 even on a match. */
+bool nc_credits_find_byte(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(2) = 0;
+    c->budget -= 2;
+    if (R(4)) {
+        c->budget -= 2;
+        if ((s32)R(6) > 0) {
+            R(6)--;
+            R(5) &= 0xff;
+            c->budget -= 5;
+            bool remaining;
+            do {
+                R(2) = MEM_R8(R(4));
+                NC_POLL(c, NC_LOAD_CYCLES);
+                NC_POLL(c, 1);
+                bool matched = R(2) == R(5);
+                R(4)++;
+                NC_POLL(c, 2);
+                if (matched) {
+                    R(2) = R(4) - 1;
+                    NC_POLL(c, 2);
+                    break;
+                }
+                set_reg(c, 6, R(6) - 1);
+                remaining = (s32)R(6) >= 0;
+                R(2) = 0;
+                NC_POLL(c, 2);
+            } while (remaining);
+        }
+    }
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Psy-Q packet constructors write the DMA word count and GP0 opcode.
  * A polyline also needs a terminator in its last word. */
 bool nc_credits_init_primitive(CPUState *c, NcCreditsPrimitive primitive) {
