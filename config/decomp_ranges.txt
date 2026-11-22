@@ -308,6 +308,8 @@ psx2_exe     80068B74    80068BEC         pad.c
 psx2_exe     80068BEC    80068CA4         pad.c
 # Ordinary menu record Start check, shared dispatch and idle repeat reset.
 psx2_exe     80068CA4    80068CF8         pad.c
+# Shared menu history write and record 100 actor button word.
+psx2_exe     80068CF8    80068D30         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
