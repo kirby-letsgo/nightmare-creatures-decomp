@@ -90,4 +90,6 @@ bool nc_credits_link_packets(CPUState *c);
 
 bool nc_credits_end_packet(CPUState *c);
 
+bool nc_credits_palette_id(CPUState *c);
+
 #endif

@@ -256,6 +256,16 @@ static bool check_terminator(void) {
     return true;
 }
 
+static bool check_palette(void) {
+    const u32 coordinates[] = {0, 15, 16, 63, 255, 511, 1023, 1024, 0x80000000, 0xffffffff};
+    for (unsigned x = 0; x < sizeof coordinates / sizeof coordinates[0]; x++)
+        for (unsigned y = 0; y < sizeof coordinates / sizeof coordinates[0]; y++)
+            if (!compare(arguments(coordinates[x], coordinates[y], 0, 7), 0x8001b610,
+                         nc_credits_palette_id, 6))
+                return false;
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -278,6 +288,7 @@ int main(int argc, char **argv) {
     pass = pass && check_link();
     pass = pass && check_link_writer();
     pass = pass && check_terminator();
+    pass = pass && check_palette();
     disc_close();
     return pass ? 0 : 1;
 }
