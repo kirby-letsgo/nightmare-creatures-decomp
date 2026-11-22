@@ -474,6 +474,53 @@ static bool menu_sequence_matches(void) {
     return true;
 }
 
+static bool menu_record_destination(CPUState *cpu) {
+    return nc_menu_record_sequence(cpu) == cpu->r[31];
+}
+
+static bool menu_record_sequences(void) {
+    const struct {
+        u32 buttons, destination;
+        u16 expected;
+    } cases[] = {
+        {0, 0x800672ec, 1},         {1, 0x800672b4, 1},           {0x300, 0x800672e0, 0x300},
+        {0x301, 0x800672ec, 0x300}, {0x8000, 0x800672ec, 0x8000}, {0xffff8000, 0x800672e0, 0x8000},
+    };
+    for (unsigned index = 0; index <= 10; ++index) {
+        u32 type = index == 10 ? 255 : index;
+        u32 descriptor = 0x80088178 + 28 * type;
+        u32 record = 0x80088594 + 50 * index;
+        u32 progress = index == 10 ? 255 : index;
+        u32 step = record + 2 + 2 * progress;
+        u32 saved_flags = MEM_R32(descriptor);
+        u8 saved_progress = MEM_R8(record);
+        u16 saved_step = MEM_R16(step);
+        for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            for (unsigned enabled = 0; enabled < 2; ++enabled) {
+                CPUState cpu = initial();
+                cpu.budget = 29;
+                cpu.r[2] = type * 8;
+                cpu.r[3] = type;
+                cpu.r[4] = index * 50;
+                cpu.r[20] = cases[i].buttons;
+                cpu.r[21] = 0x80088594;
+                cpu.r[22] = 0x80088596;
+                cpu.r[23] = 0x02000000;
+                cpu.r[31] = enabled ? cases[i].destination : 0x800672f8;
+                MEM_W32(descriptor, enabled ? 0x82000001 : 0x80000001);
+                MEM_W8(record, progress);
+                MEM_W16(step, cases[i].expected);
+                if (!compare(cpu, 0x8006725c, menu_record_destination, 28))
+                    return false;
+            }
+        }
+        MEM_W32(descriptor, saved_flags);
+        MEM_W8(record, saved_progress);
+        MEM_W16(step, saved_step);
+    }
+    return true;
+}
+
 static bool menu_navigation_history(void) {
     const u32 record = 0x80160000, item = 0x80170000;
     const u32 buttons[] = {0, 0x80, 0x20, 0xbeef00a0};
@@ -1363,16 +1410,16 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
-              playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && menu_button_scan_edges() &&
-              menu_sequence_matches() && menu_navigation_history() && menu_direction_selections() &&
-              menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
-              menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
-              menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
-              pad_inactivity() && l2_direction_edges() && button_dispatch() && sdk_pad_patch() &&
-              pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
-              pad_driver() && packet_readers() && sequences() && ports();
+    bool ok =
+        pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() && playback_read() &&
+        playback_poll_gate() && playback_interrupt() && pad_select_edge() && pad_start_edge() &&
+        menu_button_scan_edges() && menu_sequence_matches() && menu_record_sequences() &&
+        menu_navigation_history() && menu_direction_selections() && menu_horizontal_inputs() &&
+        menu_vertical_inputs() && menu_face_inputs() && menu_start_down_inputs() &&
+        menu_up_inputs() && menu_right_inputs() && menu_left_inputs() && menu_pad_type_flags() &&
+        menu_confirm_edges() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

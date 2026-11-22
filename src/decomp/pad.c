@@ -471,6 +471,24 @@ u32 nc_menu_button_scan_entry(CPUState *c) {
     return 0x8006718c;
 }
 
+/* Both record paths reset on mismatch and advance on a matching non-Select
+ * word. A matching Select continues with the action for that record type. */
+static u32 match_menu_sequence_step(CPUState *c, u32 offset) {
+    R(5) = MEM_R8(0x80088594 + offset);
+    u32 expected = (u32)(s32)(s16)MEM_R16(R(3) + 2 * R(5));
+    R(2) = 1;
+    c->budget -= 14;
+    if (R(20) != expected)
+        return 0x800672ec;
+
+    R(3) = R(5) + 1;
+    c->budget -= 2;
+    if (R(20) != 1)
+        return 0x800672e0;
+
+    return 0;
+}
+
 /* Each scan record spans 50 bytes. The loop carries twice the index in v0.
  * Type 10 matches the full button word against a signed halfword sequence. */
 u32 nc_menu_sequence_match(CPUState *c) {
@@ -486,18 +504,10 @@ u32 nc_menu_sequence_match(CPUState *c) {
     if (R(3) != 10)
         return 0x8006725c;
 
-    R(5) = MEM_R8(0x80088594 + offset);
     R(3) = R(22) + offset;
-    u32 expected = (u32)(s32)(s16)MEM_R16(R(3) + 2 * R(5));
-    R(2) = 1;
-    c->budget -= 14;
-    if (R(20) != expected)
-        return 0x800672ec;
-
-    R(3) = R(5) + 1;
-    c->budget -= 2;
-    if (R(20) != 1)
-        return 0x800672e0;
+    u32 next = match_menu_sequence_step(c, offset);
+    if (next)
+        return next;
 
     R(18) = 0;
     R(3) = MEM_R32(R(28) + 0x244);
@@ -507,6 +517,30 @@ u32 nc_menu_sequence_match(CPUState *c) {
     MEM_W32(R(3) + 4, R(2));
     c->budget -= 11;
     return 0x80067200;
+}
+
+/* Other record types consult a 28-byte descriptor before matching input. */
+u32 nc_menu_record_sequence(CPUState *c) {
+    if (c->budget <= 28)
+        return 0x8006725c;
+
+    u32 descriptor_offset = (R(2) - R(3)) * 4;
+    u32 offset = R(4);
+    R(1) = 0x80090000 + descriptor_offset;
+    R(2) = MEM_R32(0x80088178 + descriptor_offset) & R(23);
+    R(3) = offset + R(22);
+    c->budget -= 11;
+    if (!R(2))
+        return 0x800672f8;
+
+    R(1) = 0x80090000 + offset;
+    u32 next = match_menu_sequence_step(c, offset);
+    if (next)
+        return next;
+
+    R(4) = offset + R(21);
+    c->budget--;
+    return 0x800672b4;
 }
 
 /* Ordinary menu records process the direction before saving the button word. */
