@@ -33,6 +33,8 @@ bool nc_prepare_part_chain_rotation(CPUState *c);
 typedef enum { NC_NODE_FALLBACK, NC_NODE_NEXT, NC_NODE_POP, NC_NODE_RETURN } NcNodeContinuation;
 NcNodeContinuation nc_advance_node_transform(CPUState *c, bool part_rotation);
 
+bool nc_start_part_traversal(CPUState *c);
+bool nc_restore_part_branch(CPUState *c);
 bool nc_start_node_traversal(CPUState *c);
 bool nc_restore_node_branch(CPUState *c);
 bool nc_prepare_part_composition(CPUState *c);
