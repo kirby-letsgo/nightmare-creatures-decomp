@@ -129,6 +129,43 @@ static bool check_case(void) {
     return true;
 }
 
+static NcCreditsPrimitive packet_type;
+static bool init_packet(CPUState *c) {
+    return nc_credits_init_primitive(c, packet_type);
+}
+
+static bool check_primitives(void) {
+    const struct {
+        u32 entry;
+        NcCreditsPrimitive type;
+        bool polyline;
+    } cases[] = {
+        {0x8001b874, NC_POLY_F3, false}, {0x8001b888, NC_POLY_FT3, false},
+        {0x8001b89c, NC_POLY_G3, false}, {0x8001b8b0, NC_POLY_GT3, false},
+        {0x8001b8c4, NC_POLY_F4, false}, {0x8001b8d8, NC_POLY_FT4, false},
+        {0x8001b8ec, NC_POLY_G4, false}, {0x8001b900, NC_POLY_GT4, false},
+        {0x8001b914, NC_SPRT8, false},   {0x8001b928, NC_SPRT16, false},
+        {0x8001b93c, NC_SPRT, false},    {0x8001b950, NC_TILE1, false},
+        {0x8001b964, NC_TILE8, false},   {0x8001b978, NC_TILE16, false},
+        {0x8001b98c, NC_TILE, false},    {0x8001b9a0, NC_LINE_F2, false},
+        {0x8001b9b4, NC_LINE_G2, false}, {0x8001b9c8, NC_LINE_F3, true},
+        {0x8001b9e8, NC_LINE_G3, true},  {0x8001ba08, NC_LINE_F4, true},
+        {0x8001ba28, NC_LINE_G4, true},  {0x8001ba48, NC_BLOCK_FILL, false},
+    };
+    const u32 locations[] = {0x80060000, 0xa0060001, SCRATCH_BASE + 4};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        packet_type = cases[i].type;
+        int cost = cases[i].polyline ? 8 : 5;
+        for (unsigned j = 0; j < sizeof locations / sizeof locations[0]; j++) {
+            memset(nc_fast_ptr(locations[j]), 0xcc, 64);
+            if (!compare(arguments(locations[j], 0, 0, cost + 1), cases[i].entry, init_packet,
+                         cost))
+                return false;
+        }
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -145,6 +182,7 @@ int main(int argc, char **argv) {
     pass = pass && check_append();
     pass = pass && check_printf();
     pass = pass && check_case();
+    pass = pass && check_primitives();
     disc_close();
     return pass ? 0 : 1;
 }

@@ -54,4 +54,30 @@ bool nc_credits_printf(CPUState *c);
 
 bool nc_credits_change_case(CPUState *c, bool uppercase);
 
+typedef enum {
+    NC_POLY_F3,
+    NC_POLY_FT3,
+    NC_POLY_G3,
+    NC_POLY_GT3,
+    NC_POLY_F4,
+    NC_POLY_FT4,
+    NC_POLY_G4,
+    NC_POLY_GT4,
+    NC_SPRT8,
+    NC_SPRT16,
+    NC_SPRT,
+    NC_TILE1,
+    NC_TILE8,
+    NC_TILE16,
+    NC_TILE,
+    NC_LINE_F2,
+    NC_LINE_G2,
+    NC_LINE_F3,
+    NC_LINE_G3,
+    NC_LINE_F4,
+    NC_LINE_G4,
+    NC_BLOCK_FILL,
+} NcCreditsPrimitive;
+bool nc_credits_init_primitive(CPUState *c, NcCreditsPrimitive primitive);
+
 #endif
