@@ -154,3 +154,72 @@ bool nc_decode_pad(CPUState *c) {
     c->budget -= cycles;
     return true;
 }
+
+/* Return zero on completion, or the first guest instruction still to run.
+ * Entry headroom covers selection, decoding and the return. The disconnect
+ * handlers are guest calls with independent budgets, so check again there. */
+u32 nc_read_pad(CPUState *c) {
+    if (c->budget <= 700)
+        return 0x80070050;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    MEM_W32(R(29) + 0x14, R(31));
+    R(31) = 0x80070064;
+    R(16) = R(4);
+    c->budget -= 5;
+    nc_call(c, 0x8006ff34);
+
+    const u32 gp = R(28);
+    bool have_pad = MEM_R16(gp + PAD_MASK) != 0;
+    c->budget -= 6;
+    if (have_pad) {
+        R(3) = (u32)(s32)(s16)MEM_R16(gp + PAD_INDEX);
+        R(2) = R(3) << 4;
+        c->budget -= 6;
+    }
+    if (have_pad && R(3) != 1) {
+        nc_decode_pad(c); /* entry headroom includes its 550-cycle guard */
+    } else {
+        R(3) = 0xc0000000;
+        c->budget -= 2;
+        if (R(16)) {
+            R(4) = MEM_R32(gp + 0x244);
+            R(3) = 0xc0009840;
+            bool suppressed = (MEM_R32(R(4)) & R(3)) != 0;
+            R(2) = 0;
+            c->budget -= 11;
+            if (suppressed)
+                goto restore;
+            R(3) = 0x03000040;
+            R(2) = MEM_R32(R(4) + 4) & R(3);
+            c->budget -= 8;
+            if (!R(2)) {
+                R(31) = 0x800700c8;
+                c->budget -= 2;
+                nc_call(c, 0x8006eae8);
+                if (c->budget <= 15)
+                    return 0x800700c8;
+                R(2) = MEM_R32(R(28) + 0x244);
+                R(1) = 0x80090000;
+                MEM_W32(0x8008ef30, 0x10);
+                R(4) = 0x80088480;
+                R(3) = MEM_R32(R(2) + 4) | 0x40;
+                R(5) = 0x10;
+                R(31) = 0x800700f4;
+                MEM_W32(R(2) + 4, R(3));
+                c->budget -= 15;
+                nc_call(c, 0x80063058);
+            }
+        }
+        R(2) = 0;
+        NC_POLL(c, 2);
+    }
+restore:
+    if (c->budget <= 9)
+        return 0x800705d8;
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 9;
+    return 0;
+}

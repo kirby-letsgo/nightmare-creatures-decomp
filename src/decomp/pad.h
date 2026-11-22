@@ -5,5 +5,6 @@
 
 bool nc_select_pad(CPUState *c);
 bool nc_decode_pad(CPUState *c);
+u32 nc_read_pad(CPUState *c);
 
 #endif

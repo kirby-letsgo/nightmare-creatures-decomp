@@ -582,6 +582,8 @@ class Emitter:
             targets.add(0x800471AC)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.add(0x80047254)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
+            targets.add(0x800700C8)
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -612,6 +614,16 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80070050:
+                out.extend(
+                    [
+                        "    switch (nc_read_pad(c)) {",
+                        "    case 0: return;",
+                        "    case 0x800700C8: goto L_800700C8;",
+                        "    case 0x800705D8: goto L_800705D8;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
                 out.append("    if (nc_select_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800700FC:
