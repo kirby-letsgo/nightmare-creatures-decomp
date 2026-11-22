@@ -1322,6 +1322,46 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_irq_entry_hooks(void) {
+    const struct {
+        u32 entry, service, buffer;
+        bool (*routine)(CPUState *);
+    } cases[] = {
+        {0x8001ae58, 0x18, 0x12345678, nc_credits_reset_irq_entry},
+        {0x8001ae68, 0x19, 0x80023450, nc_credits_hook_irq_entry},
+        {0x8001ae68, 0x19, 0, nc_credits_hook_irq_entry},
+    };
+    StateIO saved = {0};
+    bios_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++) {
+        CPUState state = arguments(cases[i].buffer, 2, 3, 4);
+        ok = compare(state, cases[i].entry, cases[i].routine, 3) &&
+             nc_cpu.r[9] == cases[i].service && nc_cpu.r[10] == 0xb0;
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; run < 2 && ok; run++) {
+            nc_cpu = arguments(0x80061000, 0, 0, 4096);
+            nc_cpu.r[9] = 0x19;
+            bios_call(&nc_cpu, 0xb0); /* replace or clear an existing hook */
+            nc_cpu = state;
+            if (run)
+                interp_call(&nc_cpu, cases[i].entry);
+            else
+                ok = cases[i].routine(&nc_cpu);
+            bios_serialize(run ? &guest : &native);
+        }
+        ok = ok && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    saved.loading = true;
+    bios_serialize(&saved);
+    ok = ok && !saved.error;
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_critical_sections(void) {
     const u32 enable_bits[] = {0, 1, 0x400, 0x401};
     for (unsigned i = 0; i < sizeof enable_bits / sizeof enable_bits[0]; i++) {
@@ -2145,6 +2185,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_irq_entry_hooks();
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();
     pass = pass && check_interrupt_start(false);

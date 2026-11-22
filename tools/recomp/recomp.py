@@ -78,6 +78,8 @@ CREDITS_ROUTINES = {
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
     0x8001ADA8: "nc_credits_save_irq_context(c)",
+    0x8001AE58: "nc_credits_reset_irq_entry(c)",
+    0x8001AE68: "nc_credits_hook_irq_entry(c)",
     0x8001AE78: "nc_credits_exit_critical_section(c)",
     0x8001AE88: "nc_credits_start_vsync(c)",
     0x8001AEE0: "nc_credits_dispatch_vblank(c)",
@@ -1492,6 +1494,8 @@ class Emitter:
                 )
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:
+                out.append("    if (nc_step_record_angle(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006DFE8:
                 out.append("    if (nc_prepare_paired_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
