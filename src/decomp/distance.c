@@ -989,11 +989,41 @@ NcPartFlagPath nc_check_turn_parts(CPUState *c) {
     return NC_PART_FLAGS_CLEAR;
 }
 
+/* With all five parts clear, return one through the shared epilogue.
+ * The actor flag word is written in the jump delay slot. */
+bool nc_finish_part_turn(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    const u32 actor = R(17);
+    R(2) = 1;
+    MEM_W8(actor + 0x39c, 0x7f);
+    R(3) = MEM_R32(actor + 0x330);
+    R(4) = ~0x18u;
+    MEM_W8(actor + 0x39b, 0);
+    MEM_W8(actor + 0x38e, 0);
+    MEM_W8(actor + 0x38a, 0);
+    R(3) &= R(4);
+    MEM_W32(actor + 0x330, R(3));
+    c->budget -= 13;
+    return true;
+}
+
+bool nc_reset_part_turn_counter(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(1) = 0x800d0000;
+    MEM_W16(0x800d4c9c, 0);
+    R(31) = 0x8001bea8;
+    R(4) = R(17);
+    c->budget -= 4;
+    return true;
+}
+
 /* Every entry at 0x8001BEAC has v0 = 2*s0. The shift/add sequence
  * advances the pose heading by 364 units per step in a 65536-unit turn. */
-bool nc_advance_part_pose_heading(CPUState *c, bool *search) {
+bool nc_advance_part_pose_heading(CPUState *c, bool double_step, bool *search) {
     const bool start_search = R(18) == 0;
-    const int cycles = start_search ? 33 : 25;
+    const int cycles = (start_search ? 33 : 25) + double_step;
     if (c->budget <= cycles)
         return false;
     R(4) = MEM_R32(R(17) + 0x20);

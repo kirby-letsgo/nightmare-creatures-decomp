@@ -30,7 +30,9 @@ typedef enum {
     NC_PART_FLAGS_CLEAR,
 } NcPartFlagPath;
 NcPartFlagPath nc_check_turn_parts(CPUState *c);
-bool nc_advance_part_pose_heading(CPUState *c, bool *search);
+bool nc_finish_part_turn(CPUState *c);
+bool nc_reset_part_turn_counter(CPUState *c);
+bool nc_advance_part_pose_heading(CPUState *c, bool double_step, bool *search);
 bool nc_begin_part_heading_search(CPUState *c);
 bool nc_test_part_heading(CPUState *c);
 bool nc_select_part_bearing_point(CPUState *c);
