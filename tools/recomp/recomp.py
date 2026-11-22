@@ -579,7 +579,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
-            targets.add(0x800471AC)
+            targets.update((0x800471AC, 0x800471B4))
         if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
             targets.add(0x80047254)
         table_cases: list[int] = []
@@ -652,6 +652,12 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80034828, 0x800348FC):
                 quarter = "true" if i.addr == 0x80034828 else "false"
                 out.append(f"    if (nc_transform_part_position(c, {quarter})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047128:
+                out.append("    if (nc_prepare_heading_projection(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_800471B4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800471B4:
+                out.append("    if (nc_finish_heading_projection(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
                 out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800470DC:
