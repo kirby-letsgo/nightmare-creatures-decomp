@@ -37,6 +37,25 @@ static bool check_copy(void) {
     return true;
 }
 
+static bool check_fill(void) {
+    const u32 dest[] = {0, 0x80060005, SCRATCH_BASE + 3, 0xa0060008};
+    const u32 counts[] = {0, 1, 4, 19, 0x80000000, 0xffffffff};
+    for (unsigned i = 0; i < sizeof dest / sizeof dest[0]; i++)
+        for (unsigned j = 0; j < sizeof counts / sizeof counts[0]; j++) {
+            if (dest[i])
+                memset(nc_fast_ptr(dest[i]), 0x11, 24);
+            if (!compare(arguments(dest[i], 0xb2e41289, counts[j], 4096), 0x8001995c,
+                         nc_credits_fill_bytes, 2))
+                return false;
+        }
+    for (int budget = 3; budget <= 37; budget++) {
+        memset(nc_fast_ptr(dest[1]), 0x11, 24);
+        if (!compare(arguments(dest[1], 0xed, 7, budget), 0x8001995c, nc_credits_fill_bytes, 2))
+            return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -48,6 +67,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_fill();
     disc_close();
     return pass ? 0 : 1;
 }

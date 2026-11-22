@@ -31,3 +31,32 @@ bool nc_credits_copy_bytes(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* A nonpositive count returns zero; a positive count returns the starting
+ * address and leaves a0 just beyond the filled bytes. */
+bool nc_credits_fill_bytes(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    bool has_destination = R(4) != 0;
+    R(2) = 0;
+    c->budget -= 2;
+    if (has_destination) {
+        bool filling = (s32)R(6) > 0;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (filling) {
+            R(2) = R(4);
+            NC_POLL(c, NC_INSN_CYCLES);
+            do {
+                MEM_W8(R(4), (u8)R(5));
+                NC_POLL(c, NC_INSN_CYCLES);
+                R(6)--;
+                NC_POLL(c, NC_INSN_CYCLES);
+                filling = (s32)R(6) > 0;
+                R(4)++;
+                NC_POLL(c, 2 * NC_INSN_CYCLES);
+            } while (filling);
+        }
+    }
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
