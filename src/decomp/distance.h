@@ -79,6 +79,8 @@ typedef enum {
     NC_POINT_LEVEL_SET,
     NC_POINT_LEVEL_DISTANT
 } NcPointLevelAction;
+bool nc_call_distant_actor(CPUState *c, bool load_record);
+bool nc_set_actor_levels(CPUState *c, bool load_channel);
 NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged);
 bool nc_scale_spatial_level(CPUState *c, bool actor);
 bool nc_spatial_attenuation(CPUState *c);
