@@ -1,9 +1,12 @@
+#include <stdlib.h>
+
 #include "decomp/pad.h"
 #include "port/disc.h"
 #include "port/exe.h"
 #include "port/hw/hw.h"
 #include "port/interp.h"
 #include "port/runtime.h"
+#include "port/savestate.h"
 #include "port/settings.h"
 
 static u8 before[RAM_SIZE], after[RAM_SIZE];
@@ -199,6 +202,45 @@ static bool live_pad_dispatch(void) {
     MEM_W8(packet, 0xff);
     MEM_W8(packet + 34, 0xff);
     return compare(cpu, 0x80042e7c, dispatch_read, 4);
+}
+
+static bool dispatch_start_action(CPUState *cpu) {
+    return nc_call_pad_action(cpu, false);
+}
+
+static bool dispatch_select_action(CPUState *cpu) {
+    return nc_call_pad_action(cpu, true);
+}
+
+static bool pad_dispatch_actions(void) {
+    CPUState cpu = initial();
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(gp + 0x2d0, 0);
+    MEM_W32(config, 0);
+    MEM_W32(config + 4, 0);
+    cpu.r[31] = 0x80042efc;
+    if (!compare(cpu, 0x80042ef4, dispatch_start_action, 2))
+        return false;
+    MEM_W16(0x800cc00c, 0);
+    MEM_W16(0x800cbff8, 0xa540);
+    cpu.r[31] = 0x80042f54;
+    if (!compare(cpu, 0x80042f40, dispatch_select_action, 2))
+        return false;
+
+    MEM_W32(cpu.r[29] + 0x20, 0x12345678);
+    MEM_W32(cpu.r[29] + 0x24, 0); /* stop the disc interpreter after jr ra */
+    cpu.budget = 9;
+    CPUState native = cpu;
+    memcpy(before, nc_ram, RAM_SIZE);
+    if (nc_leave_pad_dispatch(&native) || memcmp(&native, &cpu, sizeof cpu) ||
+        memcmp(before, nc_ram, RAM_SIZE))
+        return false;
+    cpu.budget = 10;
+    native = cpu;
+    if (!nc_leave_pad_dispatch(&native))
+        return false;
+    interp_resume_exe(&cpu, 0x80042f54);
+    return !memcmp(&native, &cpu, sizeof cpu) && !memcmp(before, nc_ram, RAM_SIZE);
 }
 
 static bool playback_read_destination(CPUState *cpu) {
@@ -506,20 +548,62 @@ static bool compare_generated(CPUState input, u32 entry, int cutoff) {
         cpu.budget = budgets[i];
         CPUState guest = cpu;
         memcpy(nc_ram, before, RAM_SIZE);
+        /* A low-budget run advances the global poll clock. Restore its
+         * starting value along with RAM before executing the same input. */
+        StateIO snapshot = {0};
+        cpu_serialize(&snapshot);
+        if (snapshot.error) {
+            free(snapshot.buf);
+            return false;
+        }
         interp_call(&guest, entry);
-        memcpy(nc_ram, before, RAM_SIZE);
+        snapshot.loading = true;
+        cpu_serialize(&snapshot);
+        free(snapshot.buf);
+        if (snapshot.error)
+            return false;
         nc_set_module(NC_MOD_PSX2);
         NcFunc routine = nc_lookup(entry);
         if (!routine)
             return false;
         routine(&cpu);
         nc_set_module(NC_MOD_NONE);
-        if (memcmp(&cpu, &guest, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
+        if (memcmp(&cpu, &guest, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE)) {
+            fprintf(stderr, "entry %08x budget %d -> native %d/disc %d ram %d\n", entry, budgets[i],
+                    cpu.budget, guest.budget, memcmp(nc_ram, after, RAM_SIZE));
             return false;
+        }
     }
     return true;
 }
 #endif
+
+static bool full_pad_dispatch(void) {
+    const u32 words[] = {0, 1, 8, 9, 0x00080001};
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(gp + 0x2d0, 0);
+    MEM_W32(config, 0);
+    MEM_W32(config + 4, 0);
+    MEM_W16(0x800cc00c, 0);
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
+        MEM_W32(gp + 0x144, 0x12340000);
+        MEM_W32(packet, (~words[i] << 16) | 0x4100);
+        MEM_W32(packet + 34, (~words[i] & 0xffff0000) | 0x4100);
+        CPUState guest = initial();
+        memcpy(before, nc_ram, RAM_SIZE);
+        interp_call(&guest, 0x80042d9c);
+        if (guest.r[2] != 0xffffffff ||
+            MEM_R32(gp + 0x144) != ((words[i] & 1) ? 0x12340000 : words[i]))
+            return false;
+        memcpy(after, nc_ram, RAM_SIZE);
+#ifdef NC_TEST_GENERATED_PAD
+        if (!compare_generated(initial(), 0x80042d9c, 24) ||
+            !compare_generated(initial(), 0x80042d9c, 4095))
+            return false;
+#endif
+    }
+    return true;
+}
 
 static bool pad_bios_services(void) {
     const struct {
@@ -867,11 +951,12 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = live_pad_dispatch() && pad_dispatch_entry() && playback_read() &&
-              playback_poll_gate() && playback_interrupt() && pad_select_edge() &&
-              pad_start_edge() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
-              sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
-              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
+              playback_read() && playback_poll_gate() && playback_interrupt() &&
+              pad_select_edge() && pad_start_edge() && pad_inactivity() && l2_direction_edges() &&
+              button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+              ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
@@ -902,6 +987,7 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; ok && i < sizeof blocked_flags / sizeof blocked_flags[0]; ++i)
         ok = blocked_player_input(blocked_flags[i]);
     ok = ok && player_input_return(false) && player_input_return(true);
+    ok = ok && full_pad_dispatch();
     disc_close();
     return ok ? 0 : 1;
 }

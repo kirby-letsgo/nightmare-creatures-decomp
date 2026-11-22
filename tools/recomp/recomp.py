@@ -731,6 +731,12 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80042E30, 0x80042E38):
                 check_end = "true" if i.addr == 0x80042E30 else "false"
                 out.append(f"    if (nc_pad_playback_interrupt(c, {check_end})) goto L_80042F54;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042EF4:
+                out.append("    if (nc_call_pad_action(c, false)) goto L_80042EFC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042F40:
+                out.append("    if (nc_call_pad_action(c, true)) goto L_80042F54;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042F54:
+                out.append("    if (nc_leave_pad_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042EFC:
                 out.extend(
                     [

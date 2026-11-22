@@ -163,9 +163,14 @@ psx2_exe     80042E30    80042E7C         pad.c
 psx2_exe     80042E7C    80042E8C         pad.c
 # Start press edge after live pad decoding.
 psx2_exe     80042E8C    80042EF4         pad.c
-# Select press edge and button history, excluding the action call and its return.
+# Start action call.
+psx2_exe     80042EF4    80042EFC         pad.c
+# Select press edge and button history.
 psx2_exe     80042EFC    80042F40         pad.c
+# Select action call, history store and shared dispatch return.
+psx2_exe     80042F40    80042F50         pad.c
 psx2_exe     80042F50    80042F54         pad.c
+psx2_exe     80042F54    80042F68         pad.c
 # Player-control input gate, source selection, button store and shared return.
 psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    80044780         pad.c
