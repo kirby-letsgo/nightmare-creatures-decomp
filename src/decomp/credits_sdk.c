@@ -1559,8 +1559,8 @@ bool nc_credits_set_display_mask(CPUState *c) {
     return true;
 }
 
-/* Upload a 256-color palette as a single VRAM row and return its CLUT identifier. */
-bool nc_credits_load_clut(CPUState *c) {
+/* Upload the palette as a single VRAM row and return its CLUT identifier. */
+static bool upload_clut(CPUState *c, u32 width, u32 entry) {
     if (c->budget <= 16)
         return false;
     R(29) -= 40;
@@ -1573,7 +1573,7 @@ bool nc_credits_load_clut(CPUState *c) {
     R(17) = R(6);
     R(4) = R(29) + 16;
     R(5) = R(2);
-    R(2) = 256;
+    R(2) = width;
     c->budget -= 5;
     MEM_W16(R(29) + 20, R(2));
     R(2) = 1;
@@ -1584,13 +1584,13 @@ bool nc_credits_load_clut(CPUState *c) {
     c->budget--;
     MEM_W16(R(29) + 18, R(17));
     c->budget--;
-    R(31) = 0x8001b384;
+    R(31) = entry + 0x40;
     MEM_W16(R(29) + 22, R(2));
     c->budget -= 2;
     nc_call(c, 0x8001c5a4); /* LoadImage */
 
     set_reg(c, 4, R(16));
-    R(31) = 0x8001b390;
+    R(31) = entry + 0x4c;
     R(5) = R(17);
     NC_POLL(c, 2);
     nc_call(c, 0x8001b610); /* GetClut */
@@ -1601,6 +1601,14 @@ bool nc_credits_load_clut(CPUState *c) {
     set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2);
     return true;
+}
+
+bool nc_credits_load_clut(CPUState *c) {
+    return upload_clut(c, 256, 0x8001b344);
+}
+
+bool nc_credits_load_clut2(CPUState *c) {
+    return upload_clut(c, 16, 0x8001b3ac);
 }
 
 /* Both fills pack RGB from the low argument bytes. ClearImage2 also sets bit 31. */
