@@ -729,7 +729,7 @@ static bool part_chain_traversal(bool disc) {
     return true;
 }
 
-static bool part_rotation_samples(bool disc) {
+static bool part_rotation_samples(bool disc, bool transposed) {
     const u32 frame = SCRATCH_BASE + 256, part = SCRATCH_BASE;
     const u32 angles[][3] = {{0, 0x4000, 0x8000}, {-3, -2, -1}, {0x3ffd, 0x7ffe, 0xbfff}};
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
@@ -738,26 +738,27 @@ static bool part_rotation_samples(bool disc) {
         input.r[4] = part;
         input.r[5] = SCRATCH_BASE + 512;
         input.r[29] = frame + 48;
-        input.r[31] = 0x8002607c;
+        input.r[31] = transposed ? 0x80026248 : 0x8002607c;
         memset(nc_scratch, 0xa5, sizeof before);
         for (unsigned axis = 0; axis < 3; ++axis)
             MEM_W32(part + 0x40 + 4 * axis, angles[i][axis]);
         memcpy(before, nc_scratch, sizeof before);
-        input.budget = 104;
+        input.budget = transposed ? 98 : 104;
         CPUState native = input;
-        if (nc_sample_part_rotation(&native) || memcmp(&input, &native, sizeof input) ||
+        if (nc_sample_part_rotation(&native, transposed) || memcmp(&input, &native, sizeof input) ||
             memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_sample_part_rotation(&native) || native.budget != 1 || native.r[29] != frame ||
-            native.r[19] != input.r[5] || native.r[31] != 0x8002607c)
+        if (!nc_sample_part_rotation(&native, transposed) || native.budget != 1 ||
+            native.r[29] != frame || native.r[19] != input.r[5] || native.r[31] != input.r[31])
             return false;
         if (disc) {
             memcpy(after, nc_scratch, sizeof after);
             memcpy(nc_scratch, before, sizeof before);
             /* Match the oracle's stack at the continuation after the sixth lookup. */
             const u32 stub = 0x80120000;
-            MEM_W32(stub, 0x08000000u | ((0x80025fe4u >> 2) & 0x03ffffffu));
+            MEM_W32(stub,
+                    0x08000000u | (((transposed ? 0x800261c8u : 0x80025fe4u) >> 2) & 0x03ffffffu));
             MEM_W32(stub + 4, 0x27bd0030); /* addiu sp, sp, 48 */
             input.r[29] = frame;
             input.budget += 2;
@@ -769,7 +770,7 @@ static bool part_rotation_samples(bool disc) {
     return true;
 }
 
-static bool part_rotation_matrices(bool disc) {
+static bool part_rotation_matrices(bool disc, bool transposed) {
     const u32 frame = SCRATCH_BASE + 256;
     const s32 samples[][6] = {{4096, 4096, 4096, 0, 0, 0},
                               {0, 4096, 0, -4096, 0, 16384},
@@ -781,20 +782,21 @@ static bool part_rotation_matrices(bool disc) {
         input.r[19] = i == 2 ? frame : SCRATCH_BASE;
         input.r[21] = samples[i][0];
         input.r[20] = samples[i][1];
-        input.r[17] = samples[i][2];
+        input.r[transposed ? 16 : 17] = samples[i][2];
         input.r[18] = samples[i][3];
-        input.r[16] = samples[i][4];
+        input.r[transposed ? 17 : 16] = samples[i][4];
         input.r[2] = samples[i][5];
         memset(nc_scratch, 0xa5, sizeof before);
         MEM_W32(frame + 40, input.r[31]);
         memcpy(before, nc_scratch, sizeof before);
         input.budget = 97;
         CPUState native = input;
-        if (nc_finish_part_rotation(&native) || memcmp(&input, &native, sizeof input) ||
+        if (nc_finish_part_rotation(&native, transposed) || memcmp(&input, &native, sizeof input) ||
             memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_finish_part_rotation(&native) || native.budget != 1 || native.r[29] != frame + 48)
+        if (!nc_finish_part_rotation(&native, transposed) || native.budget != 1 ||
+            native.r[29] != frame + 48)
             return false;
         if (!i)
             for (unsigned k = 0; k < 9; ++k)
@@ -804,7 +806,8 @@ static bool part_rotation_matrices(bool disc) {
             memcpy(after, nc_scratch, sizeof after);
             memcpy(nc_scratch, before, sizeof before);
             const u32 stub = 0x80120000;
-            MEM_W32(stub, 0x08000000u | ((0x8002607cu >> 2) & 0x03ffffffu));
+            MEM_W32(stub,
+                    0x08000000u | (((transposed ? 0x80026248u : 0x8002607cu) >> 2) & 0x03ffffffu));
             MEM_W32(stub + 4, 0x27bdffd0); /* addiu sp, sp, -48 */
             input.r[29] += 48;
             input.budget += 2;
@@ -1557,8 +1560,9 @@ int main(int argc, char **argv) {
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
               part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
-              part_chain_traversal(disc) && part_rotation_samples(disc) &&
-              part_rotation_matrices(disc);
+              part_chain_traversal(disc) && part_rotation_samples(disc, false) &&
+              part_rotation_samples(disc, true) && part_rotation_matrices(disc, false) &&
+              part_rotation_matrices(disc, true);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
