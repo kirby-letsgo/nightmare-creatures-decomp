@@ -12,6 +12,7 @@ bool nc_actor_heading(CPUState *c);
 bool nc_prepare_local_point_heading(CPUState *c);
 bool nc_prepare_reference_distance(CPUState *c);
 bool nc_store_reference_distance(CPUState *c);
+bool nc_prepare_selected_point_bearing(CPUState *c);
 bool nc_prepare_reference_bearing(CPUState *c);
 bool nc_call_reference_facing(CPUState *c);
 bool nc_finish_reference_bearing(CPUState *c);

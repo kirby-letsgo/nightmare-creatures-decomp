@@ -928,6 +928,26 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* The selected record stores -X and Z in whole units. Publish the target
+ * halfwords, then reread the record before subtracting the actor position. */
+bool nc_prepare_selected_point_bearing(CPUState *c) {
+    if (c->budget <= 30)
+        return false;
+    const u32 point = R(3);
+    R(1) = 0x800d0000;
+    MEM_W16(0x800d4ca0, (u16)-MEM_R16(point + 0xa));
+    MEM_W16(0x800d4ca2, MEM_R16(point + 0xc));
+    R(2) = -(s32)(s16)MEM_R16(point + 0xa);
+    const s32 actor_x = (s32)MEM_R32(R(16) + 0x27c) >> 8;
+    const s32 actor_z = (s32)MEM_R32(R(16) + 0x284) >> 8;
+    R(3) = (s32)(s16)MEM_R16(point + 0xc);
+    R(4) = R(2) - actor_x;
+    R(5) = R(3) - actor_z;
+    R(31) = 0x8001c27c;
+    c->budget -= 30;
+    return true;
+}
+
 /* Bearing from the supplied actor to the reference actor. Subtract both
  * 24.8 positions before shifting so negative fractional deltas round down. */
 bool nc_prepare_reference_bearing(CPUState *c) {
