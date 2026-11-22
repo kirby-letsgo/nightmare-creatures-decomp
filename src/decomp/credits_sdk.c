@@ -1843,6 +1843,56 @@ bool nc_credits_exit_critical_section(CPUState *c) {
     return critical_section_syscall(c, 2);
 }
 
+/* Reinstall the BIOS hook and restore the saved IRQ mask and DMA priorities. */
+bool nc_credits_restart_interrupts(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = 0x80023418;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    R(2) = MEM_R16(R(16));
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (R(2) == 0) {
+        R(31) = 0x8001ad20;
+        R(4) = R(16) + 0x38;
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001ae68); /* HookEntryInt */
+        set_reg(c, 4, 0x80020000);
+        load_word(c, 4, 0x800244a8);
+        set_reg(c, 3, 0x80020000);
+        R(3) = MEM_R16(0x8002344a);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 2, 1);
+        MEM_W16(R(16), (u16)R(2));
+        NC_POLL(c, 1);
+        MEM_W16(R(4), (u16)R(3));
+        NC_POLL(c, 1);
+        set_reg(c, 3, 0x80020000);
+        load_word(c, 3, 0x800244ac);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x8002344c);
+        NC_POLL(c, 1);
+        MEM_W32(R(3), R(2));
+        NC_POLL(c, 1);
+        R(31) = 0x8001ad5c;
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001ae78); /* ExitCriticalSection */
+        R(2) = R(16);
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 2, 0);
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* startIntr uses setjmp to build the BIOS interrupt entry context. */
 bool nc_credits_save_irq_context(CPUState *c) {
     if (c->budget <= 15)

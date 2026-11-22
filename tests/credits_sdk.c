@@ -1405,6 +1405,52 @@ static void interrupt_start_state(StateIO *io) {
     irq_serialize(io);
 }
 
+static bool check_restart_interrupts(void) {
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    bios_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned active = 0; active < 2 && ok; active++) {
+        for (unsigned tight = 0; tight < 2 && ok; tight++) {
+            StateIO native = {0}, guest = {0};
+            for (unsigned run = 0; run < 2 && ok; run++) {
+                MEM_W16(0x80023418, active ? 0x8000 : 0);
+                MEM_W16(0x8002344a, 0x40);
+                MEM_W32(0x8002344c, 0x08765432);
+                MEM_W16(0x1f801070, 0);
+                MEM_W16(0x1f801074, 0);
+                MEM_W32(0x1f8010f0, 0x01234567);
+                nc_cpu = arguments(7, 2, 3, 11);
+                if (!run && nc_credits_restart_interrupts(&nc_cpu))
+                    ok = false;
+                nc_cpu.budget = tight ? 12 : 4096;
+                if (run)
+                    interp_call(&nc_cpu, 0x8001acf4);
+                else
+                    ok = nc_credits_restart_interrupts(&nc_cpu) && ok;
+                StateIO *result = run ? &guest : &native;
+                interrupt_start_state(result);
+                bios_serialize(result);
+                ok = ok && nc_cpu.r[2] == (active ? 0 : 0x80023418u) &&
+                     MEM_R16(0x80023418) == (active ? 0x8000 : 1) &&
+                     MEM_R16(0x1f801074) == (active ? 0 : 0x40) &&
+                     MEM_R32(0x1f8010f0) == (active ? 0x01234567u : 0x08765432u) &&
+                     (nc_cpu.cop0[12] & 0x401) == (active ? 0 : 0x401);
+                saved.loading = true;
+                saved.pos = 0;
+                interrupt_start_state(&saved);
+                bios_serialize(&saved);
+            }
+            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+                 !memcmp(native.buf, guest.buf, guest.len);
+            free(native.buf);
+            free(guest.buf);
+        }
+    }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_interrupt_start(bool dma) {
     const u32 slots = dma ? 0x800244e0 : 0x800244b4;
     const u32 handler = dma ? 0x80023428 : 0x8002341c;
@@ -2185,6 +2231,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
+    pass = pass && check_restart_interrupts();
     pass = pass && check_irq_entry_hooks();
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();
