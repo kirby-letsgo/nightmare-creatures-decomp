@@ -428,6 +428,52 @@ static bool menu_button_scan_edges(void) {
     return true;
 }
 
+static bool menu_sequence_destination(CPUState *cpu) {
+    return nc_menu_sequence_match(cpu) == cpu->r[31];
+}
+
+static bool menu_sequence_matches(void) {
+    const struct {
+        u32 buttons, destination;
+        u16 expected;
+        u8 type, progress;
+    } cases[] = {
+        {0, 0x8006725c, 0, 0, 0},
+        {1, 0x8006725c, 1, 255, 0},
+        {1, 0x80067200, 1, 10, 3},
+        {0x300, 0x800672e0, 0x300, 10, 0},
+        {0x301, 0x800672ec, 0x300, 10, 1},
+        {0x8000, 0x800672ec, 0x8000, 10, 2},
+        {0xffff8000, 0x800672e0, 0x8000, 10, 255},
+    };
+    for (unsigned index = 0; index <= 10; ++index) {
+        u32 record = 0x80088594 + index * 50;
+        for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            CPUState cpu = initial();
+            cpu.budget = 40;
+            cpu.r[19] = index;
+            cpu.r[2] = 2 * index;
+            cpu.r[20] = cases[i].buttons;
+            cpu.r[21] = 0x80088594;
+            cpu.r[22] = 0x80088596;
+            cpu.r[31] = cases[i].destination;
+            u32 step = record + 2 + 2 * cases[i].progress;
+            u16 saved_header = MEM_R16(record), saved_step = MEM_R16(step);
+            MEM_W8(record, cases[i].progress);
+            MEM_W8(record + 1, cases[i].type);
+            MEM_W16(step, cases[i].expected);
+            MEM_W32(gp + 0x244, config);
+            MEM_W32(config + 4, 0xabcd0001);
+            bool ok = compare(cpu, 0x8006718c, menu_sequence_destination, 39);
+            MEM_W16(record, saved_header);
+            MEM_W16(step, saved_step);
+            if (!ok)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool menu_navigation_history(void) {
     const u32 record = 0x80160000, item = 0x80170000;
     const u32 buttons[] = {0, 0x80, 0x20, 0xbeef00a0};
@@ -1320,7 +1366,7 @@ int main(int argc, char **argv) {
     bool ok = pad_dispatch_actions() && live_pad_dispatch() && pad_dispatch_entry() &&
               playback_read() && playback_poll_gate() && playback_interrupt() &&
               pad_select_edge() && pad_start_edge() && menu_button_scan_edges() &&
-              menu_navigation_history() && menu_direction_selections() &&
+              menu_sequence_matches() && menu_navigation_history() && menu_direction_selections() &&
               menu_horizontal_inputs() && menu_vertical_inputs() && menu_face_inputs() &&
               menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
               menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() &&
