@@ -2685,6 +2685,46 @@ static bool check_cd_get_toc(void) {
     return ok && !saved.error;
 }
 
+static bool check_cd_init(void) {
+    const u32 reset = 0x8001fe30, diagnostic = 0x80019a60, responses = 0x80062000;
+    const u32 slots[] = {0x8002475c, 0x80024760, 0x80024a70};
+    const u32 handlers[] = {0x8001fd78, 0x8001fda0, 0x8001fdc8};
+    const unsigned attempts[] = {1, 5, 0}; /* zero means all resets fail */
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Consume one reset response per call and record the diagnostic argument.
+     * The callback setters themselves run from the disc image. */
+    MEM_W32(reset, 0x8d220000);     /* lw v0, 0(t1) */
+    MEM_W32(reset + 4, 0x03e00008);
+    MEM_W32(reset + 8, 0x25290004); /* addiu t1, t1, 4 */
+    MEM_W32(diagnostic, 0x03e00008);
+    MEM_W32(diagnostic + 4, 0xad440000); /* sw a0, 0(t2) */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof attempts / sizeof attempts[0]; i++) {
+        for (unsigned j = 0; j < 5; j++)
+            MEM_W32(responses + 4 * j, j + 1 == attempts[i] ? 1 : 2);
+        for (unsigned j = 0; j < 3; j++)
+            MEM_W32(slots[j], UINT32_MAX);
+        MEM_W32(responses + 20, 0);
+        CPUState state = arguments(0, 0, 0, i ? 5 : 4096);
+        state.r[9] = responses;
+        state.r[10] = responses + 20;
+        ok = compare(state, 0x8001fce8, nc_credits_cd_init, 4) &&
+             nc_cpu.r[2] == (attempts[i] != 0) &&
+             nc_cpu.r[9] == responses + 4 * (attempts[i] ? attempts[i] : 5) &&
+             MEM_R32(responses + 20) == (attempts[i] ? 0 : 0x80018734u);
+        for (unsigned j = 0; ok && j < 3; j++)
+            ok = MEM_R32(slots[j]) == (attempts[i] ? handlers[j] : UINT32_MAX);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_reset(void) {
     const u32 drivers[] = {0x8002169c, 0x800216ec, 0x800215a8};
     const u32 modes[] = {2, 1, 0, UINT32_MAX};
@@ -3215,6 +3255,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
     pass = pass && check_cd_get_toc();
+    pass = pass && check_cd_init();
     pass = pass && check_cd_reset();
     pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();

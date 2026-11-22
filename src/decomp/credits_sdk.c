@@ -3535,6 +3535,59 @@ bool nc_credits_cd_get_toc(CPUState *c) {
     return true;
 }
 
+/* Each CdInit callback setter and the error diagnostic take one pointer. */
+static void cd_init_call(CPUState *c, u32 argument, u32 target, u32 resume) {
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, argument);
+    R(31) = resume;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, target);
+}
+
+/* Try CdReset(1) up to five times before reporting initialization failure. */
+bool nc_credits_cd_init(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = 4;
+    c->budget -= 2;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    for (;;) {
+        R(31) = 0x8001fd00;
+        R(4) = 1;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, 0x8001fe30);
+        set_reg(c, 3, 1);
+        const bool ready = R(2) == R(3);
+        R(16)--;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (ready) {
+            cd_init_call(c, 0x8001fd78, 0x8001ff7c, 0x8001fd1c); /* sync */
+            cd_init_call(c, 0x8001fda0, 0x8001ff94, 0x8001fd2c); /* ready */
+            cd_init_call(c, 0x8001fdc8, 0x80022cb4, 0x8001fd3c); /* read */
+            R(2) = 1;
+            NC_POLL(c, 2 * NC_INSN_CYCLES);
+            break;
+        }
+        set_reg(c, 2, UINT32_MAX);
+        const bool exhausted = R(16) == R(2);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        if (exhausted) {
+            cd_init_call(c, 0x80018734, 0x80019a60, 0x8001fd60); /* printf */
+            set_reg(c, 2, 0);
+            break;
+        }
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Mode 2 only reinstalls interrupts. Mode 1 also initializes CD audio volume. */
 bool nc_credits_cd_reset(CPUState *c) {
     if (c->budget <= 6)
