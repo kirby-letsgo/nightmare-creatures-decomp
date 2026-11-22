@@ -632,6 +632,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80062C28:
+                out.append("    if (nc_init_pad_sequence(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80062CB0:
                 out.append("    if (nc_stop_pad_sequence(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80062CC8:

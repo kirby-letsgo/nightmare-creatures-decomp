@@ -124,6 +124,60 @@ static bool caller(u32 budget, u8 first, u8 second, u32 argument, u32 flags, u32
            !memcmp(nc_ram, after, RAM_SIZE);
 }
 
+#ifdef NC_TEST_GENERATED_PAD
+/* Replay the same RAM fixture through the generated entry on either side of
+ * its budget guard. compare() saved the original and expected RAM images. */
+static bool compare_generated(CPUState input, u32 entry, int cutoff) {
+    const int budgets[] = {cutoff, cutoff + 1};
+    for (unsigned i = 0; i < 2; ++i) {
+        CPUState cpu = input;
+        cpu.budget = budgets[i];
+        CPUState guest = cpu;
+        memcpy(nc_ram, before, RAM_SIZE);
+        interp_call(&guest, entry);
+        memcpy(nc_ram, before, RAM_SIZE);
+        nc_set_module(NC_MOD_PSX2);
+        NcFunc routine = nc_lookup(entry);
+        if (!routine)
+            return false;
+        routine(&cpu);
+        nc_set_module(NC_MOD_NONE);
+        if (memcmp(&cpu, &guest, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
+            return false;
+    }
+    return true;
+}
+#endif
+
+static bool sequence_init(u32 flags, bool alternate, bool interrupts_enabled) {
+    CPUState cpu = initial();
+    cpu.cop0[12] = interrupts_enabled ? 0x405 : 4;
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(config, flags);
+    MEM_W32(config + 4, alternate ? 0x40000 : 0);
+    MEM_W32(gp + 0x184, 0xaabbccdd);
+    MEM_W32(gp + 0x188, 0x73);
+    MEM_W8(gp + 0x3f8, 20);
+    MEM_W32(gp + 0x344, 0xdead);
+    MEM_W32(0x8008f04c, 0x7b);
+    MEM_W32(0x800d4190, 0x80140000);
+    MEM_W32(0x8008ef18, 0x1248bdef);
+    MEM_W32(0x8008ef1c, 0xfeedbeef);
+    bool enabled = (flags & 0x30) != 0;
+    if (!compare(cpu, 0x80062c28, nc_init_pad_sequence, 54) ||
+        MEM_R32(gp + 0x184) != (enabled ? 0x80140000u : 0) ||
+        MEM_R32(gp + 0x188) != (enabled ? 0 : 0x73) || MEM_R8(gp + 0x3f8) != (enabled ? 0 : 20) ||
+        MEM_R32(gp + 0x344) != (enabled ? (alternate ? 0x8000 : 0x200) : 0xdead) ||
+        MEM_R32(0x8008f04c) != (enabled ? 0 : 0x7b) ||
+        MEM_R32(0x8008ef1c) != (enabled ? 0x1248bdefu : 0xfeedbeefu))
+        return false;
+#ifdef NC_TEST_GENERATED_PAD
+    return compare_generated(cpu, 0x80062c28, 54);
+#else
+    return true;
+#endif
+}
+
 static bool sequence_step(u16 buttons, u8 remaining, u8 side_byte) {
     CPUState cpu = initial();
     if (!compare(cpu, 0x80062d2c, nc_read_pad_sequence, 100) || MEM_R8(gp + 0x3f8) != remaining ||
@@ -133,25 +187,10 @@ static bool sequence_step(u16 buttons, u8 remaining, u8 side_byte) {
     if (!nc_read_pad_sequence(&cpu) || cpu.r[2] != buttons)
         return false;
 #ifdef NC_TEST_GENERATED_PAD
-    const int budgets[] = {100, 101};
-    for (unsigned i = 0; i < 2; ++i) {
-        cpu = initial();
-        cpu.budget = budgets[i];
-        CPUState guest = cpu;
-        memcpy(nc_ram, before, RAM_SIZE);
-        interp_call(&guest, 0x80062d2c);
-        memcpy(nc_ram, before, RAM_SIZE);
-        nc_set_module(NC_MOD_PSX2);
-        NcFunc read_record = nc_lookup(0x80062d2c);
-        if (!read_record)
-            return false;
-        read_record(&cpu);
-        nc_set_module(NC_MOD_NONE);
-        if (memcmp(&cpu, &guest, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
-            return false;
-    }
-#endif
+    return compare_generated(initial(), 0x80062d2c, 100);
+#else
     return true;
+#endif
 }
 
 static bool sequences(void) {
@@ -204,6 +243,8 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
     bool ok = sequences() && ports();
+    for (unsigned i = 0; ok && i < 16; ++i)
+        ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
         u32 pressed = i == 16 ? 0 : i == 17 ? 0xfafa : 1u << i;
         ok = decode(0x41, pressed, false, 0, 128, 128, 128) &&
