@@ -16,6 +16,28 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* Bit 2 of the record flags selects this pair of angle updates. The
+ * second call's delay slot stores the first result; the jump stores the second. */
+bool nc_step_record_angle_pair(CPUState *c) {
+    if (c->budget <= 48)
+        return false;
+    const u32 record = R(16);
+    R(4) = (s32)(s16)MEM_R16(record + 0x12);
+    R(5) = (s32)(s16)MEM_R16(record + 0x0a);
+    R(6) = MEM_R32(record + 0x148);
+    R(31) = 0x8002b420;
+    nc_step_record_angle(c);
+    R(4) = (s32)(s16)MEM_R16(record + 0x10);
+    R(5) = (s32)(s16)MEM_R16(record + 0x08);
+    R(6) = MEM_R32(record + 0x148);
+    R(31) = 0x8002b434;
+    MEM_W16(record + 0x0a, R(2));
+    nc_step_record_angle(c);
+    MEM_W16(record + 0x08, R(2));
+    c->budget -= 24; /* Each angle step already charged its own cycles. */
+    return true;
+}
+
 /* The paired points use unsigned halfwords. Their differences are full
  * words, including negative displacements across the signed-halfword edge. */
 bool nc_prepare_paired_point_bearing(CPUState *c) {
