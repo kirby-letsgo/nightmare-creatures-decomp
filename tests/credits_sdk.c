@@ -454,6 +454,39 @@ static bool check_set_graph_debug(void) {
     return true;
 }
 
+static bool check_gpu_parameter(void) {
+    const u32 data_slot = 0x80024628, control_slot = 0x8002462c;
+    const u32 data_port = MEM_R32(data_slot), control_port = MEM_R32(control_slot);
+    CPUState state = arguments(3, 0, 0, 19);
+    if (!compare(state, 0x8001e124, nc_credits_gpu_parameter, 18))
+        return false;
+
+    const u32 data = 0x80060800;
+    const u32 selectors[] = {0, 2, 5, 0x10000007, 0x8a123456, 0xffffffff};
+    const u32 replies[] = {0, 0x00ffffff, 0xff000000, 0xab123456};
+    for (unsigned i = 0; i < sizeof selectors / sizeof selectors[0]; i++)
+        for (unsigned j = 0; j < sizeof replies / sizeof replies[0]; j++)
+            for (unsigned alias = 0; alias < 2; alias++) {
+                MEM_W32(data_slot, data);
+                MEM_W32(control_slot, alias ? 0xa0060800 : SCRATCH_BASE);
+                MEM_W32(data, replies[j]);
+                state = arguments(selectors[i], 0, 0, 19);
+                if (!compare(state, 0x8001e124, nc_credits_gpu_parameter, 18))
+                    return false;
+            }
+
+    /* The GP1 write may redirect the data pointer itself. */
+    MEM_W32(control_slot, data_slot);
+    MEM_W32(data_slot, data);
+    MEM_W32(data, 0x11223344);
+    MEM_W32(SCRATCH_BASE, 0x55667788);
+    state = arguments(SCRATCH_BASE, 0, 0, 19);
+    bool ok = compare(state, 0x8001e124, nc_credits_gpu_parameter, 18);
+    MEM_W32(data_slot, data_port);
+    MEM_W32(control_slot, control_port);
+    return ok;
+}
+
 static bool check_gpu_command_chain(void) {
     const u32 slots = 0x8002462c, head = 0x80060840;
     u32 ports[4];
@@ -902,6 +935,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_control();
     pass = pass && check_gpu_command_block();
     pass = pass && check_gpu_command_chain();
+    pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
     pass = pass && check_draw_sync_callback();

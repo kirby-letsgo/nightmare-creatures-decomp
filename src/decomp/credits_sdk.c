@@ -516,6 +516,26 @@ bool nc_credits_read_environment(CPUState *c, bool display) {
     return true;
 }
 
+bool nc_credits_gpu_parameter(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+
+    c->budget -= 2;
+    R(3) = MEM_R32(0x8002462c);
+    R(4) |= 0x10000000; /* GP1 information request */
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(3), R(4));
+    c->budget -= 2;
+    R(2) = MEM_R32(0x80024628);
+    R(3) = 0x00ff0000;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R32(R(2));
+    R(3) |= 0xffff;
+    R(2) &= R(3);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_gpu_command_chain(CPUState *c) {
     if (c->budget <= 27)
         return false;
