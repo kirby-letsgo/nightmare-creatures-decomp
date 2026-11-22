@@ -44,3 +44,4 @@ credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
 credits_exe  80019454    8001949C         credits.c
 credits_exe  800198B0    800198EC         credits.c
+credits_exe  80018F94    80019220         credits_roll.c
