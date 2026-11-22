@@ -335,3 +335,15 @@ bool nc_credits_palette_id(CPUState *c) {
     c->budget -= 6;
     return true;
 }
+
+bool nc_credits_video_mode(CPUState *c, bool replace) {
+    if (c->budget <= (replace ? 8 : 6))
+        return false;
+    R(2) = MEM_R32(0x80024504);
+    if (replace) {
+        R(1) = 0x80020000;
+        MEM_W32(R(1) + 0x4504, R(4));
+    }
+    c->budget -= replace ? 8 : 6;
+    return true;
+}
