@@ -1084,6 +1084,44 @@ bool nc_credits_dump_display(CPUState *c) {
     return dump_environment(c, false);
 }
 
+bool nc_credits_draw_sync_callback(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    c->budget--;
+    R(2) = MEM_R8(0x8002455a);
+    R(29) -= 24;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = R(2) < 2;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget -= 2;
+    if (!R(2)) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, R(2) + 0x4554);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018538);
+        u32 diagnostic = R(2);
+        R(31) = 0x8001c220;
+        R(5) = R(16);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, diagnostic);
+    }
+
+    /* Read the previous handler after the diagnostic returns. */
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, R(2) + 0x4564);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(R(1) + 0x4564, R(16));
+    NC_POLL(c, NC_INSN_CYCLES);
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_set_graph_debug(CPUState *c) {
     if (c->budget <= 31)
         return false;

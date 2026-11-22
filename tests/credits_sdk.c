@@ -410,6 +410,31 @@ static bool check_dump_environment(bool draw, u8 graph) {
     return true;
 }
 
+static bool check_draw_sync_callback(void) {
+    const u32 slot = 0x80024564, diagnostic = 0x80060c00;
+    const u8 levels[] = {0, 1, 2, 255};
+    const u32 handlers[] = {0, 0x8001935c, 0xa0060400};
+    const int budgets[] = {11, 18, 29, 4096};
+    const u32 previous_diagnostic = MEM_R32(0x80024554);
+    /* The diagnostic changes the registered handler in its return delay slot. */
+    MEM_W32(diagnostic, 0x03e00008);     /* jr ra */
+    MEM_W32(diagnostic + 4, 0xad090000); /* sw t1, 0(t0) */
+    MEM_W32(0x80024554, diagnostic);
+    for (unsigned i = 0; i < sizeof levels; i++)
+        for (unsigned j = 0; j < sizeof handlers / sizeof handlers[0]; j++)
+            for (unsigned k = 0; k < sizeof budgets / sizeof budgets[0]; k++) {
+                MEM_W8(0x8002455a, levels[i]);
+                MEM_W32(slot, 0x800198ec);
+                CPUState state = arguments(handlers[j], 0x1234, 0x5678, budgets[k]);
+                state.r[8] = slot;
+                state.r[9] = 0x80019364;
+                if (!compare(state, 0x8001c1e8, nc_credits_draw_sync_callback, 10))
+                    return false;
+            }
+    MEM_W32(0x80024554, previous_diagnostic);
+    return true;
+}
+
 static bool check_set_graph_debug(void) {
     const u32 levels[] = {0, 1, 2, 0x100, 0xffffff80, 0xffffffff};
     /* Exercise a callback that preserves the arguments and another that uses them. */
@@ -710,6 +735,7 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_offset();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
+    pass = pass && check_draw_sync_callback();
     pass = pass && check_dump_environment(false, 0);
     for (unsigned graph = 0; graph <= 2; graph++)
         pass = pass && check_dump_environment(true, graph);
