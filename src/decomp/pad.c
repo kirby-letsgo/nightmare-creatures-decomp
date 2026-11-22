@@ -167,6 +167,26 @@ u32 nc_pad_playback_poll_gate(CPUState *c) {
     return 0x80042e18;
 }
 
+/* Any live button interrupts playback. Only an idle read consults the
+ * sequence-end marker. Keep both guest return addresses for the callees. */
+u32 nc_poll_playback_input(CPUState *c) {
+    if (c->budget <= 2)
+        return 0x80042e18;
+    R(31) = 0x80042e20;
+    R(5) = 1;
+    c->budget -= 2;
+    nc_call(c, 0x80070050);
+    bool pressed = R(2) != 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (pressed)
+        return 0x80042e38;
+
+    R(31) = 0x80042e30;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, 0x80062cc8);
+    return 0x80042e30;
+}
+
 /* Live input goes straight to the flag check. With idle pads, the caller
  * tests the sequence-end result first. Both paths return 1 in v0. */
 bool nc_pad_playback_interrupt(CPUState *c, bool check_sequence_end) {

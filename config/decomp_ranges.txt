@@ -143,6 +143,8 @@ credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
 # Playback state checks before the live pad read.
 psx2_exe     80042DE4    80042E18         pad.c
+# Poll live buttons and check for sequence end on idle input.
+psx2_exe     80042E18    80042E30         pad.c
 # Playback interruption on live input or sequence end.
 psx2_exe     80042E30    80042E7C         pad.c
 # Start press edge after live pad decoding.
