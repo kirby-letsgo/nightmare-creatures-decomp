@@ -117,6 +117,10 @@ credits_exe  8001E124    8001E154         credits_sdk.c
 credits_exe  8001E154    8001E178         credits_sdk.c
 credits_exe  8001E9FC    8001EA30         credits_sdk.c
 credits_exe  8001EC78    8001ECA4         credits_sdk.c
+credits_exe  8001FDF0    8001FE00         credits_sdk.c
+credits_exe  8001FE00    8001FE10         credits_sdk.c
+credits_exe  8001FE10    8001FE20         credits_sdk.c
+credits_exe  8001FE20    8001FE30         credits_sdk.c
 credits_exe  8001D7EC    8001D804         credits_sdk.c
 credits_exe  8001D048    8001D084         credits_sdk.c
 credits_exe  8001D6AC    8001D730         credits_sdk.c
