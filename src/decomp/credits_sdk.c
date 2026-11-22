@@ -434,6 +434,59 @@ bool nc_credits_draw_corner(CPUState *c, bool bottom_right) {
     return true;
 }
 
+bool nc_credits_draw_area_packet(CPUState *c) {
+    if (c->budget <= 161)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(5);
+    R(2) = 2;
+    c->budget -= 3;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    MEM_W8(R(17) + 3, 2);
+    c->budget--;
+    R(4) = (u32)(s32)(s16)MEM_R16(R(16));
+    c->budget -= NC_LOAD_CYCLES;
+    R(5) = (u32)(s32)(s16)MEM_R16(R(16) + 2);
+    R(31) = 0x8001d0b4;
+    c->budget -= NC_LOAD_CYCLES + 2;
+    NC_FN_ENTER(c, 0x8001d4cc);
+    nc_credits_draw_corner(c, false);
+    MEM_W32(R(17) + 4, R(2));
+    c->budget--;
+
+    /* The first command can overlap the rectangle. Reload the fields before
+     * computing the inclusive bottom-right corner with 16-bit wraparound. */
+    u32 x = MEM_R16(R(16));
+    c->budget -= NC_LOAD_CYCLES;
+    u32 width = MEM_R16(R(16) + 4);
+    c->budget -= NC_LOAD_CYCLES;
+    u32 y = MEM_R16(R(16) + 2);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    u32 height = MEM_R16(R(16) + 6);
+    R(4) = (u32)(s32)(s16)(x + width - 1);
+    R(5) = (u32)(s32)(s16)(y + height - 1);
+    R(31) = 0x8001d0ec;
+    c->budget -= NC_LOAD_CYCLES + 6;
+    NC_FN_ENTER(c, 0x8001d598);
+    nc_credits_draw_corner(c, true);
+    MEM_W32(R(17) + 8, R(2));
+    c->budget--;
+    R(31) = MEM_R32(R(29) + 24);
+    c->budget -= NC_LOAD_CYCLES;
+    R(17) = MEM_R32(R(29) + 20);
+    c->budget -= NC_LOAD_CYCLES;
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 32;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    return true;
+}
+
 bool nc_credits_draw_offset_word(CPUState *c) {
     if (c->budget <= 18)
         return false;
