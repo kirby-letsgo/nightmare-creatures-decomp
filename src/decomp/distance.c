@@ -353,6 +353,40 @@ bool nc_apply_rotated_point_offset(CPUState *c, bool subtract_x) {
     return true;
 }
 
+/* Cosine is already in v0. Build both signed coordinate triples, then
+ * pass the opposite relative angle to the projection call. */
+bool nc_place_actor_points(CPUState *c) {
+    if (c->budget <= 51)
+        return false;
+    const u32 record = R(17), actor = R(18), radius = R(23);
+    const u32 z_product = (u32)(s32)(s16)R(2) * radius;
+    R(4) = R(21);
+    R(21) = (u32)((s32)z_product >> 14);
+    nc_heading_sine(c);
+    nc_mult(c, (u32)(s32)(s16)R(2), radius);
+    R(16) = 0u - (R(16) + R(21));
+    MEM_W32(record + 0x160, actor);
+    R(3) = MEM_R32(record + 0x160);
+    R(19) -= R(30);
+    MEM_W16(record + 0x1c, R(16));
+    MEM_W16(record + 4, R(16));
+    MEM_W16(record + 0x1a, R(19));
+    MEM_W16(record + 2, R(19));
+    R(20) += (u32)((s32)c->lo >> 14);
+    MEM_W16(record + 0x18, R(20));
+    MEM_W16(record, R(20));
+    MEM_W32(record + 0x150, MEM_R32(actor + 0x27c));
+    R(2) = MEM_R32(R(3) + 0x284);
+    MEM_W32(record + 0x158, R(2));
+    R(8) = MEM_R32(R(29) + 0x10);
+    R(4) = radius;
+    R(5) = R(8) - R(22);
+    R(6) = record;
+    R(31) = 0x800470a4;
+    c->budget -= 42; /* sine lookup charged the other nine cycles */
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
