@@ -10,6 +10,15 @@ typedef enum NcHitOutcome {
     NC_HIT_OTHER_DEATH,
 } NcHitOutcome;
 
+typedef enum NcReactionRoute {
+    NC_REACTION_TIMED,
+    NC_REACTION_SELECT_ACTION,
+    NC_REACTION_STATE_13,
+    NC_REACTION_APPLY_FLAGS,
+} NcReactionRoute;
+
+NcReactionRoute nc_route_hit_reaction(CPUState *c);
+bool nc_enter_hit_state_13(CPUState *c, bool clear_hits);
 NcHitOutcome nc_check_lethal_hit(CPUState *c);
 bool nc_clear_hit_reaction_flags(CPUState *c);
 bool nc_reset_hit_animation(CPUState *c);

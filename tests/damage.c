@@ -179,6 +179,82 @@ static bool hit_preparation(void) {
     return true;
 }
 
+static bool reaction_route_matches(CPUState *c) {
+    NcReactionRoute route = nc_route_hit_reaction(c);
+    switch (route) {
+    case NC_REACTION_SELECT_ACTION:
+        return c->r[31] == 0x8004eec8;
+    case NC_REACTION_STATE_13:
+        return c->r[31] == 0x8004efcc;
+    case NC_REACTION_APPLY_FLAGS:
+        return c->r[31] == 0x8004f024;
+    default:
+        return false;
+    }
+}
+
+static bool route_hits(bool disc) {
+    const u32 kinds[] = {1, 41, 0x10029};
+    const u8 counts[] = {0, 1, 2, 5, 255};
+    const s32 values[] = {-1, 0x4000, 0x4001};
+    CPUState cpu = {0};
+    for (unsigned r = 1; r < 32; ++r)
+        cpu.r[r] = 0x12345u * r;
+    cpu.r[17] = target;
+    cpu.r[28] = 0x80140000;
+    MEM_W32(cpu.r[28] + 0x244, rules);
+    for (unsigned player = 0; player < 2; ++player)
+        for (unsigned mode = 0; mode < 2; ++mode)
+            for (unsigned k = 0; k < sizeof kinds / sizeof kinds[0]; ++k)
+                for (unsigned i = 0; i < sizeof counts; ++i)
+                    for (unsigned v = 0; v < sizeof values / sizeof values[0]; ++v) {
+                        memset(nc_ram + (target & (RAM_SIZE - 1)), 0xa5, 0x400);
+                        MEM_W32(target + 0x2c8, 0x80000100 | player);
+                        MEM_W8(target + 0x38c, counts[i]);
+                        MEM_W32(rules, mode ? 0x84000000 : 0x80000000);
+                        cpu.r[18] = kinds[k];
+                        cpu.r[16] = (u32)values[v];
+                        bool apply =
+                            player && kinds[k] != 41 && counts[i] >= 2 && values[v] <= 0x4000;
+                        bool state13 = player ? kinds[k] == 41 || (counts[i] >= 2 && !apply)
+                                              : !mode && (kinds[k] == 41 || counts[i] == 5);
+                        cpu.r[31] = apply ? 0x8004f024 : state13 ? 0x8004efcc : 0x8004eec8;
+                        cpu.budget = 28;
+                        CPUState native = cpu;
+                        if (disc ? !compare(cpu, 0x8004ee40, reaction_route_matches, 27)
+                                 : !reaction_route_matches(&native))
+                            return false;
+                        if (MEM_R8(target + 0x38a) != (apply ? 10 : 0xa5) ||
+                            MEM_R8(target + 0x38c) != (apply ? 0 : counts[i]))
+                            return false;
+                    }
+    return true;
+}
+
+static bool clear_then_state_13(CPUState *c) {
+    return nc_enter_hit_state_13(c, true);
+}
+
+static bool keep_then_state_13(CPUState *c) {
+    return nc_enter_hit_state_13(c, false);
+}
+
+static bool hit_state_13(void) {
+    CPUState cpu = {0};
+    cpu.r[17] = target;
+    cpu.r[31] = 0x8004f02c;
+    for (unsigned clear = 0; clear < 2; ++clear) {
+        memset(nc_ram + (target & (RAM_SIZE - 1)), 0xa5, 0x400);
+        int cycles = clear ? 20 : 19;
+        cpu.budget = cycles + 1;
+        if (!compare(cpu, clear ? 0x8004efcc : 0x8004efd0,
+                     clear ? clear_then_state_13 : keep_then_state_13, cycles) ||
+            MEM_R8(target + 0x38c) != (clear ? 0 : 0xa5) || MEM_R8(target + 0x39b) != 13)
+            return false;
+    }
+    return true;
+}
+
 static bool player_reaction(CPUState *c) {
     return nc_apply_lethal_reaction(c, true);
 }
@@ -307,9 +383,11 @@ int main(int argc, char **argv) {
             }
         }
     }
-    if (!lethal_hits(compare_disc) || !surviving_hit_flags(compare_disc))
+    if (!lethal_hits(compare_disc) || !surviving_hit_flags(compare_disc) ||
+        !route_hits(compare_disc))
         return 1;
-    if (compare_disc && (!hit_preparation() || !lethal_reactions() || !death_transitions())) {
+    if (compare_disc &&
+        (!hit_state_13() || !hit_preparation() || !lethal_reactions() || !death_transitions())) {
         fprintf(stderr, "death transition comparison failed\n");
         return 1;
     }

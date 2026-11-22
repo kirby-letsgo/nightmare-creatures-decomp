@@ -652,6 +652,20 @@ class Emitter:
                 out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
                 out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004EE40:
+                out.extend(
+                    [
+                        "    switch (nc_route_hit_reaction(c)) {",
+                        "    case NC_REACTION_SELECT_ACTION: goto L_8004EEC8;",
+                        "    case NC_REACTION_STATE_13: goto L_8004EFCC;",
+                        "    case NC_REACTION_APPLY_FLAGS: goto L_8004F024;",
+                        "    case NC_REACTION_TIMED: break;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x8004EFCC, 0x8004EFD0):
+                clear_hits = "true" if i.addr == 0x8004EFCC else "false"
+                out.append(f"    if (nc_enter_hit_state_13(c, {clear_hits})) goto L_8004F02C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80039964:
                 out.append("    if (nc_reset_hit_animation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004EDCC:
