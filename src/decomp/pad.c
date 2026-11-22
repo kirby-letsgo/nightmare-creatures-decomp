@@ -1623,6 +1623,20 @@ u32 nc_menu_record_37_pad_type(CPUState *c) {
     return R(2) == 7 ? 0x8006780c : 0x800677e0;
 }
 
+/* Record 37 dispatches action 0x20 when the packet type is not seven. */
+bool nc_menu_record_37_action(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    u32 record = MEM_R32(R(28) + 0x190);
+    R(6) = 0x20;
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12 * record;
+    R(31) = 0x80067804;
+    c->budget -= 11;
+    nc_call(c, 0x80063b70);
+    return true;
+}
+
 /* On the type-7 path, sample both stick bytes before testing the counter. */
 u32 nc_menu_record_37_read_stick(CPUState *c) {
     if (c->budget <= 24)
