@@ -11,6 +11,7 @@ typedef enum {
 } NcPadBiosService;
 
 bool nc_pad_bios_call(CPUState *c, NcPadBiosService service);
+bool nc_sdk_patch_pad(CPUState *c);
 bool nc_sdk_init_pad(CPUState *c);
 bool nc_sdk_start_pad(CPUState *c);
 bool nc_start_pad_driver(CPUState *c);

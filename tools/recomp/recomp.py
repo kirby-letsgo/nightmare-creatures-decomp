@@ -662,6 +662,8 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PAD_BIOS_SERVICES:
                 service = PSX2_PAD_BIOS_SERVICES[i.addr]
                 out.append(f"    if (nc_pad_bios_call(c, {service})) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80073F74:
+                out.append("    if (nc_sdk_patch_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80073EB4:
                 out.append("    if (nc_sdk_init_pad(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80073F1C:

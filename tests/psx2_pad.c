@@ -187,6 +187,35 @@ static bool pad_bios_services(void) {
     return true;
 }
 
+static bool sdk_pad_patch(void) {
+    CPUState cpu = initial();
+    bios_init();
+    cpu.r[9] = 0x57;
+    nc_call(&cpu, 0xb0);
+    u32 table_entry = cpu.r[2] + 0x16c;
+    const u32 targets[] = {MEM_R32(table_entry), 0x80150000};
+    for (unsigned i = 0; i < 2; ++i) {
+        cpu = initial();
+        cpu.cop0[12] = i ? 0x405 : 4;
+        MEM_W32(table_entry, targets[i]);
+        u32 start = targets[i] + 0x594;
+        MEM_W32(start - 4, 0xaabbccdd);
+        for (unsigned word = 0; word < 12; ++word)
+            MEM_W32(start + 4 * word, 0x12345670 + word);
+        if (!compare(cpu, 0x80073f74, nc_sdk_patch_pad, 71) || MEM_R32(0x8008efe8) != cpu.r[31] ||
+            MEM_R32(start - 4) != 0xaabbccdd || MEM_R32(start + 44) != 0x1234567b)
+            return false;
+        for (unsigned word = 0; word < 11; ++word)
+            if (MEM_R32(start + 4 * word))
+                return false;
+#ifdef NC_TEST_GENERATED_PAD
+        if (!compare_generated(cpu, 0x80073f74, 71))
+            return false;
+#endif
+    }
+    return true;
+}
+
 static bool sdk_pad(u32 first_size, u32 second_size) {
     CPUState cpu = initial();
     const u32 first = 0x80140100, second = 0x80141004;
@@ -408,8 +437,8 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
-              pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
