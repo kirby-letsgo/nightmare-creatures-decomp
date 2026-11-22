@@ -529,6 +529,8 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr == 0x80018C8C:
                 out.append("    if (nc_credits_skip_input(c)) return;")
+            if self.mod.name == "credits_exe" and i.addr == 0x800192E4:
+                out.append("    if (nc_credits_set_cd_volume(c)) return;")
             if i.addr in contact_blocks:
                 check, passed, rejected = contact_blocks[i.addr]
                 out.extend(
