@@ -1278,6 +1278,36 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_interrupt_driver_calls(void) {
+    const u32 slot = 0x800244a0, original = MEM_R32(slot);
+    const u32 table = 0x80061000, flag = 0x80023418, handler = 0x80023424;
+    u16 saved_flag = MEM_R16(flag);
+    u32 saved_handler = MEM_R32(handler);
+    MEM_W16(flag, 1);
+    MEM_W32(handler, 0x80021b54);
+    /* Distinct return values detect dispatch through the wrong table slot. */
+    MEM_W32(table + 8, 0x8001fe20);  /* CdLastPos */
+    MEM_W32(table + 12, 0x8001fdf0); /* CdStatus */
+    for (unsigned alternate = 0; alternate < 2; alternate++) {
+        MEM_W32(slot, alternate ? table : original);
+        for (unsigned install = 0; install < 2; install++)
+            for (unsigned low = 0; low < 2; low++) {
+                CPUState state = arguments(2, 0x80021b54, 7, low ? 13 : 4096);
+                if (low)
+                    state.r[29] = SCRATCH_BASE + 0x100;
+                if (!compare(state, install ? 0x8001a6c8 : 0x8001a698,
+                             install ? nc_credits_interrupt_callback : nc_credits_reset_callback, 12))
+                    return false;
+                if (alternate && nc_cpu.r[2] != (install ? 0x80024778 : MEM_R8(0x8002476c)))
+                    return false;
+            }
+    }
+    MEM_W32(slot, original);
+    MEM_W16(flag, saved_flag);
+    MEM_W32(handler, saved_handler);
+    return true;
+}
+
 static bool check_cd_init_interrupt(void) {
     const u32 flag = 0x80023418, handler = 0x80023424, enabled = 0x80023448;
     const u32 mask_slot = 0x800244a8, mask = 0x80061000;
@@ -1814,6 +1844,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_interrupt_driver_calls();
     pass = pass && check_cd_init_interrupt();
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
