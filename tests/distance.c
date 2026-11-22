@@ -637,6 +637,44 @@ static bool placed_actor_points(bool disc) {
     return true;
 }
 
+static bool part_transform_setup(bool disc) {
+    const u32 frame = SCRATCH_BASE + 256, matrix = frame + 0x98;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    CPUState input = initial();
+    input.r[29] = frame + 0xf8;
+    input.r[31] = 0x800343d8;
+    for (unsigned reg = 0; reg < 8; ++reg)
+        gte_write_ctrl(&input, reg, 0x8000ffffu + reg);
+    memset(nc_scratch, 0xa5, sizeof before);
+    memcpy(before, nc_scratch, sizeof before);
+    input.budget = 55;
+    CPUState native = input;
+    if (nc_init_part_transform(&native) || memcmp(&input, &native, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_init_part_transform(&native) || native.budget != 1 || native.r[29] != frame ||
+        native.r[17] != matrix || MEM_R16(matrix + 18) != 0xa5a5)
+        return false;
+    for (unsigned i = 0; i < 9; ++i)
+        if (MEM_R16(matrix + 2 * i) != (i % 4 == 0 ? 4096 : 0))
+            return false;
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        /* The oracle stops at the continuation with the new frame active. */
+        const u32 stub = 0x80120000;
+        MEM_W32(stub, 0x08000000u | ((0x8003433cu >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bd00f8); /* addiu sp, sp, 248 */
+        input.r[29] = frame;
+        input.budget += 2;
+        interp_call(&input, stub);
+        if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+            return false;
+    }
+    return true;
+}
+
 static bool part_offsets(bool disc) {
     const u32 frame = SCRATCH_BASE, part = frame + 512;
     const s16 points[][3] = {{-32768, 0, 0}, {0, 32767, 0}, {0, 0, -1}};
@@ -1377,7 +1415,7 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              part_offsets(disc) && part_matrix_composition(disc);
+              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

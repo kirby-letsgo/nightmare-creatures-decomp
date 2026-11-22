@@ -651,7 +651,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80046B1C:
             targets.update((0x80046E68, 0x80046F2C, 0x8004701C, 0x800470A4))
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
-            targets.update((0x80034480, 0x8003475C, 0x80034788))
+            targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -881,6 +881,8 @@ class Emitter:
                 out.append("        goto L_8004720C; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
                 out.append("    if (nc_return_point_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8003433C:
+                out.append("    if (nc_init_part_transform(c)) goto L_800343D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034430:
                 out.append("    if (nc_transform_part_offset(c)) {")
                 out.append(f"        {self.call(0x80025FE4)}")
