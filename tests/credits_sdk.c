@@ -56,6 +56,22 @@ static bool check_fill(void) {
     return true;
 }
 
+static bool check_length(void) {
+    const u32 locations[] = {0, 0x80060001, 0xa0060003, SCRATCH_BASE + 7};
+    for (unsigned i = 0; i < sizeof locations / sizeof locations[0]; i++)
+        for (unsigned length = 0; length < 10; length++) {
+            if (locations[i]) {
+                memset(nc_fast_ptr(locations[i]), 0xe1, length);
+                MEM_W8(locations[i] + length, 0);
+            }
+            for (int budget = 3; budget < 32; budget++)
+                if (!compare(arguments(locations[i], 0, 0, budget), 0x80019a30,
+                             nc_credits_string_length, 2))
+                    return false;
+        }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -68,6 +84,7 @@ int main(int argc, char **argv) {
         return 1;
     bool pass = check_copy();
     pass = pass && check_fill();
+    pass = pass && check_length();
     disc_close();
     return pass ? 0 : 1;
 }
