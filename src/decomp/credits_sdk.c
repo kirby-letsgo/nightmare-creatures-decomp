@@ -1812,6 +1812,23 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 24, 0x8001a7dc);
 }
 
+/* setIntrVSync returns the previous callback, including when it skips the store. */
+bool nc_credits_set_vsync_slot(CPUState *c) {
+    if (c->budget <= NC_LOAD_CYCLES + 10)
+        return false;
+    R(4) = 0x800244b4u + 4u * R(4);
+    R(2) = 0x800244b4u;
+    c->budget -= 4;
+    R(2) = MEM_R32(R(4));
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (R(5) != R(2)) {
+        MEM_W32(R(4), R(5));
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 /* The IRQ, VSync and DMA initializers use identical word-clear loops. */
 bool nc_credits_clear_irq_words(CPUState *c) {
     if (c->budget <= 3)
