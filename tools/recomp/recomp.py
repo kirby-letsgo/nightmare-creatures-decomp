@@ -72,6 +72,8 @@ CREDITS_ROUTINES = {
     0x8001A3B4: "nc_credits_bios_init_pad(c)",
     0x8001A3C4: "nc_credits_bios_start_pad(c)",
     0x8001A3D4: "nc_credits_bios_pad_init_and_start(c)",
+    0x8001A3E4: "nc_credits_patch_pad(c)",
+    0x8001A434: "nc_credits_flush_cache(c)",
     0x8001A444: "nc_credits_enter_critical_section(c)",
     0x8001A688: "nc_credits_change_clear_counter(c)",
     0x8001A698: "nc_credits_reset_callback(c)",

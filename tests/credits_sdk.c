@@ -1322,6 +1322,34 @@ static bool write_irq_mask(CPUState *c) {
     return nc_credits_interrupt_mask(c, true);
 }
 
+static bool check_pad_patch(void) {
+    CPUState query = arguments(0, 0, 0, 4096);
+    query.r[9] = 0x57;
+    bios_call(&query, 0xb0);
+    const u32 slot = query.r[2] + 0x16c, original = MEM_R32(slot);
+    const u32 destinations[] = {original + 0x594, SCRATCH_BASE + 4};
+    const u32 saved_ra = MEM_R32(0x80024c80);
+    bool ok = true;
+    for (unsigned i = 0; i < sizeof destinations / sizeof destinations[0] && ok; i++) {
+        u32 start = destinations[i];
+        u8 saved[52]; /* eleven words and two guards */
+        memcpy(saved, nc_fast_ptr(start - 4), sizeof saved);
+        memset(nc_fast_ptr(start - 4), 0xa5, sizeof saved);
+        MEM_W32(slot, start - 0x594);
+        CPUState state = arguments(7, 2, 3, i ? 4096 : 72);
+        state.cop0[12] = 0x401;
+        ok = compare(state, 0x8001a3e4, nc_credits_patch_pad, 71) &&
+             MEM_R32(0x80024c80) == state.r[31] && (nc_cpu.cop0[12] & 0x401) == 0 &&
+             MEM_R32(start - 4) == 0xa5a5a5a5 && MEM_R32(start + 44) == 0xa5a5a5a5;
+        for (unsigned word = 0; word < 11; word++)
+            ok = ok && MEM_R32(start + 4 * word) == 0;
+        memcpy(nc_fast_ptr(start - 4), saved, sizeof saved);
+    }
+    MEM_W32(slot, original);
+    MEM_W32(0x80024c80, saved_ra);
+    return ok && compare(arguments(7, 2, 3, 4), 0x8001a434, nc_credits_flush_cache, 3);
+}
+
 static bool check_pad_setup(void) {
     const struct {
         u32 entry;
@@ -2323,6 +2351,7 @@ int main(int argc, char **argv) {
     pass = pass && check_callback_controls();
     pass = pass && check_interrupt_driver_control(false);
     pass = pass && check_interrupt_driver_control(true);
+    pass = pass && check_pad_patch();
     pass = pass && check_pad_setup();
     pass = pass && check_interrupt_auto_clear();
     pass = pass && check_irq_entry_hooks();

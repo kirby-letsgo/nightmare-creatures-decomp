@@ -139,6 +139,8 @@ bool nc_credits_reset_irq_entry(CPUState *c);
 bool nc_credits_hook_irq_entry(CPUState *c);
 bool nc_credits_legacy_pad_init(CPUState *c);
 bool nc_credits_bios_pad_init_and_start(CPUState *c);
+bool nc_credits_patch_pad(CPUState *c);
+bool nc_credits_flush_cache(CPUState *c);
 bool nc_credits_sdk_init_pad(CPUState *c);
 bool nc_credits_bios_init_pad(CPUState *c);
 bool nc_credits_start_pad(CPUState *c);
