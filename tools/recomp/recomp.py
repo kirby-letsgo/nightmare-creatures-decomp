@@ -819,6 +819,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80067358:
             targets.add(0x80067830)
             targets.add(0x80067804)
+            targets.add(0x800682D8)
             targets.add(0x800677E0)
             targets.add(0x800676FC)
             targets.add(0x800676C4)
@@ -1400,6 +1401,8 @@ class Emitter:
                 out.append("    if (nc_menu_pad_type_flags(c)) goto L_800683D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800680EC:
                 out.append("    if (nc_menu_sample_stick_bounds(c)) goto L_80068154;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800681EC:
+                out.append("    if (nc_menu_store_stick_calibration(c)) goto L_800682D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006818C:
                 out.append("    if (nc_menu_expand_stick_bounds(c)) goto L_800681EC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068154:
