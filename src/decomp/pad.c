@@ -229,6 +229,46 @@ restore:
  * button halfword, an unsigned repeat count, and a byte copied to 8008F04C. */
 enum { SEQUENCE_BASE = 0x184, SEQUENCE_INDEX = 0x188, SEQUENCE_REMAINING = 0x3f8 };
 
+/* Level setup clears the active sequence even when playback is disabled.
+ * With playback enabled it installs the records, resets the reader, and
+ * snapshots 8008EF18 between the two guest critical-section calls. */
+bool nc_init_pad_sequence(CPUState *c) {
+    if (c->budget <= 54)
+        return false;
+    const u32 gp = R(28);
+    R(3) = MEM_R32(gp + 0x244);
+    R(29) -= 0x98;
+    MEM_W32(R(29) + 0x90, R(31));
+    R(2) = MEM_R32(R(3)) & 0x30;
+    MEM_W32(gp + SEQUENCE_BASE, 0);
+    c->budget -= 12;
+    if (R(2)) {
+        u32 flags = MEM_R32(R(3) + 4);
+        R(3) = 0x40000;
+        bool alternate = (flags & R(3)) != 0;
+        MEM_W32(gp + 0x344, alternate ? 0x8000 : 0x200);
+        R(2) = MEM_R32(0x800d4190);
+        MEM_W32(gp + SEQUENCE_INDEX, 0);
+        MEM_W8(gp + SEQUENCE_REMAINING, 0);
+        R(1) = 0x80090000;
+        MEM_W32(0x8008f04c, 0);
+        MEM_W32(gp + SEQUENCE_BASE, R(2));
+        R(31) = 0x80062c88;
+        c->budget -= alternate ? 19 : 20;
+        nc_call(c, 0x80073d8c); /* EnterCriticalSection */
+        R(2) = MEM_R32(0x8008ef18);
+        R(1) = 0x80090000;
+        MEM_W32(0x8008ef1c, R(2));
+        R(31) = 0x80062ca0;
+        c->budget -= 8;
+        nc_call(c, 0x80073d9c); /* ExitCriticalSection */
+    }
+    R(31) = MEM_R32(R(29) + 0x90);
+    R(29) += 0x98;
+    c->budget -= 6;
+    return true;
+}
+
 bool nc_stop_pad_sequence(CPUState *c) {
     if (c->budget <= 6)
         return false;
