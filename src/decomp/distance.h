@@ -11,6 +11,8 @@ bool nc_prepare_reference_distance(CPUState *c);
 bool nc_store_reference_distance(CPUState *c);
 bool nc_prepare_relative_heading(CPUState *c);
 bool nc_finish_relative_heading(CPUState *c);
+bool nc_prepare_record_projection(CPUState *c);
+bool nc_store_projected_heading(CPUState *c);
 bool nc_prepare_point_heading(CPUState *c);
 bool nc_return_point_heading(CPUState *c);
 bool nc_vector_heading(CPUState *c);

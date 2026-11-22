@@ -290,6 +290,75 @@ static bool actor_headings(bool disc) {
     return true;
 }
 
+static bool record_projections(bool disc) {
+    const u32 angles[] = {0, 1024, 2048, 3072, 4095};
+    const s32 radii[] = {0, 257, -257};
+    const u32 record = SCRATCH_BASE + 128;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof angles / sizeof angles[0]; ++i)
+        for (unsigned j = 0; j < sizeof radii / sizeof radii[0]; ++j) {
+            CPUState input = initial();
+            input.r[5] = record;
+            input.r[29] = SCRATCH_BASE + 896;
+            const u32 actor = j == 2 ? record + 0x150 - 0x284 : 0x80120000;
+            memset(nc_scratch, 0xa5, sizeof before);
+            MEM_W32(0x800d7780, (u32)-769);
+            MEM_W32(0x800d7788, 1023);
+            MEM_W32(record + 0x160, actor);
+            MEM_W32(record + 0x128, angles[i]);
+            MEM_W32(record + 0x130, radii[j]);
+            MEM_W32(actor + 0x27c, 0xffff89ab);
+            MEM_W32(actor + 0x284, 0x123456);
+            memcpy(before, nc_scratch, sizeof before);
+            CPUState cutoff = input;
+            cutoff.budget = 29;
+            CPUState native = cutoff;
+            if (nc_prepare_record_projection(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget++;
+            if (!nc_prepare_record_projection(&native) || native.budget != 1 ||
+                native.r[4] != (u32)radii[j] || native.r[5] != angles[i] * 16 ||
+                native.r[6] != record + 0x18 || native.r[31] != 0x800473c0 ||
+                MEM_R32(record + 0x150) != 0xffff89ab ||
+                MEM_R32(record + 0x158) != (j == 2 ? 0xffff89abu : 0x123456u))
+                return false;
+            native.budget = input.budget - 29;
+            if (disc) {
+                interp_call(&native, 0x80047128);
+                native.r[31] = 0x800473c8;
+                native.r[4] = native.r[17];
+                native.budget -= 2;
+                interp_call(&native, 0x80047220);
+            } else {
+                native.r[2] = angles[i];
+            }
+            cutoff = native;
+            cutoff.budget = 14;
+            CPUState finish = cutoff;
+            memcpy(after, nc_scratch, sizeof after);
+            if (nc_store_projected_heading(&finish) || memcmp(&finish, &cutoff, sizeof cutoff) ||
+                memcmp(after, nc_scratch, sizeof after))
+                return false;
+            finish.budget++;
+            if (!nc_store_projected_heading(&finish) || finish.budget != 1 ||
+                !nc_store_projected_heading(&native) ||
+                MEM_R16(record + 0x12) != (u16)native.r[2] ||
+                MEM_R16(record + 0x0a) != (u16)native.r[2] || native.r[31] != input.r[31] ||
+                native.r[29] != input.r[29])
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, 0x8004737c);
+                if (memcmp(&input, &native, sizeof input) ||
+                    memcmp(nc_scratch, after, sizeof after))
+                    return false;
+            }
+        }
+    return true;
+}
+
 static bool relative_headings(bool disc) {
     const u32 actor = SCRATCH_BASE, pose = actor + 128, linked = actor + 256;
     const u32 point = actor + 384;
@@ -563,7 +632,8 @@ int main(int argc, char **argv) {
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-              heading_projections(disc) && reference_distances(disc) && relative_headings(disc);
+              heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
+              record_projections(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

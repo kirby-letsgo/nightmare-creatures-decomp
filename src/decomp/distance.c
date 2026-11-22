@@ -111,6 +111,44 @@ bool nc_finish_relative_heading(CPUState *c) {
     return true;
 }
 
+/* Snapshot the actor coordinates and project into the second point in the
+ * record. X is stored before Z is read, so the two may alias. */
+bool nc_prepare_record_projection(CPUState *c) {
+    if (c->budget <= 29)
+        return false;
+    const u32 record = R(5);
+    R(29) -= 32;
+    MEM_W32(R(29) + 16, R(16));
+    MEM_W32(R(29) + 20, R(17));
+    MEM_W32(R(29) + 24, R(31));
+    R(16) = record;
+    R(17) = record + 0x18;
+    const u32 actor = MEM_R32(record + 0x160);
+    R(4) = MEM_R32(record + 0x130);
+    R(3) = MEM_R32(record + 0x160);
+    R(5) = MEM_R32(record + 0x128) << 4;
+    R(6) = R(17);
+    MEM_W32(record + 0x150, MEM_R32(actor + 0x27c));
+    R(2) = MEM_R32(R(3) + 0x284);
+    MEM_W32(record + 0x158, R(2));
+    R(31) = 0x800473c0;
+    c->budget -= 29;
+    return true;
+}
+
+bool nc_store_projected_heading(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    MEM_W16(R(16) + 0x12, R(2));
+    MEM_W16(R(16) + 0x0a, R(2));
+    R(31) = MEM_R32(R(29) + 24);
+    R(17) = MEM_R32(R(29) + 20);
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 32;
+    c->budget -= 14;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
