@@ -498,6 +498,50 @@ static bool check_dump_environment(bool draw, u8 graph) {
     return true;
 }
 
+static bool check_display_mask(void) {
+    const u32 env = 0x800245c4, gp1 = 0x1f801814;
+    const u32 masks[] = {0, 1, UINT32_MAX};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    gpu_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof masks / sizeof masks[0] && ok; i++)
+        for (unsigned debug = 0; debug < 2 && ok; debug++) {
+            StateIO native = {0}, guest = {0};
+            for (unsigned run = 0; run < 2 && ok; run++) {
+                MEM_W8(0x8002455a, debug ? 2 : 0);
+                MEM_W32(0x80024554, 0x8001935c); /* no-op diagnostic */
+                memset(nc_fast_ptr(env - 1), 0x55, 22);
+                MEM_W32(gp1, 0x03000000u | (masks[i] != 0));
+                nc_cpu = arguments(masks[i], 2, 3, 13);
+                if (!run && nc_credits_set_display_mask(&nc_cpu))
+                    ok = false;
+                nc_cpu.budget = debug ? 14 : 4096;
+                if (run)
+                    interp_call(&nc_cpu, 0x8001c244);
+                else
+                    ok = nc_credits_set_display_mask(&nc_cpu) && ok;
+                StateIO *result = run ? &guest : &native;
+                cpu_serialize(result);
+                gpu_serialize(result);
+                ok = ok && ((MEM_R32(gp1) >> 23) & 1) == (masks[i] == 0) &&
+                     MEM_R8(env - 1) == 0x55 && MEM_R8(env + 20) == 0x55;
+                for (unsigned j = 0; j < 20; j++)
+                    ok = ok && MEM_R8(env + j) == (masks[i] ? 0x55 : 0xff);
+                saved.loading = true;
+                saved.pos = 0;
+                cpu_serialize(&saved);
+                gpu_serialize(&saved);
+            }
+            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+                 !memcmp(native.buf, guest.buf, guest.len);
+            free(native.buf);
+            free(guest.buf);
+        }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_draw_sync_callback(void) {
     const u32 slot = 0x80024564, diagnostic = 0x80060c00;
     const u8 levels[] = {0, 1, 2, 255};
@@ -2416,6 +2460,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
+    pass = pass && check_display_mask();
     pass = pass && check_draw_sync_callback();
     pass = pass && check_dump_environment(false, 0);
     for (unsigned graph = 0; graph <= 2; graph++)
