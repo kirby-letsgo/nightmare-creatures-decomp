@@ -139,6 +139,8 @@ bool nc_credits_deliver_event(CPUState *c);
 bool nc_credits_cd_default_sync(CPUState *c);
 bool nc_credits_cd_default_ready(CPUState *c);
 bool nc_credits_cd_default_read(CPUState *c);
+bool nc_credits_cd_flush_controller(CPUState *c);
+bool nc_credits_cd_flush(CPUState *c);
 bool nc_credits_cd_status(CPUState *c);
 bool nc_credits_cd_mode(CPUState *c);
 bool nc_credits_cd_last_command(CPUState *c);
