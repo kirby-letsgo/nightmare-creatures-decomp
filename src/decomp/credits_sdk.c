@@ -823,6 +823,61 @@ bool nc_credits_end_packet(CPUState *c) {
     return true;
 }
 
+bool nc_credits_dump_texture_page(CPUState *c) {
+    if (c->budget <= 44)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 24, R(16));
+    c->budget--;
+    MEM_W32(R(29) + 28, R(31));
+    R(16) = R(4);
+    R(31) = 0x8001b63c;
+    c->budget -= 3;
+    NC_FN_ENTER(c, 0x8001c1c8);
+    nc_credits_graph_status(c, false);
+    bool alternate = R(2) == 1;
+    c->budget -= 3;
+    if (!alternate) {
+        R(31) = 0x8001b650;
+        c->budget -= 2;
+        NC_FN_ENTER(c, 0x8001c1c8);
+        nc_credits_graph_status(c, false);
+        alternate = R(2) == 2;
+        c->budget -= 3;
+    }
+
+    const u32 page = (u16)R(16);
+    R(4) = 0x800183a8;
+    R(5) = (page >> (alternate ? 9 : 7)) & 3; /* depth */
+    R(6) = (page >> (alternate ? 7 : 5)) & 3; /* blend mode */
+    R(7) = (page << 6) & 0x7c0;               /* VRAM x */
+    c->budget -= alternate ? 11 : 13;
+    u32 callback = MEM_R32(0x80024554);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    u32 y;
+    if (alternate) {
+        R(3) = callback;
+        y = R(2) = (page << 3) & 0x300;
+        R(31) = 0x8001b698;
+    } else {
+        R(8) = callback;
+        R(2) = (page >> 2) & 0x200;
+        y = R(3) = ((page << 4) & 0x100) | R(2);
+        R(31) = 0x8001b6e4;
+    }
+    MEM_W32(R(29) + 16, y);
+    c->budget -= 2;
+    nc_call(c, callback);
+    if (alternate)
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 bool nc_credits_dump_palette(CPUState *c) {
     if (c->budget <= 14)
         return false;
