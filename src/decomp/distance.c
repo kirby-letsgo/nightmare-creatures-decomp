@@ -297,6 +297,34 @@ bool nc_begin_projected_point_update(CPUState *c, bool *use_point) {
     return true;
 }
 
+/* ApplyMatrix left the rotated vector on the stack. Both entries scale
+ * the low product words by 1/512, rounding toward zero. They move the
+ * record in opposite X/Z directions. */
+bool nc_apply_rotated_point_offset(CPUState *c, bool subtract_x) {
+    if (c->budget <= 43)
+        return false;
+    const u32 frame = R(29), record = R(17);
+    const s32 scale = (s16)R(16);
+    const s32 x_product = (s32)((u32)scale * MEM_R32(frame + 0x18));
+    const s32 dx = x_product / 512;
+    const u32 x = MEM_R16(record + 0x18);
+    MEM_W16(record + 0x18, subtract_x ? x - dx : x + dx);
+
+    nc_mult(c, (u32)scale, MEM_R32(frame + 0x20));
+    const s32 z_product = (s32)c->lo;
+    const s32 dz = z_product / 512;
+    const u32 z = MEM_R16(record + 0x1c);
+    R(3) = dz;
+    R(2) = subtract_x ? z + dz : z - dz;
+    MEM_W16(record + 0x1c, R(2));
+    R(31) = MEM_R32(frame + 0x30);
+    R(17) = MEM_R32(frame + 0x2c);
+    R(16) = MEM_R32(frame + 0x28);
+    R(29) += 0x38;
+    c->budget -= 41 + (x_product < 0) + (z_product < 0);
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */
