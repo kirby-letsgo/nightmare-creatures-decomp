@@ -635,6 +635,8 @@ class Emitter:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
                 out.append("    if (nc_distance_root(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800472D8:
+                out.append("    if (nc_actor_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047220:
                 out.append("    if (nc_prepare_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
