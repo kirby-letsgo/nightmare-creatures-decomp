@@ -765,6 +765,35 @@ bool nc_start_scaled_part_position(CPUState *c) {
     return true;
 }
 
+/* Angles have 65536 units per turn. Only the shared X cosine uses the
+ * signed, unwrapped table index and the low twelve bits of the sample. */
+bool nc_sample_traversal_angles(CPUState *c, bool shared) {
+    const int cycles = shared ? 57 : 54;
+    if (c->budget <= cycles)
+        return false;
+    const u32 source = shared ? R(23) : R(10) + 0x40;
+    const u32 x = MEM_R32(source) + 2;
+    const u32 y = MEM_R32(source + 4) + 2;
+    const u32 z = MEM_R32(source + 8) + 2;
+    const u32 x_offset = (x >> 3) & 0x1ffe;
+    const u32 y_offset = (y >> 3) & 0x1ffe;
+    const u32 z_offset = (z >> 3) & 0x1ffe;
+    const u32 cosine_x_offset = shared ? (u32)((s32)x >> 4) * 2 : x_offset;
+    const u32 cosine_x = MEM_R16(R(21) + cosine_x_offset);
+    R(11) = shared ? (cosine_x & 0xfff) >> 2 : (u32)((s32)(s16)cosine_x >> 2);
+    const u32 sine_x = MEM_R16(R(20) + x_offset);
+    R(9) = (s32)(s16)sine_x >> 2;
+    R(7) = (s32)(s16)MEM_R16(R(21) + y_offset) >> 2;
+    R(6) = (s32)(s16)MEM_R16(R(21) + z_offset) >> 2;
+    R(5) = shared ? R(20) + y_offset : sine_x << 16;
+    R(4) = (s32)(s16)MEM_R16(R(20) + y_offset) >> 2;
+    R(3) = R(20) + z_offset;
+    R(2) = (u32)MEM_R16(R(3)) << 16;
+    R(8) = (s32)R(2) >> 18;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Linked parts always sample angles. A leaf needs flag 0x80. The
  * delay slots leave bit 3 in v0 even when the leaf skips sampling. */
 NcHeadingSource nc_select_part_heading_source(CPUState *c) {

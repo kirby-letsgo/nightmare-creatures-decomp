@@ -50,6 +50,7 @@ typedef enum {
     NC_HEADING_FROM_PART,
     NC_HEADING_FROM_SHARED
 } NcHeadingSource;
+bool nc_sample_traversal_angles(CPUState *c, bool shared);
 NcHeadingSource nc_select_part_heading_source(CPUState *c);
 bool nc_update_child_position(CPUState *c);
 bool nc_filter_scaled_part(CPUState *c);
