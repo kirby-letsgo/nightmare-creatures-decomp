@@ -9,6 +9,8 @@ bool nc_finish_actor_distance(CPUState *c, bool missing_target);
 bool nc_save_point_update_frame(CPUState *c);
 bool nc_select_point_update_row(CPUState *c);
 bool nc_call_record_point_bearing(CPUState *c);
+bool nc_set_linked_heading_offset(CPUState *c);
+bool nc_apply_linked_heading_offset(CPUState *c);
 bool nc_expand_record_point_bearing(CPUState *c);
 bool nc_lookup_point_row_record(CPUState *c);
 bool nc_prepare_point_distance_root(CPUState *c);
