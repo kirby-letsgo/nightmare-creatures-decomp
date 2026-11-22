@@ -2156,6 +2156,44 @@ static bool check_cd_data_sync(void) {
     return ok && !saved.error;
 }
 
+static bool check_clear_otag_reverse(void) {
+    const u32 counts[] = {1, 7};
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    bool ok = !saved.error;
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0] && ok; i++) {
+        const u32 table = i ? 0xa0062000 : 0x80062000;
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; run < 2 && ok; run++) {
+            MEM_W8(0x8002455a, i ? 2 : 0);
+            MEM_W32(0x80024554, 0x8001935c); /* no-op diagnostic */
+            memset(nc_fast_ptr(table - 4), 0xcc, (counts[i] + 2) * 4);
+            nc_cpu = arguments(table, counts[i], 3, 12);
+            if (!run && nc_credits_clear_otag_reverse(&nc_cpu))
+                ok = false;
+            nc_cpu.budget = i ? 13 : 4096;
+            if (run)
+                interp_call(&nc_cpu, 0x8001c7e8);
+            else
+                ok = nc_credits_clear_otag_reverse(&nc_cpu) && ok;
+            ok = ok && nc_cpu.r[2] == table && MEM_R32(table) == 0x24614 &&
+                 MEM_R32(table - 4) == 0xcccccccc && MEM_R32(table + 4 * counts[i]) == 0xcccccccc;
+            for (unsigned tag = 1; tag < counts[i] && ok; tag++)
+                ok = MEM_R32(table + 4 * tag) == ((table + 4 * (tag - 1)) & 0xffffff);
+            interrupt_start_state(run ? &guest : &native);
+            saved.loading = true;
+            saved.pos = 0;
+            interrupt_start_state(&saved);
+        }
+        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_dma_slot(void) {
     const u32 dicr = 0x1f8010f4, ram = 0x80061000, initial_control = 0x00410012;
     const struct {
@@ -2837,6 +2875,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_clear_otag_reverse();
     pass = pass && check_cd_get_sector();
     pass = pass && check_bios_a0_stub(0x80023364, 0x39, nc_credits_bios_init_heap);
     pass = pass && check_bios_a0_stub(0x8001ae30, 0x72, nc_credits_bios_96_remove);
