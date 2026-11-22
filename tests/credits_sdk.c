@@ -1278,6 +1278,54 @@ static bool check_cd_default_callbacks(void) {
     return true;
 }
 
+static bool check_cd_init_volume(void) {
+    const u32 slots = 0x80024a20, spu = 0x80061000, ports = SCRATCH_BASE + 0x40;
+    u8 saved[24];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(slots + 4 * i, ports + i);
+    MEM_W32(slots + 20, spu);
+    for (unsigned active = 0; active < 4; active++)
+        for (unsigned alias = 0; alias < 2; alias++) {
+            MEM_W16(spu + 0x1b8, active & 1);
+            MEM_W16(spu + 0x1ba, active & 2);
+            MEM_W32(spu + 0x180, 0x81234567);
+            MEM_W32(ports, UINT32_MAX);
+            CPUState state = arguments(1, 2, 3, alias ? 92 : 4096);
+            if (alias)
+                state.r[29] = ports + 8;
+            if (!compare(state, 0x800215a8, nc_credits_cd_init_volume, 91) ||
+                MEM_R32(spu + 0x180) != (active ? 0x81234567 : 0x3fff3fff) ||
+                MEM_R32(spu + 0x1b0) != 0x3fff3fff || MEM_R16(spu + 0x1aa) != 0xc001)
+                return false;
+        }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
+    StateIO before = {0}, native = {0}, guest = {0};
+    spu_serialize(&before);
+    cdrom_serialize(&before);
+    bool ok = !before.error;
+    for (unsigned run = 0; run < 2 && ok; run++) {
+        nc_cpu = arguments(1, 2, 3, 4096);
+        if (run)
+            interp_call(&nc_cpu, 0x800215a8);
+        else
+            ok = nc_credits_cd_init_volume(&nc_cpu);
+        StateIO *result = run ? &guest : &native;
+        spu_serialize(result);
+        cdrom_serialize(result);
+        before.loading = true;
+        before.pos = 0;
+        spu_serialize(&before);
+        cdrom_serialize(&before);
+    }
+    ok = ok && !before.error && !native.error && !guest.error && native.len == guest.len &&
+         !memcmp(native.buf, guest.buf, guest.len);
+    free(before.buf);
+    free(native.buf);
+    free(guest.buf);
+    return ok;
+}
+
 static bool check_cd_mix(void) {
     const u32 slots = 0x80024a20, ports = SCRATCH_BASE + 0x40, mix = 0x80061000;
     u8 saved[16];
@@ -1712,6 +1760,7 @@ int main(int argc, char **argv) {
     pass = pass && check_tim_info();
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
+    pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
     pass = pass && check_cd_flush();
     pass = pass && check_cd_setters();
