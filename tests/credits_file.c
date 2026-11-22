@@ -1,3 +1,4 @@
+#include "credits_compare.h"
 #include "credits_stubs.h"
 #include "decomp/credits.h"
 #include "port/disc.h"
@@ -73,7 +74,34 @@ static void cd_sync(CPUState *c) {
     R(2) = ++sectors.syncs <= busy_polls ? 1 : sync_result;
 }
 
-const NcFuncEntry credits_exe_table[] = {{0x80018d6c, read_sectors}, {0x80019680, allocate},
+static unsigned roll_entries;
+static void enter_roll(CPUState *c) {
+    (void)c;
+    roll_entries++;
+}
+
+static bool check_entry(void) {
+    const u32 sizes[][2] = {{0x800000, 0x8000}, {0x200000, 0x10000}, {0, 1}};
+    for (unsigned i = 0; i < sizeof sizes / sizeof sizes[0]; i++) {
+        CPUState cpu = {0};
+        for (unsigned reg = 1; reg < 32; reg++)
+            cpu.r[reg] = reg * 0x11359u;
+        cpu.r[31] = 0x80010000;
+        cpu.budget = i ? 31 : 4096;
+        MEM_W32(0x80024c44, sizes[i][0]);
+        MEM_W32(0x80024c40, sizes[i][1]);
+        roll_entries = 0;
+        if (!compare(cpu, 0x800232f4, nc_credits_entry, 30) || roll_entries != 2 ||
+            nc_cpu.r[28] != 0x80024c68 || nc_cpu.r[31] != cpu.r[31] ||
+            MEM_R32(0x80024c48) != 0x80028c94 ||
+            MEM_R32(0x80024c4c) != sizes[i][0] - sizes[i][1] - 0x28c94u)
+            return false;
+    }
+    return true;
+}
+
+const NcFuncEntry credits_exe_table[] = {{0x80018d6c, read_sectors}, {0x80018f94, enter_roll},
+                                         {0x80019680, allocate},
                                          {0x80020210, set_location}, {0x80021c34, search},
                                          {0x80022ae0, cd_read},      {0x80022be8, cd_sync}};
 const unsigned credits_exe_table_len = sizeof credits_exe_table / sizeof credits_exe_table[0];
@@ -157,6 +185,8 @@ int main(int argc, char **argv) {
     fclose(file);
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
+        return 1;
+    if (!check_entry())
         return 1;
     const u32 sizes[] = {0,      1,          2047,       2048,       2049,
                          983060, 0x7ffff800, 0x7ffff801, 0x80000000, 0xffffffff};
