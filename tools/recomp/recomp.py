@@ -750,7 +750,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8001BD08:
-            targets.update((0x8001BF98, 0x8001BFD0, 0x8001BFEC, 0x8001C01C))
+            targets.update((0x8001BD48, 0x8001BD84, 0x8001BF98, 0x8001BFD0, 0x8001BFEC, 0x8001C01C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001C19C:
             targets.update((0x8001C234, 0x8001C27C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001A71C:
@@ -1491,6 +1491,14 @@ class Emitter:
                 out.append("    case NC_PART_SEARCH_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001C04C:
                 out.append("    if (nc_restore_part_search_frame(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
+                out.append("    if (nc_begin_part_pose_heading(c)) {")
+                out.append("        if (R(2)) goto L_8001BE98;")
+                out.append("        goto L_8001BD48; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BD48:
+                out.append("    if (nc_check_part_heading_turn(c)) {")
+                out.append("        if (R(2)) goto L_8001BD84;")
+                out.append("        goto L_8001BEA8; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BEAC:
                 out.append("    { bool search; if (nc_advance_part_pose_heading(c, &search)) {")
                 out.append("        if (search) goto L_8001BF18;")
