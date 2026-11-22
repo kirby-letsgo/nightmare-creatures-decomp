@@ -2615,6 +2615,67 @@ static bool linked_heading_offsets(bool disc) {
     return true;
 }
 
+static bool linked_heading_traversal(bool disc) {
+    const u32 node = SCRATCH_BASE + 0x100, record = SCRATCH_BASE;
+    for (unsigned i = 0; i < 4; ++i) {
+        const bool first = (i & 2) == 0;
+        const u32 next = i & 1 ? node + 0x100 : 0;
+        CPUState input = initial();
+        input.r[5] = node;
+        input.r[31] = next ? 0x80029648 : 0x800296d0;
+        input.budget = !first && next ? 8 : 6;
+        MEM_W32(node + 0xc, next);
+        CPUState native = input;
+        if (nc_follow_heading_link(&native, first) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_follow_heading_link(&native, first) || native.budget != 1 || native.r[5] != next)
+            return false;
+        if (disc) {
+            interp_call(&input, first ? 0x80029638 : 0x80029670);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    const u32 offsets[] = {0, 0xffff8000, 0x8000, 0x10000};
+    for (unsigned i = 0; i < 4; ++i) {
+        CPUState input = initial();
+        input.r[3] = offsets[i];
+        input.r[5] = node;
+        input.r[6] = i * 0x4000 + offsets[i];
+        input.r[16] = record;
+        memset(nc_scratch, 0xaa, sizeof before);
+        MEM_W32(record + 0x2c, i & 1 ? 0x201 : 1);
+        for (unsigned bearing = 0; bearing <= 1; ++bearing) {
+            bool (*step)(CPUState *) =
+                bearing ? nc_copy_linked_bearing : nc_copy_linked_heading_offset;
+            input.r[31] = bearing ? 0x80029670 : 0x80029658;
+            input.budget = bearing ? (i & 1 ? 8 : 7) : 6;
+            CPUState native = input;
+            memcpy(before, nc_scratch, sizeof before);
+            if (step(&native) || memcmp(&input, &native, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!step(&native) || native.budget != 1 || MEM_R32(node + 0x40) != offsets[i] ||
+                MEM_R8(node + 0x4d) != 0xab ||
+                MEM_R32(node + 0x44) != (bearing && (i & 1) ? input.r[6] : 0xaaaaaaaau))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, bearing ? 0x80029658 : 0x80029648);
+                if (memcmp(&input, &native, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+            input = native;
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -4938,9 +4999,9 @@ int main(int argc, char **argv) {
         reference_bearing_gaps(disc) && actor_distances(disc) && point_pose_and_query(disc) &&
         point_index_advances(disc) && point_update_returns(disc) && point_proximity(disc) &&
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
-        linked_heading_offsets(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        linked_heading_offsets(disc) && linked_heading_traversal(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

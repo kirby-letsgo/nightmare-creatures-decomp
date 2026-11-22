@@ -3223,6 +3223,46 @@ bool nc_apply_linked_heading_offset(CPUState *c) {
     return true;
 }
 
+/* The first link falls through to the node body. Subsequent non-null links
+ * execute a jump and its delay slot before processing the next node. */
+bool nc_follow_heading_link(CPUState *c, bool first) {
+    if (c->budget <= 6)
+        return false;
+    const u32 next = MEM_R32(R(5) + 0x0c);
+    const int cycles = next && !first ? 8 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(5) = next;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_copy_linked_heading_offset(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 node = R(5);
+    R(2) = MEM_R8(node + 0x4d);
+    MEM_W32(node + 0x40, R(3));
+    R(2) |= 1;
+    MEM_W8(node + 0x4d, R(2));
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_copy_linked_bearing(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 flag = MEM_R32(R(16) + 0x2c) & 0x200;
+    const int cycles = flag ? 8 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = flag;
+    if (flag)
+        MEM_W32(R(5) + 0x44, R(6));
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each 20-byte row holds signed point identifiers. Its signed cursor
  * selects an identifier, which indexes the 36-byte coordinate records. */
 bool nc_lookup_point_row_record(CPUState *c) {
