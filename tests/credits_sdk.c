@@ -1358,6 +1358,53 @@ static bool check_save_irq_context(void) {
     return true;
 }
 
+static void vsync_start_state(StateIO *io) {
+    cpu_serialize(io);
+    timers_serialize(io);
+    irq_serialize(io);
+}
+
+static bool check_start_vsync(void) {
+    const u32 slots = 0x800244b4, handler = 0x8002341c;
+    StateIO initial = {0};
+    vsync_start_state(&initial);
+    bool ok = !initial.error;
+    for (unsigned i = 0; i < 3 && ok; i++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; run < 2 && ok; run++) {
+            memset(nc_fast_ptr(slots), 0xa5, 36); /* eight callbacks and the count */
+            MEM_W16(0x80023418, i != 2);
+            MEM_W32(handler, i == 1 ? 0x8001aee0 : 0);
+            MEM_W16(0x80023448, 0);
+            MEM_W16(0x1f801074, 0x40);
+            nc_cpu = arguments(0, 0, 0, 14);
+            if (run == 0 && nc_credits_start_vsync(&nc_cpu))
+                ok = false;
+            nc_cpu.budget = i ? 4096 : 15;
+            if (run)
+                interp_call(&nc_cpu, 0x8001ae88);
+            else
+                ok = nc_credits_start_vsync(&nc_cpu) && ok;
+            vsync_start_state(run ? &guest : &native);
+            ok = ok && nc_cpu.r[2] == 0x8001af58 &&
+                 (MEM_R32(0x1f801114) & 0x3ff) == 0x107 &&
+                 MEM_R32(handler) == (i == 2 ? 0u : 0x8001aee0u) &&
+                 MEM_R16(0x1f801074) == (i == 0 ? 0x41 : 0x40);
+            for (unsigned word = 0; word < 9; word++)
+                ok = ok && MEM_R32(slots + 4 * word) == 0;
+            initial.loading = true;
+            initial.pos = 0;
+            vsync_start_state(&initial);
+        }
+        ok = ok && !initial.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(initial.buf);
+    return ok;
+}
+
 static bool check_vsync_slot(void) {
     const struct {
         u32 index, previous, replacement;
@@ -2014,6 +2061,7 @@ int main(int argc, char **argv) {
     pass = pass && check_callback_controls();
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context();
+    pass = pass && check_start_vsync();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
     pass = pass && check_clear_irq_words(0x8001af84);
