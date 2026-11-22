@@ -146,6 +146,7 @@ bool nc_credits_flush_cache(CPUState *c);
 bool nc_credits_sdk_init_pad(CPUState *c);
 bool nc_credits_bios_init_pad(CPUState *c);
 bool nc_credits_start_pad(CPUState *c);
+bool nc_credits_bios_write(CPUState *c);
 bool nc_credits_bios_stop_pad(CPUState *c);
 bool nc_credits_bios_start_pad(CPUState *c);
 bool nc_credits_change_clear_pad(CPUState *c);

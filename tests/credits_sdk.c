@@ -39,6 +39,21 @@ static bool check_copy(void) {
     return true;
 }
 
+static bool check_bios_write(void) {
+    const u32 buffer = 0x80061001;
+    const struct {
+        u32 fd, length, expected;
+    } cases[] = {{1, 0, 0}, {1, 3, 3}, {0, 3, 3}, {UINT32_MAX, 3, UINT32_MAX}};
+    memcpy(nc_fast_ptr(buffer), "X\r\n", 3);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        CPUState state = arguments(cases[i].fd, buffer, cases[i].length, 4);
+        if (!compare(state, 0x8001a29c, nc_credits_bios_write, 3) ||
+            nc_cpu.r[2] != cases[i].expected || nc_cpu.r[9] != 0x35 || nc_cpu.r[10] != 0xb0)
+            return false;
+    }
+    return true;
+}
+
 static bool check_put_string(void) {
     const u32 ram = 0x80061001, column = 0x80024ce8;
     const struct {
@@ -2350,6 +2365,7 @@ int main(int argc, char **argv) {
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     bool pass = check_copy();
+    pass = pass && check_bios_write();
     pass = pass && check_put_string();
     pass = pass && check_find_byte();
     pass = pass && check_fill();

@@ -1837,6 +1837,10 @@ bool nc_credits_bios_pad_init_and_start(CPUState *c) {
     return bios_service(c, 0xb0, 0x15);
 }
 
+bool nc_credits_bios_write(CPUState *c) {
+    return bios_service(c, 0xb0, 0x35);
+}
+
 bool nc_credits_bios_stop_pad(CPUState *c) {
     return bios_service(c, 0xb0, 0x14);
 }
