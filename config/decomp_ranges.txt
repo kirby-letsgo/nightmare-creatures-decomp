@@ -133,6 +133,8 @@ credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
+# Start press edge after live pad decoding.
+psx2_exe     80042E8C    80042EB8         pad.c
 # Player-control input gate, source selection, button store and shared return.
 psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    80044780         pad.c

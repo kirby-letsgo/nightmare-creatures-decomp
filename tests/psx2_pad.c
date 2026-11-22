@@ -135,6 +135,33 @@ static bool button_dispatch(void) {
     return true;
 }
 
+static bool pad_start_edge(void) {
+    const u32 words[] = {0, 1, 8, 9, 0x00090000, 0xdead4088};
+    CPUState input = initial();
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
+        for (unsigned held = 0; held < 2; ++held) {
+            input.r[2] = words[i];
+            input.r[31] = (words[i] & 9) == 8 && !held ? 0x80042eb8 : 0x80042efc;
+            MEM_W32(gp + 0x144, 0x00080001 | (held << 3));
+            memcpy(before, nc_ram, RAM_SIZE);
+            input.budget = 13;
+            CPUState native = input;
+            if (nc_pad_start_edge(&native) != 0x80042e8c || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_ram, RAM_SIZE))
+                return false;
+            input.budget = 14;
+            native = input;
+            if (nc_pad_start_edge(&native) != input.r[31] || memcmp(before, nc_ram, RAM_SIZE))
+                return false;
+            CPUState guest = input;
+            interp_call(&guest, 0x80042e8c);
+            if (memcmp(&native, &guest, sizeof guest) || memcmp(before, nc_ram, RAM_SIZE))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool pad_inactivity(void) {
     const u32 buttons[] = {0, 1, 0x00400000, 0x80804010};
     CPUState cpu = initial();
@@ -644,9 +671,9 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_inactivity() && l2_direction_edges() && button_dispatch() && sdk_pad_patch() &&
-              pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) &&
-              pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = pad_start_edge() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
+              sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
