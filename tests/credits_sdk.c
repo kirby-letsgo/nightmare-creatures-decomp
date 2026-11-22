@@ -189,6 +189,29 @@ static bool check_packet_flags(void) {
     return true;
 }
 
+static bool add_one(CPUState *c) {
+    return nc_credits_prepend_packets(c, false);
+}
+static bool add_range(CPUState *c) {
+    return nc_credits_prepend_packets(c, true);
+}
+static bool check_prepend(void) {
+    const u32 head = 0x80060300;
+    const u32 nodes[] = {head, SCRATCH_BASE, 0xa0060300, head + 8};
+    for (unsigned i = 0; i < 4; i++)
+        for (unsigned j = 0; j < 4; j++)
+            for (unsigned range = 0; range < 2; range++) {
+                MEM_W32(head, 0xacffffff);
+                MEM_W32(nodes[i], 0x55017abc);
+                MEM_W32(nodes[j], 0x660c1234);
+                CPUState state = arguments(head, nodes[i], nodes[j], 22);
+                if (!compare(state, range ? 0x8001b7ac : 0x8001b770, range ? add_range : add_one,
+                             21))
+                    return false;
+            }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -207,6 +230,7 @@ int main(int argc, char **argv) {
     pass = pass && check_case();
     pass = pass && check_primitives();
     pass = pass && check_packet_flags();
+    pass = pass && check_prepend();
     disc_close();
     return pass ? 0 : 1;
 }
