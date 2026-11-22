@@ -87,6 +87,43 @@ static bool target_vertical_velocities(bool disc) {
     return true;
 }
 
+static bool spatial_bearings(bool disc, bool actor) {
+    const s16 points[][2] = {{-2, -3}, {-3, -3}, {-1, -3},
+                             {-2, -4}, {-2, -2}, {INT16_MIN, INT16_MAX}};
+    const u32 record = SCRATCH_BASE, source = record + 64;
+    const u32 entry = actor ? 0x8006c714 : 0x8006c904;
+    bool (*prepare)(CPUState *) =
+        actor ? nc_prepare_spatial_actor_bearing : nc_prepare_spatial_point_bearing;
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof points / sizeof points[0]; ++i) {
+        CPUState input = initial();
+        input.r[actor ? 18 : 19] = record;
+        input.r[31] = 0x80047684; /* Compare at the callee entry, after the delay slot. */
+        MEM_W32(record + 4, source);
+        MEM_W16(0x800d7630, -2);
+        MEM_W16(0x800d7634, 3);
+        MEM_W16(source + 0x18, points[i][0]);
+        MEM_W16(source + 0x1c, points[i][1]);
+        MEM_W32(source + 0x27c, (u32)points[i][0] * 256 + 255);
+        MEM_W32(source + 0x284, (u32)points[i][1] * 256 + 1);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = actor ? 25 : 23;
+        CPUState native = input;
+        if (prepare(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!prepare(&native) || native.budget != 1 || native.r[4] != (u32)(points[i][0] + 2) ||
+            native.r[5] != (u32)(points[i][1] + 3) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        if (disc) {
+            interp_call(&input, entry);
+            if (memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool target_displacements(bool disc) {
     const s32 offsets[][2] = {{0, 0}, {-1, 0},   {1, 0},      {0, -1},
                               {0, 1}, {37, -81}, {-65536, 5}, {5, -65536}};
@@ -2391,6 +2428,7 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok =
+        spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
         target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
         roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
         projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&

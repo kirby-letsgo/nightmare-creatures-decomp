@@ -518,6 +518,42 @@ bool nc_heading_sine(CPUState *c) {
     return heading_sample(c, 0x80083BE4);
 }
 
+/* Both spatial bearing calls subtract reference X and add reference Z.
+ * An actor supplies fixed-point words; a point supplies signed halfwords. */
+bool nc_prepare_spatial_actor_bearing(CPUState *c) {
+    if (c->budget <= 25)
+        return false;
+    R(20) = MEM_R32(R(18) + 4);
+    R(21) = R(5);
+    const s32 x = (s32)MEM_R32(R(20) + 0x27c) >> 8;
+    R(19) = x - (s16)MEM_R16(0x800d7630);
+    R(4) = R(19);
+    R(2) = (s32)MEM_R32(R(20) + 0x284) >> 8;
+    R(3) = (s32)(s16)MEM_R16(0x800d7634);
+    R(17) = R(2) + R(3);
+    R(5) = R(17);
+    R(31) = 0x8006c750;
+    c->budget -= 25;
+    return true;
+}
+
+bool nc_prepare_spatial_point_bearing(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    R(6) = MEM_R32(R(19) + 4);
+    const s32 reference_x = (s16)MEM_R16(0x800d7630);
+    R(20) = R(5);
+    R(18) = (s16)MEM_R16(R(6) + 0x18) - reference_x;
+    R(3) = (s32)(s16)MEM_R16(R(6) + 0x1c);
+    R(2) = (s32)(s16)MEM_R16(0x800d7634);
+    R(4) = R(18);
+    R(17) = R(3) + R(2);
+    R(5) = R(17);
+    R(31) = 0x8006c938;
+    c->budget -= 23;
+    return true;
+}
+
 /* The target is a signed whole-unit X/Z pair. Convert each actor coordinate
  * from eight fractional bits before subtracting it from the target. */
 bool nc_prepare_target_bearing(CPUState *c) {
