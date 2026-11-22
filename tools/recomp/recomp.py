@@ -66,6 +66,7 @@ CREDITS_ROUTINES = {
     0x8001A128: "nc_credits_change_case(c, true)",
     0x8001A158: "nc_credits_change_case(c, false)",
     0x8001A188: "nc_credits_find_byte(c)",
+    0x8001A1D8: "nc_credits_put_char(c)",
     0x8001A28C: "nc_credits_bios_stop_pad(c)",
     0x8001A29C: "nc_credits_bios_write(c)",
     0x8001A2AC: "nc_credits_change_clear_pad(c)",
