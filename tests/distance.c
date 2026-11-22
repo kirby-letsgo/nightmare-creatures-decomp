@@ -1699,6 +1699,63 @@ static bool roots(bool disc) {
     return true;
 }
 
+static bool part_search_exits(bool disc) {
+    static const struct {
+        bool matched;
+        u32 candidate, part, stop;
+        NcPartSearchStep step;
+        int cycles;
+    } paths[] = {{false, 3, 0, 0x8001bf54, NC_PART_SEARCH_NEXT_HEADING, 4},
+                 {false, 4, 3, 0x8001bf18, NC_PART_SEARCH_NEXT_PART, 9},
+                 {true, 1, 3, 0x8001bf18, NC_PART_SEARCH_NEXT_PART, 6},
+                 {false, 4, 4, 0x8001c04c, NC_PART_SEARCH_DONE, 10},
+                 {true, 0, 4, 0x8001c04c, NC_PART_SEARCH_DONE, 7}};
+    for (unsigned i = 0; i < sizeof paths / sizeof paths[0]; ++i) {
+        CPUState input = initial();
+        input.r[6] = paths[i].candidate;
+        input.r[19] = paths[i].part;
+        input.r[31] = paths[i].stop;
+        input.budget = paths[i].cycles;
+        CPUState native = input;
+        if (nc_advance_part_heading_search(&native, paths[i].matched) != NC_PART_SEARCH_FALLBACK ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_advance_part_heading_search(&native, paths[i].matched) != paths[i].step ||
+            native.budget != 1)
+            return false;
+        if (disc) {
+            interp_call(&input, paths[i].matched ? 0x8001c01c : 0x8001c024);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+
+    const u32 frame = SCRATCH_BASE + 0x100, stub = 0x80120000;
+    CPUState input = initial();
+    input.r[29] = frame;
+    for (unsigned reg = 16; reg <= 22; ++reg)
+        MEM_W32(frame + 0x20 + 4 * (reg - 16), 0xfedcb000u + reg);
+    MEM_W32(frame + 0x3c, input.r[31]);
+    input.budget = 27;
+    CPUState native = input;
+    if (nc_restore_part_search_frame(&native) || memcmp(&native, &input, sizeof input))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_restore_part_search_frame(&native) || native.budget != 1 ||
+        native.r[29] != frame + 0x40 || native.r[2] != input.r[2])
+        return false;
+    if (disc) {
+        MEM_W32(stub, 0x08000000u | ((0x8001c04cu >> 2) & 0x03ffffffu));
+        MEM_W32(stub + 4, 0x27bdffc0);
+        input.r[29] += 0x40;
+        input.budget += 2;
+        interp_call(&input, stub);
+        return !memcmp(&native, &input, sizeof input);
+    }
+    return true;
+}
+
 static bool part_heading_windows(bool disc) {
     const s16 degrees[] = {INT16_MIN, -180, -1, 0, 90, 180, INT16_MAX};
     const int offsets[] = {-183, -182, -181, 0, 181, 182, 183};
@@ -4205,8 +4262,8 @@ int main(int argc, char **argv) {
         spatial_distances(disc, true) && spatial_distances(disc, false) &&
         spatial_bearings(disc, true) && spatial_bearings(disc, false) &&
         target_vertical_velocities(disc) && target_displacements(disc) && planar_velocities(disc) &&
-        roots(disc) && part_heading_windows(disc) && part_bearing_calls(disc) &&
-        part_point_bearings(disc) && bearing_point_selection(disc) &&
+        roots(disc) && part_search_exits(disc) && part_heading_windows(disc) &&
+        part_bearing_calls(disc) && part_point_bearings(disc) && bearing_point_selection(disc) &&
         selected_point_returns(disc) && selected_point_bearings(disc) &&
         reference_bearing_gaps(disc) && actor_distances(disc) && displacements(disc) &&
         headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
