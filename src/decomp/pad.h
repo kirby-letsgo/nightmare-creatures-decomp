@@ -53,6 +53,7 @@ u32 nc_menu_check_record_101(CPUState *c);
 bool nc_menu_dispatch_timed_record(CPUState *c);
 bool nc_menu_check_record_102(CPUState *c);
 u32 nc_menu_check_record_103(CPUState *c);
+u32 nc_menu_mode_up(CPUState *c);
 bool nc_menu_record_cross(CPUState *c);
 u32 nc_menu_record_four_timing(CPUState *c);
 bool nc_menu_clear_repeat(CPUState *c);
