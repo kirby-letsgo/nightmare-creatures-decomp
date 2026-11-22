@@ -71,6 +71,7 @@ CREDITS_ROUTINES = {
     0x8001B538: "nc_credits_video_mode(c, false)",
     0x8001B548: "nc_credits_texture_page(c)",
     0x8001B610: "nc_credits_palette_id(c)",
+    0x8001B6F8: "nc_credits_dump_palette(c)",
     0x8001B738: "nc_credits_packet_link(c, false)",
     0x8001B754: "nc_credits_packet_link(c, true)",
     0x8001B770: "nc_credits_prepend_packets(c, false)",
