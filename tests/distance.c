@@ -290,6 +290,75 @@ static bool actor_headings(bool disc) {
     return true;
 }
 
+static bool reference_distances(bool disc) {
+    static const struct {
+        s32 x, z;
+        s16 ref_x, ref_z;
+        s32 dx, dz;
+    } cases[] = {
+        {-1, -1, -1, 1, 0, 0},
+        {-257, 255, -5, 4, 3, 4},
+        {-257, 255, -2, -1, 0, -1},
+        {255, -257, 1, 2, -1, 0},
+        {0x800000, 0x800100, -32768, 32767, 65536, 65536},
+        {0, -0x800100, -32768, -32768, 32768, -65537},
+    };
+    const u32 sentinel = 0xa55a5aa5;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[29] = SCRATCH_BASE + 128;
+        MEM_W32(0x800D7780, cases[i].x);
+        MEM_W32(0x800D7788, cases[i].z);
+        MEM_W16(0x800D7648, cases[i].ref_x);
+        MEM_W16(0x800D764C, cases[i].ref_z);
+        MEM_W32(0x800D7760, sentinel);
+        MEM_W32(0x800D7764, sentinel);
+        memset(nc_scratch, 0xa5, sizeof before);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState cutoff = input;
+        cutoff.budget = 28;
+        CPUState native = cutoff;
+        if (nc_prepare_reference_distance(&native) || memcmp(&native, &cutoff, sizeof cutoff) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget++;
+        u32 dx = (u32)cases[i].dx, dz = (u32)cases[i].dz;
+        if (!nc_prepare_reference_distance(&native) || native.budget != 1 || native.r[2] != dz ||
+            native.r[3] != dz * dz || native.r[4] != dx * dx + dz * dz ||
+            native.r[31] != 0x800472b8 || MEM_R32(input.r[29] - 8) != input.r[31])
+            return false;
+        native.budget = input.budget - 28;
+        if (disc)
+            interp_call(&native, 0x8007a050);
+        else
+            native.r[2] = i;
+        cutoff = native;
+        cutoff.budget = 10;
+        CPUState finish = cutoff;
+        if (nc_store_reference_distance(&finish) || memcmp(&finish, &cutoff, sizeof cutoff) ||
+            MEM_R32(0x800D7760) != sentinel || MEM_R32(0x800D7764) != sentinel)
+            return false;
+        finish.budget++;
+        if (!nc_store_reference_distance(&finish) || finish.budget != 1 ||
+            !nc_store_reference_distance(&native) || native.r[31] != input.r[31] ||
+            native.r[29] != input.r[29] || MEM_R32(0x800D7760) != native.r[2] ||
+            MEM_R32(0x800D7764) != native.r[2])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            MEM_W32(0x800D7760, sentinel);
+            MEM_W32(0x800D7764, sentinel);
+            interp_call(&input, 0x80047268);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after) ||
+                MEM_R32(0x800D7760) != native.r[2] || MEM_R32(0x800D7764) != native.r[2])
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool point_headings(bool disc, bool local) {
     const int cycles = local ? 19 : 21;
     const u32 entry = local ? 0x800471e0 : 0x80047220;
@@ -432,7 +501,7 @@ int main(int argc, char **argv) {
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
-              heading_projections(disc);
+              heading_projections(disc) && reference_distances(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
