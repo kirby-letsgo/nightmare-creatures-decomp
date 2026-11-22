@@ -788,6 +788,62 @@ bool nc_prepare_part_chain_rotation(CPUState *c) {
     return true;
 }
 
+/* The paired SetRotMatrix and SetTransMatrix calls also leave the
+ * translation in t0-t2 and the last rotation words in t3-t4. */
+static void install_node_matrix(CPUState *c, u32 continuation) {
+    R(4) = R(18);
+    for (unsigned reg = 0; reg < 8; ++reg) {
+        const u32 word = MEM_R32(R(4) + 4 * reg);
+        R(8 + (reg % 5)) = word;
+        gte_write_ctrl(c, reg, word);
+    }
+    R(31) = continuation;
+}
+
+bool nc_start_node_traversal(CPUState *c) {
+    if (c->budget <= 60)
+        return false;
+    const u32 frame = R(29) - 0xe0;
+    R(29) = frame;
+    R(2) = R(4);
+    MEM_W32(frame + 0xd0, R(20));
+    R(20) = 0;
+    MEM_W32(frame + 0xc8, R(18));
+    R(18) = R(5);
+    MEM_W32(frame + 0xd8, R(31));
+    MEM_W32(frame + 0xd4, R(21));
+    MEM_W32(frame + 0xcc, R(19));
+    MEM_W32(frame + 0xc4, R(17));
+    MEM_W32(frame + 0xc0, R(16));
+    R(16) = MEM_R32(R(2) + 4);
+    R(21) = MEM_R32(R(2) + 8);
+    install_node_matrix(c, 0x800265a4);
+    R(19) = frame + 16;
+    R(17) = R(21);
+    c->budget -= 60;
+    return true;
+}
+
+bool nc_restore_node_branch(CPUState *c) {
+    if (c->budget <= 48)
+        return false;
+    R(18) = MEM_R32(R(19));
+    --R(20);
+    install_node_matrix(c, 0x800265c4);
+    R(16) = MEM_R32(R(19) + 4);
+    R(17) = R(21);
+    c->budget -= 48;
+    return true;
+}
+
+bool nc_apply_node_matrix(CPUState *c) {
+    if (c->budget <= 40)
+        return false;
+    install_node_matrix(c, 0x800266b4);
+    c->budget -= 40;
+    return true;
+}
+
 /* Save a pending traversal branch, then select nodes that have links or
  * a flagged leaf descriptor. v0 retains the value that selected RotTrans. */
 bool nc_select_node_transform(CPUState *c) {

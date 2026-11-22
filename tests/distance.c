@@ -920,6 +920,64 @@ static bool node_continuations(bool disc) {
     return true;
 }
 
+static bool node_matrix_installation(bool disc) {
+    const u32 node = SCRATCH_BASE, matrix = node + 64, frame = node + 256;
+    static const struct {
+        bool (*run)(CPUState *);
+        u32 entry, stop;
+        int cycles;
+    } paths[] = {{nc_start_node_traversal, 0x80026560, 0x800265cc, 60},
+                 {nc_restore_node_branch, 0x800265ac, 0x800265cc, 48},
+                 {nc_apply_node_matrix, 0x800266a4, 0x800266b4, 40}};
+    const u32 words[] = {0x80001000, 0x7fff0000, 0x0001f000, 0xffff0800,
+                         0x1000,     (u32)-17,   0,          32767};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof paths / sizeof paths[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = node;
+        input.r[5] = input.r[18] = matrix;
+        input.r[19] = frame + 16;
+        input.r[29] = i ? frame : frame + 224;
+        input.r[31] = paths[i].stop;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(node + 4, node + 128);
+        MEM_W32(node + 8, node + 160);
+        MEM_W32(frame + 16, matrix);
+        MEM_W32(frame + 20, node + 128);
+        for (unsigned reg = 0; reg < 8; ++reg)
+            MEM_W32(matrix + 4 * reg, words[reg]);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = paths[i].cycles;
+        CPUState native = input;
+        if (paths[i].run(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!paths[i].run(&native) || native.budget != 1 || native.r[29] != frame)
+            return false;
+        for (unsigned reg = 0; reg < 8; ++reg)
+            if (gte_read_ctrl(&native, reg) != words[reg])
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            u32 entry = paths[i].entry;
+            if (!i) {
+                const u32 stub = 0x80120000;
+                MEM_W32(stub, 0x08000000u | ((entry >> 2) & 0x03ffffffu));
+                MEM_W32(stub + 4, 0x27bd00e0); /* addiu sp, sp, 224 */
+                input.r[29] = frame;
+                input.budget += 2;
+                entry = stub;
+            }
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool node_rotations(bool disc) {
     const u32 source = SCRATCH_BASE + 64;
     const s16 values[] = {-32768, 0, 32767, -4096, 4096, 0, 1, -1, -13};
@@ -1702,8 +1760,9 @@ int main(int argc, char **argv) {
               rotated_vector_setup(disc) && placed_actor_points(disc) &&
               actor_point_placements(disc) && matrix_headings(disc) &&
               matrix_planar_lengths(disc) && heading_matrix_setup(disc) && part_translation(disc) &&
-              node_transform_selection(disc) && node_continuations(disc) && node_rotations(disc) &&
-              part_offsets(disc) && part_matrix_composition(disc) && part_transform_setup(disc) &&
+              node_transform_selection(disc) && node_matrix_installation(disc) &&
+              node_continuations(disc) && node_rotations(disc) && part_offsets(disc) &&
+              part_matrix_composition(disc) && part_transform_setup(disc) &&
               part_chain_traversal(disc);
     for (NcRotationInput variant = NC_ROTATION_PART; ok && variant <= NC_ROTATION_PACKED; ++variant)
         ok = part_rotation_samples(disc, variant) && part_rotation_matrices(disc, variant);
