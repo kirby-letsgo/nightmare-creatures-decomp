@@ -580,6 +580,8 @@ class Emitter:
             targets.add(0x8004CE58)
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.add(0x800471AC)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80047220:
+            targets.add(0x80047254)
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -629,6 +631,12 @@ class Emitter:
                 out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
                 out.append("    if (nc_distance_root(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047220:
+                out.append("    if (nc_prepare_point_heading(c)) {")
+                out.append(f"        {self.call(0x80047684)}")
+                out.append("        goto L_80047254; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047254:
+                out.append("    if (nc_return_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
                 out.append("    if (nc_vector_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8003531C:

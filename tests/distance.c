@@ -210,6 +210,64 @@ static bool actor_coordinates(bool disc) {
     return true;
 }
 
+static bool point_headings(bool disc) {
+    const s16 points[][2] = {{-4, -3}, {-4, -4},        {-5, -3},       {-3, -3},
+                             {-4, -2}, {-32768, 32767}, {32767, -32768}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof points / sizeof points[0]; ++i) {
+        CPUState input = initial();
+        input.r[29] = SCRATCH_BASE + 128;
+        /* Last point overlaps the return-address save. */
+        u32 save = input.r[29] - 8;
+        u32 point = i + 1 == sizeof points / sizeof points[0] ? save : SCRATCH_BASE;
+        input.r[4] = point;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W32(0x800D7780, (u32)-769); /* -4 after arithmetic shift */
+        MEM_W32(0x800D7788, 1023);      /* +3 */
+        MEM_W16(point, points[i][0]);
+        MEM_W16(point + 4, points[i][1]);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState cutoff = input;
+        cutoff.budget = 21;
+        CPUState native = cutoff;
+        if (nc_prepare_point_heading(&native) || memcmp(&native, &cutoff, sizeof native) ||
+            memcmp(nc_scratch, before, sizeof before))
+            return false;
+        native = input;
+        native.budget = 22;
+        s32 x = point == save ? (s16)input.r[31] : points[i][0];
+        if (!nc_prepare_point_heading(&native) || native.budget != 1 ||
+            native.r[4] != (u32)(-4 - x) || native.r[5] != (u32)(3 + points[i][1]) ||
+            native.r[3] != (u32)x || native.r[6] != (u32)(s32)points[i][1] ||
+            native.r[2] != (u32)-4 || native.r[31] != 0x80047254 ||
+            native.r[29] != input.r[29] - 24 || MEM_R32(save) != input.r[31])
+            return false;
+        native.budget = input.budget - 21;
+        if (!nc_vector_heading(&native))
+            return false;
+        cutoff = native;
+        cutoff.budget = 7;
+        CPUState epilogue = cutoff;
+        memcpy(after, nc_scratch, sizeof after);
+        if (nc_return_point_heading(&epilogue) || memcmp(&cutoff, &epilogue, sizeof cutoff) ||
+            memcmp(nc_scratch, after, sizeof after))
+            return false;
+        epilogue.budget++;
+        epilogue.r[2] = 0x12348001;
+        if (!nc_return_point_heading(&epilogue) || epilogue.budget != 1 ||
+            epilogue.r[2] != 0xffff8001 || !nc_return_point_heading(&native) ||
+            native.r[31] != input.r[31] || native.r[29] != input.r[29])
+            return false;
+        if (disc) {
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80047220);
+            if (memcmp(&input, &native, sizeof input) || memcmp(nc_scratch, after, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool part_positions(bool disc) {
     const u32 matrices[][5] = {
         {0x1000, 0, 0x1000, 0, 0x1000}, /* identity */
@@ -284,7 +342,8 @@ int main(int argc, char **argv) {
             return 1;
     }
     bool ok = roots(disc) && displacements(disc) && headings(disc) && heading_samples(disc) &&
-              projected_points(disc) && part_positions(disc) && actor_coordinates(disc);
+              projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
+              point_headings(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;
