@@ -556,6 +556,33 @@ bool nc_scale_spatial_level(CPUState *c, bool actor) {
     return true;
 }
 
+/* Some incoming branches supply a0 in their delay slot and enter one
+ * instruction later. Keep the argument supplied by that path. */
+bool nc_call_distant_actor(CPUState *c, bool load_record) {
+    const int cycles = load_record ? 5 : 4;
+    if (c->budget <= cycles)
+        return false;
+    if (load_record)
+        R(4) = R(18);
+    R(5) = 0;
+    R(6) = (s32)(s16)R(21);
+    R(31) = 0x8006c894;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_set_actor_levels(CPUState *c, bool load_channel) {
+    const int cycles = load_channel ? 8 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = load_channel ? (s32)(s16)R(21) : (s32)R(4) >> 16;
+    R(5) = (s32)(s16)R(7);
+    R(6) = (s32)(s16)(R(6) - R(7));
+    R(31) = 0x8006c8bc;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The flagged entry either forces full levels or applies a signed 2400-unit
  * cutoff. The ordinary entry always splits the level using the bearing. */
 NcPointLevelAction nc_select_point_levels(CPUState *c, bool flagged) {

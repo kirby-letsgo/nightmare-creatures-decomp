@@ -689,7 +689,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
             targets.update((0x800471AC, 0x800471B4, 0x8004720C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C6F0:
-            targets.update((0x8006C714, 0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814))
+            targets.update((0x8006C714, 0x8006C750, 0x8006C7C8, 0x8006C7DC, 0x8006C814, 0x8006C894))
         if self.mod.name == "psx2_exe" and f.addr == 0x8006C8E4:
             targets.update((0x8006C904, 0x8006C938, 0x8006C9B0, 0x8006C9C4, 0x8006C9F8, 0x8006CA34))
         if self.mod.name == "psx2_exe" and f.addr == 0x800586D8:
@@ -1397,6 +1397,16 @@ class Emitter:
                 out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C8E4:
                 out.append("    if (nc_begin_spatial_point(c)) goto L_8006C904;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C880, 0x8006C884):
+                load_record = "true" if i.addr == 0x8006C880 else "false"
+                out.append(f"    if (nc_call_distant_actor(c, {load_record})) {{")
+                out.append(f"        {self.call(0x8006BFE8)}")
+                out.append("        goto L_8006C894; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8006C89C, 0x8006C8A0):
+                load_channel = "true" if i.addr == 0x8006C89C else "false"
+                out.append(f"    if (nc_set_actor_levels(c, {load_channel})) {{")
+                out.append(f"        {self.call(0x8006C524)}")
+                out.append("        goto L_8006C8BC; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C6F0:
                 out.append("    if (nc_begin_spatial_actor(c)) goto L_8006C714;")
             if self.mod.name == "psx2_exe" and i.addr in (
