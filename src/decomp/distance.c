@@ -718,6 +718,47 @@ static void load_part_transform(CPUState *c, u32 matrix) {
     }
 }
 
+/* Install the caller's rotation and translation, then transform the
+ * part's signed local XYZ. The stored position is four times the MAC
+ * result. The stack flag word is written before the positions are reread. */
+bool nc_start_scaled_part_position(CPUState *c) {
+    if (c->budget <= 82)
+        return false;
+    const u32 frame = R(29) - 0xf0, part = R(5);
+    R(29) = frame;
+    R(10) = part;
+    MEM_W32(frame + 0xe8, R(30));
+    R(30) = R(6);
+    MEM_W32(frame + 0xd4, R(19));
+    R(19) = 0;
+    MEM_W32(frame + 0xe0, R(22));
+    R(22) = 0;
+    R(15) = R(30);
+    const unsigned saved[] = {23, 21, 20, 18, 17, 16};
+    for (unsigned i = 0; i < sizeof saved / sizeof saved[0]; ++i)
+        MEM_W32(frame + 0xc8 + 4 * (saved[i] - 16), R(saved[i]));
+    MEM_W32(frame + 0xb0, R(4));
+    MEM_W32(frame + 0xb8, part);
+    load_part_transform(c, R(30));
+
+    gte_write_data(c, 0, MEM_R32(part + 0x10));
+    gte_write_data(c, 1, MEM_R32(part + 0x14));
+    gte_command(c, 0x0480012); /* MVMVA, rotation matrix, V0, translation */
+    const u32 output = part + 0x2c;
+    for (unsigned axis = 0; axis < 3; ++axis)
+        MEM_W32(output + 4 * axis, gte_read_data(c, 25 + axis));
+    R(12) = gte_read_ctrl(c, 31);
+    MEM_W32(frame + 0xa8, R(12));
+    const u32 x = MEM_R32(output);
+    R(3) = MEM_R32(output + 8) << 2;
+    MEM_W32(output, x << 2);
+    R(2) = MEM_R32(output + 4) << 2;
+    MEM_W32(output + 8, R(3));
+    MEM_W32(output + 4, R(2));
+    c->budget -= 82;
+    return true;
+}
+
 /* Start the part chain with an identity rotation and zero translation. */
 bool nc_init_part_transform(CPUState *c) {
     if (c->budget <= 55)
