@@ -66,3 +66,29 @@ bool nc_credits_set_cd_volume(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* The credits loader builds a list of allocation records inside its arena.
+ * The initial record owns a single free span immediately after its header. */
+bool nc_credits_init_heap(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+
+    const u32 header_size = 0x1c;
+    const u32 head = (R(4) + 3u) & ~3u;
+    const u32 size = R(5), gp = R(28);
+    R(4) = head;
+    MEM_W32(head + 0x0c, head + header_size); /* first free byte */
+    R(2) = size - header_size;
+    MEM_W32(gp + 0x0c, 0); /* allocation count */
+    MEM_W32(gp + 0x2c, head);
+    MEM_W32(head + 0x18, 0); /* next and previous records */
+    MEM_W32(head + 0x14, 0);
+    MEM_W32(head + 0x04, 0); /* payload pointer, requested size, occupied span */
+    MEM_W32(head + 0x08, 0);
+    MEM_W32(head, 0);
+    MEM_W32(head + 0x10, R(2)); /* free space following this record */
+    MEM_W32(gp + 0x10, 0);
+    MEM_W32(gp + 0x14, size);
+    c->budget -= 18;
+    return true;
+}
