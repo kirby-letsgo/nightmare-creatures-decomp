@@ -503,6 +503,8 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
+                out.append("    if (nc_select_base_damage(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):
                 check_mode = "true" if i.addr == 0x8004EB30 else "false"
                 out.append(f"    if (nc_calculate_hit_health(c, {check_mode})) goto L_8004EB78;")

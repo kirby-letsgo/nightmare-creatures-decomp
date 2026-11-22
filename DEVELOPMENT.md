@@ -252,16 +252,28 @@ disabled. To compare both gameplay builds directly, add `--no-adrenaline` to
 
 ### Native hit damage
 
-In the recompiled build, `src/decomp/damage.c` calculates the target's remaining health
-once a hit has landed and the base damage has been selected. The entry at `0x8004EB6C`
+In the recompiled build, `src/decomp/damage.c` selects base damage and calculates the
+target's remaining health. The selector at `0x8004E6DC` indexes the byte table at
+`0x800D42C8` by the actor's row (byte at offset `0x388`) and attack kind. Each row
+contains 52 bytes. Actor flags and game rules select the row or combine the attacker's
+power with a target-specific percentage. The selector writes the resulting power to
+the caller's output word and converts it to health points.
+
+In the first-combat replay the incoming attack uses row 4, kind 38, with power 20.
+Integer division of `20 * 4096 / 255` gives 321 damage. The player's attacks use row
+0, kinds 1 and 15, with powers 15 and 25. The target's entries are both 100 percent,
+so these attacks deal 240 and 401 damage.
+
+After selection, the entry at `0x8004EB6C`
 subtracts base damage directly. The entry at `0x8004EB30` doubles it when bit
 `0x08000000` in the rules word at offset 4 and bits `0x30` in the first word are all clear.
 Both paths resume at the original health store at `0x8004EB78`, where the combat replay
-counts hits. The original routine handles hit detection, base damage selection and death
+counts hits. The original code handles hit detection and death
 reactions. Near a scheduled interrupt, the recompiled build executes the instruction-timed path.
 
 `ctest -R damage` checks the arithmetic, scratch registers and cycle counts. With the US
-disc present it also compares both entries against the interpreter, including guest RAM.
+disc present it compares the selector's registers, output word and cycle count against
+the original instructions and checks guest RAM for both health-calculation entries.
 
 ### Disc format verification
 

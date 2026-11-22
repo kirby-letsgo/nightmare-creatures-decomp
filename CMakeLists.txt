@@ -213,6 +213,12 @@ add_test(NAME damage_rules COMMAND test_damage)
 add_test(NAME damage_disc COMMAND test_damage "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(damage_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
+add_executable(test_base_damage tests/base_damage.c src/decomp/damage.c src/port/no_gen.c)
+target_link_libraries(test_base_damage PRIVATE nc_runtime)
+add_test(NAME base_damage_rules COMMAND test_base_damage)
+add_test(NAME base_damage_disc COMMAND test_base_damage "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(base_damage_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
 add_test(NAME continue_game COMMAND Python3::Interpreter "${CMAKE_SOURCE_DIR}/tools/test_continue.py"
     $<TARGET_FILE:nightmare> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(continue_game PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
