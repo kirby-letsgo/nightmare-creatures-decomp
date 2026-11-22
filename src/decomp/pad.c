@@ -223,3 +223,104 @@ restore:
     c->budget -= 9;
     return 0;
 }
+
+/* Player control calls 80062D2C instead of polling the controller when
+ * either input-sequence flag (0x30) is set. Each four-byte record has a
+ * button halfword, an unsigned repeat count, and a byte copied to 8008F04C. */
+enum { SEQUENCE_BASE = 0x184, SEQUENCE_INDEX = 0x188, SEQUENCE_REMAINING = 0x3f8 };
+
+bool nc_stop_pad_sequence(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(2) = 5;
+    MEM_W32(R(28) + SEQUENCE_BASE, 0);
+    R(1) = 0x80090000;
+    MEM_W32(0x8008f164, R(2));
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_pad_sequence_ended(CPUState *c) {
+    if (c->budget <= 40)
+        return false;
+    R(3) = MEM_R32(R(28) + SEQUENCE_BASE);
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    c->budget -= 6;
+    if (!R(3)) {
+        R(2) = 1;
+        --c->budget;
+    } else {
+        R(4) = R(3) + 4 * MEM_R32(R(28) + SEQUENCE_INDEX);
+        R(3) = MEM_R16(R(4));
+        R(2) = 0;
+        c->budget -= 12;
+        if (R(3) == 0x4c41) {
+            R(3) = MEM_R16(R(4) + 2);
+            c->budget -= 6;
+            if (R(3) == 0x4e41) { /* "ALAN" in guest byte order */
+                R(31) = 0x80062d10;
+                c->budget -= 2;
+                nc_call(c, 0x80062cb0);
+                R(2) = 1;
+                c->budget -= 2;
+            }
+        }
+    }
+    R(31) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_read_pad_sequence(CPUState *c) {
+    if (c->budget <= 100)
+        return false;
+    const u32 gp = R(28);
+    R(4) = MEM_R32(gp + SEQUENCE_BASE);
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x14, R(31));
+    MEM_W32(R(29) + 0x10, R(16));
+    c->budget -= 7;
+    if (!R(4)) {
+        R(2) = 0;
+        --c->budget;
+    } else {
+        u32 remaining = MEM_R8(gp + SEQUENCE_REMAINING);
+        c->budget -= 6;
+        u32 index = MEM_R32(gp + SEQUENCE_INDEX);
+        if (remaining) {
+            R(3) = remaining - 1;
+            MEM_W8(gp + SEQUENCE_REMAINING, R(3));
+            R(16) = R(4) + 4 * index;
+            c->budget -= 6;
+        } else {
+            ++index;
+            R(3) = 4 * index;
+            MEM_W32(gp + SEQUENCE_INDEX, index);
+            R(16) = R(4) + R(3);
+            R(2) = index;
+            R(31) = 0x80062d6c;
+            c->budget -= 9;
+            nc_call(c, 0x80062cc8);
+            c->budget -= 2;
+            if (!R(2)) {
+                MEM_W8(gp + SEQUENCE_REMAINING, MEM_R8(R(16) + 2) - 1);
+                c->budget -= 8;
+            }
+        }
+        /* On the last repetition, copy the next record's fourth byte.
+         * Even the terminating call returns the current record's button word. */
+        remaining = MEM_R8(gp + SEQUENCE_REMAINING);
+        u32 side_byte = MEM_R8(R(16) + (remaining ? 3 : 7));
+        R(1) = 0x80090000;
+        MEM_W32(0x8008f04c, side_byte);
+        R(2) = MEM_R16(R(16));
+        c->budget -= 6 + (remaining ? 3 : 5) + 7;
+    }
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 9;
+    return true;
+}
