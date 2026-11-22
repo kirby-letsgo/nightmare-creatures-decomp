@@ -211,6 +211,50 @@ static bool playback_read(void) {
     return true;
 }
 
+static bool pad_dispatch_entry(void) {
+    CPUState input = initial();
+    input.r[31] = 0; /* stop at the common return, after restoring the dispatch frame */
+    MEM_W32(gp + 0x244, config);
+    MEM_W32(gp + 0x190, 0x21);
+    MEM_W32(packet, 0xffff4100);
+    MEM_W32(packet + 34, 0xffff4100);
+    for (unsigned mode = 0; mode <= 0x30; mode += 0x10) {
+        for (unsigned bits = 0; bits < 4; ++bits) {
+            MEM_W32(config, mode | ((bits & 1) << 15));
+            MEM_W32(config + 4, 0x02000010 | ((bits & 2) << 17));
+            MEM_W32(input.r[29] - 4, 0x12345678);
+            MEM_W32(input.r[29] - 8, 0x87654321);
+            memcpy(before, nc_ram, RAM_SIZE);
+            CPUState low = input;
+            low.budget = 24;
+            CPUState native = low;
+            if (nc_enter_pad_dispatch(&native) != 0x80042d9c || memcmp(&native, &low, sizeof low) ||
+                memcmp(before, nc_ram, RAM_SIZE))
+                return false;
+            native = input;
+            u32 resume = nc_enter_pad_dispatch(&native);
+            if (resume != (mode ? 0x80042de4u : 0x80042e7cu) ||
+                MEM_R32(input.r[29] - 4) != input.r[31] || MEM_R32(input.r[29] - 8) != input.r[16])
+                return false;
+            if (!mode || bits) {
+                u32 expected_v0 = bits & 1 ? 0x8000 : mode ? 0x40000 : 0;
+                int cycles = !mode ? 13 : bits & 1 ? 15 : 22;
+                if (native.r[2] != expected_v0 || native.r[3] != (mode ? 0x40000 : expected_v0) ||
+                    native.r[4] != config || native.budget != input.budget - cycles)
+                    return false;
+            }
+            interp_resume_exe(&native, resume);
+            memcpy(after, nc_ram, RAM_SIZE);
+            memcpy(nc_ram, before, RAM_SIZE);
+            CPUState guest = input;
+            interp_resume_exe(&guest, 0x80042d9c);
+            if (memcmp(&native, &guest, sizeof guest) || memcmp(after, nc_ram, RAM_SIZE))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool playback_poll_destination(CPUState *cpu) {
     return nc_pad_playback_poll_gate(cpu) == cpu->r[31];
 }
@@ -801,11 +845,11 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = playback_read() && playback_poll_gate() && playback_interrupt() &&
-              pad_select_edge() && pad_start_edge() && pad_inactivity() && l2_direction_edges() &&
-              button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-              ports();
+    bool ok = pad_dispatch_entry() && playback_read() && playback_poll_gate() &&
+              playback_interrupt() && pad_select_edge() && pad_start_edge() && pad_inactivity() &&
+              l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+              sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
+              packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

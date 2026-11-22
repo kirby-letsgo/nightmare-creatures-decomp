@@ -696,6 +696,15 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800447B8, 0x800448D4):
                 held = "true" if i.addr == 0x800447B8 else "false"
                 out.append(f"    if (nc_player_l2_direction(c, {held})) goto L_800448E0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80042D9C:
+                out.extend(
+                    [
+                        "    switch (nc_enter_pad_dispatch(c)) {",
+                        "    case 0x80042E7C: goto L_80042E7C;",
+                        "    case 0x80042DE4: goto L_80042DE4;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80042DE4:
                 out.extend(
                     [

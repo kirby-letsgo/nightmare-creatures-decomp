@@ -145,6 +145,8 @@ credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
 credits_exe  8001B548    8001B610         credits_sdk.c
 credits_exe  8001B414    8001B4E4         credits_sdk.c
+# Live input or playback selection and dispatch frame setup.
+psx2_exe     80042D9C    80042DE4         pad.c
 # Playback state checks before the live pad read.
 psx2_exe     80042DE4    80042E18         pad.c
 # Poll live buttons and check for sequence end on idle input.
