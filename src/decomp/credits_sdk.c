@@ -287,3 +287,14 @@ bool nc_credits_prepend_packets(CPUState *c, bool range) {
     c->budget -= 2;
     return true;
 }
+
+bool nc_credits_packet_link(CPUState *c, bool check_end) {
+    if (c->budget <= 9)
+        return false;
+    c->budget--;
+    const u32 link = MEM_R32(R(4)) & 0x00ffffff;
+    R(3) = check_end ? 0x00ffffff : 0x80000000;
+    R(2) = check_end ? link == 0x00ffffff : link | R(3);
+    c->budget -= 8;
+    return true;
+}
