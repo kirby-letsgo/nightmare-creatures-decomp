@@ -1524,8 +1524,18 @@ class Emitter:
                 out.append("    case NC_PART_FLAGS_LATER: goto L_8001BEAC;")
                 out.append("    case NC_PART_FLAGS_CLEAR: goto L_8001BE6C;")
                 out.append("    case NC_PART_FLAGS_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001BEAC:
-                out.append("    { bool search; if (nc_advance_part_pose_heading(c, &search)) {")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BE6C:
+                out.append("    if (nc_finish_part_turn(c)) goto L_8001C04C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8001BE98:
+                out.append("    if (nc_reset_part_turn_counter(c)) {")
+                out.append(f"        {self.call(0x80053F38)}")
+                out.append("        goto L_8001BEA8; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8001BEA8, 0x8001BEAC):
+                double_step = "true" if i.addr == 0x8001BEA8 else "false"
+                out.append(
+                    "    { bool search; "
+                    f"if (nc_advance_part_pose_heading(c, {double_step}, &search)) {{"
+                )
                 out.append("        if (search) goto L_8001BF18;")
                 out.append("        goto L_8001C04C; } }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BF18:
