@@ -26,6 +26,7 @@ bool nc_finish_actor_point_placement(CPUState *c);
 bool nc_place_actor_points(CPUState *c);
 bool nc_prepare_point_heading(CPUState *c);
 bool nc_return_point_heading(CPUState *c);
+bool nc_init_part_transform(CPUState *c);
 bool nc_transform_part_offset(CPUState *c);
 bool nc_compose_part_matrix(CPUState *c);
 bool nc_finish_part_translation(CPUState *c);

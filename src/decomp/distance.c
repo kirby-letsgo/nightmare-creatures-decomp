@@ -611,6 +611,43 @@ bool nc_vector_heading(CPUState *c) {
     return true;
 }
 
+/* Load the GTE rotation and translation. The three translation words also
+ * remain in the guest temporaries after the final control-register writes. */
+static void load_part_transform(CPUState *c, u32 matrix) {
+    for (unsigned reg = 0; reg < 8; ++reg) {
+        const u32 word = MEM_R32(matrix + 4 * reg);
+        gte_write_ctrl(c, reg, word);
+        if (reg >= 5)
+            R(12 + reg - 5) = word;
+    }
+}
+
+/* Start the part chain with an identity rotation and zero translation. */
+bool nc_init_part_transform(CPUState *c) {
+    if (c->budget <= 55)
+        return false;
+    const u32 frame = R(29) - 0xf8, matrix = frame + 0x98;
+    R(29) = frame;
+    R(7) = R(4);
+    MEM_W32(frame + 0xf0, R(20));
+    R(20) = R(6);
+    MEM_W32(frame + 0xe4, R(17));
+    R(17) = matrix;
+    R(2) = 4096;
+    MEM_W32(frame + 0xf4, R(31));
+    MEM_W32(frame + 0xec, R(19));
+    MEM_W32(frame + 0xe8, R(18));
+    MEM_W32(frame + 0xe0, R(16));
+    for (unsigned i = 0; i < 9; ++i)
+        MEM_W16(matrix + 2 * i, i % 4 == 0 ? 4096 : 0);
+    MEM_W32(matrix + 0x1c, 0);
+    MEM_W32(matrix + 0x18, 0);
+    MEM_W32(matrix + 0x14, 0);
+    load_part_transform(c, matrix);
+    c->budget -= 55;
+    return true;
+}
+
 /* Transform the selected part's signed local offset into the accumulated
  * matrix translation before composing its rotation. */
 bool nc_transform_part_offset(CPUState *c) {
@@ -656,12 +693,7 @@ bool nc_compose_part_matrix(CPUState *c) {
     rotate_matrix_column(c, frame + 0xbc, frame + 0x9c);
     R(2) = frame + 0x9c;
     R(17) = R(19);
-    for (unsigned reg = 0; reg < 8; ++reg) {
-        const u32 word = MEM_R32(R(17) + 4 * reg);
-        gte_write_ctrl(c, reg, word);
-        if (reg >= 5)
-            R(12 + reg - 5) = word;
-    }
+    load_part_transform(c, R(17));
     if (R(16))
         --R(16);
     c->budget -= cycles;
