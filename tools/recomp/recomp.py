@@ -731,6 +731,8 @@ class Emitter:
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B22C:
             targets.update((0x8002B260, 0x8002B304))
+        if self.mod.name == "psx2_exe" and f.addr == 0x8002AC70:
+            targets.add(0x8002AC94)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B3D0:
             targets.update((0x8002B40C, 0x8002B4B0, 0x8002B4E8, 0x8002B588, 0x8002B5C0, 0x8002B5E8))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002B0B0:
@@ -1629,6 +1631,12 @@ class Emitter:
                 )
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AC70:
+                out.append("    if (nc_begin_placement_defaults(c)) {")
+                out.append(f"        {self.call(0x80072910)}")
+                out.append("        goto L_8002AC94; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AC94:
+                out.append("    if (nc_finish_placement_defaults(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AD3C:
                 out.append("    if (nc_init_placement_pose(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:

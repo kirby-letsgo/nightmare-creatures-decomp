@@ -16,6 +16,52 @@ bool nc_step_record_angle(CPUState *c) {
     return true;
 }
 
+/* Clear the global placement record, then install defaults on the record
+ * supplied by the caller. The guest memset runs between these two blocks. */
+bool nc_begin_placement_defaults(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    R(4) = 0x800d7630;
+    R(5) = 0;
+    MEM_W32(R(29) + 0x14, R(31));
+    R(31) = 0x8002ac94;
+    R(6) = 0x17c;
+    c->budget -= 9;
+    return true;
+}
+
+bool nc_finish_placement_defaults(CPUState *c) {
+    if (c->budget <= 32)
+        return false;
+    const u32 record = R(16);
+    MEM_W16(record + 4, 250);
+    MEM_W32(record + 0x148, 5);
+    MEM_W32(record + 0x14c, 2);
+    R(3) = 725;
+    R(2) = 180;
+    MEM_W16(record, 0);
+    MEM_W16(record + 2, 0);
+    for (u32 axis = 0; axis < 6; axis += 2)
+        MEM_W16(record + 8 + axis, 0);
+    for (u32 axis = 0; axis < 6; axis += 2)
+        MEM_W16(record + 0x20 + axis, 0);
+    MEM_W32(record + 0x128, 0);
+    MEM_W32(record + 0x12c, 0);
+    MEM_W32(record + 0x134, R(3));
+    MEM_W32(record + 0x130, R(3));
+    MEM_W32(record + 0x13c, R(2));
+    MEM_W32(record + 0x138, R(2));
+    MEM_W32(record + 0x140, R(3));
+    R(31) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 32;
+    return true;
+}
+
 /* The callers pass angles in 4096-unit turns and whole-world X, Y, -Z.
  * Both placement poses start at the supplied position and orientation. */
 bool nc_init_placement_pose(CPUState *c) {
