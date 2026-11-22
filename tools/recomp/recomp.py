@@ -505,6 +505,10 @@ class Emitter:
             if f.addr <= start < f.end:
                 targets.update((passed, rejected))
         targets = {t for t in targets if f.addr <= t < f.end}
+        if self.mod.name == "psx2_exe" and f.addr == 0x8004CE18:
+            targets.add(0x8004CE58)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80047128:
+            targets.add(0x800471AC)
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -550,6 +554,18 @@ class Emitter:
                 outgoing, resume = box_builders[i.addr]
                 arg = "true" if outgoing else "false"
                 out.append(f"    if (nc_prepare_attack_box(c, {arg})) goto L_{resume:08X};")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004CE24:
+                out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
+                out.append("    if (nc_distance_root(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
+                out.append("    if (nc_vector_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8003531C:
+                out.append("    if (nc_heading_cosine(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80035338:
+                out.append("    if (nc_heading_sine(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
+                out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
                 out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
@@ -658,6 +674,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/adrenaline.h"')
         header.append('#include "decomp/damage.h"')
         header.append('#include "decomp/contact.h"')
+        header.append('#include "decomp/distance.h"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)
