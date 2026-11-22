@@ -1484,6 +1484,8 @@ class Emitter:
                 )
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:
+                out.append("    if (nc_step_placement_record(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
                 out.append("    if (nc_step_record_angle_pair(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:

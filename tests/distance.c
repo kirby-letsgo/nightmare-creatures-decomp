@@ -204,6 +204,55 @@ static bool actor_level_selection(bool disc) {
     return true;
 }
 
+static bool placement_record_steps(bool disc) {
+    const u32 record = SCRATCH_BASE;
+    static const struct {
+        u32 shift;
+        s16 result[3];
+    } cases[] = {{0, {32767, -32768, -1}}, {33, {-1, -1, -1}}, {31, {-32768, 32766, -1}}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = record;
+        input.r[29] = SCRATCH_BASE + SCRATCH_SIZE;
+        memset(nc_scratch, 0xa5, sizeof before);
+        MEM_W16(record, -32768);
+        MEM_W16(record + 2, 32767);
+        MEM_W16(record + 4, 0);
+        MEM_W16(record + 0x18, 32767);
+        MEM_W16(record + 0x1a, -32768);
+        MEM_W16(record + 0x1c, -1);
+        MEM_W16(record + 0x08, 0);
+        MEM_W16(record + 0x0a, -1);
+        MEM_W16(record + 0x10, 0xf7ff);
+        MEM_W16(record + 0x12, i == 2 ? 0xf800 : 0xf000);
+        MEM_W32(record + 0x128, 0xffffff00u);
+        MEM_W32(record + 0x12c, i == 2 ? 0x80000800u : 0x80000000u);
+        MEM_W32(record + 0x148, 2);
+        MEM_W32(record + 0x14c, cases[i].shift);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 151;
+        CPUState native = input;
+        if (nc_step_placement_record(&native) || memcmp(&input, &native, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_step_placement_record(&native) || native.budget != (i == 2 ? 1 : 3))
+            return false;
+        for (unsigned axis = 0; axis < 3; ++axis)
+            if ((s16)MEM_R16(record + 2 * axis) != cases[i].result[axis])
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x8002afb4);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool record_angle_pairs(bool disc) {
     static const struct {
         s16 first, first_target, second, second_target;
@@ -2864,6 +2913,8 @@ int main(int argc, char **argv) {
         if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
             return 1;
     }
+    if (!placement_record_steps(disc))
+        return 1;
     bool ok =
         spatial_frames(disc, true) && spatial_frames(disc, false) && record_angle_pairs(disc) &&
         record_angle_steps(disc) && paired_point_return(disc) && paired_point_placement(disc) &&
