@@ -329,6 +329,9 @@ psx2_exe     80067358    800673BC         pad.c
 psx2_exe     800673BC    80067400         pad.c
 # Secondary mode record selection before action 2.
 psx2_exe     80067400    8006745C         pad.c
+# Call the selected record and expire secondary mode bit 0x10.
+psx2_exe     8006745C    80067464         pad.c
+psx2_exe     80067464    800674A0         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
