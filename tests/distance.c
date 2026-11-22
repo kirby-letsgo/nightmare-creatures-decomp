@@ -359,6 +359,52 @@ static bool record_projections(bool disc) {
     return true;
 }
 
+static bool projected_heading_gaps(bool disc) {
+    static const struct {
+        s16 previous, projected;
+        s32 gap, cycles;
+    } cases[] = {
+        {0, 0, 0, 12},
+        {0, 568, 568, 11},
+        {569, 0, 569, 12},
+        {0, 2048, 2048, 11},
+        {2048, 0, 2048, 12},
+        {0, 2049, 2047, 15},
+        {4095, 0, 1, 15},
+        {-1, 4095, 0, 15},
+        {4096, 0, 0, 15},
+        {-32768, 32767, -61439, 15},
+        {32767, -32768, -61439, 15},
+    };
+    u8 before[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[2] = 0xdead0000u | (u16)cases[i].projected;
+        input.r[31] = 0x80047564;
+        MEM_W16(SCRATCH_BASE + 10, cases[i].previous);
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 15;
+        CPUState native = input;
+        if (nc_projected_heading_gap(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_projected_heading_gap(&native) || native.r[2] != (u32)(cases[i].gap < 569) ||
+            native.r[3] != (u32)cases[i].gap || native.r[4] != (u32)(s32)cases[i].previous ||
+            native.r[17] != (u32)(s32)cases[i].projected ||
+            native.budget != input.budget - cases[i].cycles ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80047518);
+            if (memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool relative_headings(bool disc) {
     const u32 actor = SCRATCH_BASE, pose = actor + 128, linked = actor + 256;
     const u32 point = actor + 384;
@@ -633,7 +679,7 @@ int main(int argc, char **argv) {
               projected_points(disc) && part_positions(disc) && actor_coordinates(disc) &&
               point_headings(disc, false) && point_headings(disc, true) && actor_headings(disc) &&
               heading_projections(disc) && reference_distances(disc) && relative_headings(disc) &&
-              record_projections(disc);
+              record_projections(disc) && projected_heading_gaps(disc);
     if (disc)
         disc_close();
     return ok ? 0 : 1;

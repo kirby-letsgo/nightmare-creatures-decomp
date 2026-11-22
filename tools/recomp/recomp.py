@@ -267,7 +267,7 @@ def load_module(name: str, exe: str) -> Module:
         entries.update(CREDITS_ROUTINES)
     if name == "psx2_exe":
         # Splat groups these independent routines after preceding returns.
-        entries.update((0x800471E0, 0x80047268, 0x80047300, 0x8004737C))
+        entries.update((0x800471E0, 0x80047268, 0x80047300, 0x8004737C, 0x80047420))
     for addr in entries:
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
@@ -699,6 +699,8 @@ class Emitter:
                 out.append("        goto L_800473C0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800473C8:
                 out.append("    if (nc_store_projected_heading(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047518:
+                out.append("    if (nc_projected_heading_gap(c)) goto L_80047564;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047300:
                 out.append("    if (nc_prepare_relative_heading(c)) {")
                 out.append(f"        {self.call(0x80047220)}")
