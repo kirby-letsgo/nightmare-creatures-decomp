@@ -22,6 +22,14 @@ NcPartSearchStep nc_advance_part_heading_search(CPUState *c, bool matched);
 bool nc_restore_part_search_frame(CPUState *c);
 bool nc_begin_part_pose_heading(CPUState *c);
 bool nc_check_part_heading_turn(CPUState *c);
+bool nc_reset_part_pose_heading(CPUState *c);
+typedef enum {
+    NC_PART_FLAGS_FALLBACK,
+    NC_PART_FLAGS_FIRST,
+    NC_PART_FLAGS_LATER,
+    NC_PART_FLAGS_CLEAR,
+} NcPartFlagPath;
+NcPartFlagPath nc_check_turn_parts(CPUState *c);
 bool nc_advance_part_pose_heading(CPUState *c, bool *search);
 bool nc_begin_part_heading_search(CPUState *c);
 bool nc_test_part_heading(CPUState *c);
