@@ -369,3 +369,171 @@ bool nc_credits_allocation_size(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
+
+/* Callee-saved registers used across the resize helper's nested calls. */
+enum { BLOCK = 16, NEW_SIZE = 17, EXTENT = 18, OLD_PTR = 19, DIFFERENCE = 20 };
+
+static void heap_call(CPUState *c, u32 target, u32 resume) {
+    R(31) = resume;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, target);
+}
+
+static void resize_extent(CPUState *c) {
+    assign(c, 3, ~3u);
+    assign(c, 2, R(2) & R(3));
+    assign(c, EXTENT, R(2) + HEADER_SIZE);
+}
+
+static void shrink_allocation(CPUState *c) {
+    resize_extent(c);
+    load(c, 2, R(BLOCK) + PAYLOAD);
+    load(c, 4, R(BLOCK) + SPAN);
+    load(c, 5, R(BLOCK) + REQUESTED);
+    assign(c, 3, R(BLOCK) + R(EXTENT));
+    store(c, R(BLOCK) + FREE_START, R(3));
+    load(c, 3, R(28) + 0x10);
+    store(c, R(BLOCK) + REQUESTED, R(NEW_SIZE));
+    store(c, R(BLOCK) + SPAN, R(EXTENT));
+    assign(c, DIFFERENCE, R(4) - R(EXTENT));
+    assign(c, 4, R(7) - R(NEW_SIZE));
+    assign(c, 3, R(3) - R(4));
+    assign(c, 5, R(5) - R(NEW_SIZE));
+    store(c, R(28) + 0x10, R(3));
+    load(c, 3, R(28) + 0x14);
+    load(c, 4, R(BLOCK) + FREE_SIZE);
+    assign(c, 3, R(3) + R(5));
+    assign(c, 4, R(4) + R(DIFFERENCE));
+    store(c, R(28) + 0x14, R(3));
+    MEM_W32(R(BLOCK) + FREE_SIZE, R(4));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+static bool can_grow_in_place(CPUState *c) {
+    resize_extent(c);
+    load(c, 2, R(BLOCK) + SPAN);
+    load(c, 3, R(BLOCK) + FREE_START);
+    NC_POLL(c, NC_INSN_CYCLES);
+    bool adjacent = R(3) != 0;
+    R(DIFFERENCE) = R(EXTENT) - R(2);
+    if (!branch(c, adjacent))
+        return false;
+    load(c, 2, R(BLOCK) + FREE_SIZE);
+    NC_POLL(c, NC_INSN_CYCLES);
+    assign(c, 2, R(2) < R(DIFFERENCE));
+    bool fits = R(2) == 0;
+    R(5) = 0;
+    return branch(c, fits);
+}
+
+static void extend_allocation(CPUState *c) {
+    assign(c, 3, R(7) - R(NEW_SIZE));
+    load(c, 4, R(BLOCK) + PAYLOAD);
+    load(c, 6, R(BLOCK) + REQUESTED);
+    load(c, 2, R(28) + 0x10);
+    assign(c, 4, R(4) + R(6));
+    assign(c, 2, R(2) - R(3));
+    store(c, R(28) + 0x10, R(2));
+    load(c, 2, R(BLOCK) + REQUESTED);
+    load(c, 3, R(28) + 0x14);
+    assign(c, 2, R(2) - R(NEW_SIZE));
+    assign(c, 3, R(3) + R(2));
+    store(c, R(28) + 0x14, R(3));
+    R(6) = R(NEW_SIZE) - R(6);
+    heap_call(c, 0x8001995c, 0x800195c8); /* clear the extension */
+    load(c, 2, R(BLOCK) + PAYLOAD);
+    load(c, 4, R(BLOCK) + FREE_SIZE);
+    assign(c, 3, R(BLOCK) + R(EXTENT));
+    store(c, R(BLOCK) + FREE_START, R(3));
+    store(c, R(BLOCK) + REQUESTED, R(NEW_SIZE));
+    store(c, R(BLOCK) + SPAN, R(EXTENT));
+    assign(c, 4, R(4) - R(DIFFERENCE));
+    MEM_W32(R(BLOCK) + FREE_SIZE, R(4));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+static void move_allocation(CPUState *c) {
+    R(4) = R(NEW_SIZE);
+    heap_call(c, 0x80019680, 0x800195f4);
+    assign(c, EXTENT, R(2)); /* now holds the new payload pointer */
+    const bool allocated = R(EXTENT) != 0;
+    R(2) = 0;
+    if (!branch(c, allocated))
+        return;
+
+    assign(c, 4, R(EXTENT));
+    load(c, 6, R(BLOCK) + REQUESTED);
+    R(5) = R(OLD_PTR);
+    heap_call(c, 0x80019928, 0x80019610); /* copy old bytes */
+    load(c, 6, R(BLOCK) + REQUESTED);
+    assign(c, 5, 0);
+    assign(c, 4, R(EXTENT) + R(6));
+    R(6) = R(NEW_SIZE) - R(6);
+    heap_call(c, 0x8001995c, 0x80019624); /* clear only new bytes */
+    R(4) = R(OLD_PTR);
+    heap_call(c, 0x800197e0, 0x8001962c);
+    R(2) = R(EXTENT);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+}
+
+static void resize_existing(CPUState *c) {
+    heap_call(c, 0x800198b0, 0x800194d4);
+    assign(c, BLOCK, R(2));
+    const bool found = R(BLOCK) != 0;
+    R(2) = 0;
+    if (!branch(c, found))
+        return;
+
+    load(c, 7, R(BLOCK) + REQUESTED);
+    NC_POLL(c, NC_INSN_CYCLES);
+    assign(c, 2, R(NEW_SIZE) < R(7));
+    bool shrink = R(2) != 0;
+    R(2) = R(NEW_SIZE) + 3;
+    if (branch(c, shrink)) {
+        shrink_allocation(c);
+        return;
+    }
+    assign(c, 2, R(7) < R(NEW_SIZE));
+    bool grow = R(2) != 0;
+    R(2) = R(NEW_SIZE) + 3;
+    if (!branch(c, grow)) {
+        load(c, 2, R(BLOCK) + PAYLOAD);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } else if (can_grow_in_place(c)) {
+        extend_allocation(c);
+    } else {
+        move_allocation(c);
+    }
+}
+
+bool nc_credits_resize(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(OLD_PTR));
+    R(OLD_PTR) = R(4);
+    MEM_W32(R(29) + 0x14, R(NEW_SIZE));
+    R(NEW_SIZE) = R(5);
+    MEM_W32(R(29) + 0x24, R(31));
+    MEM_W32(R(29) + 0x20, R(DIFFERENCE));
+    MEM_W32(R(29) + 0x18, R(EXTENT));
+    MEM_W32(R(29) + 0x10, R(BLOCK));
+    c->budget -= 10;
+    if (!R(NEW_SIZE)) {
+        R(4) = R(OLD_PTR);
+        heap_call(c, 0x800197e0, 0x80019658);
+        assign(c, 2, 0);
+    } else if (branch(c, !R(OLD_PTR))) {
+        R(4) = R(NEW_SIZE);
+        heap_call(c, 0x80019680, 0x80019648);
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    } else {
+        resize_existing(c);
+    }
+    load(c, 31, R(29) + 0x24);
+    for (int reg = DIFFERENCE; reg >= BLOCK; reg--)
+        load(c, reg, R(29) + 0x10 + 4 * (reg - BLOCK));
+    assign(c, 29, R(29) + 0x28);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}

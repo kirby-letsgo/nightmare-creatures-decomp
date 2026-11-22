@@ -126,6 +126,36 @@ static bool check_free(unsigned match, u32 left_free, u32 right_free, int budget
     return compare(start, 0x800197e0, nc_credits_free, 3);
 }
 
+static bool check_resize(u32 pointer, u32 new_size, u32 adjacent, u32 elsewhere, int budget) {
+    const u32 gp = 0x80024c68, head = 0x80060000, block = head + 0x200;
+    CPUState start = {0};
+    for (unsigned i = 1; i < 32; i++)
+        start.r[i] = i * 0x2468u;
+    start.r[4] = pointer;
+    start.r[5] = new_size;
+    start.r[28] = gp;
+    start.r[29] = 0x801fef00;
+    start.r[31] = 0x80010000;
+    start.budget = budget;
+    memset(nc_fast_ptr(head), 0, 0x400);
+    MEM_W32(gp + 0x0c, 1);
+    MEM_W32(gp + 0x10, 20);
+    MEM_W32(gp + 0x14, 500);
+    MEM_W32(gp + 0x2c, head);
+    MEM_W32(head + 0x0c, elsewhere ? head + 0x1c : 0);
+    MEM_W32(head + 0x10, elsewhere);
+    MEM_W32(head + 0x18, block);
+    MEM_W32(block, 48);
+    MEM_W32(block + 4, block + 0x1c);
+    MEM_W32(block + 8, 20);
+    MEM_W32(block + 0x0c, adjacent ? block + 48 : 0);
+    MEM_W32(block + 0x10, adjacent);
+    MEM_W32(block + 0x14, head);
+    for (unsigned i = 0; i < 120; i++)
+        MEM_W8(block + 0x1c + i, (u8)(i + 1));
+    return compare(start, 0x8001949c, nc_credits_resize, 10);
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -174,6 +204,22 @@ int main(int argc, char **argv) {
     for (int budget = 4; budget < 160; budget++)
         if (!check_free(1, 60, 40, budget)) {
             fprintf(stderr, "credits free timing mismatch, budget %d\n", budget);
+            return 1;
+        }
+    const u32 ptr = 0x8006021c;
+    const u32 new_sizes[] = {0, 1, 19, 20, 21, 24, 25, 84};
+    const u32 gaps[][2] = {{0, 0}, {4, 0}, {0, 128}, {4, 128}, {64, 0}};
+    for (unsigned i = 0; i < sizeof new_sizes / sizeof new_sizes[0]; i++)
+        for (unsigned j = 0; j < sizeof gaps / sizeof gaps[0]; j++)
+            if (!check_resize(ptr, new_sizes[i], gaps[j][0], gaps[j][1], 4096) ||
+                !check_resize(0, new_sizes[i], gaps[j][0], gaps[j][1], 4096) ||
+                !check_resize(ptr + 1, new_sizes[i], gaps[j][0], gaps[j][1], 4096)) {
+                fprintf(stderr, "resize mismatch for size %u, layout %u\n", new_sizes[i], j);
+                return 1;
+            }
+    for (int budget = 11; budget <= 160; budget++)
+        if (!check_resize(ptr, 60, 0, 128, budget) || !check_resize(ptr, 21, 4, 0, budget)) {
+            fprintf(stderr, "resize timing mismatch at budget %d\n", budget);
             return 1;
         }
     disc_close();
