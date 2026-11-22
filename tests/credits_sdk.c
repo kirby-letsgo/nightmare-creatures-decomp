@@ -300,6 +300,26 @@ static bool check_default_display(void) {
     return true;
 }
 
+static bool graph_type(CPUState *c) {
+    return nc_credits_graph_status(c, false);
+}
+
+static bool graph_debug(CPUState *c) {
+    return nc_credits_graph_status(c, true);
+}
+
+static bool check_graph_status(void) {
+    const u32 words[] = {0xff010000, 0x807fff01, 0x018000ff, 0x00ff0280};
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++) {
+        MEM_W32(0x80024558, words[i]);
+        CPUState state = arguments(0, 0, 0, 7);
+        if (!compare(state, 0x8001c1c8, graph_type, 6) ||
+            !compare(state, 0x8001c1d8, graph_debug, 6))
+            return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2)
         return 1;
@@ -325,6 +345,7 @@ int main(int argc, char **argv) {
     pass = pass && check_palette();
     pass = pass && check_video_mode();
     pass = pass && check_default_display();
+    pass = pass && check_graph_status();
     disc_close();
     return pass ? 0 : 1;
 }
