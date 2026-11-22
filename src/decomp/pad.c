@@ -183,6 +183,34 @@ u32 nc_pad_start_edge(CPUState *c) {
     return R(2) ? 0x80042efc : 0x80042ef4;
 }
 
+/* With flag 0x40 set, save both ports and report 1. Otherwise only a
+ * released Select updates history here. A new press continues at the call. */
+u32 nc_pad_select_edge(CPUState *c) {
+    if (c->budget <= 20)
+        return 0x80042efc;
+
+    u32 config = MEM_R32(R(28) + 0x244);
+    u32 flags = MEM_R32(config);
+    c->budget -= 11;
+    if (flags & 0x40) {
+        MEM_W32(R(28) + 0x144, R(16));
+        R(2) = 1;
+        c->budget -= 3;
+        return 0x80042f54;
+    }
+
+    R(2) = 0xffffffff; /* both Select branches set v0 in the delay slot */
+    c->budget -= 2;
+    if (!(R(16) & 1)) {
+        MEM_W32(R(28) + 0x144, R(16));
+        --c->budget;
+        return 0x80042f54;
+    }
+    u32 previous = MEM_R32(R(28) + 0x144);
+    c->budget -= 7;
+    return (previous & 1) ? 0x80042f54 : 0x80042f40;
+}
+
 /* The decoder returns both ports in v0. Any set bit resets the countdown
  * before the state check, including on a frame that also decrements it. */
 bool nc_pad_inactivity(CPUState *c) {

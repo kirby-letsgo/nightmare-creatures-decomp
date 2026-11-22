@@ -179,6 +179,34 @@ static bool pad_start_edge(void) {
     return true;
 }
 
+static bool select_path_matches(CPUState *cpu) {
+    return nc_pad_select_edge(cpu) == cpu->r[31];
+}
+
+static bool pad_select_edge(void) {
+    const u32 words[] = {0, 1, 8, 9, 0x00010000, 0xabcd4011};
+    CPUState cpu = initial();
+    cpu.budget = 20;
+    if (nc_pad_select_edge(&cpu) != 0x80042efc)
+        return false;
+    cpu.budget = 21;
+    MEM_W32(gp + 0x244, config);
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; ++i) {
+        cpu.r[16] = words[i];
+        for (unsigned held = 0; held < 2; ++held) {
+            for (unsigned flagged = 0; flagged < 2; ++flagged) {
+                bool new_press = !flagged && (words[i] & 1) && !held;
+                cpu.r[31] = new_press ? 0x80042f40 : 0x80042f54;
+                MEM_W32(config, 0x80000020 | (flagged << 6));
+                MEM_W32(gp + 0x144, 0x12340008 | held);
+                if (!compare(cpu, 0x80042efc, select_path_matches, 20))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool pad_inactivity(void) {
     const u32 buttons[] = {0, 1, 0x00400000, 0x80804010};
     CPUState cpu = initial();
@@ -688,9 +716,10 @@ int main(int argc, char **argv) {
     ExecInfo exe;
     if (!disc_open(argv[1]) || !exe_load("cdrom:\\PSX2.EXE;1", &exe))
         return 1;
-    bool ok = pad_start_edge() && pad_inactivity() && l2_direction_edges() && button_dispatch() &&
-              sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
-              sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
+    bool ok = pad_select_edge() && pad_start_edge() && pad_inactivity() && l2_direction_edges() &&
+              button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+              sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+              ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
