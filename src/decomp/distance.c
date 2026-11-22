@@ -25,6 +25,39 @@ bool nc_init_actor_coordinates(CPUState *c) {
     return true;
 }
 
+/* Actor-linked points store X and negated Z as signed world units.
+ * The two origin words use eight fractional bits. Save ra before reading
+ * the point, as the guest stack may overlap it. */
+bool nc_prepare_point_heading(CPUState *c) {
+    if (c->budget <= 21)
+        return false;
+    const s32 origin_x = (s32)MEM_R32(0x800D7780) >> 8;
+    const s32 origin_z = (s32)MEM_R32(0x800D7788) >> 8;
+    const u32 point = R(4);
+    R(29) -= 24;
+    MEM_W32(R(29) + 16, R(31));
+    const s16 point_x = (s16)MEM_R16(point);
+    const s16 point_z = (s16)MEM_R16(point + 4);
+    R(2) = origin_x;
+    R(3) = point_x;
+    R(6) = point_z;
+    R(4) = origin_x - point_x;
+    R(5) = origin_z + point_z;
+    R(31) = 0x80047254;
+    c->budget -= 21;
+    return true;
+}
+
+bool nc_return_point_heading(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(2) = (s32)(s16)R(2);
+    R(31) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= 7;
+    return true;
+}
+
 /* The low 16 angle bits represent a full turn. The game disc supplies
  * 4096 signed Q14 samples per table, indexed by the upper 12 angle bits. */
 static bool heading_sample(CPUState *c, u32 table) {

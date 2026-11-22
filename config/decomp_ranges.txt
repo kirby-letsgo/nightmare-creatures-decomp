@@ -7,6 +7,7 @@ psx2_exe     80036368    800363F0         contact.c
 psx2_exe     80034D2C    80034D68         contact.c
 psx2_exe     8003531C    80035354         distance.c
 psx2_exe     8004716C    800471AC         distance.c
+psx2_exe     80047220    80047268         distance.c
 psx2_exe     800470DC    80047128         distance.c
 psx2_exe     8004CE24    8004CE58         distance.c
 psx2_exe     800420B4    8004212C         contact.c
@@ -93,6 +94,7 @@ credits_exe  8001B520    8001B548         credits_sdk.c
 credits_exe  8001B4E4    8001B520         credits_sdk.c
 credits_exe  8001C1C8    8001C1D8         credits_sdk.c
 credits_exe  8001C1D8    8001C1E8         credits_sdk.c
+credits_exe  8001B548    8001B610         credits_sdk.c
 # PSX2 pad presence, packet decoding, and the second port's high button word.
 psx2_exe     8006FF34    8007001C         pad.c
 psx2_exe     800700FC    800705D8         pad.c
