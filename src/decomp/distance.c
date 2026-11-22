@@ -78,6 +78,39 @@ bool nc_store_reference_distance(CPUState *c) {
     return true;
 }
 
+/* Keep the linked pose across the point-heading call. The actor and its
+ * current pose are read again when the call returns. */
+bool nc_prepare_relative_heading(CPUState *c) {
+    if (c->budget <= 16)
+        return false;
+    const u32 actor = MEM_R32(0x800D7790);
+    R(29) -= 24;
+    MEM_W32(R(29) + 20, R(31));
+    MEM_W32(R(29) + 16, R(16));
+    R(2) = MEM_R32(actor + 0x20);
+    R(16) = MEM_R32(R(2) + 4);
+    R(31) = 0x80047328;
+    c->budget -= 16;
+    return true;
+}
+
+bool nc_finish_relative_heading(CPUState *c) {
+    if (c->budget <= 33)
+        return false;
+    const u32 actor = MEM_R32(0x800D7790);
+    const u32 pose = MEM_R32(actor + 0x20);
+    const u32 heading = MEM_R32(pose + 0x48);
+    R(4) = MEM_R32(R(16) + 0x40);
+    const u32 facing = (u32)((s32)(heading + R(4)) >> 4);
+    R(3) = ((u32)(s32)(s16)R(2) - facing) & 0xfff;
+    R(2) = 4096 - R(3); /* aligned headings return a full turn */
+    R(31) = MEM_R32(R(29) + 20);
+    R(16) = MEM_R32(R(29) + 16);
+    R(29) += 24;
+    c->budget -= 33;
+    return true;
+}
+
 /* Actor-linked points store X and negated Z as signed world units.
  * The two origin words use eight fractional bits. Save ra before reading
  * the point, as the guest stack may overlap it. */

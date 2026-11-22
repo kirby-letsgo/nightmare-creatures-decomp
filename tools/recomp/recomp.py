@@ -263,7 +263,7 @@ def load_module(name: str, exe: str) -> Module:
         entries.update(CREDITS_ROUTINES)
     if name == "psx2_exe":
         # Splat groups these independent routines after preceding returns.
-        entries.update((0x800471E0, 0x80047268))
+        entries.update((0x800471E0, 0x80047268, 0x80047300))
     for addr in entries:
         owner = containing(funcs, addr)
         if owner is not None and addr != owner.addr:
@@ -598,6 +598,8 @@ class Emitter:
             targets.update((0x80047254, 0x800472B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80070050:
             targets.add(0x800700C8)
+        if self.mod.name == "psx2_exe" and f.addr == 0x800472D8:
+            targets.add(0x80047328)
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -683,6 +685,12 @@ class Emitter:
                 out.append("        goto L_800472B8; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800472B8:
                 out.append("    if (nc_store_reference_distance(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047300:
+                out.append("    if (nc_prepare_relative_heading(c)) {")
+                out.append(f"        {self.call(0x80047220)}")
+                out.append("        goto L_80047328; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80047328:
+                out.append("    if (nc_finish_relative_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800472D8:
                 out.append("    if (nc_actor_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047220:
