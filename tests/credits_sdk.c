@@ -381,7 +381,7 @@ static bool check_dump_palette(void) {
     return true;
 }
 
-static bool check_dump_display(void) {
+static bool check_dump_environment(bool draw, u8 graph) {
     const u32 recorder = 0x80060900, trace = 0x80060a00;
     /* Guest callback: record a0..a3 and the stack argument, then advance t1. */
     const u32 code[] = {0xad240000, 0xad250004, 0xad260008, 0xad27000c,
@@ -396,12 +396,14 @@ static bool check_dump_display(void) {
         for (unsigned e = 0; e < sizeof envs / sizeof envs[0]; e++)
             for (unsigned b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
                 MEM_W32(0x80024554, callbacks[cb]);
-                for (unsigned j = 0; j < 18; j++)
+                MEM_W8(0x80024558, graph);
+                for (unsigned j = 0; j < (draw ? 24u : 18u); j++)
                     MEM_W8(envs[e] + j, (u8)(j * 53 + 11));
-                memset(nc_fast_ptr(trace), 0xcc, 80);
+                memset(nc_fast_ptr(trace), 0xcc, 120);
                 CPUState state = arguments(envs[e], 0x1234, 0x5678, budgets[b]);
                 state.r[9] = trace;
-                if (!compare(state, 0x8001bd94, nc_credits_dump_display, 4))
+                if (!compare(state, draw ? 0x8001bc14 : 0x8001bd94,
+                             draw ? nc_credits_dump_draw : nc_credits_dump_display, 4))
                     return false;
             }
     MEM_W32(0x80024554, previous);
@@ -708,7 +710,9 @@ int main(int argc, char **argv) {
     pass = pass && check_draw_offset();
     pass = pass && check_display_x();
     pass = pass && check_set_graph_debug();
-    pass = pass && check_dump_display();
+    pass = pass && check_dump_environment(false, 0);
+    for (unsigned graph = 0; graph <= 2; graph++)
+        pass = pass && check_dump_environment(true, graph);
     pass = pass && check_dump_palette();
     pass = pass && check_dump_texture_page();
     pass = pass && check_environment_reads();
