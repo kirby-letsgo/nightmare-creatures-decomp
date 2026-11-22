@@ -1577,6 +1577,33 @@ u32 nc_menu_record_26_left(CPUState *c) {
     return 0x80067770;
 }
 
+/* After Left, Right reloads both the mode word and the selected record. */
+bool nc_menu_record_26_right(CPUState *c) {
+    if (c->budget <= 25)
+        return false;
+    R(2) = R(30) & 0x20;
+    R(3) = 0x08000000;
+    c->budget -= 3;
+    if (!R(2))
+        return true;
+
+    u32 config = MEM_R32(R(28) + 0x244);
+    R(2) = MEM_R32(config + 4) & R(3);
+    R(4) = R(22);
+    c->budget -= 11;
+    if (R(2))
+        return true;
+
+    u32 record = MEM_R32(R(28) + 0x190);
+    R(6) = 0x10;
+    R(2) = 0x800883c0;
+    R(5) = R(2) + 12 * record;
+    R(31) = 0x800677bc;
+    c->budget -= 11;
+    nc_call(c, 0x80063b70);
+    return true;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
