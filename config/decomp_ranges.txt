@@ -294,6 +294,8 @@ psx2_exe     80068980    800689A8         pad.c
 psx2_exe     800689A8    80068ADC         pad.c
 # Ordinary menu record L1/R1 priority and repeat checks.
 psx2_exe     80068ADC    80068B74         pad.c
+# Ordinary menu record Cross and Triangle press checks.
+psx2_exe     80068B74    80068BEC         pad.c
 # PSX2 decoded-input inactivity countdown.
 psx2_exe     8006D548    8006D5A8         pad.c
 # PSX2 pad driver, port selection, and packet decoding.
