@@ -349,6 +349,8 @@ psx2_exe     80067464    800674A0         pad.c
 psx2_exe     800674A0    800674E0         pad.c
 # Shared counter increment/store and zero menu result.
 psx2_exe     800674E0    800674F0         pad.c
+# Record 29 counter thresholds and mode-dependent result at count 30.
+psx2_exe     8006755C    800675A0         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c

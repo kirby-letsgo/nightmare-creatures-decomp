@@ -1427,6 +1427,36 @@ bool nc_menu_store_counter(CPUState *c, bool increment) {
     return true;
 }
 
+/* v0 carries the preceding signed comparison against 30. At count 30
+ * the mode flags choose the menu result instead of advancing the counter. */
+u32 nc_menu_record_29_thresholds(CPUState *c) {
+    if (c->budget <= 11)
+        return 0x8006755c;
+    u32 count = R(3);
+    c->budget -= 2;
+    if (R(2)) {
+        R(2) = count + 1;
+        return 0x800674e4;
+    }
+
+    c->budget -= 3;
+    if (count == 30) {
+        R(3) = R(4) & 0x07800000;
+        R(2) = R(3) ? 6 : 4;
+        c->budget -= R(3) ? 6 : 4;
+        return 0x80068fe4;
+    }
+
+    R(4) = count;
+    R(2) = 105;
+    c->budget -= 4;
+    if ((s32)count >= 100)
+        return 0x800675a0;
+    R(2) = count + 1;
+    c->budget -= 2;
+    return 0x800674e4;
+}
+
 /* All menu input results leave through this 0x48-byte frame. */
 bool nc_leave_menu_input(CPUState *c) {
     if (c->budget <= 33)
