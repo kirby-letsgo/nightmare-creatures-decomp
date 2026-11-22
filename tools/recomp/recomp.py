@@ -245,6 +245,7 @@ CREDITS_ROUTINES = {
     0x800225CC: "nc_credits_cd_copy_identifier(c)",
     0x80022600: "nc_credits_strcmp(c)",
     0x80022664: "nc_credits_strncmp(c)",
+    0x80022AE0: "nc_credits_cd_read(c)",
     0x80022BE8: "nc_credits_cd_read_sync(c)",
     0x80022CB4: "nc_credits_cd_read_callback(c)",
     0x80022EBC: "nc_credits_cd_audio_ready(c)",
@@ -766,7 +767,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002959C:
-            targets.update((0x800295E0, 0x800295F8, 0x80029620, 0x80029658))
+            targets.update((0x800295E0, 0x800295F8, 0x80029620, 0x80029658, 0x800296B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
             targets.update(
                 (
@@ -1582,6 +1583,10 @@ class Emitter:
                 out.append("    if (nc_copy_linked_heading_offset(c)) goto L_80029658;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029658:
                 out.append("    if (nc_copy_linked_bearing(c)) goto L_80029670;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029688:
+                out.append("    if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800296B0:
+                out.append("    if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800295C4:
                 out.append("    if (nc_call_record_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
