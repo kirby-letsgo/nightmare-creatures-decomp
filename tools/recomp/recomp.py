@@ -1149,6 +1149,12 @@ class Emitter:
                 out.append("    if (nc_filter_scaled_part(c)) {")
                 out.append("        if (R(22) ? R(2) != 0 : R(2) == 0) goto L_80026A28;")
                 out.append("        goto L_80026F60; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80026F60:
+                out.append("    switch (nc_advance_scaled_part_walk(c)) {")
+                out.append("    case NC_NODE_NEXT: goto L_800269B4;")
+                out.append("    case NC_NODE_POP: goto L_8002695C;")
+                out.append("    case NC_NODE_RETURN: return;")
+                out.append("    case NC_NODE_FALLBACK: break; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002695C:
                 out.append("    if (nc_resume_scaled_part_walk(c)) goto L_800269B4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800266F4:

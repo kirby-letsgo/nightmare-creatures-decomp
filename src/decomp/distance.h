@@ -56,6 +56,7 @@ NcHeadingSource nc_select_part_heading_source(CPUState *c);
 bool nc_update_child_position(CPUState *c);
 bool nc_filter_scaled_part(CPUState *c);
 bool nc_begin_scaled_part_walk(CPUState *c);
+NcNodeContinuation nc_advance_scaled_part_walk(CPUState *c);
 bool nc_resume_scaled_part_walk(CPUState *c);
 bool nc_start_scaled_part_position(CPUState *c);
 bool nc_transform_part_offset(CPUState *c);
