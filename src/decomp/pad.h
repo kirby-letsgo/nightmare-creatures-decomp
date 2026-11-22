@@ -26,6 +26,8 @@ u32 nc_pad_start_edge(CPUState *c);
 u32 nc_menu_button_scan_entry(CPUState *c);
 u32 nc_menu_sequence_match(CPUState *c);
 u32 nc_menu_record_sequence(CPUState *c);
+bool nc_menu_apply_enabled_record(CPUState *c);
+u32 nc_menu_advance_enabled_record(CPUState *c);
 bool nc_menu_apply_sequence(CPUState *c);
 bool nc_menu_reset_sequences(CPUState *c);
 bool nc_menu_store_progress(CPUState *c, bool matched);

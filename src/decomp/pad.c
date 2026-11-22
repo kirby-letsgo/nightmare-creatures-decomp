@@ -543,6 +543,40 @@ u32 nc_menu_record_sequence(CPUState *c) {
     return 0x800672b4;
 }
 
+/* A type 10 completion visits ten records and applies each enabled action. */
+bool nc_menu_apply_enabled_record(CPUState *c) {
+    if (c->budget <= 20)
+        return false;
+    u32 type = MEM_R8(0x80088595 + R(16));
+    R(3) = type * 28;
+    R(1) = 0x80090000 + R(3);
+    R(2) = MEM_R32(0x80088178 + R(3)) & R(23);
+    R(4) = R(17);
+    c->budget -= 18;
+    if (R(2)) {
+        R(31) = 0x80067240;
+        R(5) = 1;
+        c->budget -= 2;
+        nc_call(c, 0x80066ed0);
+    }
+    return true;
+}
+
+u32 nc_menu_advance_enabled_record(CPUState *c) {
+    if (c->budget <= 7)
+        return 0x80067240;
+    R(17) += 50;
+    R(18)++;
+    R(2) = (s32)R(18) < 10;
+    R(16) += 50;
+    c->budget -= 5;
+    if (R(2))
+        return 0x80067200;
+    R(19)++;
+    c->budget -= 2;
+    return 0x800672fc;
+}
+
 bool nc_menu_apply_sequence(CPUState *c) {
     if (c->budget <= 2)
         return false;
