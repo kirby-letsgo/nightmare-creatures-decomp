@@ -883,7 +883,8 @@ static bool check_draw_sync_callback(void) {
     return true;
 }
 
-static bool check_cd_control_f(void) {
+static bool check_cd_control(bool fast) {
+    const int threshold = fast ? 22 : 24;
     /* Each CD_cw call records its arguments and the currently installed
      * callback, then reads the scripted result from the same trace row. */
     const u32 writer[] = {
@@ -924,16 +925,22 @@ static bool check_cd_control_f(void) {
         MEM_W32(0x8002475c, callback);
         for (unsigned j = 0; j < cases[i].calls; j++)
             MEM_W32(trace + 24 * j + 20, (cases[i].failures >> j) & 1);
-        CPUState state = arguments(cases[i].command, cases[i].params, 0x1234, i & 1 ? 23 : 4096);
+        CPUState state = arguments(cases[i].command, cases[i].params, location + 8,
+                                   i & 1 ? threshold + 1 : 4096);
         state.r[8] = trace;
         state.r[9] = 0x8002475c;
-        ok = compare(state, 0x800200e4, nc_credits_cd_control_f, 22) &&
+        ok = compare(state, fast ? 0x800200e4 : 0x8001ffac,
+                     fast ? nc_credits_cd_control_f : nc_credits_cd_control, threshold) &&
              nc_cpu.r[2] == cases[i].success && nc_cpu.r[8] == trace + 24 * cases[i].calls &&
              MEM_R32(0x8002475c) == callback;
         for (unsigned j = 0; ok && j < cases[i].calls; j++) {
             u32 row = trace + 24 * j;
-            bool async = MEM_R32(row + 12) == 1;
-            ok = MEM_R32(row + 8) == 0 && MEM_R32(row + 16) == (async ? callback : 0);
+            u32 issued = MEM_R32(row);
+            bool requested = issued == command;
+            bool status_query = !requested && issued == 1;
+            ok = MEM_R32(row + 8) == (fast || status_query ? 0 : state.r[6]) &&
+                 MEM_R32(row + 12) == (fast && requested) &&
+                 MEM_R32(row + 16) == (requested ? callback : 0);
         }
     }
     saved.loading = true;
@@ -3813,7 +3820,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
-    pass = pass && check_cd_control_f();
+    pass = pass && check_cd_control(false) && check_cd_control(true);
     pass = pass && check_rectangle_diagnostics();
     pass = pass && check_set_graph_reverse();
     pass = pass && check_set_graph_queue();
