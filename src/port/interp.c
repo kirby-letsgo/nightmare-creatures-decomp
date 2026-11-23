@@ -299,18 +299,19 @@ static bool call_native(CPUState *c, u32 target) {
     return true;
 }
 
-static void run(CPUState *c, u32 addr, bool resume) {
-    const u32 ret = resume ? 0 : c->r[31];
-    const u32 sp = c->r[29];
+enum RunMode { RUN_CALL, RUN_CONTINUE_CALL, RUN_RESUME_EXE };
+
+static void run(CPUState *c, u32 addr, u32 ret, u32 sp, enum RunMode mode) {
     u32 pc = addr;
 
     for (;;) {
         if (marked_module != (int)nc_active_module()) {
             rebuild_marks();
         }
-        /* Returned to our caller (with its stack): done. Not checked on entry: the interrupt
-         * handler is entered at a resume address that equals its own $ra. */
-        if (pc == ret && (resume || (c->r[29] == sp && pc != addr))) {
+        /* A fresh interrupt hook can start at its own ra. A continuation
+         * can already have reached the calling frame's return boundary. */
+        bool returned_to_frame = c->r[29] == sp && (mode == RUN_CONTINUE_CALL || pc != addr);
+        if (pc == ret && (mode == RUN_RESUME_EXE || returned_to_frame)) {
             return;
         }
         if (pc == 0xA0 || pc == 0xB0 || pc == 0xC0) {
@@ -401,10 +402,14 @@ static void run(CPUState *c, u32 addr, bool resume) {
 }
 
 void interp_call(CPUState *c, u32 addr) {
-    run(c, addr, false);
+    run(c, addr, c->r[31], c->r[29], RUN_CALL);
+}
+
+void interp_continue_call(CPUState *c, u32 pc, u32 return_pc, u32 return_sp) {
+    run(c, pc, return_pc, return_sp, RUN_CONTINUE_CALL);
 }
 
 void interp_resume_exe(CPUState *c, u32 pc) {
     /* Follow guest returns until this executable returns to BIOS. */
-    run(c, pc, true);
+    run(c, pc, 0, 0, RUN_RESUME_EXE);
 }
