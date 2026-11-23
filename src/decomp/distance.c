@@ -5360,11 +5360,11 @@ bool nc_set_other_placement_angles(CPUState *c) {
     return true;
 }
 
-bool nc_call_placement_y_step(CPUState *c, s32 step, s32 target, u32 return_pc) {
+bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc) {
     if (c->budget <= 5)
         return false;
     R(4) = R(16);
-    R(5) = R(16) + 0x1a;
+    R(5) = R(16) + offset;
     R(6) = (u32)step;
     R(31) = return_pc;
     R(7) = (u32)target;

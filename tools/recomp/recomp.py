@@ -725,17 +725,20 @@ PLACEMENT_FACE_RETURNS = {
     0x80027D68: (0x358, 0x3D8, 23),
 }
 
-PLACEMENT_Y_STEPS = {
-    0x800299C8: (-2, -440),
-    0x800299E4: (-2, -1000),
-    0x80029A20: (1, -370),
-    0x80029A3C: (1, -200),
-    0x80029DDC: (-2, -730),
-    0x80029DF8: (4, -64),
-    0x80029E14: (-2, -850),
-    0x80029E30: (-2, -890),
-    0x80029E68: (-5, -610),
-    0x8002A1D4: (-6, -496),
+PLACEMENT_COORDINATE_STEPS = {
+    0x800299C8: (0x1A, -2, -440),
+    0x800299E4: (0x1A, -2, -1000),
+    0x80029A20: (0x1A, 1, -370),
+    0x80029A3C: (0x1A, 1, -200),
+    0x80029B58: (0x18, -16, -200),
+    0x80029D28: (0x18, -1, 0x3BE0),
+    0x80029D64: (0x1C, 8, 0x3D00),
+    0x80029DDC: (0x1A, -2, -730),
+    0x80029DF8: (0x1A, 4, -64),
+    0x80029E14: (0x1A, -2, -850),
+    0x80029E30: (0x1A, -2, -890),
+    0x80029E68: (0x1A, -5, -610),
+    0x8002A1D4: (0x1A, -6, -496),
 }
 
 
@@ -1197,7 +1200,7 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.add(0x80029E60)
-            targets.update(pc + 0x14 for pc in PLACEMENT_Y_STEPS)
+            targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
             targets.update((0x80029788, 0x8002979C, 0x800297A4))
         table_cases: list[int] = []
@@ -3089,11 +3092,12 @@ class Emitter:
                 out.append("    if (nc_call_shared_placement_y_step(c)) {")
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append("        goto L_80029E60; }")
-            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_Y_STEPS:
-                step, target = PLACEMENT_Y_STEPS[i.addr]
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_COORDINATE_STEPS:
+                offset, step, target = PLACEMENT_COORDINATE_STEPS[i.addr]
                 resume = i.addr + 0x14
                 out.append(
-                    f"    if (nc_call_placement_y_step(c, {step}, {target}, 0x{resume:08X})) {{"
+                    f"    if (nc_call_placement_coordinate_step(c, 0x{offset:X}, {step}, "
+                    f"{target}, 0x{resume:08X})) {{"
                 )
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append(f"        goto L_{resume:08X}; }}")
