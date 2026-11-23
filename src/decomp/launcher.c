@@ -1,3 +1,4 @@
+#include "decomp/vsync.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/cd_init.h"
 #include "decomp/cd_state.h"
@@ -320,4 +321,8 @@ bool nc_launcher_wait_vblank(CPUState *c) {
         .puts_entry = 0x80013dd8, .clear_pad = 0x80011a8c, .clear_rcnt = 0x80011a9c,
     };
     return wait_vblank(c, &layout);
+}
+
+bool nc_launcher_vsync(CPUState *c) {
+    return sdk_vsync(c, 0x80015b34, 0x80015760, 0x80013e28, 0x80013f70);
 }
