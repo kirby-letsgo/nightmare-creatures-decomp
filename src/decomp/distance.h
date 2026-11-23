@@ -55,7 +55,7 @@ bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
 bool nc_return_placement_lighting(CPUState *c, bool has_records);
 bool nc_light_placement_color_record(CPUState *c);
 bool nc_begin_placement_color_records(CPUState *c, bool *has_records);
-bool nc_adjust_placement_color(CPUState *c);
+bool nc_adjust_placement_color(CPUState *c, bool linked_pose);
 bool nc_placement_lighting_offset(CPUState *c);
 bool nc_begin_placement_lighting(CPUState *c);
 bool nc_install_placement_matrices(CPUState *c, u32 continuation);

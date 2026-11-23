@@ -2473,12 +2473,19 @@ class Emitter:
                 out.append("      if (nc_begin_placement_color_records(c, &has_records)) {")
                 out.append("          if (has_records) goto L_80027F74;")
                 out.append("          goto L_80027FF4; } }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027E58:
-                out.append("    if (nc_adjust_placement_color(c)) goto L_80027ED0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027E28:
+            if self.mod.name == "psx2_exe" and i.addr in (0x80027E58, 0x80028CBC):
+                linked = i.addr == 0x80028CBC
+                resume = 0x80028D2C if linked else 0x80027ED0
+                out.append(
+                    f"    if (nc_adjust_placement_color(c, {str(linked).lower()}))"
+                    f" goto L_{resume:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80027E28, 0x80028C8C):
+                adjust = i.addr + 0x30
+                skip = 0x80028D2C if i.addr == 0x80028C8C else 0x80027ED0
                 out.append("    if (nc_placement_lighting_offset(c)) {")
-                out.append("        if (R(3)) goto L_80027E58;")
-                out.append("        goto L_80027ED0; }")
+                out.append(f"        if (R(3)) goto L_{adjust:08X};")
+                out.append(f"        goto L_{skip:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027DA4:
                 out.append("    if (nc_begin_placement_lighting(c)) goto L_80027E28;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002755C:
