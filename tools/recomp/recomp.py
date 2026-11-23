@@ -1255,6 +1255,8 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80011F0C, 0x80011F34, 0x80011F5C):
                 spec = 0x20 if i.addr == 0x80011F0C else 0x40
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x800135E4:
+                out.append("    if (cd_volume(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013CE8:
                 out.append("    if (cd_set_test_parameter_count(c, 0x80015ac0)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80012584:
@@ -3865,6 +3867,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/byte_scan.h"')
         header.append('#include "decomp/cd_state.h"')
+        header.append('#include "decomp/cd_volume.h"')
         header.append('#include "decomp/cd_position.h"')
         header.append('#include "decomp/launcher.h"')
         header.append('#include "decomp/jump_context.h"')

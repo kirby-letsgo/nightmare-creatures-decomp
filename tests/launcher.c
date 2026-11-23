@@ -2,6 +2,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
+#include "decomp/cd_volume.h"
 #include "decomp/cd_position.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
@@ -276,6 +277,28 @@ static bool check_test_parameter_count(void) {
             return false;
     }
     MEM_W32(address, saved);
+    return true;
+}
+
+static bool set_cd_volume(CPUState *c) {
+    return cd_volume(c, 0x80015adc);
+}
+
+static bool check_cd_volume(void) {
+    const u32 slots = 0x80015adc, ports = SCRATCH_BASE + 0x40;
+    u32 saved[4];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(slots + i * 4, ports + i);
+    for (unsigned alias = 0; alias < 2; alias++) {
+        u32 input = alias ? ports : 0x80016200;
+        MEM_W32(ports, 0);
+        MEM_W32(input, 0x81234567);
+        if (!compare(arguments(input, 0, 0, 57), 0x800135e4, set_cd_volume, 56) ||
+            nc_cpu.r[2] != 0 || MEM_R32(ports) != (alias ? 0x20450203u : 0x20812303u))
+            return false;
+    }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
     return true;
 }
 
@@ -892,6 +915,10 @@ int main(int argc, char **argv) {
     }
     if (!check_test_parameter_count()) {
         fprintf(stderr, "launcher CD test parameter count failed\n");
+        return 1;
+    }
+    if (!check_cd_volume()) {
+        fprintf(stderr, "launcher CD volume failed\n");
         return 1;
     }
     if (!check_cd_positions()) {
