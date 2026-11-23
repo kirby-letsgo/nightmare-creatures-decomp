@@ -2965,6 +2965,32 @@ static bool placement_point_scans(bool disc) {
     return true;
 }
 
+static bool placement_traversal_calls(bool disc) {
+    const u32 record = SCRATCH_BASE, pose = record + 0x80;
+    MEM_W32(record + 4, pose);
+    for (unsigned path = 0; path < 3; ++path) {
+        const bool parts = path == 2, nodes = path == 1;
+        CPUState input = initial(), native;
+        input.r[16] = record;
+        input.r[19] = 0x80121000;
+        input.r[31] = parts ? 0x800266f4 : nodes ? 0x80026560 : 0x80029388;
+        MEM_W32(record + 8, nodes ? pose + 0x80 : 0);
+        const u32 pc = parts ? 0x800293d4 : 0x80029364;
+        bool (*step)(CPUState *) =
+            parts ? nc_call_placement_part_traversal : nc_call_placement_node_traversal;
+        if (!compare(input, pc, step, disc, &native) ||
+            native.budget != input.budget - (nodes ? 9 : 6) ||
+            native.r[4] != (parts ? pose : record) ||
+            native.r[5] != (parts || nodes ? input.r[19] + 0x38 : input.r[5]) ||
+            native.r[6] != (parts || nodes ? input.r[19] + 0x78 : input.r[6]) ||
+            native.r[31] != (parts   ? 0x800293e4
+                             : nodes ? 0x80029380
+                                     : input.r[31]))
+            return false;
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5292,9 +5318,9 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
