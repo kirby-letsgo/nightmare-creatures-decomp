@@ -66,6 +66,17 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* The branch delay slot passes actor flag 0x100 to either continuation. */
+u32 nc_player_level_flag_check(CPUState *c) {
+    if (c->budget <= 8)
+        return 0x800448fc;
+
+    const u32 level_flags = MEM_R16(0x800d779c);
+    R(2) = R(5) & 0x100;
+    c->budget -= 8;
+    return (level_flags & 0x50) ? 0x80044914 : 0x80044924;
+}
+
 /* A nonzero incoming flag takes the action call. State 15 and the pair
  * 32/33 take distinct exits, preserving the original delay-slot results. */
 u32 nc_player_input_state_gate(CPUState *c) {
