@@ -3200,6 +3200,42 @@ static bool placement_depths(bool disc) {
     return true;
 }
 
+static bool placement_depth_cues(bool disc) {
+    const u32 frame = SCRATCH_BASE;
+    static const struct {
+        u32 excess_depth, color;
+    } cases[] = {
+        {512, 0x7e204060}, {1024, 0x7e000000}, {0x3c00, 0x7e80ffff}, {0x40000000, 0x7e4080c0}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].excess_depth;
+        input.r[29] = frame;
+        input.r[31] = 0x80028b38;
+        MEM_W32(frame + 0x2d8, 0x12345678);
+        MEM_W32(frame + 0x2dc, 0x7e4080c0);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 15;
+        CPUState native = input;
+        if (nc_apply_placement_depth_cue(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_apply_placement_depth_cue(&native) || native.budget != 1 ||
+            native.r[2] != frame + 0x2dc || native.r[8] != cases[i].excess_depth << 2 ||
+            MEM_R32(frame + 0x2d8) != native.r[8] || MEM_R32(frame + 0x2dc) != cases[i].color)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80028b0c);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_flags(bool disc) {
     const u32 record = SCRATCH_BASE, owner = record + 0x80, descriptor = owner + 0x80;
     for (unsigned flags = 0; flags < 4; ++flags) {
@@ -5619,7 +5655,7 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        placement_depths(disc) && placement_transform_flags(disc) &&
+        placement_depths(disc) && placement_depth_cues(disc) && placement_transform_flags(disc) &&
         placement_projection_args(disc) && placement_angle_entries(disc) &&
         type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
         record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
