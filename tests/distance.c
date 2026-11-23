@@ -3152,6 +3152,48 @@ static bool placement_angle_calls(bool disc) {
     return true;
 }
 
+static bool placement_angle_entries(bool disc) {
+    const u32 record = SCRATCH_BASE, pose = record + 0x80;
+    static const struct {
+        u32 direction, value, next, next_direction;
+        int cycles;
+    } cases[] = {{0x20000000, 0x808080, 0x808080, 0, 13},
+                 {1, 0x808081, 0x848485, 1, 15},
+                 {0xffffffff, 0xfffffffe, 0x40402, 0xffffffff, 15},
+                 {0, 0x20201f, 0x20201f, 1, 15},
+                 {0, 0x202020, 0x1c1c1c, 0, 16},
+                 {0, 0x80000000, 0x80000000, 1, 15}};
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[4] = record;
+        input.r[6] = record + 0x28;
+        input.r[7] = cases[i].direction;
+        input.r[31] = 0x800294f0;
+        input.budget = cases[i].cycles;
+        MEM_W32(record + 4, pose);
+        MEM_W32(input.r[6], cases[i].value);
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_begin_placement_angle_update(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_placement_angle_update(&native) || native.budget != 1 ||
+            native.r[8] != pose || native.r[3] != cases[i].value ||
+            native.r[7] != cases[i].next_direction || MEM_R32(input.r[6]) != cases[i].next)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80029498);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5479,10 +5521,10 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
