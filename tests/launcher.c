@@ -303,6 +303,35 @@ static bool check_interrupt_control(bool restart, bool active, int budget) {
     return ok;
 }
 
+static bool check_irq_word_clear(void) {
+    const u32 entries[] = {0x80011134, 0x80011ba8, 0x80011e50};
+    const struct { u32 dest, count; int budget; } cases[] = {
+        {0x80016200, 0, 4}, {SCRATCH_BASE + 4, 1, 4},
+        {0xa0016200, 8, 4096}, {0x80016200, 11, 13},
+    };
+    for (unsigned i = 0; i < sizeof entries / sizeof entries[0]; i++) {
+        for (unsigned j = 0; j < sizeof cases / sizeof cases[0]; j++) {
+            const u32 dest = cases[j].dest, bytes = 4 * cases[j].count;
+            memset(nc_fast_ptr(dest - 4), 0xcd, bytes + 8);
+            CPUState start = {0};
+            start.r[3] = 0x1234;
+            start.r[4] = dest;
+            start.r[5] = cases[j].count;
+            start.r[29] = 0x801ffe00;
+            start.r[31] = 0x80010000;
+            start.budget = cases[j].budget;
+            if (!compare(start, entries[i], nc_launcher_clear_irq_words, 3) ||
+                nc_cpu.r[4] != dest + bytes || MEM_R32(dest - 4) != 0xcdcdcdcd ||
+                MEM_R32(dest + bytes) != 0xcdcdcdcd)
+                return false;
+            for (u32 offset = 0; offset < bytes; offset += 4)
+                if (MEM_R32(dest + offset))
+                    return false;
+        }
+    }
+    return true;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -400,6 +429,10 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "launcher interrupt control failed (restart %u, active %u)\n", restart, active);
                 return 1;
             }
+    if (!check_irq_word_clear()) {
+        fprintf(stderr, "launcher interrupt table clear failed\n");
+        return 1;
+    }
     for (unsigned selection = 0; selection < 6; selection++)
         for (unsigned missing = 0; missing < 2; missing++)
             if (!check_handoff(selection, missing)) {
