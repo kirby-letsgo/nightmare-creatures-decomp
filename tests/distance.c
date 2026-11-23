@@ -4414,6 +4414,37 @@ static bool alternate_placement_update_calls(bool disc) {
            native.budget == input.budget - 2;
 }
 
+static bool alternate_placement_counter_exits(bool disc) {
+    const u32 descriptor = SCRATCH_BASE + 0x80;
+    for (unsigned path = 0; path < 3; ++path) {
+        const bool store_counter = path != 0;
+        CPUState input = initial();
+        input.r[2] = path == 2 ? 256 : 19;
+        input.r[3] = descriptor;
+        input.r[31] = 0x800290a8;
+        MEM_W32(descriptor + 0x34, 0xab123456);
+        CPUState native = input;
+        input.budget = native.budget = store_counter ? 1 : 2;
+        if (nc_finish_alternate_placement_counter(&native, store_counter) ||
+            memcmp(&native, &input, sizeof input) || MEM_R32(descriptor + 0x34) != 0xab123456)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_finish_alternate_placement_counter(&native, store_counter))
+            return false;
+        const u32 word = store_counter ? (input.r[2] << 24) | 0x123456 : 0xab123456;
+        if (MEM_R32(descriptor + 0x34) != word ||
+            native.budget != 1 || native.r[2] != input.r[2])
+            return false;
+        if (disc) {
+            MEM_W32(descriptor + 0x34, 0xab123456);
+            interp_call(&input, store_counter ? 0x800290a4 : 0x8002909c);
+            if (memcmp(&native, &input, sizeof input) || MEM_R32(descriptor + 0x34) != word)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_trees(bool disc) {
     const u32 record = SCRATCH_BASE, root = record + 0x80;
     const unsigned sizes[] = {0, 1, 5};
@@ -8455,7 +8486,7 @@ int main(int argc, char **argv) {
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
-        alternate_placement_update_calls(disc) &&
+        alternate_placement_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
