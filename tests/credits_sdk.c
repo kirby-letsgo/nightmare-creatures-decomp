@@ -883,6 +883,42 @@ static bool check_draw_sync_callback(void) {
     return true;
 }
 
+static bool check_rectangle_diagnostics(void) {
+    const u32 rect = 0x80060800, callback = 0x80060c00, output = rect + 16;
+    /* An exact fit, then each of the SDK's eight rejection branches. */
+    const s16 cases[][4] = {{1, 2, 63, 30}, {0, 0, 65, 1}, {2, 0, 63, 1},
+                            {0, 33, 1, 1}, {0, 31, 1, 2}, {0, 0, 0, 1},
+                            {-1, 0, 1, 1}, {0, -1, 1, 1}, {0, 0, 1, -1}};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W32(0x80024554, callback);
+    MEM_W32(callback, 0xad240000);     /* sw a0,0(t1) */
+    MEM_W32(callback + 4, 0x03e00008); /* jr ra */
+    MEM_W32(callback + 8, 0x25290004); /* addiu t1,t1,4 */
+    MEM_W16(0x8002455c, 64);
+    MEM_W16(0x8002455e, 32);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        for (unsigned j = 0; j < 4; j++)
+            MEM_W16(rect + j * 2, (u16)cases[i][j]);
+        for (unsigned level = 0; ok && level < 4; level++) {
+            MEM_W8(0x8002455a, level);
+            MEM_W32(output, 0);
+            MEM_W32(output + 4, 0);
+            CPUState state = arguments(0x800185a8, rect, 0x5678, i & 1 ? 12 : 4096);
+            state.r[9] = output;
+            bool report = level == 2 || (level == 1 && i != 0);
+            ok = compare(state, 0x8001c34c, nc_credits_check_rect, 11) &&
+                 MEM_R32(output) == (report ? (level == 1 ? 0x8001857c : 0x8001859c) : 0) &&
+                 MEM_R32(output + 4) == (report ? 0x80018588 : 0);
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_set_graph_reverse(void) {
     const u32 query = 0x80060c00, control = query + 16, output = control + 32;
     const u32 driver = MEM_R32(0x80024550);
@@ -3718,6 +3754,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
+    pass = pass && check_rectangle_diagnostics();
     pass = pass && check_set_graph_reverse();
     pass = pass && check_set_graph_queue();
     pass = pass && check_set_graph_debug();
