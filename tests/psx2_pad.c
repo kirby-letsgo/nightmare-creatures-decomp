@@ -247,12 +247,8 @@ static bool player_r2_returns(void) {
     return true;
 }
 
-static bool square_press(CPUState *cpu) {
-    return nc_check_player_face_press(cpu, true);
-}
-
-static bool cross_press(CPUState *cpu) {
-    return nc_check_player_face_press(cpu, false);
+static bool face_press(CPUState *cpu) {
+    return nc_check_player_face_press(cpu, cpu->r[20], cpu->r[21]);
 }
 
 static bool direct_triangle_destination(CPUState *cpu) {
@@ -642,10 +638,10 @@ static bool player_face_presses(void) {
     const u32 actor = 0x80160000, next_actor = 0x80170000;
     const struct {
         u32 entry, mask, pressed, skipped;
-        bool (*check)(CPUState *);
     } buttons[] = {
-        {0x800450bc, 0x8000, 0x800450d0, 0x8004515c, square_press},
-        {0x8004515c, 0x4000, 0x80045170, 0x80045180, cross_press},
+        {0x80044d48, 0x8000, 0x80044d5c, 0x80044dc0}, {0x80044d5c, 0x4000, 0x80044d70, 0x80044db0},
+        {0x80044dc0, 0x4000, 0x80044dd4, 0x80044de4}, {0x800450bc, 0x8000, 0x800450d0, 0x8004515c},
+        {0x8004515c, 0x4000, 0x80045170, 0x80045180},
     };
     for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
         for (unsigned down = 0; down < 2; ++down) {
@@ -654,11 +650,13 @@ static bool player_face_presses(void) {
                 cpu.r[4] = actor;
                 cpu.r[16] = next_actor;
                 cpu.r[17] = 0xffff0001 | (down ? buttons[i].mask : 0);
+                cpu.r[20] = buttons[i].mask;
+                cpu.r[21] = buttons[i].entry + 12;
                 cpu.r[31] = down && !held ? buttons[i].pressed : buttons[i].skipped;
                 cpu.budget = 20;
                 MEM_W32(actor + 0x2f8, held ? buttons[i].mask : 0x100);
                 MEM_W32(next_actor + 0x2f8, 0xdeadbeef);
-                if (!compare(cpu, buttons[i].entry, buttons[i].check, 19))
+                if (!compare(cpu, buttons[i].entry, face_press, 19))
                     return false;
             }
         }

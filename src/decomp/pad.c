@@ -384,15 +384,15 @@ u32 nc_player_down_face_buttons(CPUState *c) {
     return R(2) ? 0x8004506c : 0x80045084;
 }
 
-/* Both face-button checks use the actor already in a0 for the press test.
+/* The face-button checks use the actor already in a0 for the press test.
  * The branch delay slot reloads a0 from s0 for the next action. */
-bool nc_check_player_face_press(CPUState *c, bool square) {
+bool nc_check_player_face_press(CPUState *c, u32 mask, u32 link) {
     if (c->budget <= 19)
         return false;
 
     R(5) = R(17);
-    R(31) = square ? 0x800450c8 : 0x80045168;
-    R(6) = square ? 0x8000 : 0x4000;
+    R(31) = link;
+    R(6) = mask;
     c->budget -= 3;
     nc_record_player_button_press(c);
     R(4) = R(16);

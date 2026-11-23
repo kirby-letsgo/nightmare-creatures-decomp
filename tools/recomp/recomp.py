@@ -44,6 +44,15 @@ PSX2_PLAYER_BUTTON_STORE_JUMPS = {
     0x80045178,
 }
 
+# Entry -> (button mask, destination for a held or absent press).
+PSX2_PLAYER_FACE_PRESSES = {
+    0x80044D48: (0x8000, 0x80044DC0),
+    0x80044D5C: (0x4000, 0x80044DB0),
+    0x80044DC0: (0x4000, 0x80044DE4),
+    0x800450BC: (0x8000, 0x8004515C),
+    0x8004515C: (0x4000, 0x80045180),
+}
+
 PSX2_PAD_BIOS_SERVICES = {
     0x80073D7C: "NC_BIOS_STOP_PAD",
     0x80073E3C: "NC_BIOS_CHANGE_CLEAR_PAD",
@@ -990,6 +999,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
             targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.update(entry + 20 for entry in PSX2_PLAYER_FACE_PRESSES)
             targets.update(
                 (
                     0x80044754,
@@ -999,8 +1009,6 @@ class Emitter:
                     0x80044EB4,
                     0x80044F2C,
                     0x8004503C,
-                    0x800450D0,
-                    0x80045170,
                     0x800451DC,
                 )
             )
@@ -1222,12 +1230,12 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr in (0x800450BC, 0x8004515C):
-                square = i.addr == 0x800450BC
-                next_button = 0x8004515C if square else 0x80045180
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_FACE_PRESSES:
+                mask, next_button = PSX2_PLAYER_FACE_PRESSES[i.addr]
+                link = i.addr + 12
                 out.extend(
                     [
-                        f"    if (nc_check_player_face_press(c, {str(square).lower()})) {{",
+                        f"    if (nc_check_player_face_press(c, 0x{mask:X}, 0x{link:08X}u)) {{",
                         f"        if (R(2)) goto L_{i.addr + 20:08X};",
                         f"        goto L_{next_button:08X};",
                         "    }",
