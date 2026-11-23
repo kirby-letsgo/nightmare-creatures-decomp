@@ -925,6 +925,7 @@ class Emitter:
                 {0x80027764: 0x80027844, 0x80027954: 0x80027A5C, 0x80027B90: 0x80027C70}[f.addr]
             )
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
+            targets.update((0x80028BB0, 0x80028BC8, 0x80028BE0))
             targets.update((0x80028AAC, 0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
             targets.update((0x80028C8C, 0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
@@ -2528,6 +2529,22 @@ class Emitter:
                     f"    if (nc_select_placement_pose(c, {index_ready}, 0x{output_offset:x}))"
                     f" goto L_{next_pose:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028B7C:
+                out.append("    if (nc_check_placement_pose_callback(c)) {")
+                out.append(f"        if (R(2)) {{ {self.call(0x80061A9C)} }}")
+                out.append("        goto L_80028B98; }")
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x80028B98, 0x80028BB0, 0x80028BC8, 0x80028BE0
+            ):
+                target = {
+                    0x80028B98: 0x8002755C, 0x80028BB0: 0x80027764,
+                    0x80028BC8: 0x80027954, 0x80028BE0: 0x80027B90,
+                }[i.addr]
+                textured = "true" if i.addr in (0x80028B98, 0x80028BC8) else "false"
+                resume = i.addr + 0x18
+                out.append(f"    if (nc_call_placement_faces(c, {textured}, 0x{resume:08X})) {{")
+                out.append(f"        {self.call(target)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028BF8:
                 out.append("    if (nc_save_linked_placement_pose(c)) goto L_80028C18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028C18:

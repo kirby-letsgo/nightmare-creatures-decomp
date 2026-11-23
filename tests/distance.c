@@ -4275,6 +4275,50 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool placement_face_dispatch(bool disc) {
+    const u32 flags[] = {0x10, 0x40000000, 0x00200000, 0xffffffff};
+    for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+        CPUState input = initial(), native;
+        const u32 selected = flags[i] & 0x40200000;
+        input.r[21] = SCRATCH_BASE;
+        input.r[31] = selected ? 0x80061a9c : 0x80028b98;
+        MEM_W32(SCRATCH_BASE + 0x30, flags[i]);
+        if (!compare(input, 0x80028b7c, nc_check_placement_pose_callback, disc, &native) ||
+            native.r[2] != selected || native.r[3] != 0x40200000 || native.r[4] != SCRATCH_BASE ||
+            native.r[5] != (selected ? input.r[18] : input.r[5]) || native.r[31] != 0x80028b98 ||
+            native.budget != input.budget - (selected ? 9 : 7))
+            return false;
+    }
+    const u32 targets[] = {0x8002755c, 0x80027764, 0x80027954, 0x80027b90};
+    for (unsigned i = 0; i < 4; ++i) {
+        CPUState input = initial();
+        const u32 entry = 0x80028b98 + 0x18 * i, resume = entry + 0x18;
+        const bool textured = i % 2 == 0;
+        input.r[29] = SCRATCH_BASE;
+        input.r[31] = targets[i];
+        input.budget = textured ? 8 : 6;
+        MEM_W32(SCRATCH_BASE + 0x2dc, 0xfe123456);
+        MEM_W32(SCRATCH_BASE + 0x10, 0xffffffff);
+        CPUState native = input;
+        if (nc_call_placement_faces(&native, textured, resume) ||
+            memcmp(&native, &input, sizeof input) || MEM_R32(SCRATCH_BASE + 0x10) != 0xffffffff)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_placement_faces(&native, textured, resume) || native.budget != 1 ||
+            native.r[31] != resume || native.r[4] != input.r[16] || native.r[5] != input.r[17] ||
+            native.r[6] != input.r[20] || native.r[7] != (textured ? 0xfe123456u : 0) ||
+            MEM_R32(SCRATCH_BASE + 0x10))
+            return false;
+        if (disc) {
+            MEM_W32(SCRATCH_BASE + 0x10, 0xffffffff);
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || MEM_R32(SCRATCH_BASE + 0x10))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_lighting_returns(bool disc) {
     const u32 actor = SCRATCH_BASE, frame = actor + 0x40;
     const u32 records = 0x80124000, color = 0xfe378105;
@@ -7996,6 +8040,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_face_dispatch(disc) &&
         placement_lighting_returns(disc) &&
         placement_color_record_loop(disc) &&
         placement_color_record_entries(disc) &&

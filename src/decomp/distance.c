@@ -4775,6 +4775,38 @@ bool nc_call_indexed_pose_projection(CPUState *c) {
     return true;
 }
 
+bool nc_check_placement_pose_callback(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 flags = MEM_R32(R(21) + 0x30) & 0x40200000;
+    const int cycles = flags ? 9 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = 0x40200000;
+    R(2) = flags;
+    R(4) = R(21);
+    if (flags) {
+        R(31) = 0x80028b98;
+        R(5) = R(18);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_placement_faces(CPUState *c, bool textured, u32 return_pc) {
+    const int cycles = textured ? 8 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = R(16);
+    R(5) = R(17);
+    MEM_W32(R(29) + 0x10, 0);
+    R(7) = textured ? MEM_R32(R(29) + 0x2dc) : 0;
+    R(6) = R(20);
+    R(31) = return_pc;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both placement traversals project vertices when descriptor flag 0x02
  * is set. The branch delay slot supplies the descriptor on either path. */
 bool nc_call_pose_vertex_projection(CPUState *c, u32 return_pc) {
