@@ -4884,6 +4884,43 @@ static bool remaining_placement_vertices(bool disc, bool sixteenth) {
     return true;
 }
 
+static bool indexed_pose_projection_calls(bool disc) {
+    const u32 actor = SCRATCH_BASE, pose = actor + 0x80;
+    for (unsigned i = 0; i < 3; ++i) {
+        const u32 index = i == 2 ? 255 : 0;
+        const u32 flags = actor + 0x10a + 2 * index;
+        CPUState input = initial();
+        input.r[2] = i ? 0x10 : 0;
+        input.r[18] = pose;
+        input.r[19] = actor + 0x180;
+        input.r[21] = actor;
+        input.r[29] = actor + 0x40;
+        input.r[31] = 0x800273f0;
+        MEM_W8(pose + 0x4c, index);
+        MEM_W16(flags, 0xffff);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = i ? 17 : 5;
+        CPUState native = input;
+        if (nc_call_indexed_pose_projection(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_indexed_pose_projection(&native) || native.budget != 1 ||
+            native.r[31] != 0x80028214 || native.r[4] != input.r[19] || native.r[5] != pose ||
+            native.r[6] != input.r[29] + 0x58 || MEM_R16(flags) != (i ? 0xff6f : 0xffff))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x800281e0);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool pose_vertex_projection_calls(bool disc) {
     const u32 pose = SCRATCH_BASE, descriptor = pose + 0x80;
     const struct {
@@ -7368,12 +7405,13 @@ int main(int argc, char **argv) {
         indexed_face_selectors(disc, true) && indexed_face_selectors(disc, false) &&
         indexed_vertex_inputs(disc) && indexed_vertex_projections(disc) &&
         remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
-        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
-        placement_transform_flags(disc) && placement_projection_args(disc) &&
-        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_vertex_matrices(disc) && indexed_pose_projection_calls(disc) &&
+        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
+        placement_projection_args(disc) && placement_angle_entries(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

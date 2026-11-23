@@ -81,6 +81,7 @@ bool nc_link_indexed_face_packet(CPUState *c, bool textured);
 bool nc_write_indexed_face_packet(CPUState *c, bool textured);
 bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset);
 bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth);
+bool nc_call_indexed_pose_projection(CPUState *c);
 bool nc_call_pose_vertex_projection(CPUState *c, u32 return_pc);
 bool nc_check_placement_transform(CPUState *c);
 bool nc_select_placement_projection_args(CPUState *c);
