@@ -3717,6 +3717,94 @@ static bool check_clear_otag(void) {
     return ok && !saved.error;
 }
 
+static bool check_execute_gpu_queue(void) {
+    const u32 mask = 0x80061000, dma = mask + 4, status = mask + 8;
+    const u32 command = 0x80061200, done = command + 64, trace = command + 128;
+    const struct {
+        unsigned head, tail;
+        bool busy, start_dma, pending, callback, wait;
+        unsigned executed, remaining;
+    } cases[] = {
+        {2, 0, true, false, false, false, false, 0, 1},
+        {7, 7, false, false, false, true, false, 0, 0},
+        {7, 7, false, false, true, true, false, 0, 0},
+        {1, 63, false, false, true, true, false, 2, 0},
+        {2, 63, false, true, true, true, false, 1, 2},
+        {1, 0, false, true, true, true, false, 1, 0},
+        {1, 0, false, false, true, false, true, 1, 0},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    gpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* SetIntrMask exchanges a RAM-backed mask. Each queued command records
+     * both arguments, advances t4's trace pointer, and can start DMA. */
+    const u32 mask_stub[] = {0x8d020000, 0xad040000, 0x03e00008, 0};
+    const u32 cmd_stub[] = {0xad840000, 0xad850004, 0x258c0008, 0x03e00008, 0xad0a0004};
+    for (unsigned j = 0; j < sizeof mask_stub / sizeof mask_stub[0]; j++)
+        MEM_W32(0x8001a814 + 4 * j, mask_stub[j]);
+    for (unsigned j = 0; j < sizeof cmd_stub / sizeof cmd_stub[0]; j++)
+        MEM_W32(command + 4 * j, cmd_stub[j]);
+    MEM_W32(done, 0x03e00008);
+    MEM_W32(done + 4, 0x25ef0001); /* count completion callbacks in t7 */
+    /* DMACallback starts a 4-pixel VRAM read at (0,0). In the wait case
+     * GPUREAD supplies a zero status word followed by the ready bit. */
+    const u32 detach[] = {0xadcd0000, 0xadc00000, 0xadcb0000, 0x03e00008, 0x27390001};
+    for (unsigned j = 0; j < sizeof detach / sizeof detach[0]; j++)
+        MEM_W32(0x8001a6f8 + 4 * j, detach[j]);
+    gpu_gp0(0xa0000000);
+    gpu_gp0(0);
+    gpu_gp0(0x00010004);
+    gpu_gp0(0);
+    gpu_gp0(1u << 26);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        unsigned tail = cases[i].tail, count = cases[i].executed;
+        MEM_W32(0x80024638, dma);
+        MEM_W32(0x8002462c, cases[i].wait ? 0x1f801810 : status);
+        MEM_W32(mask, 0x456);
+        MEM_W32(dma, cases[i].busy ? 1u << 24 : 0);
+        MEM_W32(status, 1u << 26);
+        MEM_W32(0x8002465c, cases[i].head);
+        MEM_W32(0x80024660, tail);
+        MEM_W32(0x80024560, cases[i].pending);
+        MEM_W32(0x80024564, cases[i].callback ? done : 0);
+        for (unsigned j = 0; j < 64; j++) {
+            u32 row = 0x80027488 + 96 * j;
+            MEM_W32(row, command);
+            MEM_W32(row + 4, 100 + j);
+            MEM_W32(row + 8, 200 + j);
+        }
+        CPUState state = arguments(0, 0, 0, i & 1 ? 2 : 8192);
+        state.r[8] = mask;
+        state.r[10] = cases[i].start_dma ? 1u << 24 : 0;
+        state.r[11] = 0x00010004;
+        state.r[12] = trace;
+        state.r[13] = 0xc0000000;
+        state.r[14] = 0x1f801810;
+        state.r[15] = state.r[25] = 0;
+        bool notified = cases[i].callback && cases[i].pending && !cases[i].start_dma;
+        ok = compare(state, 0x8001e45c, nc_credits_execute_gpu_queue, 1) &&
+             nc_cpu.r[2] == cases[i].remaining && MEM_R32(mask) == 0x456 &&
+             MEM_R32(0x80024660) == ((tail + count) & 63) &&
+             nc_cpu.r[12] == trace + count * 8 && nc_cpu.r[15] == (u32)notified &&
+             nc_cpu.r[25] == (u32)cases[i].wait &&
+             MEM_R32(0x80024560) == (u32)(cases[i].pending && !notified);
+        for (unsigned j = 0; ok && j < count; j++) {
+            unsigned index = (tail + j) & 63;
+            ok = MEM_R32(trace + 8 * j) == 100 + index &&
+                 MEM_R32(trace + 8 * j + 4) == 200 + index;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    gpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_gpu_queue_sync(void) {
     const u32 dma = 0x80061000, gpu = dma + 4, tail = 0x80024660;
     const u32 start = 0x8001e9fc, execute = 0x8001e45c, poll = 0x8001ea30;
@@ -5841,6 +5929,7 @@ int main(int argc, char **argv) {
     pass = pass && check_texture_page();
     pass = pass && check_gpu_fill_bytes();
     pass = pass && check_gpu_queue_sync();
+    pass = pass && check_execute_gpu_queue();
     pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_alarm_expiry();
     pass = pass && check_gpu_driver_reset();
