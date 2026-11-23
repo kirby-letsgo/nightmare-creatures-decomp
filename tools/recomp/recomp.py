@@ -92,6 +92,8 @@ CREDITS_ROUTINES = {
     0x8001A7EC: "nc_credits_check_callback(c)",
     0x8001A7FC: "nc_credits_interrupt_mask(c, false)",
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
+    0x8001A830: "nc_credits_start_interrupts(c)",
+    0x8001A898: "nc_credits_resume_interrupt_start(c)",
     0x8001AC48: "nc_credits_stop_interrupts(c)",
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",
@@ -770,7 +772,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
-            targets.update((0x800292B8, 0x800292D4))
+            targets.update((0x8002922C, 0x800292B8, 0x800292D4))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002959C:
             targets.update((0x800295C4, 0x800295E0, 0x800295F8, 0x80029620, 0x80029658, 0x800296B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
@@ -1596,6 +1598,22 @@ class Emitter:
                 out.append("    if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800296B0:
                 out.append("    if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800291D8:
+                out.append("    if (nc_begin_placement_point_scan(c)) {")
+                out.append("        if (R(2)) goto L_80029254;")
+                out.append("        goto L_80029200; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029200:
+                out.append("    if (nc_test_placement_point_index(c)) {")
+                out.append("        if (R(2)) goto L_8002923C;")
+                out.append("        goto L_8002922C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002922C:
+                out.append("    if (nc_advance_placement_point_index(c)) {")
+                out.append("        if (R(2)) goto L_80029200;")
+                out.append("        goto L_8002923C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002923C:
+                out.append("    if (nc_finish_placement_point_scan(c)) {")
+                out.append("        if (R(5) != R(2)) goto L_80029310;")
+                out.append("        goto L_80029464; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800292D4:
                 out.append("    if (nc_check_placement_point(c)) {")
                 out.append("        if (!R(6) || R(2)) goto L_80029310;")
