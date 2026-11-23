@@ -1257,6 +1257,10 @@ class Emitter:
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013CE8:
                 out.append("    if (cd_set_test_parameter_count(c, 0x80015ac0)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80012584:
+                out.append("    if (cd_sector_to_position(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80012688:
+                out.append("    if (cd_position_to_sector(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80012540:
                 out.append("    if (cd_data_callback(c, 0x80010ab0, 0x80012554)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_DRIVERS:
@@ -3861,6 +3865,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/byte_scan.h"')
         header.append('#include "decomp/cd_state.h"')
+        header.append('#include "decomp/cd_position.h"')
         header.append('#include "decomp/launcher.h"')
         header.append('#include "decomp/jump_context.h"')
         header.append('#include "decomp/interrupt_driver.h"')
