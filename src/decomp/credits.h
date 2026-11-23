@@ -196,6 +196,7 @@ bool nc_credits_enter_critical_section(CPUState *c);
 bool nc_credits_exit_critical_section(CPUState *c);
 bool nc_credits_start_interrupts(CPUState *c);
 bool nc_credits_resume_interrupt_start(CPUState *c);
+bool nc_credits_set_interrupt_handler(CPUState *c);
 bool nc_credits_stop_interrupts(CPUState *c);
 bool nc_credits_restart_interrupts(CPUState *c);
 bool nc_credits_save_irq_context(CPUState *c);
