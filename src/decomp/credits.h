@@ -229,6 +229,7 @@ bool nc_credits_cd_data_callback(CPUState *c);
 bool nc_credits_cd_sync(CPUState *c);
 bool nc_credits_cd_ready(CPUState *c);
 bool nc_credits_sync_cd_command(CPUState *c);
+bool nc_credits_wait_cd_ready(CPUState *c);
 bool nc_credits_sync_cd_dma(CPUState *c);
 bool nc_credits_cd_data_sync(CPUState *c);
 bool nc_credits_cd_mix(CPUState *c);
