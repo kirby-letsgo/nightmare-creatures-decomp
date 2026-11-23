@@ -92,6 +92,7 @@ u32 nc_menu_start_down(CPUState *c);
 u32 nc_menu_down_repeat(CPUState *c);
 u32 nc_menu_up_repeat(CPUState *c);
 u32 nc_menu_right_input(CPUState *c);
+bool nc_menu_horizontal_action(CPUState *c, bool left);
 u32 nc_menu_left_input(CPUState *c);
 bool nc_menu_pad_type_flags(CPUState *c);
 bool nc_menu_store_stick_calibration(CPUState *c);

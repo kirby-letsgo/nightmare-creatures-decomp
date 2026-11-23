@@ -402,6 +402,25 @@ u32 nc_menu_right_input(CPUState *c) {
     return 0x80068480;
 }
 
+/* Left supplies the record offset in a2. Right has already prepared
+ * the offset in a1, the base in v0, and the action in a2. */
+bool nc_menu_horizontal_action(CPUState *c, bool left) {
+    int cycles = left ? 5 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (left) {
+        R(5) = 0x800883c0 + R(6);
+        R(6) = 0x10;
+        R(31) = 0x80068438;
+    } else {
+        R(5) += R(2);
+        R(31) = 0x80068488;
+    }
+    c->budget -= cycles;
+    nc_call(c, 0x80063b70);
+    return true;
+}
+
 /* A new Cross press takes priority. A held Cross still lets a new
  * Triangle through. Both actions use the same menu record. */
 u32 nc_menu_face_press(CPUState *c) {
