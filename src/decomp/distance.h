@@ -35,6 +35,7 @@ bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32
 bool nc_write_textured_quad(CPUState *c);
 bool nc_write_projected_triangle(CPUState *c);
 bool nc_write_projected_quad(CPUState *c);
+bool nc_measure_placement_quad(CPUState *c, bool textured);
 bool nc_measure_placement_triangle(CPUState *c);
 bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 limit, bool *accept);
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
