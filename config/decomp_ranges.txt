@@ -328,6 +328,7 @@ slus_005_82  80011A6C    80011A7C         bios_service.h
 slus_005_82  80011A7C    80011A88         bios_service.h
 slus_005_82  80011A8C    80011A98         bios_service.h
 slus_005_82  80011A9C    80011AA8         bios_service.h
+slus_005_82  80011B7C    80011BA8         interrupt_driver.h
 slus_005_82  80011BA8    80011BD4         interrupt_control.h
 slus_005_82  80011E50    80011E7C         interrupt_control.h
 credits_exe  80018C8C    80018CFC         credits.c

@@ -65,4 +65,21 @@ static inline bool interrupt_mask(CPUState *c, u32 port_slot, bool write) {
     return true;
 }
 
+/* setIntrVSync returns the previous callback, including when it skips the store. */
+static inline bool set_vsync_slot(CPUState *c, u32 table) {
+    if (c->budget <= NC_LOAD_CYCLES + 10)
+        return false;
+    R(4) = table + 4u * R(4);
+    R(2) = table;
+    c->budget -= 4;
+    R(2) = MEM_R32(R(4));
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (R(5) != R(2)) {
+        MEM_W32(R(4), R(5));
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 #endif

@@ -157,6 +157,31 @@ static bool call_irq_wrapper(CPUState *c) {
                                  irq_wrappers[irq_wrapper].resume, irq_wrappers[irq_wrapper].single);
 }
 
+static bool launcher_set_vsync_slot(CPUState *c) {
+    return set_vsync_slot(c, 0x80015740);
+}
+
+static bool check_vsync_slots(void) {
+    const u32 table = 0x80015740, handler = 0x80016200;
+    const struct { u32 slot, previous, next; } cases[] = {
+        {0, 0, handler}, {3, handler, handler}, {7, handler, 0},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        CPUState start = {0};
+        start.r[4] = cases[i].slot;
+        start.r[5] = cases[i].next;
+        start.r[29] = 0x801fff00;
+        start.r[31] = 0x80010000;
+        start.budget = NC_LOAD_CYCLES + 11;
+        u32 address = table + 4 * cases[i].slot;
+        MEM_W32(address, cases[i].previous);
+        if (!compare(start, 0x80011b7c, launcher_set_vsync_slot, NC_LOAD_CYCLES + 10) ||
+            nc_cpu.r[2] != cases[i].previous || MEM_R32(address) != cases[i].next)
+            return false;
+    }
+    return true;
+}
+
 static bool check_irq_wrappers(void) {
     const u32 trace = 0x80016800;
     for (unsigned driver = 0; driver < 2; driver++) {
@@ -477,6 +502,10 @@ int main(int argc, char **argv) {
     }
     if (!check_bios_wrappers()) {
         fprintf(stderr, "launcher BIOS wrappers failed\n");
+        return 1;
+    }
+    if (!check_vsync_slots()) {
+        fprintf(stderr, "launcher VSync callback slots failed\n");
         return 1;
     }
     if (!check_irq_wrappers()) {
