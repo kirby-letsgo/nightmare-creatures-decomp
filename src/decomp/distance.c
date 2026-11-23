@@ -3272,6 +3272,36 @@ bool nc_check_placement_point(CPUState *c) {
     return true;
 }
 
+bool nc_call_placement_node_traversal(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 record = R(16);
+    const u32 nodes = MEM_R32(record + 8);
+    const int cycles = nodes ? 9 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = nodes;
+    R(4) = record;
+    if (nodes) {
+        R(5) = R(19) + 0x38;
+        R(6) = R(19) + 0x78;
+        R(31) = 0x80029380;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_placement_part_traversal(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(4) = MEM_R32(R(16) + 4);
+    R(5) = R(19) + 0x38;
+    R(6) = R(19) + 0x78;
+    R(31) = 0x800293e4;
+    c->budget -= 6;
+    return true;
+}
+
 /* The pose stores (-X, Y, Z) as halfwords. Reload the pose pointer
  * between stores in the same order as the guest. */
 bool nc_place_record_pose(CPUState *c) {
