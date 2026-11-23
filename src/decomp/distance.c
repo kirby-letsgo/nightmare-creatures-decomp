@@ -4013,6 +4013,37 @@ bool nc_adjust_placement_color(CPUState *c) {
     return true;
 }
 
+/* Store the final lighting color even when the actor has no color records.
+ * The loop uses the channel masks in their original byte positions. */
+bool nc_begin_placement_color_records(CPUState *c, bool *has_records) {
+    if (c->budget <= 9)
+        return false;
+    const u32 actor = R(4);
+    const u32 color = MEM_R32(R(29) + 0xc);
+    const u32 count = MEM_R8(actor + 0x38d);
+    const int cycles = count ? 21 : 9;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = color;
+    R(5) = count;
+    MEM_W32(actor + 0x2e4, color);
+    if (count) {
+        const u32 records = MEM_R32(actor + 0x2b4);
+        R(6) = records;
+        R(8) = 0;
+        R(12) = color & 0xff;
+        R(11) = color & 0xff00;
+        R(2) = 0xff0000;
+        R(10) = color & R(2);
+        R(9) = records + 4;
+        R(5) = records + 3;
+        R(3) = records + 7;
+    }
+    *has_records = count != 0;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */
