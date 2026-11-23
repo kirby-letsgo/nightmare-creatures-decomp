@@ -66,6 +66,31 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* The entry after the input call tests its low halfword. The direct entry
+ * starts at the actor state check and preserves the incoming a0. */
+u32 nc_player_state_three_circle(CPUState *c, bool after_call) {
+    if (c->budget <= (after_call ? 12 : 9))
+        return after_call ? 0x800449e0 : 0x800449ec;
+
+    if (after_call) {
+        R(2) <<= 16;
+        R(4) = R(16);
+        c->budget -= 3;
+        if (R(2))
+            return 0x800451d4;
+    }
+
+    R(3) = MEM_R8(R(16) + 0x38a);
+    R(2) = 0x20000;
+    c->budget -= 6;
+    if (R(3) != 3)
+        return 0x80044b18;
+
+    R(2) = R(17) & 0x2000;
+    c->budget -= 3;
+    return R(2) ? 0x80044a18 : 0x80044a08;
+}
+
 /* On this Circle-held path, a fresh Triangle press selects an action;
  * otherwise the branch passes the Down bit to the next check. */
 u32 nc_player_circle_held_triangle(CPUState *c) {
