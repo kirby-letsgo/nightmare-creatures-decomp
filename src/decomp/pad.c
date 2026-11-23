@@ -477,6 +477,31 @@ u32 nc_player_up_action_six(CPUState *c, bool check_stick) {
     return 0x80044d48;
 }
 
+/* After Square and Cross are accepted, action 13 requires a signed value
+ * of at least four. The caller keeps its address in s2 across the call. */
+u32 nc_player_action_thirteen_check(CPUState *c) {
+    if (c->budget <= 9)
+        return 0x80044d70;
+
+    R(18) = 0x800ce9c8;
+    R(2) = (s32)MEM_R32(R(18)) < 4;
+    c->budget -= 9;
+    return R(2) ? 0x800451e8 : 0x80044d8c;
+}
+
+bool nc_finish_player_action_thirteen(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+
+    R(2) = MEM_R32(R(16) + 0x2c8) & 0x8000;
+    c->budget -= 7;
+    if (!R(2)) {
+        MEM_W32(R(18), 0);
+        c->budget -= 2;
+    }
+    return true;
+}
+
 /* This Triangle path records the edge on the incoming actor argument, then
  * uses the saved player actor to select and store the action. */
 u32 nc_player_triangle_direct_action(CPUState *c) {

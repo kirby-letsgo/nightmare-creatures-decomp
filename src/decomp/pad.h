@@ -28,6 +28,8 @@ u32 nc_player_horizontal_direction(CPUState *c);
 u32 nc_player_face_button_gate(CPUState *c, bool clear_direction);
 u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle);
 u32 nc_player_up_action_six(CPUState *c, bool check_stick);
+u32 nc_player_action_thirteen_check(CPUState *c);
+bool nc_finish_player_action_thirteen(CPUState *c);
 u32 nc_player_triangle_direct_action(CPUState *c);
 u32 nc_player_circle_triangle_check(CPUState *c);
 u32 nc_player_triangle_action_check(CPUState *c);
