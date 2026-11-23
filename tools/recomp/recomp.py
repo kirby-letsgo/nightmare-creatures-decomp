@@ -1430,6 +1430,9 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80068698, 0x8006874C):
+                right = "true" if i.addr == 0x8006874C else "false"
+                out.append(f"    if (nc_menu_horizontal_feedback(c, {right})) goto L_80068764;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068424:
                 out.append("    if (nc_menu_horizontal_action(c, true)) goto L_80068438;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068480:

@@ -402,6 +402,28 @@ u32 nc_menu_right_input(CPUState *c) {
     return 0x80068480;
 }
 
+/* Record 12 plays the selected sound, then prepares the text for its
+ * new setting. The Left path jumps to the shared formatting call. */
+bool nc_menu_horizontal_feedback(CPUState *c, bool right) {
+    if (c->budget <= 2)
+        return false;
+    R(7) = 0;
+    R(31) = right ? 0x80068754 : 0x800686a0;
+    c->budget -= 2;
+    nc_call(c, 0x8006c2e4);
+    R(4) = 0x80080000;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(4) = MEM_R32(0x80086e34);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(5) = right ? 0x80090000 : 0x80020000;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(5) = right ? 0x8008ef8c : 0x80018eb8;
+    NC_POLL(c, NC_INSN_CYCLES);
+    if (!right)
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
 /* Left supplies the record offset in a2. Right has already prepared
  * the offset in a1, the base in v0, and the action in a2. */
 bool nc_menu_horizontal_action(CPUState *c, bool left) {
