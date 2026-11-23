@@ -59,6 +59,7 @@ bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset, unsigned factor
 bool nc_set_projection_pose_mask(CPUState *c);
 bool nc_load_projection_pose_descriptor(CPUState *c);
 bool nc_load_projection_pose_flags(CPUState *c);
+bool nc_filter_projection_pose(CPUState *c, bool *project);
 bool nc_select_projection_pose(CPUState *c, bool index_ready);
 bool nc_set_projection_pose_cursor(CPUState *c);
 bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset);
