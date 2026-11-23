@@ -4329,6 +4329,27 @@ bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth) {
     return true;
 }
 
+/* Dispatch the projection that stores one-sixteenth depth. The caller's
+ * 0x10 pose flag requests a halfword update before the vertex transform. */
+bool nc_call_indexed_pose_projection(CPUState *c) {
+    const bool update_flags = R(2) != 0;
+    const int cycles = update_flags ? 17 : 5;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = R(19);
+    if (update_flags) {
+        const u32 pose_index = MEM_R8(R(18) + 0x4c);
+        R(3) = R(21) + 2 * pose_index;
+        R(2) = MEM_R16(R(3) + 0x10a) & 0xff6f;
+        MEM_W16(R(3) + 0x10a, (u16)R(2));
+    }
+    R(5) = R(18);
+    R(31) = 0x80028214;
+    R(6) = R(29) + 0x58;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both placement traversals project vertices when descriptor flag 0x02
  * is set. The branch delay slot supplies the descriptor on either path. */
 bool nc_call_pose_vertex_projection(CPUState *c, u32 return_pc) {
