@@ -375,6 +375,7 @@ slus_005_82  800124F8    8001251C         cd_state.h
 slus_005_82  8001251C    80012540         cd_state.h
 slus_005_82  80012540    80012564         cd_state.h
 slus_005_82  80012564    80012584         cd_state.h
+slus_005_82  80013CE8    80013CF8         cd_state.h
 slus_005_82  800145DC    800145F4         cd_state.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c

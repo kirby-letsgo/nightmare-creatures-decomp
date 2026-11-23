@@ -119,4 +119,14 @@ static inline bool cd_data_callback(CPUState *c, u32 dma_callback, u32 resume) {
     return true;
 }
 
+static inline bool cd_set_test_parameter_count(CPUState *c, u32 address) {
+    if (c->budget <= 4)
+        return false;
+    R(1) = (address + 0x8000u) & 0xffff0000u;
+    c->budget--;
+    MEM_W32(address, R(4));
+    c->budget -= 3; /* store, return and delay slot */
+    return true;
+}
+
 #endif

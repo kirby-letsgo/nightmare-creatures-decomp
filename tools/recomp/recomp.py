@@ -1253,6 +1253,8 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80011F0C, 0x80011F34, 0x80011F5C):
                 spec = 0x20 if i.addr == 0x80011F0C else 0x40
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013CE8:
+                out.append("    if (cd_set_test_parameter_count(c, 0x80015ac0)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80012540:
                 out.append("    if (cd_data_callback(c, 0x80010ab0, 0x80012554)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_DRIVERS:
