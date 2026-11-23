@@ -140,6 +140,8 @@ bool nc_prepare_shared_placement_y_step(CPUState *c, bool jump);
 bool nc_call_shared_placement_y_step(CPUState *c);
 bool nc_begin_indexed_placement_x_step(CPUState *c);
 bool nc_call_indexed_placement_x_step(CPUState *c);
+u32 nc_route_placement_tick(CPUState *c, bool from_step);
+bool nc_finish_placement_tick_call(CPUState *c);
 bool nc_advance_placement_x_index(CPUState *c);
 bool nc_call_flagged_placement_y_step(CPUState *c, bool record22);
 u32 nc_begin_placement_halfword_step(CPUState *c);

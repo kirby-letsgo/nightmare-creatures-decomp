@@ -4751,6 +4751,44 @@ static bool indexed_placement_x_steps(bool disc) {
     return true;
 }
 
+static bool placement_tick_routes(bool disc) {
+    const struct {
+        bool from_step;
+        u32 result, next;
+        int cycles;
+    } cases[] = {
+        {true, 0, 0x800473e8, 5}, {true, 1, 0x8002a258, 2},
+        {false, 0, 0x800473e8, 3}, {false, UINT32_MAX, 0x800473e8, 3},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].result;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        CPUState native = input;
+        if (nc_route_placement_tick(&native, cases[i].from_step) ||
+            memcmp(&input, &native, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_route_placement_tick(&native, cases[i].from_step) != cases[i].next ||
+            native.budget != 1)
+            return false;
+        if (cases[i].next == 0x800473e8 &&
+            (native.r[4] || native.r[5] != input.r[16] || native.r[31] != 0x8002a250))
+            return false;
+        if (disc) {
+            interp_call(&input, cases[i].from_step ? 0x8002a23c : 0x8002a244);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    CPUState input = initial(), native;
+    input.r[19] = 1;
+    input.r[31] = 0x8002a564;
+    return compare(input, 0x8002a250, nc_finish_placement_tick_call, disc, &native) &&
+           native.r[2] == (u32)-39 && native.budget == input.budget - 2;
+}
+
 static bool placement_x_indices(bool disc) {
     const u16 indices[] = {0, 3, 4, 5, 6, UINT16_MAX};
     for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
@@ -8959,7 +8997,7 @@ int main(int argc, char **argv) {
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
-        placement_x_indices(disc) &&
+        placement_tick_routes(disc) && placement_x_indices(disc) &&
         placement_halfword_entries(disc) &&
         placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&

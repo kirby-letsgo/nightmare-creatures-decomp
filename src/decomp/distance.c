@@ -5448,6 +5448,29 @@ bool nc_call_indexed_placement_x_step(CPUState *c) {
     return true;
 }
 
+/* The tick call also has a direct selector entry after the result branch. */
+u32 nc_route_placement_tick(CPUState *c, bool from_step) {
+    const bool advance = from_step && R(2) != 0;
+    const int cycles = advance ? 2 : (from_step ? 5 : 3);
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    if (advance)
+        return 0x8002a258;
+    R(4) = 0;
+    R(5) = R(16);
+    R(31) = 0x8002a250;
+    return 0x800473e8;
+}
+
+bool nc_finish_placement_tick_call(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(2) = R(19) - 0x28;
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_advance_placement_x_index(CPUState *c) {
     /* Reserve both paths before reading the index. */
     if (c->budget <= 8)
