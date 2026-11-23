@@ -1807,6 +1807,66 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_fifo_write(void) {
+    const u32 buffer = 0x80061000, ports = buffer + 256, trace = ports + 512;
+    const unsigned sizes[] = {0, 1, 63, 64, 65, 130, 2, 0};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    spu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof sizes / sizeof sizes[0]; i++) {
+        StateIO native = {0}, guest = {0};
+        bool timeout = i >= 6;
+        for (unsigned run = 0; ok && run < 2; run++) {
+            MEM_W32(0x80024678, timeout ? ports : 0x1f801c00);
+            MEM_W16(0x80024690, 0xffff); /* a long transfer wraps sound RAM */
+            for (unsigned j = 0; j < 132; j++)
+                MEM_W8(buffer + j, (u8)(j + 1));
+            spu_write(0x1aa, 0);
+            if (timeout) {
+                MEM_W16(ports + 0x1ae, i == 6 ? 0x400 : 0);
+                MEM_W32(0x8001fc78, 0x03e00008); /* set status in wait delay slot */
+                MEM_W32(0x8001fc7c, 0xa5090000); /* sh t1,0(t0) */
+                MEM_W32(0x80019a60, 0x03e00008);
+                MEM_W32(0x80019a64, 0xad450000); /* sw a1,0(t2): timeout label */
+            }
+            nc_cpu = arguments(buffer, sizes[i], 3, i & 1 ? 2 : 4096);
+            nc_cpu.r[8] = ports + 0x1ae;
+            nc_cpu.r[9] = i == 6 ? 0x400 : 1;
+            nc_cpu.r[10] = trace;
+            if (run)
+                interp_call(&nc_cpu, 0x8001f3c0);
+            else
+                ok = nc_credits_spu_write_by_io(&nc_cpu);
+            StateIO *result = run ? &guest : &native;
+            cpu_serialize(result);
+            spu_serialize(result);
+            if (timeout) {
+                ok = ok && MEM_R32(trace) == (i == 6 ? 0x8001870cu : 0x80018720u);
+            } else {
+                u8 data[132];
+                spu_write(0x1a6, 0xffff);
+                spu_dma_read(data, sizeof data);
+                unsigned bytes = (sizes[i] + 1) & ~1u;
+                ok = ok && !memcmp(data, nc_fast_ptr(buffer), bytes);
+            }
+            saved.loading = true;
+            saved.pos = 0;
+            cpu_serialize(&saved);
+            spu_serialize(&saved);
+        }
+        ok = ok && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_spu_dma_complete(void) {
     const u32 spu = 0x80060000, callback = 0x80060400, trace = callback + 16;
     const u32 event = 0x8001fcd8;
@@ -4375,6 +4435,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_fifo_write();
     pass = pass && check_spu_dma_complete();
     pass = pass && check_spu_read_blocks();
     pass = pass && check_spu_transfer(true, false);

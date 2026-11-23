@@ -211,6 +211,7 @@ CREDITS_ROUTINES = {
     0x8001EC78: "nc_credits_gpu_fill_bytes(c)",
     0x8001ECA4: "nc_credits_bios_gpu_command(c)",
     0x8001ECB4: "nc_credits_tim_info(c)",
+    0x8001F3C0: "nc_credits_spu_write_by_io(c)",
     0x8001F58C: "nc_credits_spu_dma_complete(c)",
     0x8001F65C: "nc_credits_spu_read_blocks(c)",
     0x8001F9A8: "nc_credits_spu_write(c)",
@@ -1672,6 +1673,10 @@ class Emitter:
                 out.append("    if (nc_return_placement_projection(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027288:
                 out.append("    if (nc_begin_placement_vertex_projection(c)) goto L_800272D8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027300:
+                out.append("    if (nc_project_placement_vertex_triple(c)) {")
+                out.append("        if (R(2)) goto L_80027300;")
+                out.append("        goto L_80027388; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002739C:
                 out.append("    if (nc_project_remaining_placement_vertex(c)) {")
                 out.append("        if (R(2)) goto L_8002739C;")

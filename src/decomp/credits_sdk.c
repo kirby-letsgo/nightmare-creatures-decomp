@@ -3479,6 +3479,163 @@ bool nc_credits_spu_read_blocks(CPUState *c) {
     return true;
 }
 
+/* Both SPUSTAT waits allow 0xf00 additional reads before reporting a timeout. */
+static void poll_spu_write_status(CPUState *c, bool restoring) {
+    bool waiting;
+    do {
+        set_reg(c, 2, R(3) < 0xf01);
+        bool retry = R(2) != 0;
+        NC_POLL(c, 2);
+        if (!retry) {
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x800186ec);
+            set_reg(c, 5, 0x80020000);
+            set_reg(c, 5, restoring ? 0x80018720 : 0x8001870c);
+            R(31) = restoring ? 0x8001f544 : 0x8001f4b0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x80019a60);
+            NC_POLL(c, 2);
+            break;
+        }
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024678);
+        NC_POLL(c, 1);
+        R(2) = MEM_R16(R(2) + 0x1ae);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & (restoring ? 0x7ff : 0x400));
+        waiting = R(2) != (restoring ? R(5) : 0);
+        R(3)++;
+        NC_POLL(c, 2);
+    } while (waiting);
+}
+
+static void write_spu_fifo_chunk(CPUState *c) {
+    bool fits = R(2) != 0;
+    R(16) = R(17);
+    NC_POLL(c, 2);
+    if (!fits)
+        set_reg(c, 16, 64);
+    bool more = (s32)R(16) > 0;
+    R(3) = 0;
+    NC_POLL(c, 2);
+    if (more) {
+        set_reg(c, 4, 0x80020000);
+        load_word(c, 4, 0x80024678);
+    }
+    while (more) {
+        R(2) = MEM_R16(R(18));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 18, R(18) + 2);
+        set_reg(c, 3, R(3) + 2);
+        MEM_W16(R(4) + 0x1a8, (u16)R(2)); /* odd sizes still write the full halfword */
+        NC_POLL(c, 1);
+        set_reg(c, 2, (s32)R(3) < (s32)R(16));
+        more = R(2) != 0;
+        NC_POLL(c, 2);
+    }
+
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80024678);
+    NC_POLL(c, 1);
+    R(4) = MEM_R16(R(3) + 0x1aa);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(4) & 0xffcf);
+    set_reg(c, 4, R(2) | 0x10); /* manual transfer */
+    MEM_W16(R(3) + 0x1aa, (u16)R(4));
+    NC_POLL(c, 1);
+    R(31) = 0x8001f468;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001fc78);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024678);
+    NC_POLL(c, 1);
+    R(2) = MEM_R16(R(2) + 0x1ae);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 0x400);
+    bool busy = R(2) != 0;
+    R(3) = 0;
+    NC_POLL(c, 2);
+    if (busy) {
+        set_reg(c, 3, R(3) + 1);
+        poll_spu_write_status(c, false);
+    }
+    R(31) = 0x8001f4e0;
+    R(17) -= R(16);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001fc78);
+    R(31) = 0x8001f4e8;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001fc78);
+}
+
+bool nc_credits_spu_write_by_io(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024678);
+    set_reg(c, 3, 0x80020000);
+    R(3) = MEM_R16(0x80024690);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 29, R(29) - 48);
+    MEM_W32(R(29) + 28, R(17));
+    NC_POLL(c, 1);
+    set_reg(c, 17, R(5));
+    MEM_W32(R(29) + 40, R(31));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 36, R(19));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 32, R(18));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 24, R(16));
+    NC_POLL(c, 1);
+    R(5) = MEM_R16(R(2) + 0x1ae);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 18, R(4));
+    MEM_W16(R(2) + 0x1a6, (u16)R(3));
+    NC_POLL(c, 1);
+    R(31) = 0x8001f400;
+    R(19) = R(5) & 0x7ff;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001fc78);
+
+    bool remaining = R(17) != 0;
+    R(2) = R(17) < 65;
+    NC_POLL(c, 2);
+    while (remaining) {
+        write_spu_fifo_chunk(c);
+        remaining = R(17) != 0;
+        R(2) = R(17) < 65;
+        NC_POLL(c, 2);
+    }
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024678);
+    NC_POLL(c, 1);
+    R(4) = MEM_R16(R(2) + 0x1aa);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 3, 0);
+    set_reg(c, 4, R(4) & 0xffcf);
+    MEM_W16(R(2) + 0x1aa, (u16)R(4));
+    NC_POLL(c, 1);
+    R(2) = MEM_R16(R(2) + 0x1ae);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 5, R(19) & 0xffff);
+    set_reg(c, 2, R(2) & 0x7ff);
+    bool changed = R(2) != R(5);
+    R(3)++;
+    NC_POLL(c, 2);
+    if (changed)
+        poll_spu_write_status(c, true);
+    load_word(c, 31, R(29) + 40);
+    for (unsigned reg = 19; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 24 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Send the caller's bytes to the SPU using programmed I/O or DMA. */
 bool nc_credits_spu_write(CPUState *c) {
     if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
