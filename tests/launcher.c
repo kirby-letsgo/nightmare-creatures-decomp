@@ -120,6 +120,37 @@ static bool deliver_cd_callback(CPUState *c) {
     return cd_default_event(c, cd_event_spec, cd_event_resume, 0x80011f84);
 }
 
+static u32 cd_driver, cd_driver_resume;
+
+static bool forward_cd_call(CPUState *c) {
+    return call_cd_status_driver(c, cd_driver, cd_driver_resume);
+}
+
+static bool check_cd_driver_calls(void) {
+    const struct { u32 entry, driver; } calls[] = {
+        {0x80012040, 0x8001366c}, {0x800120e0, 0x80012c80},
+        {0x80012100, 0x80012f00}, {0x80012564, 0x80013a7c},
+    };
+    const u32 trace = 0x80016200;
+    for (unsigned i = 0; i < sizeof calls / sizeof calls[0]; i++) {
+        cd_driver = calls[i].driver;
+        cd_driver_resume = calls[i].entry + 16;
+        u32 saved[3];
+        memcpy(saved, nc_fast_ptr(cd_driver), sizeof saved);
+        MEM_W32(cd_driver, 0xacbf0000);     /* sw ra, 0(a1) */
+        MEM_W32(cd_driver + 4, 0x03e00008); /* jr ra */
+        MEM_W32(cd_driver + 8, 0x00801021); /* move v0, a0 */
+        MEM_W32(trace, 0);
+        CPUState start = arguments(0x12340000 + i, trace, 0, 5);
+        bool ok = compare(start, calls[i].entry, forward_cd_call, 4) &&
+                  nc_cpu.r[2] == start.r[4] && MEM_R32(trace) == cd_driver_resume;
+        memcpy(nc_fast_ptr(cd_driver), saved, sizeof saved);
+        if (!ok)
+            return false;
+    }
+    return true;
+}
+
 static bool check_cd_events(void) {
     const struct { u32 entry, spec; } callbacks[] = {
         {0x80011f0c, 0x20}, {0x80011f34, 0x40}, {0x80011f5c, 0x40},
@@ -761,6 +792,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_driver_calls()) {
+        fprintf(stderr, "launcher CD driver calls failed\n");
         return 1;
     }
     if (!check_cd_events()) {
