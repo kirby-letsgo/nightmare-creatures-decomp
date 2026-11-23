@@ -4275,6 +4275,49 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_lighting_calls(bool disc) {
+    const u32 actor = SCRATCH_BASE, frame = SCRATCH_BASE + 0x80;
+    CPUState input = initial(), native;
+    input.r[21] = actor;
+    input.r[29] = frame;
+    input.r[31] = 0x80051568;
+    if (!compare(input, 0x800280d8, nc_disable_projection_effect, disc, &native) ||
+        native.r[4] != actor || native.r[5] != 0 || native.r[31] != 0x800280e4 ||
+        native.budget != input.budget - 3)
+        return false;
+    const struct {
+        u32 entry;
+        int cycles;
+    } sites[] = {{0x800280d0, 12}, {0x800280e4, 18}, {0x800280f8, 11}, {0x800280fc, 10}};
+    for (unsigned i = 0; i < sizeof sites / sizeof sites[0]; ++i) {
+        const u32 entry = sites[i].entry, flags = 0xfedfffff;
+        const u32 expected = entry == 0x800280e4 ? flags & ~0x20000u : flags;
+        MEM_W32(actor + 0x2cc, flags);
+        MEM_W32(actor + 0x2e0, 0xfffffff0);
+        MEM_W32(frame + 0x2e8, 0x40);
+        input.r[31] = 0x80027da4;
+        input.budget = sites[i].cycles;
+        native = input;
+        if (nc_call_projection_lighting(&native, entry) || memcmp(&native, &input, sizeof input) ||
+            MEM_R32(actor + 0x2cc) != flags)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_projection_lighting(&native, entry) || native.budget != 1 ||
+            native.r[4] != (entry == 0x800280fc ? input.r[4] : actor) ||
+            native.r[5] != input.r[18] || native.r[6] != 0x30 || native.r[7] != frame + 0x2e0 ||
+            native.r[8] != 0x40 || native.r[31] != 0x80028114 || MEM_R32(actor + 0x2cc) != expected)
+            return false;
+        if (disc) {
+            MEM_W32(actor + 0x2cc, flags);
+            CPUState guest = input;
+            interp_call(&guest, entry);
+            if (memcmp(&native, &guest, sizeof guest) || MEM_R32(actor + 0x2cc) != expected)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool projection_effect_intensities(bool disc) {
     static const struct {
         u32 phase, previous, intensity;
@@ -7764,6 +7807,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_lighting_calls(disc) &&
         projection_effect_intensities(disc) &&
         projection_effect_flags(disc) &&
         projection_traversal_entries(disc) &&
