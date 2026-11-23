@@ -1123,6 +1123,15 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044B98:
+                out.extend(
+                    [
+                        "    switch (nc_player_horizontal_direction(c)) {",
+                        "    case 0x80044C2C: goto L_80044C2C;",
+                        "    case 0x80044C30: goto L_80044C30;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80044C2C, 0x80044C30):
                 clear_direction = "true" if i.addr == 0x80044C2C else "false"
                 out.extend(
