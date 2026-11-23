@@ -774,6 +774,25 @@ static bool player_state_action_calls(void) {
     return true;
 }
 
+static bool player_action_button_counts(void) {
+    const u32 masks[] = {0x1000, 0x4000, 0x8000, 0x2000, 0x10, 0x40, 0x80, 0x20};
+    for (unsigned combination = 0; combination < 256; ++combination) {
+        CPUState cpu = initial();
+        cpu.r[4] = combination & 1 ? 0xffff0f0f : 0;
+        int cycles = 21;
+        for (unsigned bit = 0; bit < 8; ++bit) {
+            if (combination & (1u << bit)) {
+                cpu.r[4] |= masks[bit];
+                cycles += bit != 0;
+            }
+        }
+        cpu.budget = cycles + 1;
+        if (!compare(cpu, 0x80053084, nc_count_player_action_buttons, cycles))
+            return false;
+    }
+    return true;
+}
+
 static bool player_button_action_call(void) {
     const u32 actor = 0x80161000;
     const u8 states[] = {3, 1};
@@ -4498,10 +4517,11 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_action_setup_calls() && player_button_action_call() && player_state_action_calls() &&
-        player_down_paths() && player_square_actor_scans() && player_square_scans() &&
-        player_square_headings() && player_r2_action_call() && player_down_action_calls() &&
-        player_down_face_buttons() && player_level_flag_checks() && player_input_state_gates() &&
+        player_action_setup_calls() && player_action_button_counts() &&
+        player_button_action_call() && player_state_action_calls() && player_down_paths() &&
+        player_square_actor_scans() && player_square_scans() && player_square_headings() &&
+        player_r2_action_call() && player_down_action_calls() && player_down_face_buttons() &&
+        player_level_flag_checks() && player_input_state_gates() &&
         player_secondary_flag_routes() && player_input_action_gates() &&
         player_state_three_circle_checks() && player_circle_held_triangle_checks() &&
         player_vertical_action_checks() && player_shoulder_action_checks() &&

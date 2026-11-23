@@ -760,6 +760,8 @@ psx2_exe     8004515C    80045170         pad.c
 psx2_exe     80045170    80045178         pad.c
 psx2_exe     80045178    80045180         pad.c
 psx2_exe     80045180    80045208         pad.c
+# Count held face buttons and directions for the player action handler.
+psx2_exe     80053084    800530F4         pad.c
 # Four-byte input sequences: level setup, stop, end-marker check, and player-control read.
 psx2_exe     80062C28    80062CB0         pad.c
 psx2_exe     80062CB0    80062CC8         pad.c

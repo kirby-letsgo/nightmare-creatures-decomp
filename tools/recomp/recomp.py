@@ -1338,6 +1338,8 @@ class Emitter:
                 out.append("    nc_credits_restore_jump_context(c); return;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80053084:
+                out.append("    if (nc_count_player_action_buttons(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004457C:
                 out.append("    if (nc_check_player_action_words(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800445AC:
