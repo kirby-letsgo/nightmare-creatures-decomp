@@ -1,4 +1,5 @@
-#include "credits_compare.h"
+#include "jump_context.h"
+#include "decomp/jump_context.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/interrupt_driver.h"
@@ -604,6 +605,11 @@ int main(int argc, char **argv) {
     }
     if (!check_dma_slots()) {
         fprintf(stderr, "launcher DMA callback slots failed\n");
+        return 1;
+    }
+    if (!check_save_irq_context(0x800119bc, save_irq_context) ||
+        !check_restore_jump_context(0x800119f8, restore_jump_context)) {
+        fprintf(stderr, "launcher jump context failed\n");
         return 1;
     }
     if (!check_vsync_slots()) {
