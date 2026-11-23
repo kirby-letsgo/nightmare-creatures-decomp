@@ -17,6 +17,7 @@ u32 nc_dispatch_player_r2_action(CPUState *c);
 bool nc_leave_player_r2(CPUState *c, bool record_buttons);
 bool nc_enter_player_input(CPUState *c);
 bool nc_leave_player_input(CPUState *c, bool store_buttons);
+bool nc_call_player_trigger(CPUState *c, u32 entry);
 bool nc_call_live_pad(CPUState *c, u32 return_address);
 u32 nc_player_input_source(CPUState *c);
 void nc_take_live_player_buttons(CPUState *c);
