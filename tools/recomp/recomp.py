@@ -252,6 +252,7 @@ CREDITS_ROUTINES = {
     0x800214C8: "nc_credits_cd_flush_controller(c)",
     0x800215A8: "nc_credits_cd_init_volume(c)",
     0x8002169C: "nc_credits_cd_init_interrupt(c)",
+    0x800218D8: "nc_credits_sync_cd_dma(c)",
     0x80021A44: "nc_credits_cd_sector_dma(c)",
     0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
     0x80021B54: "nc_credits_cd_interrupt_callback(c)",
@@ -782,6 +783,8 @@ class Emitter:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80027288:
+            targets.add(0x800272D8)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
             targets.update((0x80028B0C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
@@ -1664,6 +1667,8 @@ class Emitter:
                 out.append("        goto L_80028C30; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028C30:
                 out.append("    if (nc_return_placement_projection(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027288:
+                out.append("    if (nc_begin_placement_vertex_projection(c)) goto L_800272D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")

@@ -3467,6 +3467,20 @@ bool nc_return_placement_projection(CPUState *c) {
     return true;
 }
 
+/* Placement projection takes the vertices from the descriptor and the
+ * rotation and translation from the matrix embedded in the pose. */
+bool nc_begin_placement_vertex_projection(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    R(29) -= 0x18;
+    R(7) = R(6);
+    R(5) += 0x18;
+    R(8) = MEM_R32(R(4) + 8);
+    load_part_transform(c, R(5));
+    c->budget -= 38;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
