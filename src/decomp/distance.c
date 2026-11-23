@@ -4901,6 +4901,18 @@ bool nc_call_placement_stack_restore(CPUState *c) {
     return true;
 }
 
+/* Below or above the limit, the scan stores the incremented low byte.
+ * After the update it jumps past that store, with a nop in the delay slot. */
+bool nc_finish_alternate_placement_counter(CPUState *c, bool store_counter) {
+    const int cycles = store_counter ? 1 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (store_counter)
+        MEM_W8(R(3) + 0x37, (u8)R(2));
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_call_placement_transform_reset(CPUState *c) {
     if (c->budget <= 7)
         return false;
