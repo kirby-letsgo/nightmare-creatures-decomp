@@ -3361,6 +3361,55 @@ static bool placement_vertex_matrices(bool disc) {
     return !memcmp(before, nc_scratch, sizeof before);
 }
 
+static bool placement_vertex_triples(bool disc) {
+    const u32 vertices = SCRATCH_BASE, output = vertices + 0x80, frame = output + 0x80;
+    const s16 coords[] = {INT16_MIN, -1, 0, 4, 127, INT16_MAX};
+    CPUState input = initial();
+    input.r[5] = 0;
+    input.r[6] = output + 20;
+    input.r[7] = output;
+    input.r[8] = vertices;
+    input.r[9] = 6;
+    input.r[10] = frame + 8;
+    input.r[11] = frame + 4;
+    input.r[29] = frame;
+    input.r[31] = 0x80027388;
+    for (unsigned i = 0; i < 5; ++i)
+        gte_write_ctrl(&input, i, i % 2 ? 0 : 4096);
+    for (unsigned i = 0; i < 6; ++i) {
+        MEM_W16(vertices + 8 * i, coords[5 - i]);
+        MEM_W16(vertices + 8 * i + 2, coords[(i + 1) % 6]);
+        MEM_W16(vertices + 8 * i + 4, coords[i]);
+        MEM_W32(output + 8 * i + 4, 0xa5a55a5a);
+    }
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memcpy(before, nc_scratch, sizeof before);
+    input.budget = 52;
+    CPUState native = input;
+    if (nc_project_placement_vertex_triple(&native) || memcmp(&input, &native, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = input.budget = 105;
+    if (!nc_project_placement_vertex_triple(&native) || native.r[2] != 1 || native.budget != 53 ||
+        !nc_project_placement_vertex_triple(&native) || native.r[2] != 0 || native.budget != 1 ||
+        native.r[3] != 8191 || native.r[5] != 6 || native.r[6] != output + 68 ||
+        native.r[7] != output + 48 || native.r[8] != vertices + 48)
+        return false;
+    for (unsigned i = 0; i < 6; ++i) {
+        const u32 depth = coords[i] > 0 ? (u32)coords[i] : 0;
+        if (MEM_R32(output + 8 * i + 4) != (0xa5a50000u | (depth >> 2)))
+            return false;
+    }
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        interp_call(&input, 0x80027300);
+        if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+            return false;
+    }
+    return true;
+}
+
 static bool remaining_placement_vertices(bool disc) {
     const u32 vertices = SCRATCH_BASE, output = vertices + 0x40, frame = output + 0x40;
     CPUState input = initial();
@@ -5822,13 +5871,13 @@ int main(int argc, char **argv) {
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
         placement_depths(disc) && placement_depth_cues(disc) && placement_pose_stack(disc) &&
-        placement_pose_exits(disc) && remaining_placement_vertices(disc) &&
-        placement_vertex_matrices(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_pose_exits(disc) && placement_vertex_triples(disc) &&
+        remaining_placement_vertices(disc) && placement_vertex_matrices(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
