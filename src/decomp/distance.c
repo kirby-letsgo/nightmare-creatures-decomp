@@ -4068,6 +4068,18 @@ bool nc_light_placement_color_record(CPUState *c) {
     return true;
 }
 
+bool nc_return_placement_lighting(CPUState *c, bool has_records) {
+    const int cycles = has_records ? 11 : 6;
+    if (c->budget <= cycles)
+        return false;
+    if (has_records)
+        MEM_W32(R(7), MEM_R32(R(4) + 0x2b4));
+    R(2) = MEM_R32(R(29) + 0xc);
+    R(29) += 0x18;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */
