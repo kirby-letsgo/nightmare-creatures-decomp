@@ -895,6 +895,7 @@ class Emitter:
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028340:
             targets.update((0x80028388, 0x80028630, 0x80028688, 0x8002897C, 0x800289CC))
+            targets.update((0x80028400, 0x8002874C))
             targets.update(INDEXED_VERTEX_INPUTS)
             targets.update(INDEXED_VERTEX_SCREEN_OFFSETS)
             targets.update(pc + 0x2C for pc in INDEXED_VERTEX_SCREEN_OFFSETS)
@@ -2120,6 +2121,25 @@ class Emitter:
                 out.append(f"    if (nc_select_indexed_face_poses(c, {textured})) {{")
                 out.append(f"        if (!R(3) || !R(5) || !R(4)) goto L_{skip:08X};")
                 out.append(f"        goto L_{i.addr + 0x64:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028388:
+                out.append("    if (nc_set_indexed_face_flags(c)) goto L_800283BC;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800283BC, 0x800286F8):
+                textured = i.addr == 0x800283BC
+                arg = "true" if textured else "false"
+                out.append(f"    if (nc_begin_indexed_face_list(c, {arg})) {{")
+                if textured:
+                    out.append("        if (!R(3)) goto L_800286F8;")
+                    out.append("        if (!R(2)) goto L_800286F0;")
+                    out.append("        goto L_800283F4; }")
+                else:
+                    out.append("        if (!R(3) || !R(9)) goto L_80028A3C;")
+                    out.append("        if (!R(2)) goto L_80028A34;")
+                    out.append("        goto L_80028740; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800283F4, 0x80028740):
+                arg, skip = ("true", 0x800286D8) if i.addr == 0x800283F4 else ("false", 0x80028A1C)
+                out.append(f"    if (nc_load_indexed_packet_limit(c, {arg})) {{")
+                out.append(f"        if (R(21) == R(2)) goto L_{skip:08X};")
+                out.append(f"        goto L_{i.addr + 12:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_INPUTS:
                 pose, index = INDEXED_VERTEX_INPUTS[i.addr]
                 out.append(
