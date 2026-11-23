@@ -1,7 +1,7 @@
 #ifndef NC_DECOMP_CD_STATE_H
 #define NC_DECOMP_CD_STATE_H
 
-#include "port/recomp.h"
+#include "decomp/interrupt_control.h"
 
 /* CdStatus, CdMode and CdLastCom each return one cached unsigned byte. */
 static inline bool cd_state_byte(CPUState *c, u32 address) {
@@ -126,6 +126,39 @@ static inline bool cd_set_test_parameter_count(CPUState *c, u32 address) {
     c->budget--;
     MEM_W32(address, R(4));
     c->budget -= 3; /* store, return and delay slot */
+    return true;
+}
+
+/* Clear the CD callbacks and cached status, then install the IRQ 2 handler. */
+static inline bool cd_init_interrupt(CPUState *c, u32 state, u32 entry, u32 reset_callback,
+                                     u32 interrupt_callback, u32 handler) {
+    if (c->budget <= 12)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(1) = (state + 0x8000u) & 0xffff0000u;
+    c->budget -= 2;
+    MEM_W32(state + 4, 0); /* ready callback */
+    c->budget -= 2;
+    MEM_W32(state, 0); /* sync callback */
+    c->budget -= 2;
+    MEM_W32(state + 20, 0);
+    c->budget -= 2;
+    MEM_W32(state + 16, 0);
+    R(31) = entry + 0x30;
+    c->budget -= 3;
+    nc_call(c, reset_callback); /* ResetCallback */
+
+    set_reg(c, 5, (handler + 0x8000u) & 0xffff0000u);
+    set_reg(c, 5, handler);
+    R(31) = entry + 0x40;
+    R(4) = 2;
+    NC_POLL(c, 2);
+    nc_call(c, interrupt_callback); /* InterruptCallback */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
     return true;
 }
 
