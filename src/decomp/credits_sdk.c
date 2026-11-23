@@ -3835,6 +3835,331 @@ static void submit_draw_env(CPUState *c, unsigned debug_reg, u32 queue_resume, u
     nc_call(c, 0x80019928); /* memcpy */
 }
 
+static bool display_rect_changed(CPUState *c, unsigned offset) {
+    for (unsigned i = offset; i < offset + 8; i += 2) {
+        u32 cached = 0x800245c4 + i;
+        set_reg(c, 2, 0x80020000);
+        if (i == 8)
+            set_reg(c, 2, cached);
+        load_image_halfword(c, 2, cached, false);
+        load_image_halfword(c, 3, R(16) + i, true);
+        set_reg(c, 2, R(2) << 16);
+        set_reg(c, 2, (u32)((s32)R(2) >> 16));
+        bool changed = R(2) != R(3);
+        NC_POLL(c, 2);
+        if (changed)
+            return true;
+    }
+    return false;
+}
+
+static void set_display_origin(CPUState *c) {
+    set_reg(c, 2, 0x80020000);
+    R(2) = MEM_R8(0x80024558);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) - 1);
+    set_reg(c, 2, R(2) < 2);
+    bool wide_fields = R(2) != 0;
+    NC_POLL(c, 2);
+    if (wide_fields) {
+        R(31) = 0x8001cba4;
+        R(4) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001d730); /* get_dx */
+        load_image_halfword(c, 3, R(16) + 2, false);
+        set_reg(c, 2, R(2) & 0xfff);
+        set_reg(c, 3, R(3) & 0xfff);
+        set_reg(c, 3, R(3) << 12);
+        set_reg(c, 3, R(3) | R(2));
+        R(2) = 0x05000000;
+        NC_POLL(c, 2);
+    } else {
+        load_image_halfword(c, 2, R(16) + 2, false);
+        load_image_halfword(c, 3, R(16), false);
+        set_reg(c, 2, R(2) & 0x3ff);
+        set_reg(c, 2, R(2) << 10);
+        set_reg(c, 3, R(3) & 0x3ff);
+        set_reg(c, 2, R(2) | R(3));
+        set_reg(c, 3, 0x05000000);
+    }
+    set_reg(c, 4, R(2) | R(3));
+    load_gpu_global(c, 2, 0x80024550);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2) + 16);
+    NC_POLL(c, 1);
+    gpu_sync_call(c, R(2), 0x8001cbfc);
+}
+
+/* Clamp the vertical start or end to the video standard's scanline limit. */
+static void limit_display_scanline(CPUState *c, bool end) {
+    unsigned src = end ? 18 : 17, dest = end ? 3 : 4;
+    u32 ntsc_max = end ? 258 : 256, pal_max = end ? 312 : 310;
+    load_env_byte(c, 2, 18);
+    NC_POLL(c, 1);
+    bool pal = R(2) != 0;
+    R(2) = (s32)R(src) <= (s32)pal_max;
+    NC_POLL(c, 2);
+    if (!pal)
+        set_reg(c, 2, (s32)R(src) <= (s32)ntsc_max);
+    bool fits = R(2) != 0;
+    NC_POLL(c, 2);
+    if (fits) {
+        R(dest) = R(src);
+        NC_POLL(c, end && !pal ? 1 : 2);
+    } else {
+        load_env_byte(c, 2, 18);
+        NC_POLL(c, 1);
+        pal = R(2) != 0;
+        R(dest) = ntsc_max;
+        NC_POLL(c, 2);
+        if (pal) {
+            R(dest) = pal_max;
+            NC_POLL(c, 2);
+        }
+    }
+}
+
+static void send_display_range(CPUState *c, bool vertical) {
+    u32 mask = vertical ? 0x3ff : 0xfff;
+    set_reg(c, 2, R(vertical ? 18 : 6) & mask);
+    set_reg(c, 2, R(2) << (vertical ? 10 : 12));
+    set_reg(c, 4, R(vertical ? 17 : 5) & mask);
+    set_reg(c, 3, vertical ? 0x07000000 : 0x06000000);
+    load_gpu_global(c, 5, 0x80024550);
+    set_reg(c, 4, R(4) | R(3));
+    load_word(c, 3, R(5) + 16);
+    NC_POLL(c, 1);
+    u32 driver = R(3);
+    R(31) = vertical ? 0x8001ce34 : 0x8001ce08;
+    R(4) |= R(2);
+    NC_POLL(c, 2);
+    nc_call(c, driver);
+}
+
+static void set_display_ranges(CPUState *c) {
+    gpu_sync_call(c, 0x8001b538, 0x8001cc78); /* GetVideoMode */
+    load_image_halfword(c, 3, R(16) + 8, true);
+    MEM_W8(R(16) + 18, (u8)R(2));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(3) << 2);
+    set_reg(c, 2, R(2) + R(3));
+    set_reg(c, 2, R(2) << 1);
+    set_reg(c, 5, R(2) + 608); /* horizontal start in GPU clock units */
+    load_env_byte(c, 2, 18);
+    load_image_halfword(c, 4, R(16) + 10, true);
+    bool pal = R(2) != 0;
+    R(17) = R(4) + 19;
+    NC_POLL(c, 2);
+    if (!pal)
+        set_reg(c, 17, R(4) + 16);
+    load_image_halfword(c, 3, R(16) + 12, true);
+    NC_POLL(c, 1);
+    bool width = R(3) != 0;
+    R(2) = R(3) << 2;
+    NC_POLL(c, 2);
+    if (width) {
+        set_reg(c, 2, R(2) + R(3));
+        set_reg(c, 2, R(2) << 1);
+        R(6) = R(5) + R(2);
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 6, R(5) + 2560);
+    }
+    load_image_halfword(c, 2, R(16) + 14, true);
+    NC_POLL(c, 1);
+    bool height = R(2) != 0;
+    R(18) = R(17) + R(2);
+    NC_POLL(c, 2);
+    if (!height)
+        set_reg(c, 18, R(17) + 240);
+
+    set_reg(c, 2, (s32)R(5) < 500);
+    bool low = R(2) != 0;
+    R(4) = 500;
+    NC_POLL(c, 2);
+    if (low) {
+        set_reg(c, 5, R(4));
+    } else {
+        set_reg(c, 4, R(5));
+        set_reg(c, 2, (s32)R(4) <= 3290);
+        bool fits = R(2) != 0;
+        R(5) = R(4);
+        NC_POLL(c, 2);
+        if (!fits) {
+            set_reg(c, 4, 3290);
+            set_reg(c, 5, R(4));
+        }
+    }
+    set_reg(c, 3, R(5) + 80);
+    set_reg(c, 2, (s32)R(6) < (s32)R(3));
+    bool narrow = R(2) != 0;
+    R(2) = (s32)R(17) < 16;
+    NC_POLL(c, 2);
+    if (!narrow) {
+        set_reg(c, 3, R(6));
+        set_reg(c, 2, (s32)R(3) <= 3290);
+        bool fits = R(2) != 0;
+        R(2) = (s32)R(17) < 16;
+        NC_POLL(c, 2);
+        if (!fits)
+            set_reg(c, 3, 3290);
+    }
+    low = R(2) != 0;
+    R(6) = R(3);
+    NC_POLL(c, 2);
+    if (low)
+        set_reg(c, 4, 16);
+    else
+        limit_display_scanline(c, false);
+    set_reg(c, 17, R(4));
+    set_reg(c, 3, R(17) + 2);
+    set_reg(c, 2, (s32)R(18) < (s32)R(3));
+    bool short_range = R(2) != 0;
+    NC_POLL(c, 2);
+    if (!short_range)
+        limit_display_scanline(c, true);
+    set_reg(c, 18, R(3));
+    send_display_range(c, false);
+    send_display_range(c, true);
+}
+
+static void set_display_resolution(CPUState *c) {
+    load_image_halfword(c, 3, R(16) + 4, true);
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(3) <= 280);
+    bool small = R(2) != 0;
+    R(2) = (s32)R(3) <= 352;
+    NC_POLL(c, 2);
+    if (!small) {
+        bool medium = R(2) != 0;
+        R(2) = (s32)R(3) <= 400;
+        NC_POLL(c, 2);
+        if (medium) {
+            R(19) |= 1;
+            NC_POLL(c, 2);
+        } else {
+            bool special = R(2) != 0;
+            R(2) = (s32)R(3) <= 560;
+            NC_POLL(c, 2);
+            if (special) {
+                R(19) |= 64;
+                NC_POLL(c, 2);
+            } else {
+                bool wide = R(2) != 0;
+                NC_POLL(c, 2);
+                R(19) |= wide ? 2 : 3;
+                NC_POLL(c, wide ? 2 : 1);
+            }
+        }
+    }
+    load_env_byte(c, 2, 18);
+    load_image_halfword(c, 3, R(16) + 6, true);
+    bool pal = R(2) != 0;
+    R(2) = (s32)R(3) <= 288;
+    NC_POLL(c, 2);
+    if (!pal)
+        set_reg(c, 2, (s32)R(3) <= 256);
+    bool tall = !R(2);
+    NC_POLL(c, 2);
+    if (tall)
+        set_reg(c, 19, R(19) | 0x24);
+}
+
+static void set_display_mode(CPUState *c) {
+    gpu_sync_call(c, 0x8001b538, 0x8001cec4);
+    MEM_W8(R(16) + 18, (u8)R(2));
+    NC_POLL(c, 1);
+    load_env_byte(c, 3, 18);
+    set_reg(c, 2, 1);
+    bool pal = R(3) == R(2);
+    NC_POLL(c, 2);
+    if (pal)
+        set_reg(c, 19, R(19) | 8);
+    for (unsigned i = 0; i < 3; i++) {
+        if (i < 2) {
+            load_env_byte(c, 2, 17 - i); /* RGB24 and interlace */
+        } else {
+            set_reg(c, 2, 0x80020000);
+            set_reg(c, 2, 0x8002455b);
+            R(2) = MEM_R8(R(2)); /* reverse display */
+            NC_POLL(c, NC_LOAD_CYCLES);
+        }
+        NC_POLL(c, 1);
+        bool enabled = R(2) != 0;
+        NC_POLL(c, 2);
+        if (enabled)
+            set_reg(c, 19, R(19) | (i == 2 ? 0x80 : 0x10u << i));
+    }
+    set_display_resolution(c);
+    load_gpu_global(c, 2, 0x80024550);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2) + 16);
+    NC_POLL(c, 1);
+    u32 driver = R(2);
+    R(31) = 0x8001cfa4;
+    R(4) = R(19);
+    NC_POLL(c, 2);
+    nc_call(c, driver);
+}
+
+bool nc_credits_put_display_env(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 40;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    R(2) = 0x80020000;
+    R(2) = 0x8002455a;
+    MEM_W32(R(29) + 32, R(31));
+    MEM_W32(R(29) + 28, R(19));
+    MEM_W32(R(29) + 24, R(18));
+    MEM_W32(R(29) + 20, R(17));
+    c->budget -= 9;
+    R(2) = MEM_R8(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) < 2);
+    bool debug = !R(2);
+    R(19) = 0x08000000;
+    NC_POLL(c, 2);
+    if (debug) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018648);
+        load_gpu_global(c, 2, 0x80024554);
+        NC_POLL(c, 1);
+        u32 printer = R(2);
+        R(31) = 0x8001cb80;
+        R(5) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, printer);
+    }
+    set_display_origin(c);
+    if (display_rect_changed(c, 8))
+        set_display_ranges(c);
+    load_gpu_global(c, 3, 0x800245d4);
+    load_word(c, 2, R(16) + 16);
+    NC_POLL(c, 1);
+    bool changed = R(3) != R(2);
+    NC_POLL(c, 2);
+    if (changed || display_rect_changed(c, 0))
+        set_display_mode(c);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x800245c4);
+    set_reg(c, 5, R(16));
+    R(31) = 0x8001cfb8;
+    R(6) = 20;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80019928);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 32);
+    for (unsigned reg = 19; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 16 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Build the embedded draw packet, submit it and save the active DRAWENV. */
 bool nc_credits_put_draw_env(CPUState *c) {
     if (c->budget <= 11 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
