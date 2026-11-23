@@ -201,6 +201,7 @@ CREDITS_ROUTINES = {
     0x8001E0D8: "nc_credits_gpu_command_chain(c)",
     0x8001E124: "nc_credits_gpu_parameter(c)",
     0x8001E154: "nc_credits_queue_command(c)",
+    0x8001E758: "nc_credits_reset_gpu_driver(c)",
     0x8001E8B4: "nc_credits_sync_gpu_queue(c)",
     0x8001E9FC: "nc_credits_set_queue_alarm(c)",
     0x8001EA30: "nc_credits_check_queue_alarm(c)",
@@ -1648,6 +1649,8 @@ class Emitter:
                 out.append("    if (nc_project_placement_depth(c)) {")
                 out.append("        if ((s32)R(4) > (s32)R(3)) goto L_80028B0C;")
                 out.append("        goto L_80028B38; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028B0C:
+                out.append("    if (nc_apply_placement_depth_cue(c)) goto L_80028B38;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")

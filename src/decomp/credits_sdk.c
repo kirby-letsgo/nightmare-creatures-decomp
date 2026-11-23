@@ -1079,31 +1079,31 @@ bool nc_credits_set_queue_alarm(CPUState *c) {
     return true;
 }
 
-/* The alarm code addresses its globals through the same upper halfword. */
-static void load_alarm_word(CPUState *c, unsigned reg, u32 address) {
+/* The GPU driver addresses these globals through the same upper halfword. */
+static void load_gpu_global(CPUState *c, unsigned reg, u32 address) {
     set_reg(c, reg, 0x80020000);
     load_word(c, reg, address);
 }
 
-static void store_alarm_word(CPUState *c, u32 address, unsigned reg) {
+static void store_gpu_global(CPUState *c, u32 address, unsigned reg) {
     set_reg(c, 1, 0x80020000);
     MEM_W32(address, R(reg));
     NC_POLL(c, 1);
 }
 
 static void report_gpu_timeout(CPUState *c) {
-    load_alarm_word(c, 3, 0x8002462c);
+    load_gpu_global(c, 3, 0x8002462c);
     set_reg(c, 4, 0x80020000);
     set_reg(c, 4, 0x80018660);
     load_word(c, 2, R(3)); /* GPUSTAT is read twice by the original. */
-    load_alarm_word(c, 5, 0x8002465c);
-    load_alarm_word(c, 2, 0x80024630);
-    load_alarm_word(c, 8, 0x80024660);
+    load_gpu_global(c, 5, 0x8002465c);
+    load_gpu_global(c, 2, 0x80024630);
+    load_gpu_global(c, 8, 0x80024660);
     load_word(c, 2, R(2)); /* DMA2 address is the fifth printf argument */
     set_reg(c, 5, R(5) - R(8));
     MEM_W32(R(29) + 16, R(2));
     NC_POLL(c, 1);
-    load_alarm_word(c, 2, 0x80024638);
+    load_gpu_global(c, 2, 0x80024638);
     load_word(c, 6, R(3));
     load_word(c, 7, R(2));
     R(31) = 0x8001ead0;
@@ -1114,28 +1114,19 @@ static void report_gpu_timeout(CPUState *c) {
     set_reg(c, 2, 0x80020000);
     set_reg(c, 2, 0x8002464c);
     load_word(c, 5, R(2));
-    load_alarm_word(c, 6, 0x80024650);
-    load_alarm_word(c, 7, 0x80024654);
+    load_gpu_global(c, 6, 0x80024650);
+    load_gpu_global(c, 7, 0x80024654);
     set_reg(c, 4, 0x80020000);
     set_reg(c, 4, 0x80018694);
     gpu_sync_call(c, 0x80019a60, 0x8001eafc);
 }
 
-static void recover_gpu_queue(CPUState *c) {
-    R(31) = 0x8001eb04;
-    R(4) = 0;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001a814); /* SetIntrMask(0) */
-    store_alarm_word(c, 0x80024660, 0);
-    load_alarm_word(c, 3, 0x80024660);
-    store_alarm_word(c, 0x8002466c, 2);
-    store_alarm_word(c, 0x8002465c, 3);
-
-    load_alarm_word(c, 3, 0x80024638);
+static void reset_gpu_command_buffer(CPUState *c) {
+    load_gpu_global(c, 3, 0x80024638);
     set_reg(c, 2, 0x401);
     MEM_W32(R(3), R(2)); /* stop DMA2 */
     NC_POLL(c, 1);
-    load_alarm_word(c, 3, 0x80024648);
+    load_gpu_global(c, 3, 0x80024648);
     NC_POLL(c, 1);
     load_word(c, 2, R(3));
     NC_POLL(c, 1);
@@ -1144,15 +1135,120 @@ static void recover_gpu_queue(CPUState *c) {
     NC_POLL(c, 1);
     /* Acknowledge the GPU interrupt, then reset its command buffer. */
     for (unsigned command = 2; command > 0; command--) {
-        load_alarm_word(c, 3, 0x8002462c);
+        load_gpu_global(c, 3, 0x8002462c);
         set_reg(c, 2, command << 24);
         MEM_W32(R(3), R(2));
         NC_POLL(c, 1);
     }
-    load_alarm_word(c, 4, 0x8002466c);
+}
+
+static void recover_gpu_queue(CPUState *c) {
+    R(31) = 0x8001eb04;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a814); /* SetIntrMask(0) */
+    store_gpu_global(c, 0x80024660, 0);
+    load_gpu_global(c, 3, 0x80024660);
+    store_gpu_global(c, 0x8002466c, 2);
+    store_gpu_global(c, 0x8002465c, 3);
+
+    reset_gpu_command_buffer(c);
+    load_gpu_global(c, 4, 0x8002466c);
     gpu_sync_call(c, 0x8001a814, 0x8001eb80);
     R(2) = UINT32_MAX;
     NC_POLL(c, 2);
+}
+
+/* Mode zero also resets GP1 and clears both driver buffers. */
+static void reset_gpu_buffers(CPUState *c) {
+    load_gpu_global(c, 3, 0x80024638);
+    NC_POLL(c, 1);
+    MEM_W32(R(3), R(2)); /* DMA2 CHCR = 0x401 */
+    NC_POLL(c, 1);
+    load_gpu_global(c, 3, 0x80024648);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80024d30);
+    load_word(c, 2, R(3));
+    set_reg(c, 5, 0);
+    set_reg(c, 2, R(2) | 0x800);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    load_gpu_global(c, 2, 0x8002462c);
+    set_reg(c, 6, 0x100);
+    MEM_W32(R(2), 0);
+    NC_POLL(c, 1);
+    gpu_sync_call(c, 0x8001ec78, 0x8001e814);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80027488);
+    set_reg(c, 5, 0);
+    R(31) = 0x8001e828;
+    R(6) = 0x1800;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ec78);
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_reset_gpu_driver(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 20, R(31));
+    R(31) = 0x8001e770;
+    R(4) = 0;
+    c->budget -= 3;
+    nc_call(c, 0x8001a814); /* suspend interrupts while resetting the queue */
+    store_gpu_global(c, 0x80024660, 0);
+    load_gpu_global(c, 3, 0x80024660);
+    store_gpu_global(c, 0x8002466c, 2);
+    set_reg(c, 2, 1);
+    store_gpu_global(c, 0x8002465c, 3);
+    set_reg(c, 3, R(16) & 7);
+    bool command_reset = R(3) == R(2);
+    R(2) = (s32)R(3) < 2;
+    NC_POLL(c, 2);
+    if (!command_reset) {
+        bool low_mode = R(2) != 0;
+        NC_POLL(c, 2);
+        if (low_mode) {
+            bool full_reset = R(3) == 0;
+            R(2) = 0x401;
+            NC_POLL(c, 2);
+            if (full_reset)
+                reset_gpu_buffers(c);
+            else
+                NC_POLL(c, 2);
+        } else {
+            set_reg(c, 2, 3);
+            command_reset = R(3) == R(2);
+            NC_POLL(c, 2);
+            if (!command_reset)
+                NC_POLL(c, 2);
+        }
+    }
+    if (command_reset)
+        reset_gpu_command_buffer(c);
+
+    load_gpu_global(c, 4, 0x8002466c);
+    gpu_sync_call(c, 0x8001a814, 0x8001e88c);
+    set_reg(c, 2, R(16) & 7);
+    bool query_version = R(2) == 0;
+    R(2) = 0;
+    NC_POLL(c, 2);
+    if (query_version) {
+        R(31) = 0x8001e8a0;
+        R(4) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001eb9c);
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
 }
 
 bool nc_credits_check_queue_alarm(CPUState *c) {
@@ -1166,16 +1262,16 @@ bool nc_credits_check_queue_alarm(CPUState *c) {
     c->budget -= 3;
     nc_call(c, 0x8001a454); /* VSync(-1) */
 
-    load_alarm_word(c, 3, 0x80024670);
+    load_gpu_global(c, 3, 0x80024670);
     NC_POLL(c, 1);
     set_reg(c, 3, (s32)R(3) < (s32)R(2));
     bool expired = R(3) != 0;
     NC_POLL(c, 2);
     if (!expired) {
-        load_alarm_word(c, 3, 0x80024674);
+        load_gpu_global(c, 3, 0x80024674);
         NC_POLL(c, 1);
         set_reg(c, 2, R(3) + 1);
-        store_alarm_word(c, 0x80024674, 2);
+        store_gpu_global(c, 0x80024674, 2);
         set_reg(c, 2, 0xf0000);
         set_reg(c, 2, (s32)R(2) < (s32)R(3));
         expired = R(2) != 0;
