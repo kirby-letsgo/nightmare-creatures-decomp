@@ -4370,6 +4370,35 @@ static bool placement_coordinate_copies(bool disc) {
     return true;
 }
 
+static bool placement_scan_before_bounds(bool disc) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
+    for (unsigned active = 0; active <= 1; ++active) {
+        CPUState input = initial(), native;
+        input.r[16] = record;
+        input.r[20] = 0xffffffff;
+        input.r[31] = active ? 0x80029188 : 0x80029464;
+        MEM_W32(record + 0x2c, 0x80000400 | (active << 2));
+        if (!compare(input, 0x80029150, nc_recheck_placement_active, disc, &native) ||
+            native.r[2] != active << 2 || native.r[20] != input.r[20] + !active ||
+            native.budget != input.budget - (active ? 7 : 9))
+            return false;
+    }
+    for (unsigned path = 0; path < 3; ++path) {
+        CPUState input = initial(), native;
+        input.r[16] = record;
+        input.r[31] = path ? 0x800297c8 : 0x80029188;
+        MEM_W32(record, path ? descriptor : 0);
+        const u32 selector = path == 2 ? 255 : 0;
+        MEM_W8(descriptor + 0x34, selector);
+        if (!compare(input, 0x8002916c, nc_prepare_placement_selector, disc, &native) ||
+            native.r[2] != (path ? descriptor : 0) || native.r[4] != (path ? record : input.r[4]) ||
+            native.r[5] != (path ? selector : input.r[5]) || native.r[31] != 0x80029188 ||
+            native.budget != input.budget - (path ? 11 : 6))
+            return false;
+    }
+    return true;
+}
+
 static bool placement_scan_bounds(bool disc) {
     static const struct {
         u32 center;
@@ -8217,6 +8246,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
