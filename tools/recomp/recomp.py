@@ -1123,6 +1123,8 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr == 0x8001078C:
+                out.append("    if (nc_launcher_init_shared_record(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80010618:
                 out.append("    if (nc_launcher_run_modules(c)) return;")
             if self.mod.name == "credits_exe" and i.addr == 0x8001ADE4:
