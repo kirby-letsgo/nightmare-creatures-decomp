@@ -2446,10 +2446,11 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029030:
+            if self.mod.name == "psx2_exe" and i.addr in (0x8002902C, 0x80029030):
+                reload = "true" if i.addr == 0x8002902C else "false"
                 out.extend(
                     [
-                        "    switch (nc_check_alternate_placement_counter(c)) {",
+                        f"    switch (nc_check_alternate_placement_counter(c, {reload})) {{",
                         "    case 0x80029060: goto L_80029060;",
                         "    case 0x800290a4: goto L_800290A4;",
                         "    case 0x800290a8: goto L_800290A8;",
