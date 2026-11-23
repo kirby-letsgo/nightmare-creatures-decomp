@@ -3396,7 +3396,7 @@ static bool placement_vertex_dispatch(bool disc) {
     return true;
 }
 
-static bool placement_vertex_triples(bool disc) {
+static bool placement_vertex_triples(bool disc, bool sixteenth) {
     const u32 vertices = SCRATCH_BASE, output = vertices + 0x80, frame = output + 0x80;
     const s16 coords[] = {INT16_MIN, -1, 0, 4, 127, INT16_MAX};
     CPUState input = initial();
@@ -3408,7 +3408,7 @@ static bool placement_vertex_triples(bool disc) {
     input.r[10] = frame + 8;
     input.r[11] = frame + 4;
     input.r[29] = frame;
-    input.r[31] = 0x80027388;
+    input.r[31] = sixteenth ? 0x800274f0 : 0x80027388;
     for (unsigned i = 0; i < 5; ++i)
         gte_write_ctrl(&input, i, i % 2 ? 0 : 4096);
     for (unsigned i = 0; i < 6; ++i) {
@@ -3421,31 +3421,32 @@ static bool placement_vertex_triples(bool disc) {
     memcpy(before, nc_scratch, sizeof before);
     input.budget = 52;
     CPUState native = input;
-    if (nc_project_placement_vertex_triple(&native) || memcmp(&input, &native, sizeof input) ||
-        memcmp(before, nc_scratch, sizeof before))
+    if (nc_project_placement_vertex_triple(&native, sixteenth ? 4 : 2) ||
+        memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
         return false;
     native.budget = input.budget = 105;
-    if (!nc_project_placement_vertex_triple(&native) || native.r[2] != 1 || native.budget != 53 ||
-        !nc_project_placement_vertex_triple(&native) || native.r[2] != 0 || native.budget != 1 ||
-        native.r[3] != 8191 || native.r[5] != 6 || native.r[6] != output + 68 ||
-        native.r[7] != output + 48 || native.r[8] != vertices + 48)
+    if (!nc_project_placement_vertex_triple(&native, sixteenth ? 4 : 2) || native.r[2] != 1 ||
+        native.budget != 53 || !nc_project_placement_vertex_triple(&native, sixteenth ? 4 : 2) ||
+        native.r[2] != 0 || native.budget != 1 || native.r[3] != (sixteenth ? 2047u : 8191u) ||
+        native.r[5] != 6 || native.r[6] != output + 68 || native.r[7] != output + 48 ||
+        native.r[8] != vertices + 48)
         return false;
     for (unsigned i = 0; i < 6; ++i) {
         const u32 depth = coords[i] > 0 ? (u32)coords[i] : 0;
-        if (MEM_R32(output + 8 * i + 4) != (0xa5a50000u | (depth >> 2)))
+        if (MEM_R32(output + 8 * i + 4) != (0xa5a50000u | (depth >> (sixteenth ? 4 : 2))))
             return false;
     }
     if (disc) {
         memcpy(after, nc_scratch, sizeof after);
         memcpy(nc_scratch, before, sizeof before);
-        interp_call(&input, 0x80027300);
+        interp_call(&input, sixteenth ? 0x80027468 : 0x80027300);
         if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
             return false;
     }
     return true;
 }
 
-static bool remaining_placement_vertices(bool disc) {
+static bool remaining_placement_vertices(bool disc, bool sixteenth) {
     const u32 vertices = SCRATCH_BASE, output = vertices + 0x40, frame = output + 0x40;
     CPUState input = initial();
     input.r[5] = 3;
@@ -3453,7 +3454,7 @@ static bool remaining_placement_vertices(bool disc) {
     input.r[7] = output;
     input.r[8] = vertices;
     input.r[29] = frame;
-    input.r[31] = 0x800273e4;
+    input.r[31] = sixteenth ? 0x80027550 : 0x800273e4;
     for (unsigned i = 0; i < 5; ++i)
         gte_write_ctrl(&input, i, i % 2 ? 0 : 4096);
     MEM_W32(vertices, 0x7fff8000);
@@ -3464,22 +3465,24 @@ static bool remaining_placement_vertices(bool disc) {
     MEM_W32(output + 12, 0xa5a55a5a);
     u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
     memcpy(before, nc_scratch, sizeof before);
-    input.budget = 24;
+    const int cycles = sixteenth ? 25 : 24;
+    input.budget = cycles;
     CPUState native = input;
-    if (nc_project_remaining_placement_vertex(&native) || memcmp(&input, &native, sizeof input) ||
-        memcmp(before, nc_scratch, sizeof before))
+    if (nc_project_remaining_placement_vertex(&native, sixteenth) ||
+        memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
         return false;
-    input.budget = native.budget = 49;
-    if (!nc_project_remaining_placement_vertex(&native) || native.r[2] != 1 ||
-        native.budget != 25 || MEM_R32(output + 4) != 0xa5a50000 ||
-        !nc_project_remaining_placement_vertex(&native) || native.r[2] || native.budget != 1 ||
-        native.r[8] != vertices + 16 || native.r[7] != output + 16 || native.r[5] != 5 ||
-        native.r[12] != 8191 || MEM_R32(frame) != 8191 || MEM_R32(output + 12) != 0xa5a51fff)
+    input.budget = native.budget = 2 * cycles + 1;
+    if (!nc_project_remaining_placement_vertex(&native, sixteenth) || native.r[2] != 1 ||
+        native.budget != cycles + 1 || MEM_R32(output + 4) != 0xa5a50000 ||
+        !nc_project_remaining_placement_vertex(&native, sixteenth) || native.r[2] ||
+        native.budget != 1 || native.r[8] != vertices + 16 || native.r[7] != output + 16 ||
+        native.r[5] != 5 || native.r[12] != 8191 || MEM_R32(frame) != 8191 ||
+        MEM_R32(output + 12) != (sixteenth ? 0xa5a507ffu : 0xa5a51fffu))
         return false;
     if (disc) {
         memcpy(after, nc_scratch, sizeof after);
         memcpy(nc_scratch, before, sizeof before);
-        interp_call(&input, 0x8002739c);
+        interp_call(&input, sixteenth ? 0x80027504 : 0x8002739c);
         if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
             return false;
     }
@@ -5907,7 +5910,8 @@ int main(int argc, char **argv) {
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
         placement_depths(disc) && placement_depth_cues(disc) && placement_pose_stack(disc) &&
         placement_pose_exits(disc) && placement_vertex_dispatch(disc) &&
-        placement_vertex_triples(disc) && remaining_placement_vertices(disc) &&
+        placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
+        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
         placement_vertex_matrices(disc) && placement_transform_flags(disc) &&
         placement_projection_args(disc) && placement_angle_entries(disc) &&
         type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
