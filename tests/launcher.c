@@ -1,3 +1,5 @@
+#include "cd_sector_dma.h"
+#include "decomp/cd_sector_dma.h"
 #include "cd_read.h"
 #include "cd_read_sync.h"
 #include "vsync.h"
@@ -89,6 +91,10 @@ static bool check_cd_read(void) {
         .timer_slots = 0x80015b34, .frame = 0x80015760, .callbacks = 0x80015818,
     };
     return compare_cd_read(&layout, nc_launcher_cd_read);
+}
+
+static bool launcher_cd_sector_dma(CPUState *c) {
+    return cd_sector_dma(c, 0x80015adc);
 }
 
 static bool check_cd_read_sync(void) {
@@ -1037,6 +1043,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!compare_cd_sector_transfer(0x80013be8, launcher_cd_sector_dma, true)) {
+        fprintf(stderr, "launcher CD sector DMA failed\n");
         return 1;
     }
     if (!check_sdk_putchar(0x800118d8, launcher_putchar, 0x80015b7c)) {

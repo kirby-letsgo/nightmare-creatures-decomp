@@ -1295,6 +1295,8 @@ class Emitter:
                 out.append("    if (sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011160:
                 out.append("    if (sdk_printf(c, 0x8001119c, 0x8001118c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013BE8:
+                out.append("    if (cd_sector_dma(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800135E4:
                 out.append("    if (cd_volume(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x8001366C:
@@ -3964,6 +3966,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/byte_scan.h"')
         header.append('#include "decomp/cd_flush.h"')
+        header.append('#include "decomp/cd_sector_dma.h"')
         header.append('#include "decomp/cd_state.h"')
         header.append('#include "decomp/cd_volume.h"')
         header.append('#include "decomp/cd_position.h"')

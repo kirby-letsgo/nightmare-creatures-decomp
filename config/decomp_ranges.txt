@@ -414,6 +414,7 @@ slus_005_82  800135E4    8001366C         cd_volume.h
 slus_005_82  8001366C    8001374C         cd_flush.h
 slus_005_82  8001374C    80013840         cd_volume.h
 slus_005_82  80013840    80013890         cd_state.h
+slus_005_82  80013BE8    80013CE8         cd_sector_dma.h
 slus_005_82  80013CE8    80013CF8         cd_state.h
 slus_005_82  80013DD8    80013E28         sdk_puts.h
 slus_005_82  80013E28    80013F70         vsync.h
