@@ -1019,6 +1019,7 @@ class Emitter:
                     0x80044AC0,
                     0x80044AEC,
                     0x80044B08,
+                    0x80044B88,
                     0x80044C60,
                     0x80044CBC,
                     0x80044D48,
@@ -1239,6 +1240,17 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044B6C:
+                out.extend(
+                    [
+                        "    switch (nc_prepare_player_queued_action(c)) {",
+                        "    case 0x80044B88: goto L_80044B88;",
+                        "    case 0x80044B98: goto L_80044B98;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044B90:
+                out.append("    if (nc_clear_player_queued_action(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044B98:
                 out.extend(
                     [

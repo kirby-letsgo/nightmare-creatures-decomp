@@ -311,6 +311,34 @@ u32 nc_player_queue_face_action(CPUState *c) {
     return 0x800448f4;
 }
 
+/* With a queued action, discard the current button word and prepare the
+ * arguments for the original action call. Its delay slot commits the flags. */
+u32 nc_prepare_player_queued_action(CPUState *c) {
+    if (c->budget <= 11)
+        return 0x80044b6c;
+
+    R(2) = MEM_R8(R(16) + 0x3a3);
+    R(4) = R(16);
+    c->budget -= 6;
+    if (!R(2))
+        return 0x80044b98;
+
+    R(17) = 0;
+    R(5) = MEM_R8(R(16) + 0x3a3);
+    R(2) = R(3) | 0x8000;
+    c->budget -= 5;
+    return 0x80044b88;
+}
+
+bool nc_clear_player_queued_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+
+    MEM_W8(R(16) + 0x3a3, 0);
+    c->budget -= 2;
+    return true;
+}
+
 /* Left takes priority when both directions are down. Circle enables the
  * side-specific stick comparison that selects direction 4 or 8. */
 u32 nc_player_horizontal_direction(CPUState *c) {
