@@ -5620,8 +5620,8 @@ bool nc_credits_cd_get_toc(CPUState *c) {
     return true;
 }
 
-/* Each CdInit callback setter and the error diagnostic take one pointer. */
-static void cd_init_call(CPUState *c, u32 argument, u32 target, u32 resume) {
+/* Materialize a pointer argument before calling an SDK routine. */
+static void cd_call_with_pointer(CPUState *c, u32 argument, u32 target, u32 resume) {
     set_reg(c, 4, 0x80020000);
     set_reg(c, 4, argument);
     R(31) = resume;
@@ -5650,9 +5650,9 @@ bool nc_credits_cd_init(CPUState *c) {
         R(16)--;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (ready) {
-            cd_init_call(c, 0x8001fd78, 0x8001ff7c, 0x8001fd1c); /* sync */
-            cd_init_call(c, 0x8001fda0, 0x8001ff94, 0x8001fd2c); /* ready */
-            cd_init_call(c, 0x8001fdc8, 0x80022cb4, 0x8001fd3c); /* read */
+            cd_call_with_pointer(c, 0x8001fd78, 0x8001ff7c, 0x8001fd1c); /* sync */
+            cd_call_with_pointer(c, 0x8001fda0, 0x8001ff94, 0x8001fd2c); /* ready */
+            cd_call_with_pointer(c, 0x8001fdc8, 0x80022cb4, 0x8001fd3c); /* read */
             R(2) = 1;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             break;
@@ -5661,7 +5661,7 @@ bool nc_credits_cd_init(CPUState *c) {
         const bool exhausted = R(16) == R(2);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (exhausted) {
-            cd_init_call(c, 0x80018734, 0x80019a60, 0x8001fd60); /* printf */
+            cd_call_with_pointer(c, 0x80018734, 0x80019a60, 0x8001fd60); /* printf */
             set_reg(c, 2, 0);
             break;
         }
@@ -6103,6 +6103,185 @@ bool nc_credits_cd_interrupt_callback(CPUState *c) {
     load_word(c, 16, R(29) + 16);
     set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
+static void cd_read_call(CPUState *c, u32 target, u32 resume) {
+    R(31) = resume;
+    NC_POLL(c, 2);
+    nc_call(c, target);
+}
+
+static void handle_open_cd_lid(CPUState *c) {
+    R(31) = 0x80022948;
+    R(4) = UINT32_MAX;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a454);
+    set_reg(c, 2, R(2) & 63);
+    bool report = R(2) == 0;
+    R(4) = 1;
+    NC_POLL(c, 2);
+    if (report) {
+        cd_call_with_pointer(c, 0x80018ba8, 0x8001a638, 0x80022964);
+        set_reg(c, 4, 1);
+    }
+    R(31) = 0x80022970;
+    R(5) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x800200e4); /* CdlNop */
+    R(31) = 0x80022978;
+    R(4) = UINT32_MAX;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a454);
+    set_reg(c, 3, 0x80020000);
+    set_reg(c, 3, 0x80024a90);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    set_reg(c, 2, UINT32_MAX);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x80024a88, R(2));
+    NC_POLL(c, 1);
+    NC_POLL(c, 2);
+}
+
+static void retry_cd_control(CPUState *c, u32 resume) {
+    R(31) = resume;
+    R(6) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ffac);
+}
+
+static bool restore_cd_read_position(CPUState *c) {
+    cd_call_with_pointer(c, 0x80018bc0, 0x8001a638, 0x800229b0);
+    set_reg(c, 4, 9); /* CdlPause */
+    set_reg(c, 5, 0);
+    retry_cd_control(c, 0x800229c0);
+    cd_read_call(c, 0x8001fe20, 0x800229c8); /* CdLastPos */
+    set_reg(c, 4, 2); /* CdlSetloc */
+    set_reg(c, 5, R(2));
+    retry_cd_control(c, 0x800229d8);
+    bool success = R(2) != 0;
+    R(3) = UINT32_MAX;
+    NC_POLL(c, 2);
+    if (!success) {
+        set_reg(c, 2, 0x80020000);
+        set_reg(c, 2, 0x80024a88);
+        MEM_W32(R(2), R(3));
+        NC_POLL(c, 1);
+        load_word(c, 2, R(2));
+        NC_POLL(c, 2);
+    }
+    return success;
+}
+
+static void start_cd_read_attempt(CPUState *c) {
+    cd_read_call(c, 0x8001fe9c, 0x80022a00); /* CdFlush */
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x80024a80);
+    load_word(c, 16, R(2));
+    NC_POLL(c, 1);
+    MEM_W8(R(29) + 16, (u8)R(16));
+    NC_POLL(c, 1);
+    R(31) = 0x80022a1c;
+    R(16) &= 0xff;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001fe00);
+    bool set_mode = R(16) != R(2);
+    R(4) = 14;
+    NC_POLL(c, 2);
+    if (!set_mode) {
+        set_mode = R(17) != 0;
+        NC_POLL(c, 2);
+    }
+    if (set_mode) {
+        set_reg(c, 5, R(29) + 16);
+        retry_cd_control(c, 0x80022a38);
+        bool success = R(2) != 0;
+        R(2) = UINT32_MAX;
+        NC_POLL(c, 2);
+        if (!success) {
+            set_reg(c, 1, 0x80020000);
+            MEM_W32(0x80024a88, R(2));
+            NC_POLL(c, 1);
+            NC_POLL(c, 2);
+            return;
+        }
+    }
+    cd_read_call(c, 0x8001fe20, 0x80022a58);
+    R(31) = 0x80022a60;
+    R(4) = R(2);
+    NC_POLL(c, 2);
+    nc_call(c, 0x800204e4); /* CdPosToInt */
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x800226e4); /* cb_read */
+    set_reg(c, 3, 0x80020000);
+    set_reg(c, 3, 0x80024a94);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    cd_read_call(c, 0x8001ff94, 0x80022a7c);
+    set_reg(c, 4, 6); /* CdlReadN */
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024a78);
+    set_reg(c, 5, 0);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x80024a7c, R(2));
+    NC_POLL(c, 1);
+    cd_read_call(c, 0x800200e4, 0x80022a9c);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024a74);
+    set_reg(c, 4, UINT32_MAX);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x80024a88, R(2));
+    NC_POLL(c, 1);
+    cd_read_call(c, 0x8001a454, 0x80022ab8);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x80024a8c, R(2));
+    NC_POLL(c, 1);
+}
+
+bool nc_credits_cd_read_retry(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 28, R(17));
+    R(17) = R(4);
+    R(4) = 0;
+    c->budget -= 3;
+    MEM_W32(R(29) + 32, R(31));
+    c->budget--;
+    R(31) = 0x80022924;
+    MEM_W32(R(29) + 24, R(16));
+    c->budget -= 2;
+    nc_call(c, 0x8001ff7c); /* detach sync and ready callbacks */
+    R(31) = 0x8002292c;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ff94);
+    cd_read_call(c, 0x8001fdf0, 0x80022934);
+    set_reg(c, 2, R(2) & 0x10);
+    bool lid_open = R(2) != 0;
+    NC_POLL(c, 2);
+    bool load_result = true;
+    if (lid_open) {
+        handle_open_cd_lid(c);
+    } else {
+        bool retry = R(17) != 0;
+        NC_POLL(c, 2);
+        if (retry)
+            load_result = restore_cd_read_position(c);
+        if (load_result)
+            start_cd_read_attempt(c);
+    }
+    if (load_result) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024a88);
+    }
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
     return true;
 }
 
