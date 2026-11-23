@@ -1639,6 +1639,10 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
+                out.append("    if (nc_check_placement_transform(c)) {")
+                out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")
+                out.append("        goto L_80029460; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293E4:
                 out.append("    if (nc_select_placement_projection_args(c)) goto L_80029418;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293D4:

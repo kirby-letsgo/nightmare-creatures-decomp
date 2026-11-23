@@ -3366,6 +3366,34 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* After projecting a placement, the loop tests two flags before passing
+ * the record to the additional transform at 0x8002A674. */
+bool nc_check_placement_transform(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 record = R(16);
+    u32 transform = 0;
+    int cycles = 7;
+    if (MEM_R32(record + 0x2c) & 0x40) {
+        if (c->budget <= 22)
+            return false;
+        const u32 owner = MEM_R32(record);
+        const u32 descriptor = MEM_R32(owner + 0x14);
+        transform = MEM_R32(descriptor + 0x10) & 0x10000;
+        cycles = transform ? 24 : 22;
+        if (c->budget <= cycles)
+            return false;
+    }
+    R(2) = transform;
+    R(3) = 0x10000;
+    if (transform) {
+        R(4) = record;
+        R(31) = 0x80029460;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Select the pose and parameter block passed to the projection at 0x80028A70. */
 bool nc_select_placement_projection_args(CPUState *c) {
     if (c->budget <= 14)
