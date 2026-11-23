@@ -5471,6 +5471,27 @@ bool nc_finish_placement_tick_call(CPUState *c) {
     return true;
 }
 
+/* Some selector exits subtract 40 in their jump delay slot and enter
+ * at the unsigned range check with that result already in v0. */
+u32 nc_route_placement_selector_exit(CPUState *c, bool subtract_selector) {
+    const u32 offset = subtract_selector ? R(19) - 40 : R(2);
+    const bool call = offset < 6;
+    const int cycles = (call ? 12 : 3) + (subtract_selector ? 1 : 0);
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    R(2) = R(19) << 1;
+    if (!call)
+        return 0x8002a58c;
+    R(1) = 0x800d0000 + R(2);
+    R(4) = (u32)(s32)(s16)MEM_R16(R(1) + 0x7c84);
+    R(5) = 0x2fff;
+    R(6) = 1;
+    R(31) = 0x8002a58c;
+    R(7) = R(16);
+    return 0x8006c2e4;
+}
+
 bool nc_advance_placement_x_index(CPUState *c) {
     /* Reserve both paths before reading the index. */
     if (c->budget <= 8)

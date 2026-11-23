@@ -4789,6 +4789,46 @@ static bool placement_tick_routes(bool disc) {
            native.r[2] == (u32)-39 && native.budget == input.budget - 2;
 }
 
+static bool placement_selector_exits(bool disc) {
+    const struct {
+        u32 selector, offset;
+        bool subtract, call;
+    } cases[] = {
+        {39, 0, true, false}, {40, 6, true, true}, {45, 6, true, true},
+        {46, 0, true, false}, {45, 0, false, true}, {40, 5, false, true},
+        {40, 6, false, false}, {45, UINT32_MAX, false, false},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        const bool call = cases[i].call;
+        CPUState input = initial();
+        input.r[2] = cases[i].offset;
+        input.r[19] = cases[i].selector;
+        input.r[31] = call ? 0x8006c2e4 : 0x8002a58c;
+        input.budget = (call ? 12 : 3) + cases[i].subtract;
+        const u32 address = 0x800d7c84 + input.r[19] * 2;
+        const u16 saved = MEM_R16(address);
+        MEM_W16(address, 0xff80);
+        CPUState native = input;
+        if (nc_route_placement_selector_exit(&native, cases[i].subtract) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_route_placement_selector_exit(&native, cases[i].subtract) != input.r[31] ||
+            native.r[2] != input.r[19] * 2 || native.budget != 1 ||
+            (call && (native.r[4] != (u32)-128 || native.r[5] != 0x2fff ||
+                      native.r[6] != 1 || native.r[7] != input.r[16] ||
+                      native.r[31] != 0x8002a58c)))
+            return false;
+        if (disc) {
+            interp_call(&input, cases[i].subtract ? 0x8002a560 : 0x8002a564);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+        MEM_W16(address, saved);
+    }
+    return true;
+}
+
 static bool placement_x_indices(bool disc) {
     const u16 indices[] = {0, 3, 4, 5, 6, UINT16_MAX};
     for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
@@ -8997,7 +9037,7 @@ int main(int argc, char **argv) {
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
-        placement_tick_routes(disc) && placement_x_indices(disc) &&
+        placement_tick_routes(disc) && placement_selector_exits(disc) && placement_x_indices(disc) &&
         placement_halfword_entries(disc) &&
         placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
