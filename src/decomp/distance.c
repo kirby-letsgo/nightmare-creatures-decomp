@@ -3328,6 +3328,39 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+bool nc_set_type7_pose_angles(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u16 type = MEM_R16(R(4) + 0x5a);
+    const int cycles = type == 7 ? 19 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = type;
+    R(2) = (u32)-0x4000;
+    if (type == 7) {
+        const u32 pose = R(8);
+        MEM_W32(pose + 0x40, R(2));
+        MEM_W32(pose + 0x44, R(2));
+        R(2) = (s16)MEM_R16(R(5) + 4);
+        MEM_W32(pose + 0x48, R(2));
+        R(8) = MEM_R32(pose + 4);
+        R(4) = 0x8000;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_set_type7_linked_heading(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    const s16 global_angle = (s16)MEM_R16(0x800d763a);
+    R(3) = (s16)MEM_R16(R(5) + 4) + R(4);
+    R(2) = global_angle * 16 + R(3);
+    MEM_W32(R(8) + 0x40, R(2));
+    c->budget -= 12;
+    return true;
+}
+
 bool nc_begin_record_point_heading(CPUState *c) {
     if (c->budget <= 12)
         return false;
