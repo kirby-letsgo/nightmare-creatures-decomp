@@ -15,6 +15,7 @@ static inline void load_word(CPUState *c, unsigned reg, u32 addr) {
 typedef struct {
     u32 state, ports;
     u32 start, stop, restart;
+    u32 set_handler, clear_pad, clear_rcnt;
     u32 clear, save_context, trap, start_vsync, start_dma, remove;
     u32 enter_critical, exit_critical;
     u32 reset_hook, install_hook;
@@ -113,6 +114,136 @@ static inline bool start_driver_interrupts(CPUState *c, const InterruptControlLa
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, layout->save_context); /* setjmp */
     return resume_interrupt_start(c, layout);
+}
+
+/* VBlank and the three root counters have BIOS auto-acknowledge settings. */
+static inline void update_interrupt_clear_mode(CPUState *c, const InterruptControlLayout *layout) {
+    bool vblank = R(17) == 0;
+    R(2) = 4;
+    NC_POLL(c, 2);
+    if (vblank) {
+        set_reg(c, 16, R(18) == 0);
+        R(31) = layout->set_handler + 0xcc;
+        R(4) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, layout->clear_pad); /* ChangeClearPad */
+        set_reg(c, 4, 3);
+        R(31) = layout->set_handler + 0xd8;
+        R(5) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, layout->clear_rcnt); /* ChangeClearRCnt */
+        set_reg(c, 2, 4);
+    }
+    for (unsigned counter = 0; counter < 3; counter++) {
+        bool matches = R(17) == R(2);
+        if (counter == 2)
+            R(4) = 2;
+        else
+            R(2) = 5 + counter;
+        NC_POLL(c, 2);
+        if (matches) {
+            if (counter != 2)
+                set_reg(c, 4, counter);
+            const u32 resume_offsets[] = {0xf0, 0x108, 0x11c};
+            R(31) = layout->set_handler + resume_offsets[counter];
+            R(5) = R(18) == 0;
+            NC_POLL(c, 2);
+            nc_call(c, layout->clear_rcnt);
+            if (counter != 2)
+                set_reg(c, 2, 5 + counter);
+        }
+    }
+}
+
+static inline void replace_interrupt_handler(CPUState *c, const InterruptControlLayout *layout) {
+    set_reg(c, 2, (layout->ports + 4 + 0x8000u) & 0xffff0000u);
+    load_word(c, 2, layout->ports + 4); /* I_MASK */
+    NC_POLL(c, 1);
+    R(3) = MEM_R16(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    MEM_W16(R(2), 0);
+    NC_POLL(c, 1);
+    bool install = R(18) != 0;
+    R(19) = R(3) & 0xffff;
+    NC_POLL(c, 2);
+    if (install) {
+        set_reg(c, 3, 1);
+        set_reg(c, 3, R(3) << (R(17) & 31));
+        MEM_W32(R(4), R(18));
+        NC_POLL(c, 1);
+        R(2) = MEM_R16(R(5) + 44);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 19, R(19) | R(3));
+        set_reg(c, 2, R(2) | R(3));
+        MEM_W16(R(5) + 44, (u16)R(2));
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 2, 1);
+        set_reg(c, 2, R(2) << (R(17) & 31));
+        set_reg(c, 2, ~R(2));
+        MEM_W32(R(4), 0);
+        NC_POLL(c, 1);
+        set_reg(c, 3, (layout->state + 0x30 + 0x8000u) & 0xffff0000u);
+        R(3) = MEM_R16(layout->state + 0x30);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 19, R(19) & R(2));
+        set_reg(c, 3, R(3) & R(2));
+        set_reg(c, 1, (layout->state + 0x30 + 0x8000u) & 0xffff0000u);
+        MEM_W16(layout->state + 0x30, (u16)R(3));
+        NC_POLL(c, 1);
+    }
+    update_interrupt_clear_mode(c, layout);
+    set_reg(c, 2, (layout->ports + 4 + 0x8000u) & 0xffff0000u);
+    load_word(c, 2, layout->ports + 4);
+    NC_POLL(c, 1);
+    MEM_W16(R(2), (u16)R(19));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(20));
+}
+
+/* Return the previous handler, leaving an inactive driver untouched. */
+static inline bool set_interrupt_handler(CPUState *c, const InterruptControlLayout *layout) {
+    if (c->budget <= 16 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(5);
+    R(5) = layout->state + 4;
+    R(2) = R(17) << 2;
+    R(4) = R(2) + R(5);
+    c->budget -= 6;
+    MEM_W32(R(29) + 36, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 32, R(20));
+    c->budget--;
+    MEM_W32(R(29) + 28, R(19));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    R(20) = MEM_R32(R(4));
+    bool changed = R(18) != R(20);
+    R(2) = R(20);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (changed) {
+        R(2) = MEM_R16(R(5) - 4);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        bool active = R(2) != 0;
+        R(2) = R(20);
+        NC_POLL(c, 2);
+        if (active)
+            replace_interrupt_handler(c, layout);
+    }
+    load_word(c, 31, R(29) + 36);
+    for (unsigned reg = 20; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 16 + (reg - 16) * 4);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
 }
 
 /* Save the IRQ mask and DMA priorities before disabling the interrupt driver. */
