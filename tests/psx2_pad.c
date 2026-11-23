@@ -2079,6 +2079,10 @@ static bool menu_up_destination(CPUState *cpu) {
     return nc_menu_up_repeat(cpu) == cpu->r[31];
 }
 
+static bool menu_up_from_buttons_destination(CPUState *cpu) {
+    return nc_menu_up_from_buttons(cpu) == cpu->r[31];
+}
+
 static bool menu_up_inputs(void) {
     CPUState cpu = initial();
     cpu.budget = 23;
@@ -2098,6 +2102,12 @@ static bool menu_up_inputs(void) {
                 bool suppress = held && (s32)(counts[j] + 1u) < 11;
                 cpu.r[31] = !cpu.r[2] ? 0x800684d0 : suppress ? 0x800687cc : 0x800685fc;
                 if (!compare(cpu, 0x8006848c, menu_up_destination, 23))
+                    return false;
+                MEM_W32(gp + 0x194, counts[j]);
+                CPUState from_buttons = cpu;
+                from_buttons.r[2] ^= 0x10;
+                from_buttons.budget = 25;
+                if (!compare(from_buttons, 0x80068488, menu_up_from_buttons_destination, 24))
                     return false;
             }
         }
