@@ -118,6 +118,28 @@ static bool player_button_suppression(void) {
     return true;
 }
 
+static bool player_button_presses(void) {
+    const u32 actor = 0x80160000;
+    const struct {
+        u32 buttons, mask, previous;
+    } cases[] = {
+        {0xffffffff, 0, 0x55555555}, {0x80, 0x100, 0},   {0x100, 0x100, 0x100},
+        {0x100, 0x100, 0x80},        {0x10, 0x30, 0x20}, {0x10, 0x30, 0x80},
+        {0xffffffff, 0x80000000, 1},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[4] = actor;
+        cpu.r[5] = cases[i].buttons;
+        cpu.r[6] = cases[i].mask;
+        cpu.budget = 15;
+        MEM_W32(actor + 0x2f8, cases[i].previous);
+        if (!compare(cpu, 0x800445ac, nc_record_player_button_press, 14))
+            return false;
+    }
+    return true;
+}
+
 static bool player_button_clear(void) {
     const u32 buttons[] = {0, 1, 0xffff0000, 0xffffffff};
     for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
@@ -2962,10 +2984,10 @@ int main(int argc, char **argv) {
         menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && player_button_suppression() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        l2_direction_edges() && player_button_suppression() && player_button_presses() &&
+        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
+        sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
