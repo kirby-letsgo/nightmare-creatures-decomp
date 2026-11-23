@@ -1658,6 +1658,8 @@ class Emitter:
                 out.append("    if (nc_check_record_projection_limit(c)) {")
                 out.append("        if (R(2)) goto L_80029460;")
                 out.append("        goto L_800292D4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029498:
+                out.append("    if (nc_begin_placement_angle_update(c)) goto L_800294F0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800294F0:
                 out.append("    if (nc_set_type7_pose_angles(c)) {")
                 out.append("        if (R(3) != 7) goto L_80029544;")

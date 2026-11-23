@@ -3366,6 +3366,31 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* The caller passes a direction flag and a packed word. The upper turn
+ * uses exact equality; the lower turn uses a signed comparison. */
+bool nc_begin_placement_angle_update(CPUState *c) {
+    if (c->budget <= 13)
+        return false;
+    const u32 pose = MEM_R32(R(4) + 4);
+    const u32 value = MEM_R32(R(6));
+    const bool rising = R(7) != 0;
+    const bool reverse = rising ? value == 0x808080 : (s32)value < 0x202020;
+    const int cycles = rising ? (reverse ? 13 : 15) : (reverse ? 15 : 16);
+    if (c->budget <= cycles)
+        return false;
+    R(8) = pose;
+    R(3) = value;
+    if (reverse) {
+        R(2) = rising ? 0x00040000 : 0xfffb0000;
+        R(7) = !rising;
+    } else {
+        R(2) = rising ? value + 0x40404 : value - 0x40404;
+        MEM_W32(R(6), R(2));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_set_type7_pose_angles(CPUState *c) {
     if (c->budget <= 6)
         return false;
