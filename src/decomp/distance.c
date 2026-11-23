@@ -4225,6 +4225,23 @@ bool nc_select_projection_packet_mode(CPUState *c) {
     return true;
 }
 
+/* The triangle call inherits a0 from mode selection. The quad call reloads
+ * the descriptor after the triangle routine has used the argument registers. */
+bool nc_call_projection_textured_faces(CPUState *c, bool quad) {
+    const int cycles = quad ? 8 : 7;
+    if (c->budget <= cycles)
+        return false;
+    if (quad)
+        R(4) = R(19);
+    R(5) = R(23);
+    R(7) = MEM_R32(R(29) + 0x2e8);
+    R(6) = R(30);
+    R(31) = quad ? 0x80028298 : 0x80028280;
+    MEM_W32(R(29) + 0x10, R(16));
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_return_projection_traversal(CPUState *c) {
     if (c->budget <= 33)
         return false;

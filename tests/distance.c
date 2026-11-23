@@ -4275,6 +4275,36 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_textured_face_calls(bool disc) {
+    for (unsigned quad = 0; quad <= 1; ++quad) {
+        CPUState input = initial();
+        input.r[29] = SCRATCH_BASE;
+        input.r[31] = quad ? 0x80027954 : 0x8002755c;
+        input.budget = quad ? 8 : 7;
+        MEM_W32(SCRATCH_BASE + 0x2e8, 0x81234568);
+        MEM_W32(SCRATCH_BASE + 0x10, ~input.r[16]);
+        CPUState native = input;
+        if (nc_call_projection_textured_faces(&native, quad) ||
+            memcmp(&input, &native, sizeof input) || MEM_R32(SCRATCH_BASE + 0x10) != ~input.r[16])
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_projection_textured_faces(&native, quad) || native.budget != 1 ||
+            native.r[4] != input.r[quad ? 19 : 4] || native.r[5] != input.r[23] ||
+            native.r[6] != input.r[30] || native.r[7] != 0x81234568 ||
+            native.r[31] != (quad ? 0x80028298u : 0x80028280u) ||
+            MEM_R32(SCRATCH_BASE + 0x10) != input.r[16])
+            return false;
+        if (disc) {
+            MEM_W32(SCRATCH_BASE + 0x10, ~input.r[16]);
+            interp_call(&input, quad ? 0x80028280 : 0x8002826c);
+            if (memcmp(&input, &native, sizeof input) ||
+                MEM_R32(SCRATCH_BASE + 0x10) != input.r[16])
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool projection_packet_modes(bool disc) {
     const u32 actor = SCRATCH_BASE;
     for (unsigned bits = 0; bits < 32; ++bits) {
@@ -7603,6 +7633,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_textured_face_calls(disc) &&
         projection_packet_modes(disc) &&
         projection_traversal_return(disc) &&
         placement_depths(disc, 0x80027f0c, 8, 5, 5) &&
