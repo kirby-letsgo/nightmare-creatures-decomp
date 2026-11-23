@@ -1151,6 +1151,11 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80010BA4:
+                out.append("    if (interrupt_callback_status(c, 0x80014622)) return;")
+            if self.mod.name == LAUNCHER and i.addr in (0x80010BB4, 0x80010BCC):
+                write = "true" if i.addr == 0x80010BCC else "false"
+                out.append(f"    if (interrupt_mask(c, 0x800156b0, {write})) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_IRQ_WRAPPERS:
                 single = i.addr == 0x80010AE0
                 resume = i.addr + (36 if single else 32)
