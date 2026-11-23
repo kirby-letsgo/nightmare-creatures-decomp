@@ -374,6 +374,7 @@ slus_005_82  80011F94    80011FA4         cd_state.h
 slus_005_82  80011FA4    80011FB4         cd_state.h
 slus_005_82  80011FB4    80011FC4         cd_state.h
 slus_005_82  80011FC4    80011FD4         cd_state.h
+slus_005_82  80011FD4    80012040         cd_state.h
 slus_005_82  80012040    80012060         cd_state.h
 slus_005_82  80012060    80012078         cd_state.h
 slus_005_82  80012078    800120AC         cd_state.h
