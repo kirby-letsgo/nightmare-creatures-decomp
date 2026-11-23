@@ -254,6 +254,10 @@ bool nc_launcher_restart_interrupts(CPUState *c) {
     return restart_driver_interrupts(c, &interrupt_control);
 }
 
+bool nc_launcher_dispatch_vblank(CPUState *c) {
+    return dispatch_vblank(c, 0x80015740, 0x80011b54);
+}
+
 bool nc_launcher_clear_irq_words(CPUState *c) {
     return clear_interrupt_words(c);
 }

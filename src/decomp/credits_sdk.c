@@ -7450,52 +7450,8 @@ bool nc_credits_start_vsync(CPUState *c) {
     return true;
 }
 
-/* Count this VBlank and visit the live table so callbacks can change later slots. */
 bool nc_credits_dispatch_vblank(CPUState *c) {
-    if (c->budget <= 18)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x800244d4);
-    R(29) -= 32;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(29) + 20, R(17));
-    R(17) = 0;
-    c->budget -= 2;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = 0x800244b4;
-    c->budget -= 3;
-    MEM_W32(R(29) + 24, R(31));
-    R(2)++;
-    R(1) = 0x80020000;
-    c->budget -= 3;
-    MEM_W32(0x800244d4, R(2));
-    c->budget -= 2;
-    load_word(c, 2, 0x800244d4);
-
-    bool more;
-    do {
-        load_word(c, 2, R(16));
-        NC_POLL(c, 1);
-        bool occupied = R(2) != 0;
-        R(16) += 4;
-        NC_POLL(c, 2);
-        if (occupied) {
-            u32 callback = R(2);
-            R(31) = 0x8001af30;
-            NC_POLL(c, 2);
-            nc_call(c, callback);
-        }
-        set_reg(c, 17, R(17) + 1);
-        set_reg(c, 2, (s32)R(17) < 8);
-        more = R(2) != 0;
-        NC_POLL(c, 2);
-    } while (more);
-    load_word(c, 31, R(29) + 24);
-    load_word(c, 17, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 32);
-    NC_POLL(c, 2);
-    return true;
+    return dispatch_vblank(c, 0x800244b4, 0x8001af30);
 }
 
 bool nc_credits_set_vsync_slot(CPUState *c) {
