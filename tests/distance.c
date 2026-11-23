@@ -2868,6 +2868,38 @@ static bool record_pose_coordinates(bool disc) {
     return true;
 }
 
+static bool placement_point_flags(bool disc) {
+    const u32 record = SCRATCH_BASE, table = 0x80120000;
+    const u32 saved_table = MEM_R32(0x8008f0c8);
+    static const struct {
+        u16 count, index;
+        u32 flags;
+    } cases[] = {{0, 0, 0}, {1, 0, 0x10}, {1, 1, 0x20}, {1, 0x8000, 0x11}, {1, 0xffff, 0xfffffff0}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial(), native;
+        input.r[2] = 0; /* The projection limit check passed. */
+        input.r[6] = cases[i].count;
+        input.r[16] = record;
+        const u32 flag = cases[i].flags & 0x10;
+        input.r[31] = !cases[i].count || flag ? 0x80029310 : 0x80029460;
+        /* Keep the selected entry in RAM even for high unsigned indices. */
+        const u32 base = table - 36u * cases[i].index;
+        const u32 entry = base + 36u * cases[i].index;
+        const u32 saved_flags = MEM_R32(entry);
+        MEM_W32(entry, cases[i].flags);
+        MEM_W32(0x8008f0c8, base);
+        MEM_W16(record + 0x3a, cases[i].index);
+        if (!compare(input, 0x800292d4, nc_check_placement_point, disc, &native) ||
+            native.r[2] != (cases[i].count ? flag : input.r[2]) ||
+            native.r[3] != (cases[i].count ? base : input.r[3]) ||
+            native.budget != input.budget - (cases[i].count ? 21 : 2))
+            return false;
+        MEM_W32(entry, saved_flags);
+    }
+    MEM_W32(0x8008f0c8, saved_table);
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5193,9 +5225,10 @@ int main(int argc, char **argv) {
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
-        record_point_projections(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        record_point_projections(disc) && placement_point_flags(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

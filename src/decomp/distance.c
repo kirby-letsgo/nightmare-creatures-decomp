@@ -3192,6 +3192,21 @@ bool nc_check_record_projection_limit(CPUState *c) {
     return true;
 }
 
+/* A zero point count bypasses the table and leaves v0 and v1 intact.
+ * Otherwise, the first unsigned index selects a 36-byte point record. */
+bool nc_check_placement_point(CPUState *c) {
+    const int cycles = R(6) ? 21 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (R(6)) {
+        const u16 index = MEM_R16(R(16) + 0x3a);
+        R(3) = MEM_R32(0x8008f0c8);
+        R(2) = MEM_R32(R(3) + 36u * index) & 0x10;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The pose stores (-X, Y, Z) as halfwords. Reload the pose pointer
  * between stores in the same order as the guest. */
 bool nc_place_record_pose(CPUState *c) {
