@@ -37,6 +37,14 @@ PSX2_PLAYER_SHOULDER_CALLS = {
     0x80044D08: (4, 0x80044D10),
 }
 
+# Entry -> (action, return address at the button-history store).
+PSX2_PLAYER_DOWN_CALLS = {
+    0x8004506C: (0x23, 0x80045078),
+    0x80045080: (5, 0x8004508C),
+    0x80045084: (5, 0x8004508C),
+    0x80045094: (2, 0x800450A0),
+}
+
 PSX2_PLAYER_BUTTON_STORE_JUMPS = {
     0x80044CC4,
     0x80044CD4,
@@ -1028,6 +1036,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
             targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.update(dest for _, dest in PSX2_PLAYER_DOWN_CALLS.values())
             targets.update(dest for _, dest in PSX2_PLAYER_SHOULDER_CALLS.values())
             targets.update(entry + 20 for entry in PSX2_PLAYER_FACE_PRESSES)
             targets.update(
@@ -1481,6 +1490,13 @@ class Emitter:
                         "    case 0x80045084: goto L_80045084;",
                         "    }",
                     ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_DOWN_CALLS:
+                action, link = PSX2_PLAYER_DOWN_CALLS[i.addr]
+                reload_actor = "false" if i.addr == 0x80045084 else "true"
+                out.append(
+                    f"    if (nc_call_player_down_action(c, {action}, 0x{link:08X}u, "
+                    f"{reload_actor})) goto L_{link:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_FACE_PRESSES:
                 mask, next_button = PSX2_PLAYER_FACE_PRESSES[i.addr]
