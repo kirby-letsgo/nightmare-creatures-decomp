@@ -302,6 +302,33 @@ static bool check_cd_volume(void) {
     return true;
 }
 
+static bool init_cd_volume(CPUState *c) {
+    return cd_init_volume(c, 0x80015adc);
+}
+
+static bool check_cd_init_volume(void) {
+    const u32 slots = 0x80015adc, spu = 0x80061000, ports = SCRATCH_BASE + 0x40;
+    u8 saved[24];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    for (unsigned i = 0; i < 4; i++)
+        MEM_W32(slots + i * 4, ports + i);
+    MEM_W32(slots + 20, spu);
+    bool ok = true;
+    for (unsigned active = 0; active < 4 && ok; active++) {
+        MEM_W16(spu + 0x1b8, active & 1);
+        MEM_W16(spu + 0x1ba, active & 2);
+        MEM_W32(spu + 0x180, 0x81234567);
+        MEM_W32(spu + 0x1b0, 0);
+        MEM_W16(spu + 0x1aa, 0);
+        MEM_W32(ports, UINT32_MAX);
+        ok = compare(arguments(1, 2, 3, 92), 0x8001374c, init_cd_volume, 91) &&
+             MEM_R32(spu + 0x180) == (active ? 0x81234567 : 0x3fff3fff) &&
+             MEM_R32(spu + 0x1b0) == 0x3fff3fff && MEM_R16(spu + 0x1aa) == 0xc001;
+    }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
+    return ok;
+}
+
 static bool check_cd_positions(void) {
     const u32 position = 0x80016201;
     const struct { s32 sector; u8 minute, second, frame; } cases[] = {
@@ -919,6 +946,10 @@ int main(int argc, char **argv) {
     }
     if (!check_cd_volume()) {
         fprintf(stderr, "launcher CD volume failed\n");
+        return 1;
+    }
+    if (!check_cd_init_volume()) {
+        fprintf(stderr, "launcher CD volume initialization failed\n");
         return 1;
     }
     if (!check_cd_positions()) {
