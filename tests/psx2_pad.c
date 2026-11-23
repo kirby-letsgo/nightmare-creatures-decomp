@@ -581,6 +581,26 @@ static bool player_down_resume(CPUState *cpu) {
     return nc_player_down_path(cpu, false) == cpu->r[31];
 }
 
+static bool player_down_setup_call(void) {
+    const u32 actor = 0x80160000;
+    for (unsigned active = 0; active < 2; ++active) {
+        CPUState cpu = initial();
+        cpu.r[4] = 0x80161000;
+        cpu.r[16] = actor;
+        cpu.r[31] = 0x80045014;
+        MEM_W8(actor + 0x388, 0);
+        MEM_W8(actor + 0x38a, active ? 3 : 0);
+        MEM_W8(actor + 0x38e, 2);
+        MEM_W8(actor + 0x39b, 0);
+        MEM_W8(actor + 0x39c, 4);
+        MEM_W32(actor + 0x2c8, 1);
+        MEM_W32(actor + 0x330, 0x8018);
+        if (!compare(cpu, 0x8004500c, nc_call_player_down_setup, 2))
+            return false;
+    }
+    return true;
+}
+
 static bool player_down_paths(void) {
     const struct {
         bool full_entry;
@@ -4209,21 +4229,21 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_paths() && player_down_face_buttons() && player_level_flag_checks() &&
-        player_input_state_gates() && player_secondary_flag_routes() &&
-        player_input_action_gates() && player_state_three_circle_checks() &&
-        player_circle_held_triangle_checks() && player_vertical_action_checks() &&
-        player_shoulder_action_checks() && player_queued_action_calls() &&
-        player_queued_face_actions() && player_horizontal_directions() &&
-        player_face_button_gates() && player_face_button_calls() && flagged_shoulder_paths() &&
-        player_shoulder_action_calls() && player_circle_shoulder_paths() &&
-        player_up_action_six_checks() && player_action_thirteen_call() &&
-        player_action_thirteen_checks() && player_single_face_actions() && player_face_presses() &&
-        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
-        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        player_down_setup_call() && player_down_paths() && player_down_face_buttons() &&
+        player_level_flag_checks() && player_input_state_gates() &&
+        player_secondary_flag_routes() && player_input_action_gates() &&
+        player_state_three_circle_checks() && player_circle_held_triangle_checks() &&
+        player_vertical_action_checks() && player_shoulder_action_checks() &&
+        player_queued_action_calls() && player_queued_face_actions() &&
+        player_horizontal_directions() && player_face_button_gates() &&
+        player_face_button_calls() && flagged_shoulder_paths() && player_shoulder_action_calls() &&
+        player_circle_shoulder_paths() && player_up_action_six_checks() &&
+        player_action_thirteen_call() && player_action_thirteen_checks() &&
+        player_single_face_actions() && player_face_presses() && player_triangle_actions() &&
+        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
+        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
