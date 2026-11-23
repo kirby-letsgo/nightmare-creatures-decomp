@@ -1183,6 +1183,8 @@ class Emitter:
                     f"    if (interrupt_driver_call(c, 0x800156a8, {LAUNCHER_IRQ_WRAPPERS[i.addr]}, "
                     f"0x{resume:x}, {'true' if single else 'false'})) return;"
                 )
+            if self.mod.name == LAUNCHER and i.addr == 0x80010A40:
+                out.append("    if (nc_launcher_switch_stack(c)) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x80010A30, 0x80011A6C):
                 selector = 1 if i.addr == 0x80010A30 else 2
                 out.append(f"    if (critical_section_syscall(c, {selector})) return;")

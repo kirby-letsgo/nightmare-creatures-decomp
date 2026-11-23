@@ -332,6 +332,27 @@ static bool check_irq_word_clear(void) {
     return true;
 }
 
+static bool check_stack_switch(void) {
+    CPUState start = {0};
+    start.r[4] = 0x801ffe00;
+    start.r[29] = 0x801ffe00;
+    start.r[31] = 0x80010000;
+    start.budget = 4;
+    if (!compare(start, 0x80010a40, nc_launcher_switch_stack, 3))
+        return false;
+
+    /* Returning from a stack switch crosses the interpreter's frame boundary
+     * with the new sp. Supply that boundary explicitly. */
+    start.r[4] = 0x801fff00;
+    CPUState native = start;
+    if (!nc_launcher_switch_stack(&native))
+        return false;
+    nc_cpu = start;
+    interp_continue_call(&nc_cpu, 0x80010a40, start.r[31], start.r[4]);
+    return !memcmp(&native, &nc_cpu, sizeof native) &&
+           native.r[2] == start.r[29] && native.r[29] == start.r[4];
+}
+
 static bool enter_critical(CPUState *c) {
     return critical_section_syscall(c, 1);
 }
@@ -462,6 +483,10 @@ int main(int argc, char **argv) {
             }
     if (!check_irq_word_clear()) {
         fprintf(stderr, "launcher interrupt table clear failed\n");
+        return 1;
+    }
+    if (!check_stack_switch()) {
+        fprintf(stderr, "launcher stack switch failed\n");
         return 1;
     }
     if (!check_critical_sections()) {
