@@ -1565,7 +1565,7 @@ static bool menu_record_37_action(void) {
             CPUState cpu = initial();
             cpu.r[4] = 0x80150000;
             cpu.r[30] = buttons[i];
-            cpu.r[31] = 0x80067804;
+            cpu.r[31] = 0x80068334;
             if (!compare(cpu, 0x800677e0, nc_menu_record_37_action, 11))
                 return false;
         }

@@ -1727,6 +1727,7 @@ bool nc_menu_record_37_action(CPUState *c) {
         return false;
     R(6) = 0x20;
     call_record_37_action(c, 0x80067804);
+    NC_POLL(c, 2 * NC_INSN_CYCLES); /* jump back to the selected-record check */
     return true;
 }
 
