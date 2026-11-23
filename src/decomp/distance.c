@@ -3405,6 +3405,33 @@ bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 lim
     return true;
 }
 
+bool nc_write_textured_triangle(CPUState *c) {
+    if (c->budget <= 42)
+        return false;
+    const u32 first = R(19), second = R(17), third = R(18);
+    const u32 packet = R(16), face = R(20);
+    const u32 first_xy = MEM_R32(first);
+    R(5) = (u32)(s32)(s16)MEM_R16(third + 4);
+    const s32 second_z = (s16)MEM_R16(second + 4);
+    R(6) = (u32)(s32)(s16)MEM_R16(first + 4);
+    // Four times the weighted depth, masked to an aligned ordering-table offset.
+    R(4) = (R(6) + (u32)second_z + 2 * R(5)) & 0x1ffc;
+    MEM_W32(packet - 14, first_xy);
+    const u32 second_xy = MEM_R32(second);
+    ++R(23);
+    MEM_W32(packet - 6, second_xy);
+    const u32 third_xy = MEM_R32(third);
+    R(11) = MEM_R32(R(29) + 0x18);
+    MEM_W32(packet - 18, R(11));
+    MEM_W32(packet + 2, third_xy);
+    MEM_W32(packet - 10, MEM_R32(face + 1));
+    MEM_W32(packet - 2, MEM_R32(face + 5));
+    R(2) = MEM_R16(face + 9);
+    MEM_W16(packet + 6, R(2));
+    c->budget -= 42;
+    return true;
+}
+
 bool nc_write_projected_triangle(CPUState *c) {
     if (c->budget <= 27)
         return false;
