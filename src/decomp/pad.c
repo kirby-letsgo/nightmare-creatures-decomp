@@ -69,6 +69,12 @@ u32 nc_player_input_source(CPUState *c) {
     return 0x80044780;
 }
 
+/* The live pad returns both ports in v0. Keep the complete word after the
+ * control hook has applied its direction edits. */
+void nc_take_live_player_buttons(CPUState *c) {
+    R(17) = R(2);
+}
+
 /* Live and sequenced input meet here in s1, after the live-input hook.
  * Select skips the store. A missing actor or zero halfword takes the store
  * path. The remaining paths also load the previous word for edge checks. */
