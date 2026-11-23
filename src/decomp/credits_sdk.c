@@ -1839,6 +1839,105 @@ bool nc_credits_load_clut2(CPUState *c) {
     return upload_clut(c, 16, 0x8001b3ac);
 }
 
+/* Sample each condition before polling for the branch and its delay slot. */
+static bool rectangle_branch(CPUState *c, bool condition) {
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return condition;
+}
+
+/* Level one checks the rectangle against the signed VRAM limits in SDK order. */
+static bool rectangle_out_of_bounds(CPUState *c) {
+    R(5) = (s16)MEM_R16(R(16) + 4); /* width */
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 3, 0x80020000);
+    R(3) = (s16)MEM_R16(0x8002455c);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(3) < (s32)R(5));
+    if (rectangle_branch(c, R(2)))
+        return true;
+
+    R(7) = (s16)MEM_R16(R(16)); /* x */
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(5) + R(7));
+    set_reg(c, 2, (s32)R(3) < (s32)R(2));
+    if (rectangle_branch(c, R(2)))
+        return true;
+
+    R(3) = (s16)MEM_R16(R(16) + 2); /* y */
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 4, 0x80020000);
+    R(4) = (s16)MEM_R16(0x8002455e);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(4) < (s32)R(3));
+    if (rectangle_branch(c, R(2)))
+        return true;
+
+    R(6) = (s16)MEM_R16(R(16) + 6); /* height */
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(3) + R(6));
+    set_reg(c, 2, (s32)R(4) < (s32)R(2));
+    if (rectangle_branch(c, R(2)))
+        return true;
+    if (rectangle_branch(c, (s32)R(5) <= 0))
+        return true;
+    if (rectangle_branch(c, (s32)R(7) < 0))
+        return true;
+    if (rectangle_branch(c, (s32)R(3) < 0))
+        return true;
+    return rectangle_branch(c, (s32)R(6) <= 0);
+}
+
+bool nc_credits_check_rect(CPUState *c) {
+    if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 32;
+    R(8) = R(4); /* caller's operation name */
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(5);
+    c->budget -= 3;
+    R(3) = MEM_R8(0x8002455a);
+    R(2) = 1;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    bool validate = R(3) == 1;
+    MEM_W32(R(29) + 28, R(31));
+    NC_POLL(c, 2);
+
+    bool report;
+    if (validate) {
+        report = rectangle_out_of_bounds(c);
+    } else {
+        set_reg(c, 2, 2);
+        report = R(3) == 2;
+        NC_POLL(c, 2);
+        if (!report)
+            NC_POLL(c, 2);
+    }
+    if (report) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, validate ? 0x8001857c : 0x8001859c);
+        if (validate)
+            NC_POLL(c, 2);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024554);
+        NC_POLL(c, 1);
+        R(31) = 0x8001c438;
+        R(5) = R(8);
+        NC_POLL(c, 2);
+        nc_call(c, R(2));
+        report_rectangle(c, 0, 0x80018588, 0x8001c460);
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Both fills pack RGB from the low argument bytes. ClearImage2 also sets bit 31. */
 static bool queue_image_fill(CPUState *c, bool high_bit) {
     const unsigned green = high_bit ? 16 : 17;
