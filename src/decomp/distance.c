@@ -3396,6 +3396,20 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_apply_textured_face_flags(CPUState *c, bool quad) {
+    const u32 flags = R(5) & 7;
+    const int cycles = 8 + 2 * !!(flags & 1) + 2 * !!(flags & 2) + !!(flags & 4);
+    if (c->budget <= cycles)
+        return false;
+    // The second flag overrides the first texture-page setting.
+    R(quad ? 10 : 9) = (flags & 2) ? 0x40 : (flags & 1) ? 0x20 : 0;
+    if (flags)
+        R(quad ? 9 : 7) = 2;
+    R(2) = flags & 4;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_begin_untextured_triangles(CPUState *c) {
     if (c->budget <= 34)
         return false;

@@ -1816,6 +1816,10 @@ class Emitter:
                 out.append(
                     f"    if (nc_measure_placement_quad(c, {textured})) goto L_{i.addr + 0x44:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800275A8:
+                out.append("    if (nc_apply_textured_face_flags(c, false)) goto L_800275DC;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800279A0:
+                out.append("    if (nc_apply_textured_face_flags(c, true)) goto L_800279D4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027B90:
                 out.append("    if (nc_begin_untextured_quads(c)) goto L_80027BF0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027BF0:
