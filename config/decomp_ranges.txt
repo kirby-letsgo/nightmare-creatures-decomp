@@ -501,6 +501,9 @@ psx2_exe     800682D8    800682FC         pad.c
 psx2_exe     800682FC    80068330         pad.c
 # Button history and record test before the pad-type lookup.
 psx2_exe     80068330    80068344         pad.c
+# Record 12 horizontal feedback and text arguments for Left and Right.
+psx2_exe     80068698    800686B8         pad.c
+psx2_exe     8006874C    80068764         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
