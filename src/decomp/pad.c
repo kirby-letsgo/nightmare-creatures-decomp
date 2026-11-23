@@ -66,6 +66,53 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* On this Circle-held path, a fresh Triangle press selects an action;
+ * otherwise the branch passes the Down bit to the next check. */
+u32 nc_player_circle_held_triangle(CPUState *c) {
+    if (c->budget <= 63)
+        return 0x80044a18;
+
+    const u32 actor = R(16);
+    R(2) = MEM_R32(actor + 0x2c8) & 0x8000;
+    R(4) = actor;
+    c->budget -= 7;
+    if (R(2))
+        return 0x800451d4;
+
+    R(5) = R(17);
+    R(6) = 0x1000;
+    R(31) = 0x80044a38;
+    c->budget -= 3;
+    nc_record_player_button_press(c);
+    const bool pressed = R(2) != 0;
+    R(2) = R(17) & 0x40;
+    c->budget -= 2;
+    if (!pressed)
+        return 0x80044a7c;
+
+    const u32 flags = MEM_R32(actor + 0x2c8);
+    R(2) = 4;
+    c->budget -= 7;
+    if (flags & 0x8000)
+        return 0x80044ee8;
+
+    R(3) = MEM_R8(actor + 0x39b);
+    R(2) = 1;
+    R(4) = actor;
+    c->budget -= 6;
+    if (R(3) != 1)
+        return 0x80044ef4;
+
+    R(31) = 0x80044a6c;
+    c->budget -= 2;
+    nc_check_player_action_words(c);
+    c->budget -= 2;
+    if (R(2))
+        return 0x80044ec4;
+    c->budget -= 2;
+    return 0x80044ed4;
+}
+
 /* L1 requests action 3 and R1 requests action 4. Each check skips the
  * action call when the button is released or the action is already active. */
 u32 nc_player_shoulder_action_check(CPUState *c, bool left) {
