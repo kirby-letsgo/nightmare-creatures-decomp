@@ -1294,6 +1294,8 @@ class Emitter:
                 out.append("    if (nc_launcher_vsync(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013F70:
                 out.append("    if (nc_launcher_wait_vblank(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013CF8:
+                out.append("    if (nc_launcher_cd_interrupt_callback(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013DD8:
                 out.append("    if (sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011160:

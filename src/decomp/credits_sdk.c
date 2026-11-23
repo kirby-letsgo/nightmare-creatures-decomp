@@ -1,3 +1,4 @@
+#include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_sector_dma.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
@@ -8960,93 +8961,12 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
     return cd_sector_to_position(c);
 }
 
-/* Drain CD interrupts and dispatch ready before sync when both flags are set. */
 bool nc_credits_cd_interrupt_callback(CPUState *c) {
-    if (c->budget <= 9 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x80024a20);
-    R(29) -= 32;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(29) + 28, R(31));
-    c->budget--;
-    MEM_W32(R(29) + 24, R(18));
-    c->budget--;
-    MEM_W32(R(29) + 20, R(17));
-    c->budget--;
-    MEM_W32(R(29) + 16, R(16));
-    c->budget--;
-    R(2) = MEM_R8(R(2));
-    R(18) = 0x80024a39;
-    R(17) = R(2) & 3; /* original CD register bank */
-    c->budget -= NC_LOAD_CYCLES + 3;
-
-    for (;;) {
-        R(31) = 0x80021b88;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, 0x80020564); /* getintr */
-        set_reg(c, 16, R(2));
-        const bool pending = R(16) != 0;
-        R(2) = R(16) & 4;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        if (!pending)
-            break;
-        const bool ready = R(2) != 0;
-        R(2) = R(16) & 2;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        if (ready) {
-            set_reg(c, 2, 0x80020000);
-            load_word(c, 2, 0x80024760);
-            NC_POLL(c, NC_INSN_CYCLES);
-            const bool registered = R(2) != 0;
-            NC_POLL(c, 2 * NC_INSN_CYCLES);
-            if (registered) {
-                R(4) = MEM_R8(R(18));
-                NC_POLL(c, NC_LOAD_CYCLES);
-                set_reg(c, 5, 0x80020000);
-                set_reg(c, 5, 0x80024e38);
-                u32 handler = R(2);
-                R(31) = 0x80021bc4;
-                NC_POLL(c, 2 * NC_INSN_CYCLES);
-                nc_call(c, handler);
-            }
-            set_reg(c, 2, R(16) & 2);
-        }
-        const bool sync = R(2) != 0;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        if (!sync)
-            continue;
-        set_reg(c, 3, 0x80020000);
-        load_word(c, 3, 0x8002475c);
-        NC_POLL(c, NC_INSN_CYCLES);
-        const bool registered = R(3) != 0;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        if (registered) {
-            set_reg(c, 2, 0x80020000);
-            set_reg(c, 2, 0x80024a38);
-            R(4) = MEM_R8(R(2));
-            NC_POLL(c, NC_LOAD_CYCLES);
-            set_reg(c, 5, 0x80020000);
-            set_reg(c, 5, 0x80024e30);
-            u32 handler = R(3);
-            R(31) = 0x80021c00;
-            NC_POLL(c, 2 * NC_INSN_CYCLES);
-            nc_call(c, handler);
-            NC_POLL(c, 2 * NC_INSN_CYCLES);
-        }
-    }
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x80024a20);
-    NC_POLL(c, NC_INSN_CYCLES);
-    MEM_W8(R(2), (u8)R(17));
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_word(c, 31, R(29) + 28);
-    load_word(c, 18, R(29) + 24);
-    load_word(c, 17, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 32);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
+    static const CdCallbackLayout layout = {
+        .entry = 0x80021b54, .getintr = 0x80020564, .ports = 0x80024a20,
+        .callbacks = 0x8002475c, .results = 0x80024e30,
+    };
+    return cd_interrupt_callback(c, &layout);
 }
 
 static void cd_read_call(CPUState *c, u32 target, u32 resume) {

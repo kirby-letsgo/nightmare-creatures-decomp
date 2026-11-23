@@ -1,3 +1,4 @@
+#include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "decomp/cd_sector_dma.h"
 #include "cd_read.h"
@@ -83,6 +84,14 @@ static bool run_destructors(CPUState *c) {
 static bool check_wait_vblank(void) {
     const u32 drivers[] = {0x80013dd8, 0x80011a8c, 0x80011a9c};
     return compare_vblank_wait(0x80013f70, nc_launcher_wait_vblank, 0x80015760, 0x800105c4, drivers);
+}
+
+static bool check_cd_interrupt_callback(void) {
+    static const CdCallbackLayout layout = {
+        .entry = 0x80013cf8, .getintr = 0x80012708, .ports = 0x80015adc,
+        .callbacks = 0x80015818, .results = 0x80015b80,
+    };
+    return compare_cd_callbacks(&layout, nc_launcher_cd_interrupt_callback);
 }
 
 static bool check_cd_read(void) {
@@ -1071,6 +1080,10 @@ int main(int argc, char **argv) {
     }
     if (!check_wait_vblank()) {
         fprintf(stderr, "launcher VBlank wait failed\n");
+        return 1;
+    }
+    if (!check_cd_interrupt_callback()) {
+        fprintf(stderr, "launcher CD interrupt callback failed\n");
         return 1;
     }
     if (!check_cd_read()) {

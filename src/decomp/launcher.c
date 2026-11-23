@@ -1,3 +1,4 @@
+#include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
 #include "decomp/vsync.h"
@@ -345,4 +346,12 @@ bool nc_launcher_cd_read(CPUState *c) {
         .control = 0x800123b4, .retry = 0x80014230,
     };
     return cd_read(c, &layout);
+}
+
+bool nc_launcher_cd_interrupt_callback(CPUState *c) {
+    static const CdCallbackLayout layout = {
+        .entry = 0x80013cf8, .getintr = 0x80012708, .ports = 0x80015adc,
+        .callbacks = 0x80015818, .results = 0x80015b80,
+    };
+    return cd_interrupt_callback(c, &layout);
 }
