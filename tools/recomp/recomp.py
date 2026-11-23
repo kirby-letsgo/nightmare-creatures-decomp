@@ -94,6 +94,7 @@ CREDITS_ROUTINES = {
     0x8001A814: "nc_credits_interrupt_mask(c, true)",
     0x8001A830: "nc_credits_start_interrupts(c)",
     0x8001A898: "nc_credits_resume_interrupt_start(c)",
+    0x8001AAF4: "nc_credits_set_interrupt_handler(c)",
     0x8001AC48: "nc_credits_stop_interrupts(c)",
     0x8001ACF4: "nc_credits_restart_interrupts(c)",
     0x8001AD7C: "nc_credits_clear_irq_words(c)",

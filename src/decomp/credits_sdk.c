@@ -3625,6 +3625,136 @@ bool nc_credits_start_interrupts(CPUState *c) {
     return nc_credits_resume_interrupt_start(c);
 }
 
+/* VBlank and the three root counters have BIOS auto-acknowledge settings. */
+static void update_interrupt_clear_mode(CPUState *c) {
+    bool vblank = R(17) == 0;
+    R(2) = 4;
+    NC_POLL(c, 2);
+    if (vblank) {
+        set_reg(c, 16, R(18) == 0);
+        R(31) = 0x8001abc0;
+        R(4) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001a2ac); /* ChangeClearPad */
+        set_reg(c, 4, 3);
+        R(31) = 0x8001abcc;
+        R(5) = R(16);
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001a688); /* ChangeClearRCnt */
+        set_reg(c, 2, 4);
+    }
+    for (unsigned counter = 0; counter < 3; counter++) {
+        bool matches = R(17) == R(2);
+        if (counter == 2)
+            R(4) = 2;
+        else
+            R(2) = 5 + counter;
+        NC_POLL(c, 2);
+        if (matches) {
+            if (counter != 2)
+                set_reg(c, 4, counter);
+            const u32 resume[] = {0x8001abe4, 0x8001abfc, 0x8001ac10};
+            R(31) = resume[counter];
+            R(5) = R(18) == 0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x8001a688);
+            if (counter != 2)
+                set_reg(c, 2, 5 + counter);
+        }
+    }
+}
+
+static void replace_interrupt_handler(CPUState *c) {
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800244a8); /* I_MASK */
+    NC_POLL(c, 1);
+    R(3) = MEM_R16(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    MEM_W16(R(2), 0);
+    NC_POLL(c, 1);
+    bool install = R(18) != 0;
+    R(19) = R(3) & 0xffff;
+    NC_POLL(c, 2);
+    if (install) {
+        set_reg(c, 3, 1);
+        set_reg(c, 3, R(3) << (R(17) & 31));
+        MEM_W32(R(4), R(18));
+        NC_POLL(c, 1);
+        R(2) = MEM_R16(R(5) + 44);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 19, R(19) | R(3));
+        set_reg(c, 2, R(2) | R(3));
+        MEM_W16(R(5) + 44, (u16)R(2));
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 2, 1);
+        set_reg(c, 2, R(2) << (R(17) & 31));
+        set_reg(c, 2, ~R(2));
+        MEM_W32(R(4), 0);
+        NC_POLL(c, 1);
+        set_reg(c, 3, 0x80020000);
+        R(3) = MEM_R16(0x80023448);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 19, R(19) & R(2));
+        set_reg(c, 3, R(3) & R(2));
+        set_reg(c, 1, 0x80020000);
+        MEM_W16(0x80023448, (u16)R(3));
+        NC_POLL(c, 1);
+    }
+    update_interrupt_clear_mode(c);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800244a8);
+    NC_POLL(c, 1);
+    MEM_W16(R(2), (u16)R(19));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(20));
+}
+
+/* Return the previous handler, leaving an inactive driver untouched. */
+bool nc_credits_set_interrupt_handler(CPUState *c) {
+    if (c->budget <= 16 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 40;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(5);
+    R(5) = 0x8002341c;
+    R(2) = R(17) << 2;
+    R(4) = R(2) + R(5);
+    c->budget -= 6;
+    MEM_W32(R(29) + 36, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 32, R(20));
+    c->budget--;
+    MEM_W32(R(29) + 28, R(19));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    R(20) = MEM_R32(R(4));
+    bool changed = R(18) != R(20);
+    R(2) = R(20);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (changed) {
+        R(2) = MEM_R16(R(5) - 4);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        bool active = R(2) != 0;
+        R(2) = R(20);
+        NC_POLL(c, 2);
+        if (active)
+            replace_interrupt_handler(c);
+    }
+    load_word(c, 31, R(29) + 36);
+    for (unsigned reg = 20; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 16 + (reg - 16) * 4);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Save the IRQ mask and DMA priorities before disabling the interrupt driver. */
 bool nc_credits_stop_interrupts(CPUState *c) {
     if (c->budget <= 11)
