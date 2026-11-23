@@ -1,3 +1,4 @@
+#include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
 #include "decomp/vsync.h"
 #include "decomp/vblank_wait.h"
@@ -334,4 +335,14 @@ bool nc_launcher_cd_read_sync(CPUState *c) {
         .vsync = 0x80013e28, .retry = 0x80014230, .ready = 0x80012100,
     };
     return cd_read_sync(c, &layout);
+}
+
+bool nc_launcher_cd_read(CPUState *c) {
+    static const CdReadLayout layout = {
+        .entry = 0x80014408, .state = 0x80015b48,
+        .set_sync = 0x80012120, .set_ready = 0x80012138,
+        .vsync = 0x80013e28, .status = 0x80011f94,
+        .control = 0x800123b4, .retry = 0x80014230,
+    };
+    return cd_read(c, &layout);
 }
