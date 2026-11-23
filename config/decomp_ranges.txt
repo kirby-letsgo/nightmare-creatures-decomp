@@ -516,6 +516,8 @@ psx2_exe     80068698    800686B8         pad.c
 psx2_exe     8006874C    80068764         pad.c
 # Format the selected feedback text and prepare the record action.
 psx2_exe     80068764    8006878C         pad.c
+# Dispatch the feedback action and return to the menu scan.
+psx2_exe     8006878C    8006879C         pad.c
 # Menu record pointer and direction arguments for ordinary Left and Right actions.
 psx2_exe     800686B8    800686D4         pad.c
 psx2_exe     8006879C    800687B4         pad.c
