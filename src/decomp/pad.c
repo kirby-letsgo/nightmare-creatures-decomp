@@ -19,6 +19,31 @@ bool nc_check_player_action_words(CPUState *c) {
     return true;
 }
 
+/* Compare the full requested action before narrowing it for the actor byte. */
+bool nc_set_player_input_action(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+
+    const u32 actor = R(4);
+    const u32 requested = R(5);
+    const u32 current = MEM_R8(actor + 0x39b);
+    R(2) = 0x7f;
+    c->budget -= 8;
+    if (current == requested)
+        return true;
+
+    MEM_W8(actor + 0x39c, (u8)R(2));
+    R(2) = MEM_R32(actor + 0x330);
+    R(3) = ~0x18u;
+    MEM_W8(actor + 0x38a, 0);
+    MEM_W8(actor + 0x38e, 0);
+    MEM_W8(actor + 0x39b, (u8)requested);
+    R(2) &= R(3);
+    MEM_W32(actor + 0x330, R(2));
+    c->budget -= 10;
+    return true;
+}
+
 /* Accept a masked press only when the previous word contains none of its bits.
  * A successful press replaces the previous word with the entire requested mask. */
 bool nc_record_player_button_press(CPUState *c) {
