@@ -2066,6 +2066,18 @@ class Emitter:
                     f"    if (nc_link_indexed_face_packet(c, {textured}))"
                     f" goto L_{i.addr + 0x50:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x800286D8, 0x80028A1C):
+                textured, loop = (
+                    ("true", 0x800283F4) if i.addr == 0x800286D8 else ("false", 0x80028740)
+                )
+                out.append(f"    if (nc_advance_indexed_face(c, {textured})) {{")
+                out.append(f"        if (R(2)) goto L_{loop:08X};")
+                out.append(f"        goto L_{i.addr + 0x18:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800286F0, 0x80028A34):
+                textured = "true" if i.addr == 0x800286F0 else "false"
+                out.append(
+                    f"    if (nc_save_indexed_face_cursors(c, {textured})) goto L_{i.addr + 8:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_INPUTS:
                 pose, index = INDEXED_VERTEX_INPUTS[i.addr]
                 out.append(

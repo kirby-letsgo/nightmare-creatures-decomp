@@ -3715,6 +3715,27 @@ bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32
     return true;
 }
 
+bool nc_advance_indexed_face(CPUState *c, bool textured) {
+    if (c->budget <= 8)
+        return false;
+    ++R(20);
+    const u32 count = MEM_R8(R(30) + (textured ? 1 : 0));
+    R(2) = (s32)R(20) < (s32)count;
+    R(17) += textured ? 24 : 12; /* branch delay slot */
+    c->budget -= 8;
+    return true;
+}
+
+/* The empty-list path also enters here with the original packet cursors. */
+bool nc_save_indexed_face_cursors(CPUState *c, bool textured) {
+    if (c->budget <= 2)
+        return false;
+    MEM_W32(R(28) + (textured ? 0x37c : 0x354), R(18));
+    MEM_W32(R(28) + (textured ? 0x29c : 0x3d0), R(21));
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_link_indexed_face_packet(CPUState *c, bool textured) {
     if (c->budget <= 32)
         return false;

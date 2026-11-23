@@ -4432,6 +4432,60 @@ static bool indexed_vertex_inputs(bool disc) {
     return true;
 }
 
+static bool indexed_face_advances(bool disc, bool textured) {
+    const u32 entry = textured ? 0x800286d8 : 0x80028a1c;
+    const u32 save = entry + 0x18;
+    const struct {
+        u32 index;
+        u8 count;
+        bool repeat;
+    } cases[] = {{0, 2, true}, {254, 255, false}, {0, 0, false}, {0x7fffffff, 0, true}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[30] = SCRATCH_BASE;
+        input.r[20] = cases[i].index;
+        input.r[31] = cases[i].repeat ? (textured ? 0x800283f4 : 0x80028740) : save;
+        MEM_W16(SCRATCH_BASE, textured ? (unsigned)cases[i].count << 8 : cases[i].count);
+        input.budget = 8;
+        CPUState native = input;
+        if (nc_advance_indexed_face(&native, textured) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_advance_indexed_face(&native, textured) || native.budget != 1 ||
+            native.r[2] != cases[i].repeat || native.r[20] != cases[i].index + 1 ||
+            native.r[17] != input.r[17] + (textured ? 24 : 12))
+            return false;
+        if (disc) {
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    CPUState input = initial();
+    input.r[28] = SCRATCH_BASE;
+    input.r[31] = save + 8;
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memcpy(before, nc_scratch, sizeof before);
+    input.budget = 2;
+    CPUState native = input;
+    if (nc_save_indexed_face_cursors(&native, textured) || memcmp(&native, &input, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_save_indexed_face_cursors(&native, textured) || native.budget != 1 ||
+        MEM_R32(SCRATCH_BASE + (textured ? 0x37c : 0x354)) != input.r[18] ||
+        MEM_R32(SCRATCH_BASE + (textured ? 0x29c : 0x3d0)) != input.r[21])
+        return false;
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        interp_call(&input, save);
+        if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+            return false;
+    }
+    return true;
+}
+
 static bool indexed_packet_links(bool disc, bool textured) {
     const u32 frame = SCRATCH_BASE, table = frame + 0x80;
     const u32 entry = textured ? 0x80028688 : 0x800289cc;
@@ -7173,7 +7227,8 @@ int main(int argc, char **argv) {
         placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && indexed_packet_links(disc, true) &&
+        placement_vertex_triples(disc, true) && indexed_face_advances(disc, true) &&
+        indexed_face_advances(disc, false) && indexed_packet_links(disc, true) &&
         indexed_packet_links(disc, false) && indexed_face_packets(disc, true) &&
         indexed_face_packets(disc, false) && indexed_face_windings(disc) &&
         indexed_depth_stores(disc) && indexed_vertex_inputs(disc) &&
