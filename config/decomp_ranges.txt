@@ -362,6 +362,7 @@ slus_005_82  80011160    8001119C         sdk_printf.h
 slus_005_82  80011828    80011858         launcher.c
 slus_005_82  80011858    80011888         launcher.c
 slus_005_82  80011888    800118D8         byte_scan.h
+slus_005_82  800118D8    8001198C         sdk_putchar.h
 slus_005_82  8001198C    800119BC         byte_scan.h
 slus_005_82  800119BC    800119F8         jump_context.h
 slus_005_82  800119F8    80011A34         jump_context.h

@@ -9,6 +9,8 @@
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/sdk_printf.h"
+#include "decomp/sdk_putchar.h"
+#include "sdk_putchar.h"
 #include "decomp/sdk_puts.h"
 #include "sdk_puts.h"
 #include "decomp/interrupt_driver.h"
@@ -69,6 +71,10 @@ static bool run_constructors(CPUState *c) {
 
 static bool run_destructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, false);
+}
+
+static bool launcher_putchar(CPUState *c) {
+    return sdk_putchar(c, 0x800118d8, 0x80011a7c, 0x80015b7c, 0x800156bd);
 }
 
 static bool launcher_puts(CPUState *c) {
@@ -1001,6 +1007,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_sdk_putchar(0x800118d8, launcher_putchar, 0x80015b7c)) {
+        fprintf(stderr, "launcher putchar failed\n");
         return 1;
     }
     if (!check_sdk_puts(0x80013dd8, launcher_puts, 0x80015b7c)) {
