@@ -3236,6 +3236,58 @@ static bool placement_depth_cues(bool disc) {
     return true;
 }
 
+static bool placement_pose_stack(bool disc) {
+    const u32 frame = SCRATCH_BASE, pose = frame + 0x80;
+    const struct {
+        u32 pc, index, link;
+        int cycles;
+    } cases[] = {{0x80028b38, 0, 0, 2}, {0x80028b38, 3, 0, 9}, {0x80028b44, 0, 0, 6},
+                 {0x80028b44, 2, 0, 6}, {0x80028bf8, 3, 0, 6}, {0x80028bf8, 2, pose, 10}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        const bool save = cases[i].pc == 0x80028bf8;
+        const bool index_ready = cases[i].pc == 0x80028b44;
+        input.r[18] = pose;
+        input.r[19] = cases[i].index;
+        input.r[29] = frame;
+        input.r[31] = save ? 0x80028c18 : 0x80028b54;
+        MEM_W32(pose + 0xc, cases[i].link);
+        for (unsigned j = 0; j < 4; ++j)
+            MEM_W32(frame + 0x18 + 4 * j, pose + 0x20 * (j + 1));
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = cases[i].cycles;
+        CPUState native = input;
+        if ((save ? nc_save_linked_placement_pose(&native)
+                  : nc_select_placement_pose(&native, index_ready)) ||
+            memcmp(&native, &input, sizeof input) || memcmp(nc_scratch, before, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!(save ? nc_save_linked_placement_pose(&native)
+                   : nc_select_placement_pose(&native, index_ready)) ||
+            native.budget != 1)
+            return false;
+        if (save) {
+            if (native.r[4] != cases[i].link || native.r[19] != cases[i].index + !!cases[i].link ||
+                (cases[i].link && MEM_R32(frame + 0x18 + 4 * cases[i].index) != cases[i].link))
+                return false;
+        } else {
+            const u32 index = cases[i].index - (!index_ready && cases[i].index != 0);
+            if (native.r[19] != index || native.r[17] != frame + 0x38 ||
+                native.r[18] != (index_ready || cases[i].index ? pose + 0x20 * (index + 1) : pose))
+                return false;
+        }
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, cases[i].pc);
+            if (memcmp(&native, &input, sizeof input) || memcmp(nc_scratch, after, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_flags(bool disc) {
     const u32 record = SCRATCH_BASE, owner = record + 0x80, descriptor = owner + 0x80;
     for (unsigned flags = 0; flags < 4; ++flags) {
@@ -5655,12 +5707,12 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        placement_depths(disc) && placement_depth_cues(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_depths(disc) && placement_depth_cues(disc) && placement_pose_stack(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
