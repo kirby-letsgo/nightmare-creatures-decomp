@@ -3366,6 +3366,25 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* Select the pose and parameter block passed to the projection at 0x80028A70. */
+bool nc_select_placement_projection_args(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+    const u32 record = R(16);
+    const u32 flag = MEM_R32(record + 0x30) & 0x100000;
+    const int cycles = flag ? 16 : 14;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = flag;
+    R(3) = 0x100000;
+    R(4) = record;
+    R(5) = MEM_R32(record + 4);
+    R(6) = flag ? MEM_R32(R(28) + 0x364) + 0xa0 : MEM_R32(R(28) + 0x2bc);
+    R(7) = 1;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The caller passes a direction flag and a packed word. The upper turn
  * uses exact equality; the lower turn uses a signed comparison. */
 bool nc_begin_placement_angle_update(CPUState *c) {
