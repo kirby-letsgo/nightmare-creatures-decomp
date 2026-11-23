@@ -2402,6 +2402,8 @@ class Emitter:
                     f"    if (nc_project_indexed_vertex(c, 0x{offset:x}))"
                     f" goto L_{i.addr + 0x2C:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027E58:
+                out.append("    if (nc_adjust_placement_color(c)) goto L_80027ED0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027E28:
                 out.append("    if (nc_placement_lighting_offset(c)) {")
                 out.append("        if (R(3)) goto L_80027E58;")
