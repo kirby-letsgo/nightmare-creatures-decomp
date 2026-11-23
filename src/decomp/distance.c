@@ -4775,6 +4775,46 @@ bool nc_call_indexed_pose_projection(CPUState *c) {
     return true;
 }
 
+bool nc_begin_placement_scan(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(29) -= 0x38;
+    const u32 frame = R(29);
+    MEM_W32(frame + 0x2c, R(21));
+    R(21) = MEM_R32(0x800ce9c4);
+    for (unsigned reg = 16; reg <= 20; ++reg)
+        MEM_W32(frame + 0x18 + 4 * (reg - 16), R(reg));
+    MEM_W32(frame + 0x30, R(31));
+    R(19) = R(4);
+    R(20) = 0;
+    R(2) = 0;
+    c->budget -= 15;
+    return true;
+}
+
+/* Every occupied slot clears the high flag bit, including records skipped
+ * because bit 2 is clear. A vacant slot leaves the prior flags untouched. */
+bool nc_check_placement_slot(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    const u32 index_bytes = R(2);
+    const u32 record = MEM_R32(0x800cf184 + index_bytes);
+    const int cycles = record ? 16 : 8;
+    if (c->budget <= cycles)
+        return false;
+    R(1) = 0x800d0000 + index_bytes;
+    R(16) = record;
+    R(2) = 0x7fff0000;
+    if (record) {
+        R(3) = MEM_R32(record + 0x2c);
+        R(4) = R(3) & 0x7fffffff;
+        R(2) = R(3) & 4;
+        MEM_W32(record + 0x2c, R(4));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_check_placement_pose_callback(CPUState *c) {
     if (c->budget <= 7)
         return false;
