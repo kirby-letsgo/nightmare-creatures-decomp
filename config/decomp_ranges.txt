@@ -280,6 +280,7 @@ psx2_exe     8002A23C    8002A258         distance.c
 psx2_exe     8002A258    8002A270         distance.c
 psx2_exe     8002A418    8002A42C         distance.c
 psx2_exe     8002A560    8002A58C         distance.c
+psx2_exe     8002A58C    8002A5B8         distance.c
 psx2_exe     8001BD08    8001BD84         distance.c
 psx2_exe     8001BD84    8001BE6C         distance.c
 psx2_exe     8001BE6C    8001BEAC         distance.c

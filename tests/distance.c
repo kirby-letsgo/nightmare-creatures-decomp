@@ -4829,6 +4829,47 @@ static bool placement_selector_exits(bool disc) {
     return true;
 }
 
+static bool flagged_placement_updates(bool disc) {
+    const u32 pointer = 0x8008f050;
+    const u32 saved = MEM_R32(pointer);
+    const struct {
+        u32 field, flags;
+    } cases[] = {
+        {SCRATCH_BASE + 0x30, 0x80000001}, {SCRATCH_BASE + 0x30, 0x88000001},
+        {pointer, 0xffffffff},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        const u32 field = cases[i].field, flags = cases[i].flags;
+        const bool update = (flags & 0x08000000) != 0;
+        CPUState input = initial();
+        input.r[16] = field - 0x30;
+        input.r[31] = update ? 0x80073dac : 0x8002a5d4;
+        MEM_W32(pointer, SCRATCH_BASE + 0x200);
+        MEM_W32(field, flags);
+        const u32 argument = MEM_R32(pointer);
+        input.budget = 15;
+        CPUState native = input;
+        if (nc_begin_flagged_placement_update(&native) || memcmp(&input, &native, sizeof input) ||
+            MEM_R32(field) != flags)
+            return false;
+        native.budget = ++input.budget;
+        const u32 remaining = flags & ~0x08000000u;
+        if (nc_begin_flagged_placement_update(&native) != input.r[31] ||
+            native.r[3] != flags || native.budget != (update ? 1 : 9) ||
+            native.r[2] != (update ? remaining : 0xf7ff0000u) || MEM_R32(field) != remaining ||
+            (update && (native.r[4] != argument || native.r[31] != 0x8002a5b8)))
+            return false;
+        if (disc) {
+            MEM_W32(field, flags);
+            interp_call(&input, 0x8002a58c);
+            if (memcmp(&input, &native, sizeof input) || MEM_R32(field) != remaining)
+                return false;
+        }
+    }
+    MEM_W32(pointer, saved);
+    return true;
+}
+
 static bool placement_x_indices(bool disc) {
     const u16 indices[] = {0, 3, 4, 5, 6, UINT16_MAX};
     for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
@@ -9037,7 +9078,8 @@ int main(int argc, char **argv) {
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
-        placement_tick_routes(disc) && placement_selector_exits(disc) && placement_x_indices(disc) &&
+        placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&
+        placement_x_indices(disc) &&
         placement_halfword_entries(disc) &&
         placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
