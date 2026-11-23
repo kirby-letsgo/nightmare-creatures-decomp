@@ -2470,18 +2470,20 @@ static void interrupt_start_state(StateIO *io) {
     irq_serialize(io);
 }
 
-static bool check_gpu_image_upload(void) {
+static bool check_gpu_image_transfer(bool readback) {
     const u32 rect = 0x80061000, pixels = rect + 64, status = rect + 512;
     const u32 gp0 = 0x1f801810, gp1 = gp0 + 4;
     const struct {
         s16 width, height, clipped_width, clipped_height;
         bool wait, timeout;
+        bool wait_for_data;
     } cases[] = {
-        {-1, 8, 0, 8, false, false}, {2, -3, 2, 0, false, false},
-        {3, 3, 3, 3, false, false},         /* CPU words, odd pixel count */
-        {32, 1, 32, 1, false, false},       /* one DMA block */
-        {50, 9, 37, 2, false, false},       /* clipped, CPU prefix plus DMA */
-        {4, 1, 4, 1, true, false}, {4, 1, 4, 1, true, true},
+        {-1, 8, 0, 8, false, false, false}, {2, -3, 2, 0, false, false, false},
+        {3, 3, 3, 3, false, false, false},         /* CPU words, odd pixel count */
+        {32, 1, 32, 1, false, false, false},       /* one DMA block */
+        {50, 9, 37, 2, false, false, false},       /* clipped, CPU prefix plus DMA */
+        {4, 1, 4, 1, true, false, false}, {4, 1, 4, 1, true, true, false},
+        {4, 1, 4, 1, true, true, true}, /* timeout after the read command */
     };
     StateIO saved = {0};
     interrupt_start_state(&saved);
@@ -2490,6 +2492,8 @@ static bool check_gpu_image_upload(void) {
     nc_set_module(NC_MOD_NONE);
     bool ok = !saved.error;
     for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        if (cases[i].wait_for_data && !readback)
+            continue;
         StateIO native = {0}, guest = {0};
         for (unsigned run = 0; ok && run < 2; run++) {
             MEM_W32(0x8001e9fc, 0x03e00008); /* set_alarm */
@@ -2500,7 +2504,7 @@ static bool check_gpu_image_upload(void) {
             MEM_W32(gp1, 0); /* reset command FIFO */
             MEM_W32(0x80024628, gp0);
             MEM_W32(0x8002462c, cases[i].wait ? status : gp1);
-            MEM_W32(status, 0);
+            MEM_W32(status, cases[i].wait_for_data ? 1u << 26 : 0);
             MEM_W32(0x80024630, 0x1f8010a0);
             MEM_W32(0x80024634, 0x1f8010a4);
             MEM_W32(0x80024638, 0x1f8010a8);
@@ -2512,22 +2516,34 @@ static bool check_gpu_image_upload(void) {
             MEM_W16(rect + 6, (u16)cases[i].height);
             for (unsigned j = 0; j < 80; j++)
                 MEM_W16(pixels + j * 2, (u16)(0x1240 + j));
-            nc_cpu = arguments(rect, pixels, 0, i & 1 ? 10 : 4096);
+            unsigned count = cases[i].clipped_width * cases[i].clipped_height;
+            if (readback && count) {
+                MEM_W32(gp0, 0xa0000000); /* seed VRAM with a known rectangle */
+                MEM_W32(gp0, MEM_R32(rect));
+                MEM_W32(gp0, (u32)cases[i].clipped_height << 16 | (u32)cases[i].clipped_width);
+                for (unsigned j = 0; j < count; j += 2)
+                    MEM_W32(gp0, MEM_R32(pixels + j * 2));
+                memset(nc_fast_ptr(pixels), 0xdd, 160);
+            }
+            nc_cpu = arguments(rect, pixels, 0, i & 1 ? (readback ? 9 : 10) : 4096);
             nc_cpu.r[8] = status;
-            nc_cpu.r[9] = 1u << 26;
+            nc_cpu.r[9] = 3u << 26;
             nc_cpu.r[10] = cases[i].timeout;
             if (run)
-                interp_call(&nc_cpu, 0x8001db5c);
+                interp_call(&nc_cpu, readback ? 0x8001ddb0 : 0x8001db5c);
             else
-                ok = nc_credits_upload_gpu_image(&nc_cpu);
+                ok = readback ? nc_credits_read_gpu_image(&nc_cpu) : nc_credits_upload_gpu_image(&nc_cpu);
             StateIO *result = run ? &guest : &native;
             interrupt_start_state(result);
             gpu_serialize(result);
-            unsigned count = cases[i].clipped_width * cases[i].clipped_height;
             ok = ok && MEM_R16(rect + 4) == cases[i].clipped_width &&
                  MEM_R16(rect + 6) == cases[i].clipped_height &&
                  nc_cpu.r[2] == (count && !cases[i].timeout ? 0u : UINT32_MAX);
-            if (ok && count && !cases[i].timeout) {
+            if (readback && count) {
+                for (unsigned j = 0; ok && j < count; j++)
+                    ok = MEM_R16(pixels + j * 2) == (cases[i].timeout ? 0xddddu : 0x1240u + j);
+                ok = ok && MEM_R32(pixels + 4 * ((count + 1) / 2)) == 0xdddddddd;
+            } else if (ok && count && !cases[i].timeout) {
                 MEM_W32(gp0, 0xc0000000); /* read the uploaded pixels back from VRAM */
                 MEM_W32(gp0, MEM_R32(rect));
                 MEM_W32(gp0, MEM_R32(rect + 4));
@@ -5052,7 +5068,8 @@ int main(int argc, char **argv) {
     pass = pass && check_queue_alarm_expiry();
     pass = pass && check_gpu_driver_reset();
     pass = pass && check_reset_graph();
-    pass = pass && check_gpu_image_upload();
+    pass = pass && check_gpu_image_transfer(false);
+    pass = pass && check_gpu_image_transfer(true);
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
