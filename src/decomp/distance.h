@@ -41,6 +41,7 @@ bool nc_check_placement_vertex_remainder(CPUState *c);
 bool nc_return_placement_vertices(CPUState *c);
 bool nc_project_placement_vertex_triple(CPUState *c, unsigned depth_shift);
 bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth);
+bool nc_call_pose_vertex_projection(CPUState *c, u32 return_pc);
 bool nc_check_placement_transform(CPUState *c);
 bool nc_select_placement_projection_args(CPUState *c);
 bool nc_begin_placement_angle_update(CPUState *c);

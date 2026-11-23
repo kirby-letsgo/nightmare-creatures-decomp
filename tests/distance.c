@@ -3489,6 +3489,45 @@ static bool remaining_placement_vertices(bool disc, bool sixteenth) {
     return true;
 }
 
+static bool pose_vertex_projection_calls(bool disc) {
+    const u32 pose = SCRATCH_BASE, descriptor = pose + 0x80;
+    const struct {
+        u32 entry, skip, resume;
+    } sites[] = {{0x80028b54, 0x80028bf8, 0x80028b7c}, {0x80028dd4, 0x80028e5c, 0x80028dfc}};
+    MEM_W32(pose + 0x38, descriptor);
+    for (unsigned site = 0; site < 2; ++site) {
+        for (unsigned project = 0; project < 2; ++project) {
+            CPUState input = initial();
+            input.r[18] = pose;
+            input.r[17] = pose + 0x100;
+            input.r[31] = project ? 0x80027288 : sites[site].skip;
+            MEM_W8(descriptor + 5, project ? 0xff : 0xfd);
+            u8 before[SCRATCH_SIZE];
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = project ? 14 : 11;
+            CPUState native = input;
+            if (nc_call_pose_vertex_projection(&native, sites[site].resume) ||
+                memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_call_pose_vertex_projection(&native, sites[site].resume) ||
+                native.budget != 1 || native.r[2] != 2 * project || native.r[16] != descriptor ||
+                native.r[4] != descriptor || native.r[5] != (project ? pose : input.r[5]) ||
+                native.r[6] != (project ? input.r[17] : input.r[6]) ||
+                native.r[31] != (project ? sites[site].resume : sites[site].skip))
+                return false;
+            if (disc) {
+                interp_call(&input, sites[site].entry);
+                if (memcmp(&input, &native, sizeof input))
+                    return false;
+            }
+            if (memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_flags(bool disc) {
     const u32 record = SCRATCH_BASE, owner = record + 0x80, descriptor = owner + 0x80;
     for (unsigned flags = 0; flags < 4; ++flags) {
@@ -5912,12 +5951,12 @@ int main(int argc, char **argv) {
         placement_pose_exits(disc) && placement_vertex_dispatch(disc) &&
         placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
         remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
-        placement_vertex_matrices(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
