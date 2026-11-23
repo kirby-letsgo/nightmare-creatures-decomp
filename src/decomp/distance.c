@@ -4872,6 +4872,23 @@ u32 nc_check_primary_placement_counter(CPUState *c) {
     return placement_counter_at_limit(c) ? 0x80028f68 : 0x80028f84;
 }
 
+/* A match prepares the stack switch and commits the saved flags. A miss
+ * stores the incremented byte in the jump's delay slot. */
+bool nc_finish_primary_placement_counter(CPUState *c, bool at_limit) {
+    const int cycles = at_limit ? 9 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (at_limit) {
+        R(4) = MEM_R32(0x8008f050);
+        R(2) = R(18) & ~0x08000000u;
+        MEM_W32(R(16) + 0x2c, R(2));
+    } else {
+        MEM_W8(R(3) + 0x37, (u8)R(2));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The first branch tests the incoming selector bit before its delay slot
  * replaces v0. Only an enabled alternate placement reads the descriptor. */
 u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector) {
