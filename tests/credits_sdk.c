@@ -1247,6 +1247,62 @@ static bool check_gpu_fill_bytes(void) {
     return true;
 }
 
+static bool check_reset_graph(void) {
+    const u32 state_base = 0x80024558, trace = 0x80061000, stub = trace + 0x100;
+    const u32 driver = trace + 0x200, modes[] = {0, 0x103, 1, 2, 4, 5, 6, 0xfffffff7};
+    /* Record each external call by return address and first argument. The
+     * real byte-fill routine still runs, including both environment fills. */
+    const u32 calls[] = {0x80019a60, 0x8001a698, 0x8001eca4, 0x8001e758};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    for (unsigned i = 0; i < sizeof calls / sizeof calls[0]; i++) {
+        MEM_W32(calls[i], 0x08000000 | ((stub >> 2) & 0x03ffffff)); /* j stub */
+        MEM_W32(calls[i] + 4, 0);
+    }
+    MEM_W32(stub, 0xad1f0000);      /* sw ra,0(t0) */
+    MEM_W32(stub + 4, 0xad040004);  /* sw a0,4(t0) */
+    MEM_W32(stub + 8, 0x25080008);  /* addiu t0,t0,8 */
+    MEM_W32(stub + 12, 0x03e00008); /* jr ra */
+    MEM_W32(stub + 16, 0x01601021); /* move v0,t3 */
+    MEM_W32(0x80024550, driver);
+    MEM_W32(0x80024554, stub);
+    MEM_W32(driver + 0x34, stub);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof modes / sizeof modes[0]; i++) {
+        u8 type = i & 3, debug = i & 1 ? 2 : 1;
+        memset(nc_fast_ptr(state_base), 0xa5, 0x80);
+        MEM_W8(state_base + 2, debug);
+        MEM_W16(0x800245d8 + type * 4, 1024 + type);
+        MEM_W16(0x800245ec + type * 4, 512 + type);
+        CPUState state = arguments(modes[i], 2, 3, i & 1 ? 8 : 4096);
+        state.r[8] = trace;
+        state.r[11] = 0x100 + type;
+        ok = compare(state, 0x8001be40, nc_credits_reset_graph, 7);
+        if ((modes[i] & 7) == 0 || (modes[i] & 7) == 3) {
+            ok = ok && nc_cpu.r[2] == type && nc_cpu.r[8] == trace + 32 &&
+                 MEM_R32(trace) == 0x8001be88 && MEM_R32(trace + 8) == 0x8001bea0 &&
+                 MEM_R32(trace + 16) == 0x8001beb8 && MEM_R32(trace + 20) == (driver & 0xffffff) &&
+                 MEM_R32(trace + 24) == 0x8001bec0 && MEM_R32(trace + 28) == modes[i] &&
+                 MEM_R8(state_base) == type && MEM_R8(state_base + 1) == 1 &&
+                 MEM_R16(state_base + 4) == 1024 + type && MEM_R16(state_base + 6) == 512 + type;
+            for (unsigned j = 8; ok && j < 0x80; j++)
+                ok = MEM_R8(state_base + j) == (j < 16 ? 0 : 0xff);
+        } else {
+            u32 last = trace + (debug >= 2 ? 8 : 0);
+            ok = ok && nc_cpu.r[2] == state.r[11] && nc_cpu.r[8] == last + 8 &&
+                 MEM_R32(last) == 0x8001bf84 && MEM_R32(last + 4) == 1 &&
+                 (debug < 2 || MEM_R32(trace) == 0x8001bf68) && MEM_R8(state_base) == 0xa5;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_gpu_driver_reset(void) {
     const u32 ports = 0x80061000, first = 0x80024d30, second = 0x80027488;
     const u32 modes[] = {0, 1, 2, 3, 4, 5, 6, 7, 0x100, 0xfffffff9};
@@ -4230,6 +4286,7 @@ int main(int argc, char **argv) {
     pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_alarm_expiry();
     pass = pass && check_gpu_driver_reset();
+    pass = pass && check_reset_graph();
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
