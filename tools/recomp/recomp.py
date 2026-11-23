@@ -562,6 +562,15 @@ PLACEMENT_PACKET_LINKS = {
 }
 
 
+# Whether the face is textured, whether it is a quad, loop head, and loop exit.
+PLACEMENT_FACE_ADVANCES = {
+    0x80027710: (True, False, 0x80027600, 0x80027728),
+    0x800278FC: (False, False, 0x800277E0, 0x80027918),
+    0x80027B3C: (True, True, 0x800279F8, 0x80027B54),
+    0x80027D4C: (False, True, 0x80027C0C, 0x80027D68),
+}
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
@@ -1747,6 +1756,12 @@ class Emitter:
                 out.append("    if (nc_write_projected_triangle(c)) {")
                 out.append("        if (!R(9)) goto L_8002789C;")
                 out.append("        goto L_80027880; }")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_ADVANCES:
+                textured, quad, head, done = PLACEMENT_FACE_ADVANCES[i.addr]
+                args = f"{str(textured).lower()}, {str(quad).lower()}"
+                out.append(f"    if (nc_advance_placement_face(c, {args})) {{")
+                out.append(f"        if (R(2)) goto L_{head:08X};")
+                out.append(f"        goto L_{done:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_PACKET_LINKS:
                 table, tag, address, size = PLACEMENT_PACKET_LINKS[i.addr]
                 out.append(
