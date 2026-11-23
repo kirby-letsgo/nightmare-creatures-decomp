@@ -6591,34 +6591,16 @@ bool nc_credits_hook_irq_entry(CPUState *c) {
     return bios_service(c, 0xb0, 0x19);
 }
 
-/* The default callbacks notify the BIOS CD event class through DeliverEvent. */
-static bool cd_default_event(CPUState *c, u32 spec, u32 resume) {
-    if (c->budget <= 6)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(31));
-    R(4) = 0xf0000003;
-    R(31) = resume;
-    R(5) = spec;
-    c->budget -= 5;
-    nc_call(c, 0x8001fcd8); /* DeliverEvent */
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
-}
-
 bool nc_credits_cd_default_sync(CPUState *c) {
-    return cd_default_event(c, 0x20, 0x8001fd90);
+    return cd_default_event(c, 0x20, 0x8001fd90, 0x8001fcd8);
 }
 
 bool nc_credits_cd_default_ready(CPUState *c) {
-    return cd_default_event(c, 0x40, 0x8001fdb8);
+    return cd_default_event(c, 0x40, 0x8001fdb8, 0x8001fcd8);
 }
 
 bool nc_credits_cd_default_read(CPUState *c) {
-    return cd_default_event(c, 0x40, 0x8001fde0);
+    return cd_default_event(c, 0x40, 0x8001fde0, 0x8001fcd8);
 }
 
 static void cd_mix_control(CPUState *c, u32 slot, u8 value) {

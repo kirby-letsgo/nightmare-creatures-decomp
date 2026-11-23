@@ -49,6 +49,7 @@ LAUNCHER_BIOS_SERVICES = {
     0x80011A7C: (0xB0, 0x35),  # write
     0x80011A8C: (0xB0, 0x5B),  # ChangeClearPad
     0x80011A9C: (0xC0, 0x0A),  # ChangeClearRCnt
+    0x80011F84: (0xB0, 0x07),  # DeliverEvent
 }
 LAUNCHER_IRQ_WRAPPERS = {
     0x80010A50: 12,  # ResetCallback
@@ -1240,6 +1241,9 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_SETTERS:
                 address = LAUNCHER_CD_STATE_SETTERS[i.addr]
                 out.append(f"    if (exchange_cd_word(c, 0x{address:x})) return;")
+            if self.mod.name == LAUNCHER and i.addr in (0x80011F0C, 0x80011F34, 0x80011F5C):
+                spec = 0x20 if i.addr == 0x80011F0C else 0x40
+                out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
                 address = LAUNCHER_CD_STATE_BYTES[i.addr]
                 out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")

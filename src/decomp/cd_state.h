@@ -54,4 +54,24 @@ static inline bool cd_lookup_name(CPUState *c, u32 table, u32 count, u32 unknown
     return true;
 }
 
+/* The default callbacks notify the BIOS CD event class through DeliverEvent. */
+static inline bool cd_default_event(CPUState *c, u32 spec, u32 resume, u32 deliver) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(4) = 0xf0000003;
+    R(31) = resume;
+    R(5) = spec;
+    c->budget -= 5;
+    nc_call(c, deliver); /* DeliverEvent */
+    R(31) = MEM_R32(R(29) + 16);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 24;
+    NC_POLL(c, 1);
+    NC_POLL(c, 2);
+    return true;
+}
+
 #endif
