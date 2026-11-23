@@ -2,7 +2,9 @@
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/interrupt_driver.h"
+#include "port/bios.h"
 #include "port/disc.h"
+#include "port/hw/hw.h"
 #include "port/exe.h"
 
 #include <stdio.h>
@@ -234,6 +236,73 @@ static bool check_interrupt_mask(void) {
     return ok;
 }
 
+static void save_interrupt_state(StateIO *io) {
+    cpu_serialize(io);
+    timers_serialize(io);
+    dma_serialize(io);
+    irq_serialize(io);
+    bios_serialize(io);
+}
+
+static bool check_interrupt_control(bool restart, bool active, int budget) {
+    const u32 state = 0x80014620, mask = 0x1f801074, dpcr = 0x1f8010f0;
+    bool (*routine)(CPUState *) = restart ? nc_launcher_restart_interrupts : nc_launcher_stop_interrupts;
+    StateIO initial = {0}, native = {0}, guest = {0};
+    save_interrupt_state(&initial);
+    bool ok = !initial.error;
+    for (unsigned run = 0; ok && run < 2; run++) {
+        MEM_W16(state, active ? 0x8000 : 0);
+        MEM_W16(state + 0x32, 0x50);
+        MEM_W32(state + 0x34, 0x13572468);
+        MEM_W16(mask, 0x40);
+        MEM_W32(dpcr, 0xfaceb00c);
+        irq_raise(IRQ_DMA);
+        nc_cpu = (CPUState){0};
+        if (!restart) {
+            nc_cpu.r[4] = state + 0x38;
+            nc_cpu.r[9] = 0x19;
+            bios_call(&nc_cpu, 0xb0); /* seed the hook that stopIntr removes */
+        }
+        nc_cpu.r[16] = 0xcafe;
+        nc_cpu.r[29] = 0x801ffe00;
+        nc_cpu.r[31] = 0x80010000;
+        nc_cpu.cop0[12] = restart ? 0 : 0x401;
+        nc_cpu.budget = 11;
+        if (!run && routine(&nc_cpu))
+            ok = false;
+        nc_cpu.budget = budget;
+        if (run)
+            interp_call(&nc_cpu, restart ? 0x800110ac : 0x80011000);
+        else
+            ok = routine(&nc_cpu) && ok;
+        bool stopped = !restart && active;
+        bool restarted = restart && !active;
+        u32 expected_dpcr = 0xfaceb00c;
+        u16 expected_mask = 0x40, expected_state = active ? 0x8000 : 0;
+        if (stopped) {
+            expected_dpcr &= 0x77777777;
+            expected_mask = expected_state = 0;
+        } else if (restarted) {
+            expected_dpcr = 0x13572468;
+            expected_mask = 0x50;
+            expected_state = 1;
+        }
+        ok = ok && nc_cpu.r[2] == (stopped || restarted ? state : 0) &&
+             MEM_R16(mask) == expected_mask && MEM_R32(dpcr) == expected_dpcr &&
+             MEM_R16(state) == expected_state;
+        save_interrupt_state(run ? &guest : &native);
+        initial.loading = true;
+        initial.pos = 0;
+        save_interrupt_state(&initial);
+    }
+    ok = ok && !initial.error && !native.error && !guest.error && native.len == guest.len &&
+         !memcmp(native.buf, guest.buf, guest.len);
+    free(initial.buf);
+    free(native.buf);
+    free(guest.buf);
+    return ok;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -324,6 +393,13 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher interrupt mask failed\n");
         return 1;
     }
+    for (unsigned restart = 0; restart < 2; restart++)
+        for (unsigned active = 0; active < 2; active++)
+            if (!check_interrupt_control(restart, active, 12) ||
+                !check_interrupt_control(restart, active, 4096)) {
+                fprintf(stderr, "launcher interrupt control failed (restart %u, active %u)\n", restart, active);
+                return 1;
+            }
     for (unsigned selection = 0; selection < 6; selection++)
         for (unsigned missing = 0; missing < 2; missing++)
             if (!check_handoff(selection, missing)) {
