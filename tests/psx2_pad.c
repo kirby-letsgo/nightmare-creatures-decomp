@@ -115,6 +115,14 @@ static bool button_dispatch(void) {
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
+        input.r[2] = cases[i].buttons;
+        input.r[31] = 0x80044784;
+        CPUState live = input;
+        nc_take_live_player_buttons(&live);
+        NC_POLL(&live, NC_INSN_CYCLES);
+        interp_call(&input, 0x80044780);
+        if (memcmp(&live, &input, sizeof input))
+            return false;
         input.r[16] = cases[i].actor;
         input.r[17] = cases[i].buttons;
         input.r[31] = cases[i].continuation; /* stop the interpreter at the branch destination */

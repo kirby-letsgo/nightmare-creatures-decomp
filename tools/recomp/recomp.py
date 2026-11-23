@@ -705,7 +705,10 @@ class Emitter:
 
     def timed_simple(self, i: Insn, *, delay_slot: bool = False) -> str:
         """Execute an instruction, then poll. A branch and its slot retire together."""
-        stmt = self.simple(i)
+        if self.mod.name == "psx2_exe" and i.addr == 0x80044780:
+            stmt = "nc_take_live_player_buttons(c);"
+        else:
+            stmt = self.simple(i)
         cost = "NC_LOAD_CYCLES" if 0x20 <= i.op <= 0x26 or i.op == 0x32 else "NC_INSN_CYCLES"
         flag = self.patches.get(i.addr)
         if flag and cost != "NC_INSN_CYCLES":
