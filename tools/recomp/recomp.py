@@ -1140,6 +1140,15 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x80044EC4,
+                0x80044ED4,
+                0x80044EE8,
+                0x80044EF4,
+            ):
+                out.append(
+                    f"    if (nc_apply_triangle_action(c, 0x{i.addr:08X}u)) goto L_800451D4;"
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044F04:
                 out.extend(
                     [

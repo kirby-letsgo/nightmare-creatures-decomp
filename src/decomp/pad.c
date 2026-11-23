@@ -139,6 +139,49 @@ u32 nc_player_triangle_action_one(CPUState *c) {
     return R(2) ? 0x80044ec4 : 0x80044ed4;
 }
 
+/* The four entries share the setter call and restore the actor argument in
+ * the jump delay slot. Only the flagged entry writes the global word. */
+bool nc_apply_triangle_action(CPUState *c, u32 entry) {
+    u32 action, link;
+    int setup_cycles;
+    switch (entry) {
+    case 0x80044ec4:
+        action = 0x11;
+        link = 0x80044ecc;
+        setup_cycles = 0;
+        break;
+    case 0x80044ed4:
+        action = 0x12;
+        link = 0x80044ee0;
+        setup_cycles = 1;
+        break;
+    case 0x80044ee8:
+    case 0x80044ef4:
+        action = 0x13;
+        link = 0x80044efc;
+        setup_cycles = entry == 0x80044ee8 ? 3 : 0;
+        break;
+    default:
+        return false;
+    }
+    if (c->budget <= 22 + setup_cycles)
+        return false;
+
+    if (entry == 0x80044ee8) {
+        R(1) = 0x800d0000;
+        MEM_W32(0x800ce9c8, R(2));
+    }
+    if (setup_cycles)
+        R(4) = R(16);
+    R(31) = link;
+    R(5) = action;
+    c->budget -= setup_cycles + 2;
+    nc_set_player_input_action(c);
+    R(4) = R(16);
+    c->budget -= 2;
+    return true;
+}
+
 /* The preceding Triangle check supplies 0x13 in v0. That action and
  * actions 0x11 and 0x12 go directly to the trigger handlers. */
 u32 nc_player_direction_action_check(CPUState *c) {
