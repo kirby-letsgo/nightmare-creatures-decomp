@@ -12,6 +12,7 @@ typedef enum {
 
 bool nc_player_triangle_fallback(CPUState *c);
 u32 nc_player_down_face_buttons(CPUState *c);
+u32 nc_player_queue_face_action(CPUState *c);
 u32 nc_player_horizontal_direction(CPUState *c);
 u32 nc_player_face_button_gate(CPUState *c, bool clear_direction);
 u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle);

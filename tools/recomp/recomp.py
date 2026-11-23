@@ -1123,6 +1123,15 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044B18:
+                out.extend(
+                    [
+                        "    switch (nc_player_queue_face_action(c)) {",
+                        "    case 0x80044B6C: goto L_80044B6C;",
+                        "    case 0x800448F4: goto L_800448F4;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044B98:
                 out.extend(
                     [
