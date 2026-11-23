@@ -1091,6 +1091,212 @@ static void store_gpu_global(CPUState *c, u32 address, unsigned reg) {
     NC_POLL(c, 1);
 }
 
+static void upload_halfword(CPUState *c, unsigned reg, u32 address, bool sign_extend) {
+    u16 value = MEM_R16(address);
+    R(reg) = sign_extend ? (u32)(s32)(s16)value : (u32)value;
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+/* Clamp the dimensions in the caller's RECT, then split the pixel count
+ * into packed 32-bit words and 16-word DMA blocks. */
+static bool size_gpu_upload(CPUState *c) {
+    upload_halfword(c, 4, R(17) + 4, true);
+    set_reg(c, 21, 0);
+    bool negative = (s32)R(4) < 0;
+    R(3) = R(4);
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 3, 0);
+    } else {
+        set_reg(c, 5, 0x80020000);
+        set_reg(c, 5, 0x8002455c);
+        upload_halfword(c, 2, R(5), false);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) << 16);
+        set_reg(c, 2, (u32)((s32)R(2) >> 16));
+        set_reg(c, 2, (s32)R(2) < (s32)R(4));
+        bool too_wide = R(2) != 0;
+        NC_POLL(c, 2);
+        if (too_wide) {
+            upload_halfword(c, 3, R(5), false);
+            NC_POLL(c, 2);
+        }
+    }
+    upload_halfword(c, 5, R(17) + 6, true);
+    MEM_W16(R(17) + 4, (u16)R(3));
+    NC_POLL(c, 1);
+    negative = (s32)R(5) < 0;
+    R(3) = R(5);
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 4, 0);
+        set_reg(c, 2, R(4) << 16);
+    } else {
+        set_reg(c, 6, 0x80020000);
+        set_reg(c, 6, 0x8002455e);
+        upload_halfword(c, 2, R(6), false);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) << 16);
+        set_reg(c, 2, (u32)((s32)R(2) >> 16));
+        set_reg(c, 2, (s32)R(2) < (s32)R(5));
+        bool too_tall = R(2) != 0;
+        R(4) = R(3);
+        NC_POLL(c, 2);
+        if (too_tall) {
+            upload_halfword(c, 4, R(6), false);
+            R(2) = R(4) << 16;
+            NC_POLL(c, 2);
+        } else {
+            set_reg(c, 2, R(4) << 16);
+        }
+    }
+    upload_halfword(c, 3, R(17) + 4, true);
+    set_reg(c, 2, (u32)((s32)R(2) >> 16));
+    nc_mult(c, R(3), R(2));
+    NC_POLL(c, 1);
+    MEM_W16(R(17) + 6, (u16)R(4));
+    NC_POLL(c, 1);
+    set_reg(c, 2, c->lo);
+    set_reg(c, 2, R(2) + 1);
+    set_reg(c, 3, R(2) >> 31);
+    set_reg(c, 2, R(2) + R(3));
+    set_reg(c, 4, (u32)((s32)R(2) >> 1));
+    bool has_pixels = (s32)R(4) > 0;
+    R(16) = (u32)((s32)R(2) >> 5);
+    NC_POLL(c, 2);
+    return has_pixels;
+}
+
+static bool wait_for_gpu_upload(CPUState *c) {
+    set_reg(c, 3, R(16));
+    set_reg(c, 2, R(3) << 4);
+    set_reg(c, 16, R(4) - R(2)); /* leading words sent through GP0 */
+    load_gpu_global(c, 2, 0x8002462c);
+    set_reg(c, 20, R(3)); /* remaining DMA blocks */
+    load_word(c, 2, R(2));
+    set_reg(c, 3, 1u << 26);
+    set_reg(c, 2, R(2) & R(3));
+    bool ready = R(2) != 0;
+    R(4) = 0xa0000000;
+    NC_POLL(c, 2);
+    if (!ready)
+        set_reg(c, 19, 1u << 26);
+    while (!ready) {
+        if (gpu_sync_timed_out(c, 0x8001dc80))
+            return false;
+        load_gpu_global(c, 2, 0x8002462c);
+        NC_POLL(c, 1);
+        load_word(c, 2, R(2));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & R(19));
+        ready = R(2) != 0;
+        R(4) = 0xa0000000;
+        NC_POLL(c, 2);
+    }
+    return true;
+}
+
+static void send_gpu_upload(CPUState *c) {
+    load_gpu_global(c, 3, 0x8002462c);
+    set_reg(c, 2, 0x04000000);
+    MEM_W32(R(3), R(2)); /* disable GPU DMA */
+    NC_POLL(c, 1);
+    load_gpu_global(c, 3, 0x80024628);
+    set_reg(c, 2, 0x01000000);
+    MEM_W32(R(3), R(2)); /* clear texture cache */
+    NC_POLL(c, 1);
+    load_gpu_global(c, 2, 0x80024628);
+    bool alternate_opcode = R(21) != 0;
+    NC_POLL(c, 2);
+    if (alternate_opcode)
+        set_reg(c, 4, 0xb0000000);
+    MEM_W32(R(2), R(4)); /* CPU-to-VRAM command */
+    NC_POLL(c, 1);
+    load_gpu_global(c, 3, 0x80024628);
+    load_word(c, 2, R(17));
+    NC_POLL(c, 1);
+    MEM_W32(R(3), R(2)); /* destination coordinates */
+    NC_POLL(c, 1);
+    load_gpu_global(c, 3, 0x80024628);
+    load_word(c, 2, R(17) + 4);
+    set_reg(c, 16, R(16) - 1);
+    MEM_W32(R(3), R(2)); /* dimensions */
+    NC_POLL(c, 1);
+    set_reg(c, 2, UINT32_MAX);
+    bool more = R(16) != R(2);
+    NC_POLL(c, 2);
+    if (more)
+        set_reg(c, 4, UINT32_MAX);
+    while (more) {
+        load_word(c, 3, R(18));
+        set_reg(c, 18, R(18) + 4);
+        load_gpu_global(c, 2, 0x80024628);
+        set_reg(c, 16, R(16) - 1);
+        MEM_W32(R(2), R(3));
+        NC_POLL(c, 1);
+        more = R(16) != R(4);
+        NC_POLL(c, 2);
+    }
+    bool dma = R(20) != 0;
+    R(3) = 0x04000000;
+    NC_POLL(c, 2);
+    if (dma) {
+        load_gpu_global(c, 2, 0x8002462c);
+        set_reg(c, 3, R(3) | 2);
+        MEM_W32(R(2), R(3)); /* GPU DMA direction */
+        NC_POLL(c, 1);
+        load_gpu_global(c, 2, 0x80024630);
+        set_reg(c, 4, 0x01000000);
+        MEM_W32(R(2), R(18)); /* start after leading words */
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(20) << 16);
+        load_gpu_global(c, 3, 0x80024634);
+        set_reg(c, 2, R(2) | 16);
+        MEM_W32(R(3), R(2));
+        NC_POLL(c, 1);
+        load_gpu_global(c, 2, 0x80024638);
+        set_reg(c, 4, R(4) | 0x201);
+        MEM_W32(R(2), R(4));
+        NC_POLL(c, 1);
+    }
+    set_reg(c, 2, 0);
+}
+
+bool nc_credits_upload_gpu_image(CPUState *c) {
+    if (c->budget <= 9)
+        return false;
+    R(29) -= 64;
+    c->budget--;
+    MEM_W32(R(29) + 36, R(17));
+    R(17) = R(4); /* RECT */
+    c->budget -= 2;
+    MEM_W32(R(29) + 40, R(18));
+    R(18) = R(5); /* pixel data */
+    c->budget -= 2;
+    MEM_W32(R(29) + 56, R(31));
+    c->budget--;
+    for (unsigned reg = 21; reg >= 19; reg--) {
+        MEM_W32(R(29) + 32 + 4 * (reg - 16), R(reg));
+        c->budget--;
+    }
+    R(31) = 0x8001db88;
+    MEM_W32(R(29) + 32, R(16));
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001e9fc); /* set_alarm */
+    if (!size_gpu_upload(c)) {
+        R(2) = UINT32_MAX;
+        NC_POLL(c, 2);
+    } else if (wait_for_gpu_upload(c)) {
+        send_gpu_upload(c);
+    }
+    load_word(c, 31, R(29) + 56);
+    for (unsigned reg = 21; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 32 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 64);
+    NC_POLL(c, 2);
+    return true;
+}
+
 static void report_gpu_timeout(CPUState *c) {
     load_gpu_global(c, 3, 0x8002462c);
     set_reg(c, 4, 0x80020000);

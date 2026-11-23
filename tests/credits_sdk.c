@@ -2470,6 +2470,88 @@ static void interrupt_start_state(StateIO *io) {
     irq_serialize(io);
 }
 
+static bool check_gpu_image_upload(void) {
+    const u32 rect = 0x80061000, pixels = rect + 64, status = rect + 512;
+    const u32 gp0 = 0x1f801810, gp1 = gp0 + 4;
+    const struct {
+        s16 width, height, clipped_width, clipped_height;
+        bool wait, timeout;
+    } cases[] = {
+        {-1, 8, 0, 8, false, false}, {2, -3, 2, 0, false, false},
+        {3, 3, 3, 3, false, false},         /* CPU words, odd pixel count */
+        {32, 1, 32, 1, false, false},       /* one DMA block */
+        {50, 9, 37, 2, false, false},       /* clipped, CPU prefix plus DMA */
+        {4, 1, 4, 1, true, false}, {4, 1, 4, 1, true, true},
+    };
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    gpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; ok && run < 2; run++) {
+            MEM_W32(0x8001e9fc, 0x03e00008); /* set_alarm */
+            MEM_W32(0x8001ea00, 0);
+            MEM_W32(0x8001ea30, 0xad090000); /* get_alarm makes the GPU ready */
+            MEM_W32(0x8001ea34, 0x03e00008);
+            MEM_W32(0x8001ea38, 0x01401021); /* return t2 */
+            MEM_W32(gp1, 0); /* reset command FIFO */
+            MEM_W32(0x80024628, gp0);
+            MEM_W32(0x8002462c, cases[i].wait ? status : gp1);
+            MEM_W32(status, 0);
+            MEM_W32(0x80024630, 0x1f8010a0);
+            MEM_W32(0x80024634, 0x1f8010a4);
+            MEM_W32(0x80024638, 0x1f8010a8);
+            MEM_W32(0x8002455c, 2u << 16 | 37);
+            if (i < 3)
+                MEM_W16(0x8002455e, 8);
+            MEM_W32(rect, 10u << 16 | 20);
+            MEM_W16(rect + 4, (u16)cases[i].width);
+            MEM_W16(rect + 6, (u16)cases[i].height);
+            for (unsigned j = 0; j < 80; j++)
+                MEM_W16(pixels + j * 2, (u16)(0x1240 + j));
+            nc_cpu = arguments(rect, pixels, 0, i & 1 ? 10 : 4096);
+            nc_cpu.r[8] = status;
+            nc_cpu.r[9] = 1u << 26;
+            nc_cpu.r[10] = cases[i].timeout;
+            if (run)
+                interp_call(&nc_cpu, 0x8001db5c);
+            else
+                ok = nc_credits_upload_gpu_image(&nc_cpu);
+            StateIO *result = run ? &guest : &native;
+            interrupt_start_state(result);
+            gpu_serialize(result);
+            unsigned count = cases[i].clipped_width * cases[i].clipped_height;
+            ok = ok && MEM_R16(rect + 4) == cases[i].clipped_width &&
+                 MEM_R16(rect + 6) == cases[i].clipped_height &&
+                 nc_cpu.r[2] == (count && !cases[i].timeout ? 0u : UINT32_MAX);
+            if (ok && count && !cases[i].timeout) {
+                MEM_W32(gp0, 0xc0000000); /* read the uploaded pixels back from VRAM */
+                MEM_W32(gp0, MEM_R32(rect));
+                MEM_W32(gp0, MEM_R32(rect + 4));
+                for (unsigned j = 0; ok && j < count; j += 2) {
+                    u32 pair = MEM_R32(gp0);
+                    ok = (u16)pair == 0x1240 + j &&
+                         (j + 1 == count || pair >> 16 == 0x1241 + j);
+                }
+            }
+            saved.loading = true;
+            saved.pos = 0;
+            interrupt_start_state(&saved);
+            gpu_serialize(&saved);
+        }
+        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    nc_set_module(module);
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_set_interrupt_handler(void) {
     const struct {
         unsigned irq;
@@ -4970,6 +5052,7 @@ int main(int argc, char **argv) {
     pass = pass && check_queue_alarm_expiry();
     pass = pass && check_gpu_driver_reset();
     pass = pass && check_reset_graph();
+    pass = pass && check_gpu_image_upload();
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
