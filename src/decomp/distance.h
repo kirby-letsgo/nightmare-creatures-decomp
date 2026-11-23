@@ -135,6 +135,7 @@ bool nc_begin_placement_angle_update(CPUState *c);
 bool nc_set_type7_pose_angles(CPUState *c);
 bool nc_set_type7_linked_heading(CPUState *c);
 bool nc_set_other_placement_angles(CPUState *c);
+u32 nc_begin_placement_halfword_step(CPUState *c);
 u32 nc_step_placement_halfword(CPUState *c);
 bool nc_finish_placement_angle_step(CPUState *c);
 bool nc_begin_record_point_heading(CPUState *c);
