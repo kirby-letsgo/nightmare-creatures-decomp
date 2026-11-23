@@ -62,6 +62,34 @@ static bool run_destructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, false);
 }
 
+static bool launcher_toupper(CPUState *c) {
+    return nc_launcher_convert_case(c, true);
+}
+
+static bool launcher_tolower(CPUState *c) {
+    return nc_launcher_convert_case(c, false);
+}
+
+static bool check_case_conversion(void) {
+    const struct { u32 input, upper, lower; } cases[] = {
+        {'a', 'A', 'a'}, {'Z', 'Z', 'z'}, {'9', '9', '9'},
+        {0xffffff61, 'A', 'a'}, {0x141, 'A', 'a'}, {0xffffffff, 255, 255},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        CPUState start = {0};
+        start.r[4] = cases[i].input;
+        start.r[29] = 0x801fff00;
+        start.r[31] = 0x80010000;
+        start.budget = NC_LOAD_CYCLES + 12;
+        if (!compare(start, 0x80011828, launcher_toupper, NC_LOAD_CYCLES + 11) ||
+            nc_cpu.r[2] != cases[i].upper ||
+            !compare(start, 0x80011858, launcher_tolower, NC_LOAD_CYCLES + 11) ||
+            nc_cpu.r[2] != cases[i].lower)
+            return false;
+    }
+    return true;
+}
+
 static bool check_global_callbacks(void) {
     const u32 flags[] = {0, 1, 0x80000000};
     for (unsigned ctor = 0; ctor < 2; ctor++)
@@ -586,6 +614,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_case_conversion()) {
+        fprintf(stderr, "launcher character case conversion failed\n");
         return 1;
     }
     if (!check_global_callbacks()) {

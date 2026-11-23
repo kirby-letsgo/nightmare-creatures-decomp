@@ -45,6 +45,24 @@ static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
     NC_POLL(c, 2);
 }
 
+/* The SDK indexes its character-class table with the low byte of the argument. */
+bool nc_launcher_convert_case(CPUState *c, bool upper) {
+    if (c->budget <= NC_LOAD_CYCLES + 11)
+        return false;
+    R(3) = R(4);
+    R(1) = 0x80010000u + (R(4) & 0xff);
+    c->budget -= 4;
+    u32 flags = MEM_R8(R(1) + 0x56bd);
+    c->budget -= NC_LOAD_CYCLES + 4;
+    if (flags & (upper ? 2u : 1u)) {
+        R(3) = upper ? R(4) - 32 : R(4) + 32;
+        c->budget--;
+    }
+    R(2) = R(3) & 0xff;
+    c->budget -= 2;
+    return true;
+}
+
 /* Return the previous stack pointer and install the caller's stack. */
 bool nc_launcher_switch_stack(CPUState *c) {
     if (c->budget <= 3)

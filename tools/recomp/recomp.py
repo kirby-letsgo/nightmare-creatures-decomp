@@ -1232,6 +1232,9 @@ class Emitter:
                 out.append("    if (nc_launcher_init_shared_record(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80010618:
                 out.append("    if (nc_launcher_run_modules(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr in (0x80011828, 0x80011858):
+                upper = "true" if i.addr == 0x80011828 else "false"
+                out.append(f"    if (nc_launcher_convert_case(c, {upper})) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800119BC:
                 out.append("    if (save_irq_context(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800119F8:
