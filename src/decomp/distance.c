@@ -4802,6 +4802,27 @@ bool nc_copy_placement_coordinates(CPUState *c) {
     return true;
 }
 
+/* Each axis uses an unsigned record coordinate and signed comparisons
+ * against the wrapping 32-bit bounds. The lower branch leaves center+5 in v0. */
+bool nc_check_placement_axis(CPUState *c, bool second, bool *inside) {
+    if (c->budget <= 11)
+        return false;
+    const u32 center = MEM_R32(second ? 0x8008f180 : 0x8008f174);
+    const u32 coordinate = MEM_R16(R(16) + (second ? 0x36 : 0x34));
+    const bool below = (s32)coordinate < (s32)(center - 5);
+    const int cycles = below ? 11 : 14;
+    if (c->budget <= cycles)
+        return false;
+    const u32 upper = center + 5;
+    const bool above = (s32)upper < (s32)coordinate;
+    R(4) = center;
+    R(3) = coordinate;
+    R(2) = below ? upper : (u32)above;
+    *inside = !below && !above;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_begin_placement_scan(CPUState *c) {
     if (c->budget <= 15)
         return false;
