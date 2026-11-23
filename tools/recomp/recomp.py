@@ -252,6 +252,7 @@ CREDITS_ROUTINES = {
     0x800214C8: "nc_credits_cd_flush_controller(c)",
     0x800215A8: "nc_credits_cd_init_volume(c)",
     0x8002169C: "nc_credits_cd_init_interrupt(c)",
+    0x800218D8: "nc_credits_sync_cd_dma(c)",
     0x80021A44: "nc_credits_cd_sector_dma(c)",
     0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
     0x80021B54: "nc_credits_cd_interrupt_callback(c)",
