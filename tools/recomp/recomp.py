@@ -28,6 +28,13 @@ FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
+# Entry -> (action, return address at the button-history store).
+PSX2_PLAYER_SHOULDER_CALLS = {
+    0x80044CBC: (9, 0x80044CC4),
+    0x80044CCC: (0x15, 0x80044CD4),
+    0x80044CDC: (0x16, 0x80044CE8),
+}
+
 PSX2_PLAYER_BUTTON_STORE_JUMPS = {
     0x80044CC4,
     0x80044CD4,
@@ -1004,6 +1011,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
             targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.update(dest for _, dest in PSX2_PLAYER_SHOULDER_CALLS.values())
             targets.update(entry + 20 for entry in PSX2_PLAYER_FACE_PRESSES)
             targets.update(
                 (
@@ -1290,6 +1298,12 @@ class Emitter:
                         "    case 0x80044CBC: goto L_80044CBC;",
                         "    }",
                     ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_SHOULDER_CALLS:
+                action, dest = PSX2_PLAYER_SHOULDER_CALLS[i.addr]
+                out.append(
+                    f"    if (nc_call_player_shoulder_action(c, {action}, 0x{dest:08X})) "
+                    f"goto L_{dest:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr in (0x80044D18, 0x80044D38):
                 check_stick = "true" if i.addr == 0x80044D18 else "false"

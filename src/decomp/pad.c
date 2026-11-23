@@ -431,6 +431,20 @@ bool nc_call_player_face_button(CPUState *c, bool check_cross) {
     return true;
 }
 
+/* Only the action-22 entry reloads the actor before the call. */
+bool nc_call_player_shoulder_action(CPUState *c, u32 action, u32 return_pc) {
+    const int cycles = action == 0x16 ? 3 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (action == 0x16)
+        R(4) = R(16);
+    R(31) = return_pc;
+    R(5) = action;
+    c->budget -= cycles;
+    nc_call(c, 0x8004f87c);
+    return true;
+}
+
 /* Circle routes to the stick check. Otherwise the shoulder buttons select
  * an action path, or pass the Up bit to the direct action-6 check. */
 u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle) {
