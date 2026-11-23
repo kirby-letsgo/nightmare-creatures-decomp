@@ -3243,6 +3243,73 @@ static bool check_clear_otag_reverse(void) {
     return ok;
 }
 
+static bool check_interrupt_dispatch(void) {
+    const u32 status = 0x80061000, mask = status + 4, trace = status + 16;
+    const u32 first = status + 128, last = first + 32;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* A returning exception stub makes both the early diagnostic and the
+     * normally unreachable stack restore observable. */
+    MEM_W32(0x8001ae48, 0x03e00008);
+    MEM_W32(0x8001ae4c, 0x25ad0001); /* addiu t5,t5,1 */
+    MEM_W32(0x80019a60, 0x03e00008);
+    MEM_W32(0x80019a64, 0xad040010); /* sw a0,16(t0) */
+    for (unsigned i = 0; i < 2; i++) {
+        u32 entry = i ? last : first;
+        MEM_W32(entry, 0x95220000);      /* lhu v0,0(t1): acknowledged status */
+        MEM_W32(entry + 4, 0x00000000);
+        MEM_W32(entry + 8, 0xad020000);  /* sw v0,0(t0) */
+        MEM_W32(entry + 12, 0x25080004);
+        MEM_W32(entry + 16, 0x03e00008);
+        MEM_W32(entry + 20, i ? 0xa5200000 : 0xa52a0000); /* set next pending bits */
+    }
+    const struct {
+        u16 initialized, status, enabled, mask;
+        u32 counter, final_counter, diagnostic;
+    } cases[] = {
+        {0, 0, 0, 0, 9, 0, 0x80018344},
+        {1, 0, 1, 1, 12, 0, 0},
+        {1, 1, 1, 1, 0, 0, 0}, /* acknowledge a slot with no callback */
+        {1, 0x8004, 0x8404, 0x8404, 0, 0, 0}, /* source 2 posts source 10 */
+        {1, 4, 0, 4, 0x800, 0x801, 0},
+        {1, 4, 0, 4, 0x801, 0, 0x80018360},
+    };
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W16(0x80023418, cases[i].initialized);
+        MEM_W16(0x8002341a, 0);
+        memset(nc_fast_ptr(0x8002341c), 0, 11 * 4);
+        MEM_W32(0x8002341c + 2 * 4, first);
+        MEM_W32(0x8002341c + 10 * 4, last);
+        MEM_W16(0x80023448, cases[i].enabled);
+        MEM_W32(0x800244a4, status);
+        MEM_W32(0x800244a8, mask);
+        MEM_W32(0x800244b0, cases[i].counter);
+        MEM_W16(status, cases[i].status);
+        MEM_W16(mask, cases[i].mask);
+        memset(nc_fast_ptr(trace), 0, 32);
+        CPUState state = arguments(1, 2, 3, i & 1 ? 10 : 4096);
+        state.r[8] = trace;
+        state.r[9] = status;
+        state.r[10] = 1u << 10;
+        state.r[13] = 0;
+        ok = compare(state, 0x8001a90c, nc_credits_dispatch_interrupts, 9) &&
+             MEM_R16(0x8002341a) == 0 && MEM_R32(0x800244b0) == cases[i].final_counter &&
+             MEM_R32(trace + 16) == cases[i].diagnostic &&
+             nc_cpu.r[13] == (cases[i].initialized ? 1u : 2u);
+        if (i == 3)
+            ok = ok && nc_cpu.r[8] == trace + 8 && MEM_R32(trace) == 0xfffb &&
+                 MEM_R32(trace + 4) == 0xfbff && MEM_R16(status) == 0;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_dma_interrupt_dispatch(void) {
     const u32 trace = 0x80061000, callback = trace + 0x100, dicr = 0x1f8010f4;
     StateIO saved = {0};
@@ -4633,6 +4700,7 @@ int main(int argc, char **argv) {
     pass = pass && check_sector_ready_callback();
     pass = pass && check_cd_dma_wait();
     pass = pass && check_dma_slot();
+    pass = pass && check_interrupt_dispatch();
     pass = pass && check_dma_interrupt_dispatch();
     pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();
