@@ -556,6 +556,16 @@ bool nc_finish_player_action_thirteen(CPUState *c) {
     return true;
 }
 
+bool nc_call_player_single_face_action(CPUState *c, bool cross) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = cross ? 0x80044ddc : 0x80044db8;
+    R(5) = cross ? 8 : 6;
+    c->budget -= 2;
+    nc_call(c, 0x8004fa34);
+    return true;
+}
+
 /* This Triangle path records the edge on the incoming actor argument, then
  * uses the saved player actor to select and store the action. */
 u32 nc_player_triangle_direct_action(CPUState *c) {
