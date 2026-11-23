@@ -37,4 +37,32 @@ static inline bool interrupt_driver_call(CPUState *c, u32 driver_slot, u32 offse
     return true;
 }
 
+static inline bool interrupt_callback_status(CPUState *c, u32 address) {
+    if (c->budget <= 6)
+        return false;
+    c->budget--;
+    R(2) = MEM_R16(address);
+    c->budget -= NC_LOAD_CYCLES + 2;
+    return true;
+}
+
+/* Both mask accessors return the old unsigned halfword. SetIntrMask also
+ * leaves the port pointer in v1 and stores the low half of a0. */
+static inline bool interrupt_mask(CPUState *c, u32 port_slot, bool write) {
+    if (c->budget <= (write ? 11 : 10))
+        return false;
+    c->budget--;
+    u32 port = MEM_R32(port_slot);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    R(2) = MEM_R16(port);
+    c->budget -= NC_LOAD_CYCLES;
+    if (write) {
+        R(3) = port;
+        MEM_W16(port, (u16)R(4));
+        c->budget--;
+    }
+    c->budget -= 2;
+    return true;
+}
+
 #endif

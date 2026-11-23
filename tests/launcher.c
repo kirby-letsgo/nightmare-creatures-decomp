@@ -175,6 +175,65 @@ static bool check_irq_wrappers(void) {
     return true;
 }
 
+static bool read_callback_status(CPUState *c) {
+    return interrupt_callback_status(c, 0x80014622);
+}
+
+static bool read_mask(CPUState *c) {
+    return interrupt_mask(c, 0x800156b0, false);
+}
+
+static bool replace_mask(CPUState *c) {
+    return interrupt_mask(c, 0x800156b0, true);
+}
+
+static bool check_interrupt_mask(void) {
+    const u32 slot = 0x800156b0, status = 0x80014622;
+    const u32 ports[] = {0x80016702, SCRATCH_BASE + 6};
+    const u32 hardware = MEM_R32(slot);
+    if (nc_phys(hardware) != 0x1f801074)
+        return false;
+    const u16 previous_mask = MEM_R16(hardware);
+    CPUState start = {0};
+    start.r[3] = 0x76543210;
+    start.r[4] = 0x12345678;
+    start.r[29] = 0x801ffe00;
+    start.r[31] = 0x80010000;
+    for (unsigned i = 0; i < sizeof ports / sizeof ports[0]; i++) {
+        start.budget = i ? 4096 : 12;
+        u16 old = i ? 0x8001 : 0;
+        MEM_W16(status, old);
+        if (!compare(start, 0x80010ba4, read_callback_status, 6) || nc_cpu.r[2] != old)
+            return false;
+        MEM_W32(slot, ports[i]);
+        MEM_W32(ports[i] - 2, 0xabcd);
+        MEM_W16(ports[i], old);
+        MEM_W16(ports[i] + 2, 0xef01);
+        if (!compare(start, 0x80010bb4, read_mask, 10) || nc_cpu.r[2] != old ||
+            !compare(start, 0x80010bcc, replace_mask, 11) || nc_cpu.r[2] != old ||
+            nc_cpu.r[3] != ports[i] || MEM_R16(ports[i]) != 0x5678 ||
+            MEM_R16(ports[i] - 2) != 0xabcd || MEM_R16(ports[i] + 2) != 0xef01)
+            return false;
+    }
+    MEM_W32(slot, hardware);
+    /* The CPU comparison restores RAM. Seed the hardware mask separately
+     * before each run so both executions observe the same previous value. */
+    bool ok = true;
+    for (unsigned run = 0; run < 2; run++) {
+        MEM_W16(hardware, 0x41);
+        nc_cpu = start;
+        nc_cpu.r[4] = 0xff000102;
+        if (run)
+            interp_call(&nc_cpu, 0x80010bcc);
+        else
+            ok = replace_mask(&nc_cpu);
+        ok = ok && nc_cpu.r[2] == 0x41 && nc_cpu.r[3] == hardware &&
+             MEM_R16(hardware) == 0x102 && nc_cpu.budget == start.budget - 11;
+    }
+    MEM_W16(hardware, previous_mask);
+    return ok;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -259,6 +318,10 @@ int main(int argc, char **argv) {
     }
     if (!check_irq_wrappers()) {
         fprintf(stderr, "launcher callback wrappers failed\n");
+        return 1;
+    }
+    if (!check_interrupt_mask()) {
+        fprintf(stderr, "launcher interrupt mask failed\n");
         return 1;
     }
     for (unsigned selection = 0; selection < 6; selection++)
