@@ -1367,6 +1367,15 @@ class Emitter:
                 out.append("    nc_credits_restore_jump_context(c); return;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800530F4:
+                out.extend(
+                    [
+                        "    switch (nc_enter_player_button_action(c)) {",
+                        "    case 0x80053184: goto L_80053184;",
+                        "    case 0x80053478: goto L_80053478;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80053084:
                 out.append("    if (nc_count_player_action_buttons(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004457C:

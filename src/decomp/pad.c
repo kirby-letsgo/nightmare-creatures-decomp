@@ -171,6 +171,50 @@ bool nc_count_player_action_buttons(CPUState *c) {
     return true;
 }
 
+/* Save the actor and buttons before checking whether this action may proceed. */
+u32 nc_enter_player_button_action(CPUState *c) {
+    if (c->budget <= 46)
+        return 0x800530f4;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 0x20, R(18));
+    MEM_W32(R(29) + 0x24, R(31));
+    MEM_W32(R(29) + 0x18, R(16));
+    R(3) = MEM_R8(R(17) + 0x38a);
+    R(18) = R(5);
+    R(2) = 0;
+    c->budget -= 12;
+    switch (R(3)) {
+    case 3:
+        c->budget -= 2;
+        return 0x80053478;
+    case 9:
+        c->budget -= 5;
+        return 0x80053478;
+    case 0x22:
+    case 10:
+        c->budget -= 7;
+        return 0x80053478;
+    }
+    c->budget -= 14;
+    if (MEM_R32(R(17) + 0x330) & 0x800)
+        return 0x80053478;
+
+    R(4) = MEM_R32(R(28) + 0x244);
+    R(3) = 0x20000;
+    R(2) = MEM_R32(R(4) + 4) & R(3);
+    c->budget -= 11;
+    if (!R(2))
+        return 0x80053184;
+    R(2) = MEM_R32(R(4)) & 0x30;
+    c->budget -= 7;
+    if (R(2))
+        return 0x80053184;
+    c->budget -= 2;
+    return 0x80053478;
+}
+
 bool nc_call_player_button_action(CPUState *c) {
     if (c->budget <= 2)
         return false;
