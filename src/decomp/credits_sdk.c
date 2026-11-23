@@ -2422,6 +2422,100 @@ bool nc_credits_draw_sync_callback(CPUState *c) {
     return true;
 }
 
+/* Set the GPU display-mode reverse bit and return the previous flag byte. */
+bool nc_credits_set_graph_reverse(CPUState *c) {
+    const int entry_cycles = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    if (c->budget <= entry_cycles)
+        return false;
+    c->budget--;
+    R(2) = MEM_R8(0x8002455a);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = 0x8002455b;
+    c->budget -= 3;
+    MEM_W32(R(29) + 28, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 24, R(18));
+    c->budget--;
+    R(18) = MEM_R8(R(16));
+    R(2) = R(2) < 2;
+    R(17) = R(4);
+    c->budget -= NC_LOAD_CYCLES + 3;
+    graphics_diagnostic(c, 0x800184e0, 0x8001bfec, 17);
+
+    /* Query GPU parameter 8, then combine it with the current reverse flag. */
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    MEM_W8(R(16), (u8)R(17));
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2) + 0x28);
+    NC_POLL(c, 1);
+    R(31) = 0x8001c008;
+    R(4) = 8;
+    NC_POLL(c, 2);
+    nc_call(c, R(2));
+    R(3) = MEM_R8(R(16));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    bool reverse = R(3) != 0;
+    R(4) = R(2);
+    NC_POLL(c, 2);
+    set_reg(c, 2, 0x08000000);
+    if (reverse) {
+        R(2) |= 0x80;
+        NC_POLL(c, 2);
+    }
+    set_reg(c, 4, R(4) | R(2));
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80024550);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2) + 0x10);
+    NC_POLL(c, 1);
+    R(31) = 0x8001c048;
+    NC_POLL(c, 2);
+    nc_call(c, R(2));
+
+    /* Graphics type 2 needs a second control command. */
+    set_reg(c, 3, 0x80020000);
+    R(3) = MEM_R8(0x80024558);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 2, 2);
+    bool extra_command = R(3) == R(2);
+    R(2) = R(18);
+    NC_POLL(c, 2);
+    if (extra_command) {
+        set_reg(c, 4, 0x20000000);
+        set_reg(c, 2, 0x80020000);
+        R(2) = MEM_R8(0x8002455b);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 3, 0x80020000);
+        load_word(c, 3, 0x80024550);
+        reverse = R(2) != 0;
+        R(4) = 0x20000504;
+        NC_POLL(c, 2);
+        if (reverse) {
+            set_reg(c, 4, 0x20000000);
+            set_reg(c, 4, 0x20000501);
+        }
+        load_word(c, 2, R(3) + 0x10);
+        NC_POLL(c, 1);
+        R(31) = 0x8001c090;
+        NC_POLL(c, 2);
+        nc_call(c, R(2));
+        set_reg(c, 2, R(18));
+    }
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Change GPU queue mode and detach the GPU DMA callback when the mode changes. */
 bool nc_credits_set_graph_queue(CPUState *c) {
     const int entry_cycles = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
