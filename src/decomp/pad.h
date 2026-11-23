@@ -11,6 +11,8 @@ typedef enum {
 } NcPadBiosService;
 
 bool nc_player_triangle_fallback(CPUState *c);
+bool nc_call_player_r2_action(CPUState *c);
+u32 nc_player_r2_action_result(CPUState *c);
 bool nc_call_player_down_action(CPUState *c, u32 action, u32 link, bool reload_actor);
 u32 nc_player_down_face_buttons(CPUState *c);
 u32 nc_player_level_flag_check(CPUState *c);
