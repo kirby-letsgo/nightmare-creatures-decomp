@@ -153,6 +153,24 @@ u32 nc_player_input_action_gate(CPUState *c) {
     return R(2) ? 0x800449ec : 0x800449d8;
 }
 
+/* Triangle seeds the count. Each other held face button or direction
+ * executes one extra increment in the original routine. */
+bool nc_count_player_action_buttons(CPUState *c) {
+    const u32 buttons = R(4);
+    unsigned increments = 0;
+    for (u32 held = buttons & 0xe0f0; held; held &= held - 1)
+        ++increments;
+
+    const int cycles = 21 + (int)increments;
+    if (c->budget <= cycles)
+        return false;
+    R(5) = (buttons & 0x1000) != 0;
+    R(3) = R(5) + increments;
+    R(2) = R(3);
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_call_player_button_action(CPUState *c) {
     if (c->budget <= 2)
         return false;
