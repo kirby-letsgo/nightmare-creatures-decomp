@@ -2130,6 +2130,212 @@ bool nc_credits_texture_window_packet(CPUState *c) {
     return true;
 }
 
+static void load_env_byte(CPUState *c, unsigned reg, unsigned offset) {
+    R(reg) = MEM_R8(R(16) + offset);
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+static void store_draw_word(CPUState *c, u32 address, u32 value) {
+    MEM_W32(address, value);
+    NC_POLL(c, 1);
+}
+
+/* The optional clear uses a stack copy of the environment's clipping rectangle. */
+static void prepare_env_clear(CPUState *c) {
+    for (unsigned offset = 0; offset <= 4; offset += 2) {
+        load_image_halfword(c, 2, R(16) + offset, false);
+        NC_POLL(c, 1);
+        MEM_W16(R(29) + 16 + offset, (u16)R(2));
+        NC_POLL(c, 1);
+    }
+    load_image_halfword(c, 3, R(16) + 6, false);
+    set_reg(c, 2, R(2) << 16);
+    MEM_W16(R(29) + 22, (u16)R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 3, (u32)((s32)R(2) >> 16));
+    bool negative = (s32)R(3) < 0;
+    R(2) = 0;
+    NC_POLL(c, 2);
+    if (!negative) {
+        clear_rect_limit(c, 0x8002455c);
+        bool clip = R(2) != 0;
+        R(2) = R(3);
+        NC_POLL(c, 2);
+        if (clip) {
+            set_reg(c, 3, R(4));
+            set_reg(c, 2, R(3));
+        }
+    }
+    load_image_halfword(c, 3, R(29) + 22, true);
+    NC_POLL(c, 1);
+    negative = (s32)R(3) < 0;
+    MEM_W16(R(29) + 20, (u16)R(2));
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 2, 0);
+    } else {
+        clear_rect_limit(c, 0x8002455e);
+        bool clip = R(2) != 0;
+        R(2) = R(3);
+        NC_POLL(c, 2);
+        if (clip) {
+            set_reg(c, 3, R(4));
+            R(2) = R(3);
+            NC_POLL(c, 2);
+        }
+    }
+    load_image_halfword(c, 3, R(29) + 16, false);
+    MEM_W16(R(29) + 22, (u16)R(2));
+    NC_POLL(c, 1);
+}
+
+static void pack_env_clear_color(CPUState *c) {
+    load_env_byte(c, 2, 27);
+    load_env_byte(c, 3, 26);
+    set_reg(c, 2, R(2) << 16);
+    set_reg(c, 3, R(3) << 8);
+    set_reg(c, 3, R(3) | R(4));
+    load_env_byte(c, 4, 25);
+    set_reg(c, 2, R(2) | R(3));
+    set_reg(c, 2, R(2) | R(4));
+}
+
+static void append_env_clear(CPUState *c) {
+    prepare_env_clear(c);
+    set_reg(c, 2, R(3) & 63);
+    bool aligned = !R(2);
+    R(6) = R(8) << 2;
+    NC_POLL(c, 2);
+    if (aligned) {
+        load_image_halfword(c, 2, R(29) + 20, false);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 63);
+        aligned = !R(2);
+        R(5) = R(8) << 2;
+        NC_POLL(c, 2);
+    }
+    if (aligned) {
+        /* A VRAM fill uses absolute coordinates. */
+        set_reg(c, 8, R(8) + 1);
+        set_reg(c, 6, R(8) << 2);
+        set_reg(c, 8, R(8) + 1);
+        set_reg(c, 7, R(8) << 2);
+        set_reg(c, 8, R(8) + 1);
+        set_reg(c, 5, R(5) + R(17));
+        set_reg(c, 4, 0x02000000);
+        pack_env_clear_color(c);
+        store_draw_word(c, R(5), R(2));
+        load_word(c, 2, R(29) + 16);
+        set_reg(c, 6, R(6) + R(17));
+        store_draw_word(c, R(6), R(2));
+        load_word(c, 2, R(29) + 20);
+        set_reg(c, 7, R(7) + R(17));
+        store_draw_word(c, R(7), R(2));
+        return;
+    }
+    /* A solid rectangle uses coordinates relative to the drawing offset. */
+    set_reg(c, 8, R(8) + 1);
+    set_reg(c, 5, R(8) << 2);
+    set_reg(c, 8, R(8) + 1);
+    load_image_halfword(c, 2, R(16) + 8, false);
+    set_reg(c, 6, R(6) + R(17));
+    set_reg(c, 2, R(3) - R(2));
+    MEM_W16(R(29) + 16, (u16)R(2));
+    NC_POLL(c, 1);
+    load_image_halfword(c, 2, R(29) + 18, false);
+    load_image_halfword(c, 3, R(16) + 10, false);
+    set_reg(c, 4, 0x60000000);
+    set_reg(c, 2, R(2) - R(3));
+    MEM_W16(R(29) + 18, (u16)R(2));
+    NC_POLL(c, 1);
+    pack_env_clear_color(c);
+    store_draw_word(c, R(6), R(2));
+    load_word(c, 2, R(29) + 16);
+    set_reg(c, 5, R(5) + R(17));
+    store_draw_word(c, R(5), R(2));
+    set_reg(c, 2, R(8) << 2);
+    load_word(c, 3, R(29) + 20);
+    set_reg(c, 2, R(2) + R(17));
+    store_draw_word(c, R(2), R(3));
+    load_image_halfword(c, 2, R(29) + 16, false);
+    load_image_halfword(c, 3, R(16) + 8, false);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) + R(3));
+    MEM_W16(R(29) + 16, (u16)R(2));
+    NC_POLL(c, 1);
+    load_image_halfword(c, 2, R(29) + 18, false);
+    load_image_halfword(c, 3, R(16) + 10, false);
+    set_reg(c, 8, R(8) + 1);
+    set_reg(c, 2, R(2) + R(3));
+    MEM_W16(R(29) + 18, (u16)R(2));
+    NC_POLL(c, 2);
+}
+
+/* SetDrawEnv builds the DR_ENV packet from the caller's DRAWENV. */
+bool nc_credits_set_draw_env(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 40;
+    MEM_W32(R(29) + 24, R(16));
+    R(16) = R(5);
+    MEM_W32(R(29) + 28, R(17));
+    R(17) = R(4);
+    MEM_W32(R(29) + 32, R(31));
+    c->budget -= 6;
+    load_image_halfword(c, 4, R(16), true);
+    load_image_halfword(c, 5, R(16) + 2, true);
+    gpu_sync_call(c, 0x8001d4cc, 0x8001d1f4); /* clip start */
+    store_draw_word(c, R(17) + 4, R(2));
+    load_image_halfword(c, 4, R(16) + 4, false);
+    load_image_halfword(c, 2, R(16), false);
+    load_image_halfword(c, 5, R(16) + 2, false);
+    set_reg(c, 4, R(4) + R(2));
+    set_reg(c, 4, R(4) - 1);
+    set_reg(c, 4, R(4) << 16);
+    load_image_halfword(c, 2, R(16) + 6, false);
+    set_reg(c, 4, (u32)((s32)R(4) >> 16));
+    set_reg(c, 5, R(5) + R(2));
+    set_reg(c, 5, R(5) - 1);
+    set_reg(c, 5, R(5) << 16);
+    R(31) = 0x8001d22c;
+    R(5) = (u32)((s32)R(5) >> 16);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001d598); /* inclusive clip end */
+    store_draw_word(c, R(17) + 8, R(2));
+    load_image_halfword(c, 4, R(16) + 8, true);
+    load_image_halfword(c, 5, R(16) + 10, true);
+    gpu_sync_call(c, 0x8001d664, 0x8001d240); /* drawing offset */
+    store_draw_word(c, R(17) + 12, R(2));
+    load_env_byte(c, 4, 23);
+    load_env_byte(c, 5, 22);
+    load_image_halfword(c, 6, R(16) + 20, false);
+    gpu_sync_call(c, 0x8001d470, 0x8001d258); /* drawing mode */
+    set_reg(c, 4, R(16) + 12);
+    R(31) = 0x8001d264;
+    MEM_W32(R(17) + 16, R(2));
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001d6ac); /* texture window */
+    store_draw_word(c, R(17) + 20, R(2));
+    set_reg(c, 2, 0xe6000000);
+    store_draw_word(c, R(17) + 24, R(2));
+    load_env_byte(c, 2, 24);
+    NC_POLL(c, 1);
+    bool clear = R(2) != 0;
+    R(8) = 7;
+    NC_POLL(c, 2);
+    if (clear)
+        append_env_clear(c);
+    set_reg(c, 2, R(8) - 1);
+    MEM_W8(R(17) + 3, (u8)R(2));
+    NC_POLL(c, 1);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_draw_mode_packet(CPUState *c) {
     /* Both command builders can run to completion within this budget. */
     if (c->budget <= 88)
