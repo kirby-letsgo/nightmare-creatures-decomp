@@ -66,6 +66,27 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* L1 requests action 3 and R1 requests action 4. Each check skips the
+ * action call when the button is released or the action is already active. */
+u32 nc_player_shoulder_action_check(CPUState *c, bool left) {
+    if (c->budget <= 9)
+        return left ? 0x80044aa4 : 0x80044ad0;
+
+    const u32 next = left ? 0x80044ad0 : 0x80044afc;
+    const u32 button = left ? 0x400 : 0x800;
+    R(2) = left ? 3 : 4;
+    c->budget -= 3;
+    if (!(R(17) & button))
+        return next;
+
+    R(3) = MEM_R8(R(16) + 0x39b);
+    R(4) = R(16);
+    c->budget -= 6;
+    if (R(3) == R(2))
+        return next;
+    return left ? 0x80044ac0 : 0x80044aec;
+}
+
 /* While action 9 is active, Square queues 6 and Cross queues 8. The
  * original checks Cross last, so it takes priority when both are held. */
 u32 nc_player_queue_face_action(CPUState *c) {

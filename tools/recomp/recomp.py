@@ -1008,6 +1008,8 @@ class Emitter:
                     0x80044754,
                     0x80044780,
                     0x800447B8,
+                    0x80044AC0,
+                    0x80044AEC,
                     0x80044C60,
                     0x80044CBC,
                     0x80044D48,
@@ -1120,6 +1122,18 @@ class Emitter:
                         "    if (nc_enter_player_input(c)) {",
                         "        if (R(2)) goto L_800451EC;",
                         "        goto L_80044754;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044AA4, 0x80044AD0):
+                left = i.addr == 0x80044AA4
+                request = i.addr + 0x1C
+                next_check = 0x80044AD0 if left else 0x80044AFC
+                out.extend(
+                    [
+                        f"    switch (nc_player_shoulder_action_check(c, {str(left).lower()})) {{",
+                        f"    case 0x{request:08X}: goto L_{request:08X};",
+                        f"    case 0x{next_check:08X}: goto L_{next_check:08X};",
                         "    }",
                     ]
                 )
