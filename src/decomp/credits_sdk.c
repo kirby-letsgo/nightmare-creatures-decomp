@@ -9490,26 +9490,6 @@ bool nc_credits_cd_read_callback(CPUState *c) {
     return exchange_cd_word(c, 0x80024a70);
 }
 
-/* CdComstr and CdIntstr return guest pointers into the CD diagnostic strings. */
-static bool cd_lookup_name(CPUState *c, u32 table, u32 count) {
-    if (c->budget <= 13)
-        return false;
-    R(4) &= 0xff;
-    c->budget -= 4; /* mask, range check, branch and delay slot */
-    if (R(4) < count) {
-        u32 offset = R(4) * 4;
-        R(1) = 0x80020000 + offset;
-        c->budget -= 2;
-        R(2) = MEM_R32(table + offset);
-        c->budget -= NC_LOAD_CYCLES + 2; /* load and jump to the return */
-    } else {
-        R(2) = 0x8001874c;
-        c->budget -= 2;
-    }
-    c->budget -= 2; /* jr and delay slot */
-    return true;
-}
-
 /* CD_cw(command, parameters, result, async). The async flag is in the delay slot. */
 static void issue_cd_control(CPUState *c, u32 parameters, unsigned result_reg, bool async, u32 resume) {
     set_reg(c, 5, parameters);
@@ -9680,11 +9660,11 @@ bool nc_credits_cd_control_b(CPUState *c) {
 }
 
 bool nc_credits_cd_command_name(CPUState *c) {
-    return cd_lookup_name(c, 0x80024780, 28);
+    return cd_lookup_name(c, 0x80024780, 28, 0x8001874c);
 }
 
 bool nc_credits_cd_interrupt_name(CPUState *c) {
-    return cd_lookup_name(c, 0x80024800, 7);
+    return cd_lookup_name(c, 0x80024800, 7, 0x8001874c);
 }
 
 /* CdIntToPos adds the lead-in before splitting the signed frame count.

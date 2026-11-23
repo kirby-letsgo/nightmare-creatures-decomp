@@ -1233,6 +1233,10 @@ class Emitter:
                 out.append("    if (set_dma_slot(c, 0x8001576c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
                 out.append("    if (set_vsync_slot(c, 0x80015740)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80012078:
+                out.append("    if (cd_lookup_name(c, 0x8001583c, 28, 0x80010364)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x800120AC:
+                out.append("    if (cd_lookup_name(c, 0x800158bc, 7, 0x80010364)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_SETTERS:
                 address = LAUNCHER_CD_STATE_SETTERS[i.addr]
                 out.append(f"    if (exchange_cd_word(c, 0x{address:x})) return;")

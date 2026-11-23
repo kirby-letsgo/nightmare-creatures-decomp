@@ -106,6 +106,33 @@ static bool set_cd_word(CPUState *c) {
     return exchange_cd_word(c, cd_state_address);
 }
 
+static bool cd_command_name(CPUState *c) {
+    return cd_lookup_name(c, 0x8001583c, 28, 0x80010364);
+}
+
+static bool cd_interrupt_name(CPUState *c) {
+    return cd_lookup_name(c, 0x800158bc, 7, 0x80010364);
+}
+
+static bool check_cd_names(void) {
+    const struct { u32 entry, table, count; bool (*routine)(CPUState *); } lookups[] = {
+        {0x80012078, 0x8001583c, 28, cd_command_name},
+        {0x800120ac, 0x800158bc, 7, cd_interrupt_name},
+    };
+    for (unsigned i = 0; i < sizeof lookups / sizeof lookups[0]; i++) {
+        const u32 count = lookups[i].count;
+        const u32 inputs[] = {0, 0x100 + count - 1, count, UINT32_MAX};
+        for (unsigned j = 0; j < sizeof inputs / sizeof inputs[0]; j++) {
+            u32 index = inputs[j] & 0xff;
+            u32 expected = index < count ? MEM_R32(lookups[i].table + 4 * index) : 0x80010364;
+            CPUState start = arguments(inputs[j], 0, 0, 14);
+            if (!compare(start, lookups[i].entry, lookups[i].routine, 13) || nc_cpu.r[2] != expected)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_cd_setters(void) {
     const struct { u32 entry, address; } setters[] = {
         {0x80012060, 0x80015824}, {0x80012120, 0x80015818},
@@ -695,6 +722,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_names()) {
+        fprintf(stderr, "launcher CD name lookups failed\n");
         return 1;
     }
     if (!check_cd_setters()) {
