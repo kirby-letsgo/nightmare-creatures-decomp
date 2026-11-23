@@ -4322,6 +4322,46 @@ static bool placement_scan_exits(bool disc) {
     return true;
 }
 
+static bool alternate_placement_counters(bool disc) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
+    const struct {
+        u32 selector, flags, counter, limit, next, result;
+        int cycles;
+    } cases[] = {
+        {0, 0xffffffff, 0, 0, 0x800290a8, 0x10000000, 2},
+        {0x800, 0xefffffff, 0, 0, 0x800290a8, 0, 5},
+        {0x800, 0x10000000, 0, 0, 0x80029060, 1, 18},
+        {1, 0xffffffff, 255, 255, 0x80029060, 256, 18},
+        {1, 0xffffffff, 255, 0, 0x800290a4, 256, 18},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].selector;
+        input.r[16] = record;
+        input.r[18] = cases[i].flags;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        MEM_W32(record, descriptor);
+        MEM_W8(descriptor + 0x37, cases[i].counter);
+        MEM_W8(descriptor + 0x3c, cases[i].limit);
+        CPUState native = input;
+        if (nc_check_alternate_placement_counter(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_check_alternate_placement_counter(&native) != cases[i].next ||
+            native.r[2] != cases[i].result || native.budget != 1 ||
+            native.r[3] != (cases[i].cycles == 18 ? descriptor : input.r[3]) ||
+            native.r[4] != (cases[i].cycles == 18 ? cases[i].counter : input.r[4]))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80029030);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_trees(bool disc) {
     const u32 record = SCRATCH_BASE, root = record + 0x80;
     const unsigned sizes[] = {0, 1, 5};
@@ -8362,6 +8402,7 @@ int main(int argc, char **argv) {
         placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
+        alternate_placement_counters(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
