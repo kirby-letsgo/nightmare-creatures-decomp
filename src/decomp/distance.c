@@ -3366,6 +3366,21 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* The traversals install the global light matrix, then the rotation and
+ * translation stored 0x40 bytes before it. The three SDK calls take
+ * 22, 22, and 14 cycles in addition to the nine caller instructions. */
+bool nc_install_placement_matrices(CPUState *c, u32 continuation) {
+    if (c->budget <= 67)
+        return false;
+    const u32 light = 0x800d76a8;
+    for (unsigned i = 0; i < 5; ++i)
+        gte_write_ctrl(c, 8 + i, MEM_R32(light + 4 * i));
+    R(16) = light - 0x40;
+    install_node_matrix(c, R(16), continuation);
+    c->budget -= 67;
+    return true;
+}
+
 /* Project the signed pose coordinates and keep the latest GTE depth (SZ3).
  * The branch compares depth and threshold before the delay-slot subtraction. */
 bool nc_project_placement_depth(CPUState *c, u32 depth_offset) {
