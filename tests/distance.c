@@ -4275,6 +4275,48 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool placement_color_record_loop(bool disc) {
+    const u32 actor = SCRATCH_BASE, records = actor + 0x40;
+    CPUState input = initial();
+    input.r[4] = actor;
+    input.r[6] = records;
+    input.r[5] = records + 3;
+    input.r[9] = records + 4;
+    input.r[3] = records + 7;
+    input.r[8] = 0;
+    input.r[10] = 0xff0000;
+    input.r[11] = 0x8000;
+    input.r[12] = 0x40;
+    input.r[31] = 0x80027fe8;
+    input.budget = 39;
+    MEM_W8(actor + 0x38d, 2);
+    MEM_W32(records, 0x55ff80ff);
+    MEM_W32(records + 8, 0xaa010301);
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    memcpy(before, nc_scratch, sizeof before);
+    CPUState native = input;
+    if (nc_light_placement_color_record(&native) || memcmp(&native, &input, sizeof input) ||
+        memcmp(before, nc_scratch, sizeof before))
+        return false;
+    native.budget = input.budget = 79;
+    if (!nc_light_placement_color_record(&native) || native.r[2] != 1 || native.budget != 40 ||
+        MEM_R32(records + 4) != 0x55fc807f)
+        return false;
+    if (!nc_light_placement_color_record(&native) || native.r[2] || native.budget != 1 ||
+        native.r[8] != 2 || native.r[3] != records + 23 || native.r[6] != records + 16 ||
+        native.r[15] != 0xff0000 || native.lo != native.r[15] || native.hi ||
+        MEM_R32(records + 12) != 0xaa010300)
+        return false;
+    if (disc) {
+        memcpy(after, nc_scratch, sizeof after);
+        memcpy(nc_scratch, before, sizeof before);
+        interp_call(&input, 0x80027f74);
+        if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+            return false;
+    }
+    return true;
+}
+
 static bool placement_color_record_entries(bool disc) {
     const u32 actor = SCRATCH_BASE, color = 0xa580fe01;
     const u8 counts[] = {0, 1, 255};
@@ -7917,6 +7959,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_color_record_loop(disc) &&
         placement_color_record_entries(disc) &&
         placement_color_adjustments(disc) &&
         placement_lighting_offsets(disc) &&

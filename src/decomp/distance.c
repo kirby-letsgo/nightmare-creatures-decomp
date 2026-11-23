@@ -4044,6 +4044,30 @@ bool nc_begin_placement_color_records(CPUState *c, bool *has_records) {
     return true;
 }
 
+/* Each eight-byte record holds the source color followed by its lit copy.
+ * The three channel masks still occupy their packed RGB bit positions. */
+bool nc_light_placement_color_record(CPUState *c) {
+    if (c->budget <= 39)
+        return false;
+    const u32 red = MEM_R8(R(6)) * R(12);
+    MEM_W8(R(9), (u8)(red >> 7));
+    const u32 green = MEM_R8(R(5) - 2) * R(11);
+    MEM_W8(R(3) - 2, (u8)(green >> 15));
+    nc_mult(c, MEM_R8(R(5) - 1), R(10));
+    R(6) += 8;
+    R(8)++;
+    R(9) += 8;
+    R(15) = c->lo;
+    MEM_W8(R(3) - 1, (u8)(R(15) >> 23));
+    const u8 flags = MEM_R8(R(5));
+    R(5) += 8;
+    MEM_W8(R(3), flags);
+    R(2) = (s32)R(8) < (s32)MEM_R8(R(4) + 0x38d);
+    R(3) += 8;
+    c->budget -= 39;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */
