@@ -4696,6 +4696,120 @@ static bool cd_lookup_name(CPUState *c, u32 table, u32 count) {
     return true;
 }
 
+/* CD_cw(command, parameters, NULL, async). The async flag is in the delay slot. */
+static void issue_cd_control(CPUState *c, u32 parameters, bool async, u32 resume) {
+    set_reg(c, 5, parameters);
+    set_reg(c, 6, 0);
+    R(31) = resume;
+    R(7) = async;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80021028);
+}
+
+static void set_cd_control_callback(CPUState *c, u32 callback) {
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x8002475c, callback);
+    NC_POLL(c, 1);
+}
+
+/* CdControlF retries the command up to four times. Keep the sync callback
+ * disabled for the status and Setloc commands preceding the requested one. */
+bool nc_credits_cd_control_f(CPUState *c) {
+    if (c->budget <= 19 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 48;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(5);
+    c->budget -= 2;
+    MEM_W32(R(29) + 28, R(19));
+    R(19) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = 3;
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(18));
+    R(18) = R(19) & 0xff;
+    R(3) = 0x800246d4;
+    c->budget -= 4;
+    MEM_W32(R(29) + 32, R(20));
+    c->budget -= 2;
+    R(20) = MEM_R32(0x8002475c);
+    R(2) = R(18) << 2;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 36, R(21));
+    R(21) = R(2) + R(3);
+    c->budget -= 2;
+    MEM_W32(R(29) + 40, R(22));
+    R(22) = 0;
+    c->budget -= 2;
+    MEM_W32(R(29) + 44, R(31));
+    c->budget--;
+
+    for (;;) {
+        set_cd_control_callback(c, 0);
+        set_reg(c, 2, 1);
+        bool check_status = R(18) != R(2);
+        NC_POLL(c, 2);
+        if (check_status) {
+            set_reg(c, 2, 0x80020000);
+            R(2) = MEM_R8(0x8002476c);
+            NC_POLL(c, NC_LOAD_CYCLES);
+            NC_POLL(c, 1);
+            set_reg(c, 2, R(2) & 0x10);
+            bool shell_open = R(2) != 0;
+            R(4) = 1;
+            NC_POLL(c, 2);
+            if (shell_open)
+                issue_cd_control(c, 0, false, 0x80020170);
+        }
+
+        bool has_parameters = R(17) != 0;
+        NC_POLL(c, 2);
+        bool location_failed = false;
+        if (has_parameters) {
+            load_word(c, 2, R(21));
+            NC_POLL(c, 1);
+            bool needs_location = R(2) != 0;
+            R(4) = 2;
+            NC_POLL(c, 2);
+            if (needs_location) {
+                issue_cd_control(c, R(17), false, 0x80020198);
+                location_failed = R(2) != 0;
+                NC_POLL(c, 2);
+            }
+        }
+        if (!location_failed) {
+            set_cd_control_callback(c, R(20));
+            set_reg(c, 4, R(19) & 0xff);
+            issue_cd_control(c, R(17), true, 0x800201bc);
+            bool success = R(2) == 0;
+            R(2) = R(22) + 1;
+            NC_POLL(c, 2);
+            if (success)
+                break;
+        }
+
+        set_reg(c, 16, R(16) - 1);
+        set_reg(c, 2, UINT32_MAX);
+        bool retry = R(16) != R(2);
+        NC_POLL(c, 2);
+        if (!retry) {
+            set_cd_control_callback(c, R(20));
+            set_reg(c, 22, UINT32_MAX);
+            set_reg(c, 2, R(22) + 1);
+            break;
+        }
+    }
+
+    load_word(c, 31, R(29) + 44);
+    for (unsigned i = 0; i < 7; i++)
+        load_word(c, 22 - i, R(29) + 40 - 4 * i);
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_cd_command_name(CPUState *c) {
     return cd_lookup_name(c, 0x80024780, 28);
 }
