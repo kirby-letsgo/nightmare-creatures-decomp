@@ -4084,6 +4084,43 @@ bool nc_measure_indexed_face(CPUState *c, u32 return_pc) {
     return true;
 }
 
+/* Accepted faces weight the first depth twice. Masking the sum gives a
+ * word-aligned byte offset into the ordering table. */
+bool nc_write_indexed_face_packet(CPUState *c, bool textured) {
+    const int cycles = textured ? 42 : 38;
+    if (c->budget <= cycles)
+        return false;
+    const u32 frame = R(29), packet = R(16), face = R(17);
+    ++R(21);
+    const u32 first_xy = MEM_R32(frame + 0x10);
+    R(5) = (u32)(s32)(s16)MEM_R16(frame + 0x14);
+    const s32 second_z = (s16)MEM_R16(frame + 0x1c);
+    R(6) = (u32)(s32)(s16)MEM_R16(frame + 0x24);
+    const u32 bucket = (2 * R(5) + (u32)second_z + R(6)) & 0x1ffc;
+    MEM_W32(packet + 1, first_xy);
+    MEM_W32(packet + (textured ? 9 : 5), MEM_R32(frame + 0x18));
+    const u32 third_xy = MEM_R32(frame + 0x20);
+    if (textured) {
+        R(9) = MEM_R32(frame + 0x38);
+        MEM_W32(packet - 3, R(9));
+        MEM_W32(packet + 17, third_xy);
+        MEM_W32(packet + 5, MEM_R32(face + 1));
+        MEM_W32(packet + 13, MEM_R32(face + 5));
+        R(2) = MEM_R16(face + 9);
+        R(4) = bucket;
+        MEM_W16(packet + 21, (u16)R(2));
+    } else {
+        MEM_W32(packet + 9, third_xy);
+        const u32 color_index = MEM_R16(face + 7);
+        R(9) = MEM_R32(frame + 0x40);
+        R(2) = MEM_R32(R(9) + 4 * color_index);
+        R(3) = bucket;
+        MEM_W32(packet - 3, R(2));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each of the three indexed vertices has its own screen-coordinate slot.
  * The depth output is shared and receives SZ3 in quarter-depth units. */
 bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset) {
