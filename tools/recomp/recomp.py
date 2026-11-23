@@ -1056,6 +1056,7 @@ class Emitter:
                     0x80044E74,
                     0x80044EB4,
                     0x80044F2C,
+                    0x80045014,
                     0x8004503C,
                     0x800451DC,
                 )
@@ -1458,6 +1459,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004500C:
+                out.append("    if (nc_call_player_down_setup(c)) goto L_80045014;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
                 check_circle = "true" if i.addr == 0x80045014 else "false"
                 out.extend(

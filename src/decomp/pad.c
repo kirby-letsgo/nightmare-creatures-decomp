@@ -837,6 +837,16 @@ u32 nc_player_down_shoulder_action(CPUState *c, bool test_down) {
     return 0x800451d0;
 }
 
+bool nc_call_player_down_setup(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80045014;
+    R(4) = R(16);
+    c->budget -= 2;
+    nc_call(c, 0x8005426c);
+    return true;
+}
+
 /* Circle skips the Down path. The other entry already has the Down test
  * in v0 from the earlier branch's delay slot. */
 u32 nc_player_down_path(CPUState *c, bool check_circle) {
