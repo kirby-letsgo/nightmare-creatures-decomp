@@ -305,6 +305,13 @@ slus_005_82  800109E0    800109EC         bios_service.h
 slus_005_82  800109F0    800109FC         bios_service.h
 slus_005_82  80010A00    80010A0C         bios_service.h
 slus_005_82  80010A18    80010A24         bios_service.h
+slus_005_82  80010A50    80010A80         interrupt_driver.h
+slus_005_82  80010A80    80010AB0         interrupt_driver.h
+slus_005_82  80010AB0    80010AE0         interrupt_driver.h
+slus_005_82  80010AE0    80010B14         interrupt_driver.h
+slus_005_82  80010B14    80010B44         interrupt_driver.h
+slus_005_82  80010B44    80010B74         interrupt_driver.h
+slus_005_82  80010B74    80010BA4         interrupt_driver.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
 credits_exe  80019454    8001949C         credits.c

@@ -33,6 +33,15 @@ LAUNCHER_BIOS_A0 = {
     0x80010A00: 0x71,  # _96_init
     0x80010A18: 0x72,  # _96_remove
 }
+LAUNCHER_IRQ_WRAPPERS = {
+    0x80010A50: 12,  # ResetCallback
+    0x80010A80: 8,   # InterruptCallback
+    0x80010AB0: 4,   # DMACallback
+    0x80010AE0: 20,  # VSyncCallback(handler)
+    0x80010B14: 20,  # VSyncCallbacks(slot, handler)
+    0x80010B44: 16,  # StopCallback
+    0x80010B74: 24,  # RestartCallback
+}
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
 # Entry -> (action, return address at the button-history store).
@@ -1140,6 +1149,13 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_IRQ_WRAPPERS:
+                single = i.addr == 0x80010AE0
+                resume = i.addr + (36 if single else 32)
+                out.append(
+                    f"    if (interrupt_driver_call(c, 0x800156a8, {LAUNCHER_IRQ_WRAPPERS[i.addr]}, "
+                    f"0x{resume:x}, {'true' if single else 'false'})) return;"
+                )
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_A0:
                 service = LAUNCHER_BIOS_A0[i.addr]
                 out.append(f"    if (bios_service(c, 0xa0, 0x{service:x})) return;")
@@ -3517,6 +3533,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == LAUNCHER:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/launcher.h"')
+        header.append('#include "decomp/interrupt_driver.h"')
     if mod.name == "credits_exe":
         header.append('#include "decomp/credits.h"')
     if mod.name == "psx2_exe":
