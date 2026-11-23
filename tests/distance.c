@@ -4132,9 +4132,7 @@ static bool placement_depths(bool disc, u32 cue_pc, u32 depth_offset, unsigned p
     return true;
 }
 
-static bool placement_depth_cues(bool disc, bool small_frame) {
-    const u32 depth_offset = small_frame ? 0x160 : 0x2d8;
-    const u32 cue_pc = small_frame ? 0x80028d8c : 0x80028b0c;
+static bool placement_depth_cues(bool disc, u32 cue_pc, u32 depth_offset, unsigned factor_reg) {
     const u32 frame = SCRATCH_BASE;
     static const struct {
         u32 excess_depth, color;
@@ -4151,13 +4149,14 @@ static bool placement_depth_cues(bool disc, bool small_frame) {
         memcpy(before, nc_scratch, sizeof before);
         input.budget = 15;
         CPUState native = input;
-        if (nc_apply_placement_depth_cue(&native, depth_offset) ||
+        if (nc_apply_placement_depth_cue(&native, depth_offset, factor_reg) ||
             memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_apply_placement_depth_cue(&native, depth_offset) || native.budget != 1 ||
-            native.r[2] != frame + depth_offset + 4 || native.r[8] != cases[i].excess_depth << 2 ||
-            MEM_R32(frame + depth_offset) != native.r[8] ||
+        if (!nc_apply_placement_depth_cue(&native, depth_offset, factor_reg) ||
+            native.budget != 1 || native.r[2] != frame + depth_offset + 4 ||
+            native.r[factor_reg] != cases[i].excess_depth << 2 ||
+            MEM_R32(frame + depth_offset) != native.r[factor_reg] ||
             MEM_R32(frame + depth_offset + 4) != cases[i].color)
             return false;
         if (disc) {
@@ -6906,8 +6905,10 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
-        placement_depths(disc, 0x80027f0c, 8, 5, 5) && placement_depth_cues(disc, false) &&
-        placement_depth_cues(disc, true) && placement_pose_stack(disc) &&
+        placement_depths(disc, 0x80027f0c, 8, 5, 5) &&
+        placement_depth_cues(disc, 0x80027f0c, 8, 15) &&
+        placement_depth_cues(disc, 0x80028b0c, 0x2d8, 8) &&
+        placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
         placement_vertex_triples(disc, true) && remaining_placement_vertices(disc, false) &&

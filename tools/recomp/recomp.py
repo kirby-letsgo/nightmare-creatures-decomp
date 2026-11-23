@@ -1978,10 +1978,14 @@ class Emitter:
                     f"        if ((s32)R({depth_reg}) > (s32)R(3)) goto L_{i.addr + 0x3C:08X};"
                 )
                 out.append(f"        goto L_{i.addr + 0x68:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr in (0x80028B0C, 0x80028D8C):
-                depth_offset = 0x2D8 if i.addr == 0x80028B0C else 0x160
+            if self.mod.name == "psx2_exe" and i.addr in (0x80027F0C, 0x80028B0C, 0x80028D8C):
+                depth_offset, factor_reg = {
+                    0x80027F0C: (8, 15),
+                    0x80028B0C: (0x2D8, 8),
+                    0x80028D8C: (0x160, 8),
+                }[i.addr]
                 out.append(
-                    f"    if (nc_apply_placement_depth_cue(c, 0x{depth_offset:x}))"
+                    f"    if (nc_apply_placement_depth_cue(c, 0x{depth_offset:x}, {factor_reg}))"
                     f" goto L_{i.addr + 0x2C:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr in (

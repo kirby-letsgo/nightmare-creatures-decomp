@@ -3861,7 +3861,7 @@ bool nc_project_placement_depth(CPUState *c, u32 pose, u32 depth_offset, unsigne
 
 /* Beyond the depth threshold, four times the excess depth supplies IR0
  * for the GTE interpolation of the placement color toward the far color. */
-bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset) {
+bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset, unsigned factor_reg) {
     if (c->budget <= 15)
         return false;
     const u32 factor_slot = R(29) + depth_offset;
@@ -3869,8 +3869,8 @@ bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset) {
     MEM_W32(factor_slot, R(2) << 2);
     R(2) = color_slot;
     gte_write_data(c, 6, MEM_R32(color_slot));
-    R(8) = MEM_R32(factor_slot);
-    gte_write_data(c, 8, R(8));
+    R(factor_reg) = MEM_R32(factor_slot);
+    gte_write_data(c, 8, R(factor_reg));
     gte_command(c, 0x0780010); /* DPCS */
     MEM_W32(color_slot, gte_read_data(c, 22));
     c->budget -= 15;
