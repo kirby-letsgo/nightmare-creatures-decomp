@@ -4242,6 +4242,30 @@ bool nc_call_projection_textured_faces(CPUState *c, bool quad) {
     return true;
 }
 
+/* Only packet modes zero and four emit the untextured faces. The first
+ * branch leaves four in v0 even when mode zero bypasses the second test. */
+bool nc_check_untextured_projection_mode(CPUState *c) {
+    const int cycles = R(16) ? 4 : 2;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = 4;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_projection_untextured_faces(CPUState *c, bool quad) {
+    if (c->budget <= 8)
+        return false;
+    R(4) = R(19);
+    R(5) = R(23);
+    MEM_W32(R(29) + 0x10, R(16));
+    R(7) = MEM_R32(R(29) + 0x2e0);
+    R(31) = quad ? 0x800282d8 : 0x800282c0;
+    R(6) = R(30);
+    c->budget -= 8;
+    return true;
+}
+
 bool nc_return_projection_traversal(CPUState *c) {
     if (c->budget <= 33)
         return false;
