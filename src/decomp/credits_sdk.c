@@ -2957,6 +2957,125 @@ bool nc_credits_draw_sync_callback(CPUState *c) {
     return true;
 }
 
+static void fill_graphics_state(CPUState *c, u32 length, u32 resume) {
+    R(31) = resume;
+    R(6) = length;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ec78);
+}
+
+static void initialize_graphics_state(CPUState *c) {
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x800184ac);
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x80024510);
+    set_reg(c, 16, 0x80020000);
+    set_reg(c, 16, 0x80024558);
+    R(31) = 0x8001be88;
+    R(6) = R(16);
+    NC_POLL(c, 2);
+    nc_call(c, 0x80019a60); /* printf */
+    set_reg(c, 4, R(16));
+    set_reg(c, 5, 0);
+    fill_graphics_state(c, 0x80, 0x8001be98);
+    gpu_sync_call(c, 0x8001a698, 0x8001bea0); /* ResetCallback */
+    set_reg(c, 2, 0x00ff0000);
+    load_gpu_global(c, 4, 0x80024550);
+    set_reg(c, 2, R(2) | 0xffff);
+    R(31) = 0x8001beb8;
+    R(4) &= R(2);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001eca4); /* GPU_cw */
+    R(31) = 0x8001bec0;
+    R(4) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001e758);
+
+    /* The reset result selects the VRAM width and height tables by low byte. */
+    set_reg(c, 4, R(16) + 16);
+    MEM_W8(R(16), (u8)R(2));
+    NC_POLL(c, 1);
+    R(2) = MEM_R8(R(16));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 3, 1);
+    set_reg(c, 1, 0x80020000);
+    MEM_W8(0x80024559, (u8)R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) << 2);
+    set_reg(c, 1, 0x80020000);
+    set_reg(c, 1, R(1) + R(2));
+    R(3) = MEM_R16(R(1) + 0x45d8);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(2) = MEM_R8(R(16));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 5, UINT32_MAX);
+    set_reg(c, 2, R(2) << 2);
+    set_reg(c, 1, 0x80020000);
+    MEM_W16(0x8002455c, (u16)R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 1, 0x80020000);
+    set_reg(c, 1, R(1) + R(2));
+    R(2) = MEM_R16(R(1) + 0x45ec);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 1, 0x80020000);
+    MEM_W16(0x8002455e, (u16)R(2));
+    NC_POLL(c, 1);
+    fill_graphics_state(c, 0x5c, 0x8001bf18);
+    set_reg(c, 4, R(16) + 0x6c);
+    set_reg(c, 5, UINT32_MAX);
+    fill_graphics_state(c, 0x14, 0x8001bf28);
+    R(2) = MEM_R8(R(16));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_reset_graph(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = R(4);
+    R(3) = R(17) & 7;
+    c->budget -= 3;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    bool initialize = R(3) == 0;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget -= 2;
+    if (!initialize) {
+        set_reg(c, 2, 3);
+        initialize = R(3) == R(2);
+        NC_POLL(c, 2);
+    }
+    if (initialize) {
+        initialize_graphics_state(c);
+    } else {
+        set_reg(c, 2, 0x80020000);
+        R(2) = MEM_R8(0x8002455a);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) < 2);
+        NC_POLL(c, 2);
+        graphics_diagnostic(c, 0x800184cc, 0x8001bf68, 17);
+        load_gpu_global(c, 2, 0x80024550);
+        NC_POLL(c, 1);
+        load_word(c, 2, R(2) + 0x34);
+        NC_POLL(c, 1);
+        u32 reset = R(2);
+        R(31) = 0x8001bf84;
+        R(4) = 1;
+        NC_POLL(c, 2);
+        nc_call(c, reset);
+    }
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Set the GPU display-mode reverse bit and return the previous flag byte. */
 bool nc_credits_set_graph_reverse(CPUState *c) {
     const int entry_cycles = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
