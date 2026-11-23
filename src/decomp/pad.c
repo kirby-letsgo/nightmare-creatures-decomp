@@ -24,6 +24,28 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* A fresh L2 press resets the direction-repeat counter. */
+bool nc_reset_repeat_on_l2_press(CPUState *c) {
+    if (c->budget <= 28)
+        return false;
+
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0x10, R(31));
+    R(31) = 0x800445ec;
+    R(6) = 0x100;
+    c->budget -= 4;
+    nc_record_player_button_press(c); /* entry budget covers the full nested call */
+    if (R(2)) {
+        R(1) = 0x800d0000;
+        MEM_W16(0x800cbffa, 0);
+        c->budget -= 2;
+    }
+    R(31) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x18;
+    c->budget -= 8;
+    return true;
+}
+
 /* Save the player-control frame before deciding whether to read input.
  * v0 retains the blocking bits and v1 retains the full flags for the selector. */
 bool nc_enter_player_input(CPUState *c) {

@@ -140,6 +140,24 @@ static bool player_button_presses(void) {
     return true;
 }
 
+static bool l2_repeat_reset(void) {
+    const u32 actor = 0x80160000;
+    const struct {
+        u32 buttons, previous;
+    } cases[] = {{0, 0x100}, {0x1000000, 0}, {0x180, 0x100}, {0x180, 0x80}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[4] = actor;
+        cpu.r[5] = cases[i].buttons;
+        cpu.budget = 29;
+        MEM_W32(actor + 0x2f8, cases[i].previous);
+        MEM_W32(0x800cbff8, 0xabcd1234);
+        if (!compare(cpu, 0x800445dc, nc_reset_repeat_on_l2_press, 28))
+            return false;
+    }
+    return true;
+}
+
 static bool player_button_clear(void) {
     const u32 buttons[] = {0, 1, 0xffff0000, 0xffffffff};
     for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
@@ -2984,10 +3002,10 @@ int main(int argc, char **argv) {
         menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && player_button_suppression() && player_button_presses() &&
-        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
+        player_button_presses() && player_button_clear() && button_dispatch() && sdk_pad_patch() &&
+        pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
+        packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
