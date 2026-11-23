@@ -4878,6 +4878,29 @@ bool nc_begin_alternate_placement_update(CPUState *c) {
     return true;
 }
 
+/* The stack switch returns the previous sp in v0. Keep it in s1 across
+ * the placement update so the second switch can restore the scan stack. */
+bool nc_call_alternate_placement_update(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(17) = R(2);
+    R(4) = R(16);
+    R(5) = 1;
+    R(31) = 0x80029094;
+    R(6) = 0;
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_call_placement_stack_restore(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x8002909c;
+    R(4) = R(17);
+    c->budget -= 2;
+    return true;
+}
+
 bool nc_call_placement_transform_reset(CPUState *c) {
     if (c->budget <= 7)
         return false;

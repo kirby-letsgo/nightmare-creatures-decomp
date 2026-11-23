@@ -110,6 +110,8 @@ bool nc_restore_placement_scan_frame(CPUState *c);
 u32 nc_reset_placement_transforms(CPUState *c);
 u32 nc_check_alternate_placement_counter(CPUState *c);
 bool nc_begin_alternate_placement_update(CPUState *c);
+bool nc_call_alternate_placement_update(CPUState *c);
+bool nc_call_placement_stack_restore(CPUState *c);
 bool nc_call_placement_transform_reset(CPUState *c);
 bool nc_copy_placement_coordinates(CPUState *c);
 bool nc_route_placement_selector(CPUState *c, u32 *next);

@@ -4395,6 +4395,25 @@ static bool alternate_placement_updates(bool disc) {
     return true;
 }
 
+static bool alternate_placement_update_calls(bool disc) {
+    CPUState input = initial(), native;
+    input.r[2] = SCRATCH_BASE + 0x380;
+    input.r[16] = 0x801c0000;
+    input.r[31] = 0x8002d580;
+    if (!compare(input, 0x80029080, nc_call_alternate_placement_update, disc, &native) ||
+        native.r[17] != input.r[2] || native.r[4] != input.r[16] ||
+        native.r[5] != 1 || native.r[6] || native.r[31] != 0x80029094 ||
+        native.budget != input.budget - 5)
+        return false;
+
+    input.r[2] = 0;
+    input.r[17] = native.r[17];
+    input.r[31] = 0x80073dac;
+    return compare(input, 0x80029094, nc_call_placement_stack_restore, disc, &native) &&
+           native.r[4] == input.r[17] && native.r[31] == 0x8002909c &&
+           native.budget == input.budget - 2;
+}
+
 static bool placement_transform_trees(bool disc) {
     const u32 record = SCRATCH_BASE, root = record + 0x80;
     const unsigned sizes[] = {0, 1, 5};
@@ -8436,6 +8455,7 @@ int main(int argc, char **argv) {
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
+        alternate_placement_update_calls(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
