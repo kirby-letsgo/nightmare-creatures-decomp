@@ -4619,6 +4619,51 @@ static bool alternate_placement_counter_exits(bool disc) {
     return true;
 }
 
+static bool placement_halfword_entries(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100;
+    const struct {
+        u32 field, target;
+        s16 start;
+    } cases[] = {
+        {SCRATCH_BASE, 0x12348000, -32768},
+        {SCRATCH_BASE, 0x12347fff, -1},
+        {frame + 0x1c, 0x12348000, 0},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[29] = frame + 0x28;
+        input.r[17] = 0x56788000;
+        input.r[5] = cases[i].field;
+        input.r[7] = cases[i].target;
+        input.budget = 15;
+        memset(nc_scratch, 0xab, SCRATCH_SIZE);
+        MEM_W16(input.r[5], cases[i].start);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_begin_placement_halfword_step(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        const bool reached = i != 1;
+        const u32 next = reached ? 0x800297b0 : 0x8002971c;
+        if (nc_begin_placement_halfword_step(&native) != next ||
+            native.budget != (reached ? 1 : 3) || native.r[29] != frame ||
+            native.r[2] != (reached ? 1u : 0xffffffffu) ||
+            MEM_R32(frame + 0x18) != input.r[16] || MEM_R32(frame + 0x1c) != input.r[17] ||
+            MEM_R32(frame + 0x20) != input.r[31])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_continue_call(&input, 0x800296e8, next, frame);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_halfword_steps(bool disc) {
     const struct {
         s16 start, target;
@@ -8706,7 +8751,7 @@ int main(int argc, char **argv) {
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
-        placement_halfword_steps(disc) &&
+        placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&

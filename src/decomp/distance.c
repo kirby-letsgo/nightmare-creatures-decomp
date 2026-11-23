@@ -5360,6 +5360,25 @@ bool nc_set_other_placement_angles(CPUState *c) {
     return true;
 }
 
+/* The field may point into the new frame. Save all three registers before
+ * reading it, and reserve enough budget for the longer, already-equal exit. */
+u32 nc_begin_placement_halfword_step(CPUState *c) {
+    if (c->budget <= 15)
+        return 0;
+    R(29) -= 0x28;
+    MEM_W32(R(29) + 0x1c, R(17));
+    R(17) = R(4);
+    R(3) = R(7);
+    MEM_W32(R(29) + 0x20, R(31));
+    MEM_W32(R(29) + 0x18, R(16));
+    R(4) = (u32)(s32)(s16)MEM_R16(R(5));
+    R(7) = (u32)(s32)(s16)R(7);
+    const bool reached = R(4) == R(7);
+    R(2) = reached ? 1 : R(4);
+    c->budget -= reached ? 15 : 13;
+    return reached ? 0x800297b0 : 0x8002971c;
+}
+
 /* Step the halfword before testing for a crossing. The guest keeps the
  * full sum in a1/a2 but compares its signed low half against the target. */
 u32 nc_step_placement_halfword(CPUState *c) {
