@@ -2,6 +2,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
+#include "decomp/cd_position.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/interrupt_driver.h"
@@ -275,6 +276,27 @@ static bool check_test_parameter_count(void) {
             return false;
     }
     MEM_W32(address, saved);
+    return true;
+}
+
+static bool check_cd_positions(void) {
+    const u32 position = 0x80016201;
+    const struct { s32 sector; u8 minute, second, frame; } cases[] = {
+        {-150, 0, 0, 0}, {-1, 0, 0x01, 0x74}, {0, 0, 0x02, 0},
+        {4349, 0, 0x59, 0x74}, {4350, 0x01, 0, 0}, {449849, 0x99, 0x59, 0x74},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        const u32 sector = (u32)cases[i].sector;
+        memset(nc_fast_ptr(position - 1), 0xcc, 5);
+        if (!compare(arguments(sector, position, 0, 66), 0x80012584, cd_sector_to_position, 65) ||
+            nc_cpu.r[2] != position || MEM_R8(position) != cases[i].minute ||
+            MEM_R8(position + 1) != cases[i].second || MEM_R8(position + 2) != cases[i].frame ||
+            MEM_R8(position - 1) != 0xcc || MEM_R8(position + 3) != 0xcc)
+            return false;
+        if (!compare(arguments(position, 0, 0, 39), 0x80012688, cd_position_to_sector, 38) ||
+            nc_cpu.r[2] != sector)
+            return false;
+    }
     return true;
 }
 
@@ -870,6 +892,10 @@ int main(int argc, char **argv) {
     }
     if (!check_test_parameter_count()) {
         fprintf(stderr, "launcher CD test parameter count failed\n");
+        return 1;
+    }
+    if (!check_cd_positions()) {
+        fprintf(stderr, "launcher CD position conversions failed\n");
         return 1;
     }
     if (!check_cd_state()) {
