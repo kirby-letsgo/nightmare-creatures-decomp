@@ -5247,6 +5247,159 @@ static void load_cd_port(CPUState *c, unsigned reg, u32 slot) {
     load_word(c, reg, slot);
 }
 
+static bool cd_irq_pending(CPUState *c, bool first_read) {
+    load_cd_port(c, 2, 0x80024a2c);
+    NC_POLL(c, 1);
+    R(2) = MEM_R8(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 7);
+    bool pending = R(2) != 0;
+    if (first_read)
+        R(4) = 1; /* delay slot selects CD register bank one */
+    NC_POLL(c, 2);
+    return pending;
+}
+
+static void write_cd_init_port(CPUState *c, u32 slot, unsigned source) {
+    load_cd_port(c, 2, slot);
+    NC_POLL(c, 1);
+    MEM_W8(R(2), (u8)R(source));
+    NC_POLL(c, 1);
+}
+
+static void cd_init_command(CPUState *c, u32 resume) {
+    set_reg(c, 5, 0);
+    set_reg(c, 6, 0);
+    R(31) = resume;
+    R(7) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80021028); /* CD_cw */
+}
+
+static bool cd_init_command_failed(CPUState *c) {
+    bool failed = R(2) != 0;
+    R(2) = UINT32_MAX;
+    NC_POLL(c, 2);
+    return failed;
+}
+
+bool nc_credits_initialize_cd_driver(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    R(4) = 0x80018980;
+    c->budget -= 3;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    R(31) = 0x80021704;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a638); /* puts */
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x8001898c);
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x80024a3c);
+    R(31) = 0x8002171c;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80019a60); /* printf */
+
+    const u32 status_bytes[] = {0x8002477d, 0x8002477c};
+    const u32 callback_and_status_words[] = {0x80024760, 0x8002475c, 0x80024770, 0x8002476c};
+    for (unsigned i = 0; i < 2; i++) {
+        set_reg(c, 1, 0x80020000);
+        MEM_W8(status_bytes[i], 0);
+        NC_POLL(c, 1);
+    }
+    for (unsigned i = 0; i < 4; i++) {
+        set_reg(c, 1, 0x80020000);
+        MEM_W32(callback_and_status_words[i], 0);
+        NC_POLL(c, 1);
+    }
+    R(31) = 0x80021754;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a698); /* ResetCallback */
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x80021b54);
+    R(31) = 0x80021764;
+    R(4) = 2;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a6c8); /* install CD interrupt handler */
+
+    load_cd_port(c, 3, 0x80024a20);
+    set_reg(c, 2, 1);
+    MEM_W8(R(3), (u8)R(2));
+    NC_POLL(c, 1);
+    if (cd_irq_pending(c, true)) {
+        set_reg(c, 3, 7);
+        do {
+            write_cd_init_port(c, 0x80024a20, 4); /* bank one */
+            write_cd_init_port(c, 0x80024a2c, 3); /* acknowledge */
+            write_cd_init_port(c, 0x80024a28, 3); /* enable interrupts */
+        } while (cd_irq_pending(c, false));
+    }
+
+    set_reg(c, 4, 1); /* CdlNop */
+    set_reg(c, 5, 0);
+    set_reg(c, 6, 0);
+    set_reg(c, 1, 0x80020000);
+    MEM_W8(0x80024a3a, 0);
+    NC_POLL(c, 1);
+    set_reg(c, 3, 0x80020000);
+    R(3) = MEM_R8(0x80024a3a);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x80024a39);
+    MEM_W8(R(2), (u8)R(3));
+    NC_POLL(c, 1);
+    load_cd_port(c, 3, 0x80024a20);
+    set_reg(c, 2, 2);
+    set_reg(c, 1, 0x80020000);
+    MEM_W8(0x80024a38, (u8)R(2));
+    NC_POLL(c, 1);
+    MEM_W8(R(3), 0);
+    NC_POLL(c, 1);
+    load_cd_port(c, 2, 0x80024a2c);
+    set_reg(c, 7, 0);
+    MEM_W8(R(2), 0);
+    NC_POLL(c, 1);
+    load_cd_port(c, 3, 0x80024a30);
+    set_reg(c, 2, 0x1325);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    R(31) = 0x80021850;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80021028);
+
+    load_cd_port(c, 2, 0x8002476c);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 0x10);
+    bool shell_open = R(2) != 0;
+    R(4) = 1;
+    NC_POLL(c, 2);
+    if (shell_open)
+        cd_init_command(c, 0x80021878);
+    set_reg(c, 4, 10); /* CdlInit */
+    cd_init_command(c, 0x8002188c);
+    if (!cd_init_command_failed(c)) {
+        set_reg(c, 4, 12); /* CdlDemute */
+        cd_init_command(c, 0x800218a8);
+        if (!cd_init_command_failed(c)) {
+            set_reg(c, 4, 0);
+            R(31) = 0x800218bc;
+            R(5) = 0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x80020adc); /* CD_sync */
+            set_reg(c, 2, R(2) ^ 2);
+            set_reg(c, 2, R(2) != 0);
+            set_reg(c, 2, 0u - R(2));
+        }
+    }
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Request the CD data FIFO, then transfer the requested words through DMA 3. */
 bool nc_credits_cd_sector_dma(CPUState *c) {
     if (c->budget <= 3 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
