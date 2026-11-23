@@ -99,6 +99,8 @@ static bool check_bios_wrappers(void) {
         {0x80010a18, 0xa0, 0x72, 0, 0},
         {0x80011a5c, 0xb0, 0x19, probe, 0}, /* HookEntryInt */
         {0x80011a4c, 0xb0, 0x18, 0, 0},     /* ResetEntryInt */
+        {0x80011a7c, 0xb0, 0x35, 1, 2},      /* write to the TTY */
+        {0x80011a7c, 0xb0, 0x35, 99, ~0u},   /* invalid descriptor */
         {0x80011a8c, 0xb0, 0x5b, 1, 0},     /* ChangeClearPad */
         {0x80011a9c, 0xc0, 0x0a, 2, 1},     /* ChangeClearRCnt */
     };
@@ -114,6 +116,12 @@ static bool check_bios_wrappers(void) {
         bios_table = cases[i].table;
         bios_function = cases[i].service;
         MEM_W32(trace, 0);
+        if (bios_table == 0xb0 && bios_function == 0x35) {
+            start.r[5] = probe;
+            start.r[6] = 2;
+            MEM_W8(probe, 'x');
+            MEM_W8(probe + 1, '\n');
+        }
         if (bios_function == 0x43) {
             ExecInfo info = {.pc0 = probe};
             exe_write_info(&info, header);
