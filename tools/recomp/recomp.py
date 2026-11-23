@@ -794,6 +794,8 @@ class Emitter:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
+        if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
+            targets.add(0x80027644)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
             targets.update((0x80028AAC, 0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
@@ -1669,6 +1671,8 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027600:
+                out.append("    if (nc_measure_placement_triangle(c)) goto L_80027644;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028A70, 0x80028C58):
                 small_frame = i.addr == 0x80028C58
                 project = 0x80028C8C if small_frame else 0x80028AAC

@@ -3366,6 +3366,32 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* The face cursor is three bytes into its record. Signed halfword indices
+ * select eight-byte projected vertices, in the winding order used by NormalClip. */
+bool nc_measure_placement_triangle(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    const u32 face = R(20), vertices = R(8);
+    const u32 first = (u32)(s32)(s16)MEM_R16(face + 0xd) * 8;
+    R(3) = (u32)(s32)(s16)MEM_R16(face + 0xf) * 8;
+    R(19) = vertices + first;
+    R(17) = vertices + R(3);
+    R(18) = vertices + (u32)(s32)(s16)MEM_R16(face + 0xb) * 8;
+    R(4) = MEM_R32(R(19));
+    R(5) = MEM_R32(R(17));
+    R(6) = MEM_R32(R(18));
+    for (unsigned reg = 7; reg <= 10; ++reg)
+        MEM_W32(R(29) + 0x30 + 4 * (reg - 7), R(reg));
+    R(31) = 0x80027644;
+    gte_write_data(c, 12, R(4));
+    gte_write_data(c, 14, R(6));
+    gte_write_data(c, 13, R(5));
+    gte_command(c, 0x1400006); /* NCLIP */
+    R(2) = gte_read_data(c, 24);
+    c->budget -= 38;
+    return true;
+}
+
 /* Both traversals start with the root pose and an empty pending-pose stack.
  * Their delay slots copy the placement color even when projection is skipped. */
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {
