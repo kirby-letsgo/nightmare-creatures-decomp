@@ -394,6 +394,7 @@ credits_exe  800203E0    800204E4         credits_sdk.c
 credits_exe  800204E4    80020564         credits_sdk.c
 credits_exe  80020ADC    80020D5C         credits_sdk.c
 credits_exe  80020D5C    80021028         credits_sdk.c
+credits_exe  80021028    80021440         credits_sdk.c
 credits_exe  80021440    800214C8         credits_sdk.c
 credits_exe  800214C8    800215A8         credits_sdk.c
 credits_exe  800215A8    8002169C         credits_sdk.c
