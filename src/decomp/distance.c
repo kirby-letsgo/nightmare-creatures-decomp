@@ -3366,15 +3366,19 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
-static void finish_placement_winding(CPUState *c, unsigned first_saved, u32 return_pc) {
-    for (unsigned i = 0; i < 4; ++i)
-        MEM_W32(R(29) + 0x30 + 4 * i, R(first_saved + i));
-    R(31) = return_pc;
+static void measure_screen_winding(CPUState *c) {
     gte_write_data(c, 12, R(4));
     gte_write_data(c, 14, R(6));
     gte_write_data(c, 13, R(5));
     gte_command(c, 0x1400006); /* NCLIP */
     R(2) = gte_read_data(c, 24);
+}
+
+static void finish_placement_winding(CPUState *c, unsigned first_saved, u32 return_pc) {
+    for (unsigned i = 0; i < 4; ++i)
+        MEM_W32(R(29) + 0x30 + 4 * i, R(first_saved + i));
+    R(31) = return_pc;
+    measure_screen_winding(c);
     c->budget -= 38;
 }
 
@@ -4060,6 +4064,23 @@ bool nc_store_indexed_vertex_depth(CPUState *c, u32 depth_offset, u32 next_pose)
     MEM_W16(R(29) + depth_offset, (u16)(depth >> 2));
     R(2) = next_pose + 0x18;
     c->budget -= 7;
+    return true;
+}
+
+/* NormalClip measures the signed area of the three packed screen points.
+ * Its call delay slot saves the third vertex's depth beside its coordinates. */
+bool nc_measure_indexed_face(CPUState *c, u32 return_pc) {
+    if (c->budget <= 26)
+        return false;
+    const u32 frame = R(29);
+    R(4) = MEM_R32(frame + 0x10);
+    R(5) = MEM_R32(frame + 0x18);
+    const s32 depth = (s32)MEM_R32(frame + 0x28);
+    R(6) = MEM_R32(frame + 0x20);
+    MEM_W16(frame + 0x24, (u16)(depth >> 2));
+    R(31) = return_pc;
+    measure_screen_winding(c);
+    c->budget -= 26;
     return true;
 }
 
