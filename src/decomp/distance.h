@@ -29,6 +29,7 @@ bool nc_call_placement_angle_update(CPUState *c);
 bool nc_store_placement_angle_result(CPUState *c);
 bool nc_call_placement_part_traversal(CPUState *c);
 bool nc_place_record_pose(CPUState *c);
+bool nc_write_textured_triangle(CPUState *c);
 bool nc_write_projected_triangle(CPUState *c);
 bool nc_write_projected_quad(CPUState *c);
 bool nc_measure_placement_triangle(CPUState *c);
