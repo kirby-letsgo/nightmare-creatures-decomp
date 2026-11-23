@@ -45,6 +45,32 @@ u32 nc_player_down_path(CPUState *c, bool check_circle) {
     return R(2) ? 0x80045094 : 0x8004503c;
 }
 
+/* On the Down path, mode zero tests Square and mode one tests Cross.
+ * The second branch reloads the mode into v1 and leaves the Cross bit in v0. */
+u32 nc_player_down_face_buttons(CPUState *c) {
+    if (c->budget <= 16)
+        return 0x8004503c;
+
+    const u32 mode_addr = R(16) + 0x388;
+    const u8 mode = MEM_R8(mode_addr);
+    R(2) = R(17) & 0x8000;
+    c->budget -= 6;
+    if (!mode) {
+        c->budget -= 2;
+        if (R(2))
+            return 0x8004506c;
+    }
+
+    R(3) = MEM_R8(mode_addr);
+    R(2) = R(17) & 0x4000;
+    c->budget -= 6;
+    if (R(3) != 1)
+        return 0x80045080;
+    R(4) = R(16);
+    c->budget -= 2;
+    return R(2) ? 0x8004506c : 0x80045084;
+}
+
 /* Both face-button checks use the actor already in a0 for the press test.
  * The branch delay slot reloads a0 from s0 for the next action. */
 bool nc_check_player_face_press(CPUState *c, bool square) {

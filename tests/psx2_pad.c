@@ -290,6 +290,32 @@ static bool player_down_paths(void) {
     return true;
 }
 
+static bool down_face_destination(CPUState *cpu) {
+    return nc_player_down_face_buttons(cpu) == cpu->r[31];
+}
+
+static bool player_down_face_buttons(void) {
+    const struct {
+        u8 mode;
+        u32 buttons, destination;
+    } cases[] = {
+        {0, 0, 0x80045080},      {0, 0x4000, 0x80045080}, {0, 0x8000, 0x8004506c},
+        {0, 0xc000, 0x8004506c}, {1, 0, 0x80045084},      {1, 0x8000, 0x80045084},
+        {1, 0x4000, 0x8004506c}, {1, 0xc000, 0x8004506c}, {0xff, 0xc000, 0x80045080},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[16] = 0x80160000;
+        cpu.r[17] = cases[i].buttons | 0xc0000040;
+        cpu.r[31] = cases[i].destination;
+        cpu.budget = 17;
+        MEM_W8(cpu.r[16] + 0x388, cases[i].mode);
+        if (!compare(cpu, 0x8004503c, down_face_destination, 16))
+            return false;
+    }
+    return true;
+}
+
 static bool player_face_presses(void) {
     const u32 actor = 0x80160000, next_actor = 0x80170000;
     const struct {
@@ -3249,11 +3275,12 @@ int main(int argc, char **argv) {
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
         l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
-        player_r2_press() && player_r2_returns() && player_down_paths() && player_face_presses() &&
-        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
-        player_button_presses() && player_button_clear() && button_dispatch() && sdk_pad_patch() &&
-        pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
-        packet_readers() && sequences() && ports();
+        player_r2_press() && player_r2_returns() && player_down_paths() &&
+        player_down_face_buttons() && player_face_presses() && player_triangle_actions() &&
+        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
+        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
+        sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
