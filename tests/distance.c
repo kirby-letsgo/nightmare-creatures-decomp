@@ -4275,6 +4275,46 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool placement_color_record_entries(bool disc) {
+    const u32 actor = SCRATCH_BASE, color = 0xa580fe01;
+    const u8 counts[] = {0, 1, 255};
+    for (unsigned i = 0; i < sizeof counts; ++i) {
+        const bool present = counts[i] != 0;
+        const u32 records = i == 2 ? 0xfffffffdu : 0x80110000;
+        CPUState input = initial();
+        input.r[4] = actor;
+        input.r[29] = actor + 0x40;
+        input.r[31] = present ? 0x80027f74 : 0x80027ff4;
+        input.budget = present ? 21 : 9;
+        MEM_W32(input.r[29] + 0xc, color);
+        MEM_W32(actor + 0x2b4, records);
+        MEM_W32(actor + 0x2e4, ~color);
+        MEM_W8(actor + 0x38d, counts[i]);
+        CPUState native = input;
+        bool has_records = !present;
+        if (nc_begin_placement_color_records(&native, &has_records) ||
+            memcmp(&input, &native, sizeof input) || has_records == present ||
+            MEM_R32(actor + 0x2e4) != ~color)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_placement_color_records(&native, &has_records) || native.budget != 1 ||
+            has_records != present || MEM_R32(actor + 0x2e4) != color ||
+            native.r[3] != (present ? records + 7 : color) ||
+            native.r[5] != (present ? records + 3 : 0))
+            return false;
+        if (present && (native.r[6] != records || native.r[9] != records + 4 || native.r[8] ||
+                        native.r[12] != 1 || native.r[11] != 0xfe00 || native.r[10] != 0x800000))
+            return false;
+        if (disc) {
+            MEM_W32(actor + 0x2e4, ~color);
+            interp_call(&input, 0x80027f38);
+            if (memcmp(&native, &input, sizeof input) || MEM_R32(actor + 0x2e4) != color)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_color_adjustments(bool disc) {
     const u32 frame = SCRATCH_BASE;
     for (unsigned mask = 0; mask < 10; ++mask) {
@@ -7877,6 +7917,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_color_record_entries(disc) &&
         placement_color_adjustments(disc) &&
         placement_lighting_offsets(disc) &&
         projection_lighting_calls(disc) &&
