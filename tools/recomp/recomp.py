@@ -1182,6 +1182,8 @@ class Emitter:
             targets.add(0x80026414)
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
+        if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
+            targets.update((0x80029788, 0x8002979C, 0x800297A4))
         table_cases: list[int] = []
         if jump_tables:
             table_cases = sorted(w for w in self.mod.words if f.addr < w < f.end and w % 4 == 0)
@@ -2511,7 +2513,9 @@ class Emitter:
                 out.append("        goto L_80029080; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029000, 0x80029008):
                 load_stack = "true" if i.addr == 0x80029000 else "false"
-                out.append(f"    if (nc_call_placement_stack_switch(c, {load_stack})) {{")
+                out.append(
+                    f"    if (nc_call_placement_stack_switch(c, {load_stack}, 0x80029010)) {{"
+                )
                 out.append(f"        {self.call(0x80073DAC)}")
                 out.append("        goto L_80029010; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029010, 0x80029080):
@@ -3051,6 +3055,20 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029778:
+                out.append("    if (nc_call_placement_stack_switch(c, true, 0x80029788)) {")
+                out.append(f"        {self.call(0x80073DAC)}")
+                out.append("        goto L_80029788; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029788:
+                out.append("    if (nc_call_placement_step_update(c)) {")
+                out.append(f"        {self.call(0x8002D580)}")
+                out.append("        goto L_8002979C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002979C:
+                out.append("    if (nc_restore_placement_step_stack(c)) {")
+                out.append(f"        {self.call(0x80073DAC)}")
+                out.append("        goto L_800297A4; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800297A4, 0x800297AC, 0x800297B0):
+                out.append(f"    if (nc_return_placement_halfword_step(c, 0x{i.addr:08X})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002971C:
                 out.extend(
                     [

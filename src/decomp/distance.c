@@ -4961,13 +4961,13 @@ bool nc_begin_alternate_placement_update(CPUState *c) {
 
 /* The counter path enters at the call with a0 already set. The other
  * entry first loads the replacement stack from the placement global. */
-bool nc_call_placement_stack_switch(CPUState *c, bool load_stack) {
+bool nc_call_placement_stack_switch(CPUState *c, bool load_stack, u32 return_pc) {
     const int cycles = load_stack ? 6 : 2;
     if (c->budget <= cycles)
         return false;
     if (load_stack)
         R(4) = MEM_R32(0x8008f050);
-    R(31) = 0x80029010;
+    R(31) = return_pc;
     c->budget -= cycles;
     return true;
 }
@@ -5412,6 +5412,45 @@ u32 nc_step_placement_halfword(CPUState *c) {
     R(2) = result;
     c->budget -= cycles;
     return next;
+}
+
+bool nc_call_placement_step_update(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(16) = R(2);
+    R(4) = R(17);
+    R(5) = 0;
+    R(31) = 0x8002979c;
+    R(6) = 0;
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_restore_placement_step_stack(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800297a4;
+    R(4) = R(16);
+    c->budget -= 2;
+    return true;
+}
+
+/* The shared epilogue preserves v0 for callers entering at 0x800297b0.
+ * The two earlier entries set the result before restoring the same frame. */
+bool nc_return_placement_halfword_step(CPUState *c, u32 entry) {
+    const bool updated = entry == 0x800297a4;
+    const bool pending = entry == 0x800297ac;
+    const int cycles = updated ? 14 : pending ? 13 : 12;
+    if (c->budget <= cycles)
+        return false;
+    if (updated || pending)
+        R(2) = updated;
+    R(31) = MEM_R32(R(29) + 0x20);
+    R(17) = MEM_R32(R(29) + 0x1c);
+    R(16) = MEM_R32(R(29) + 0x18);
+    R(29) += 0x28;
+    c->budget -= cycles;
+    return true;
 }
 
 bool nc_finish_placement_angle_step(CPUState *c) {

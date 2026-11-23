@@ -4540,10 +4540,10 @@ static bool placement_scan_stack_switches(bool disc) {
         input.r[31] = 0x80073dac;
         input.budget = load ? 6 : 2;
         CPUState native = input;
-        if (nc_call_placement_stack_switch(&native, load) || memcmp(&native, &input, sizeof input))
+        if (nc_call_placement_stack_switch(&native, load, 0x80029010) || memcmp(&native, &input, sizeof input))
             return false;
         native.budget = ++input.budget;
-        if (!nc_call_placement_stack_switch(&native, load) || native.budget != 1 ||
+        if (!nc_call_placement_stack_switch(&native, load, 0x80029010) || native.budget != 1 ||
             native.r[4] != (load ? 0x801cf000 : input.r[4]) || native.r[31] != 0x80029010)
             return false;
         if (disc) {
@@ -4658,6 +4658,44 @@ static bool placement_halfword_entries(bool disc) {
             memcpy(nc_scratch, before, sizeof before);
             interp_continue_call(&input, 0x800296e8, next, frame);
             if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool placement_step_returns(bool disc) {
+    CPUState input = initial(), native;
+    input.r[31] = 0x8002d580;
+    if (!compare(input, 0x80029788, nc_call_placement_step_update, disc, &native) ||
+        native.r[4] != input.r[17] || native.r[5] || native.r[6] ||
+        native.r[16] != input.r[2] || native.r[31] != 0x8002979c || native.budget != input.budget - 5)
+        return false;
+    input.r[31] = 0x80073dac;
+    if (!compare(input, 0x8002979c, nc_restore_placement_step_stack, disc, &native) ||
+        native.r[4] != input.r[16] || native.r[31] != 0x800297a4 || native.budget != input.budget - 2)
+        return false;
+    const u32 frame = SCRATCH_BASE + 0x180;
+    const u32 entries[] = {0x800297a4, 0x800297ac, 0x800297b0};
+    MEM_W32(frame + 0x20, 0x80010000);
+    MEM_W32(frame + 0x1c, 0x89abcdef);
+    MEM_W32(frame + 0x18, 0x12345678);
+    for (unsigned i = 0; i < 3; ++i) {
+        input.r[29] = frame;
+        input.budget = 14 - i;
+        native = input;
+        if (nc_return_placement_halfword_step(&native, entries[i]) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_return_placement_halfword_step(&native, entries[i]) || native.budget != 1 ||
+            native.r[2] != (i == 2 ? input.r[2] : i == 0) || native.r[29] != frame + 0x28 ||
+            native.r[31] != 0x80010000 || native.r[17] != 0x89abcdef || native.r[16] != 0x12345678)
+            return false;
+        if (disc) {
+            CPUState guest = input;
+            interp_continue_call(&guest, entries[i], native.r[31], native.r[29]);
+            if (memcmp(&native, &guest, sizeof guest))
                 return false;
         }
     }
@@ -8751,6 +8789,7 @@ int main(int argc, char **argv) {
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
+        placement_step_returns(disc) &&
         placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
