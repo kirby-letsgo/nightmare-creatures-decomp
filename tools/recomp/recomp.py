@@ -271,6 +271,7 @@ CREDITS_ROUTINES = {
     0x80022AE0: "nc_credits_cd_read(c)",
     0x80022BE8: "nc_credits_cd_read_sync(c)",
     0x80022CB4: "nc_credits_cd_read_callback(c)",
+    0x80022CCC: "nc_credits_control_cd_playback(c)",
     0x80022EBC: "nc_credits_cd_audio_ready(c)",
     0x80022F84: "nc_credits_cd_play_track(c)",
     0x800230AC: "nc_credits_cd_get_toc(c)",
