@@ -3481,6 +3481,35 @@ bool nc_begin_placement_vertex_projection(CPUState *c) {
     return true;
 }
 
+/* RTPT projects three vertices into the GTE's screen and depth FIFOs.
+ * The caller keeps a separate pointer to the third output depth field. */
+bool nc_project_placement_vertex_triple(CPUState *c) {
+    if (c->budget <= 52)
+        return false;
+    const u32 vertices = R(8), output = R(7), depth_field = R(6);
+    for (unsigned word = 0; word < 6; ++word)
+        gte_write_data(c, word, MEM_R32(vertices + 4 * word));
+    gte_command(c, 0x0280030); /* RTPT */
+    R(5) += 3;
+    R(8) += 24;
+    for (unsigned i = 0; i < 3; ++i)
+        MEM_W32(output + 8 * i, gte_read_data(c, 12 + i));
+    MEM_W32(R(29), gte_read_data(c, 17));
+    MEM_W32(R(11), gte_read_data(c, 18));
+    MEM_W32(R(10), gte_read_data(c, 19));
+    const s32 first_depth = (s32)MEM_R32(R(29)) >> 2;
+    R(7) += 24;
+    MEM_W16(depth_field - 16, (u16)first_depth);
+    const s32 second_depth = (s32)MEM_R32(R(29) + 4) >> 2;
+    R(3) = (u32)((s32)MEM_R32(R(29) + 8) >> 2);
+    MEM_W16(depth_field - 8, (u16)second_depth);
+    MEM_W16(depth_field, (u16)R(3));
+    R(2) = (s32)R(5) < (s32)R(9);
+    R(6) += 24;
+    c->budget -= 52;
+    return true;
+}
+
 /* Project one vertex left after the three-at-a-time loop. Each eight-byte
  * output holds packed screen coordinates and a halfword of quarter-depth. */
 bool nc_project_remaining_placement_vertex(CPUState *c) {

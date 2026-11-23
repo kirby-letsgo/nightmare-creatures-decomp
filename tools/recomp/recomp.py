@@ -1670,6 +1670,10 @@ class Emitter:
                 out.append("    if (nc_return_placement_projection(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027288:
                 out.append("    if (nc_begin_placement_vertex_projection(c)) goto L_800272D8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027300:
+                out.append("    if (nc_project_placement_vertex_triple(c)) {")
+                out.append("        if (R(2)) goto L_80027300;")
+                out.append("        goto L_80027388; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002739C:
                 out.append("    if (nc_project_remaining_placement_vertex(c)) {")
                 out.append("        if (R(2)) goto L_8002739C;")
