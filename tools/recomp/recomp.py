@@ -31,6 +31,12 @@ LAUNCHER_CD_STATE_BYTES = {
     0x80011FA4: 0x80015838,  # CdMode
     0x80011FB4: 0x80015839,  # CdLastCom
 }
+LAUNCHER_CD_STATE_SETTERS = {
+    0x80012060: 0x80015824,  # CdSetDebug
+    0x80012120: 0x80015818,  # CdSyncCallback
+    0x80012138: 0x8001581C,  # CdReadyCallback
+    0x800145DC: 0x80015B44,  # CdReadCallback
+}
 LAUNCHER_BIOS_SERVICES = {
     0x800109D0: (0xA0, 0x39),  # InitHeap
     0x800109E0: (0xA0, 0x42),  # Load
@@ -1227,6 +1233,9 @@ class Emitter:
                 out.append("    if (set_dma_slot(c, 0x8001576c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
                 out.append("    if (set_vsync_slot(c, 0x80015740)) return;")
+            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_SETTERS:
+                address = LAUNCHER_CD_STATE_SETTERS[i.addr]
+                out.append(f"    if (exchange_cd_word(c, 0x{address:x})) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
                 address = LAUNCHER_CD_STATE_BYTES[i.addr]
                 out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")

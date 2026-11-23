@@ -92,14 +92,40 @@ static bool check_case_conversion(void) {
     return true;
 }
 
-static u32 cd_byte_address;
+static u32 cd_state_address;
 
 static bool read_cd_byte(CPUState *c) {
-    return cd_state_byte(c, cd_byte_address);
+    return cd_state_byte(c, cd_state_address);
 }
 
 static bool get_cd_position(CPUState *c) {
     return cd_last_position(c, 0x80015834);
+}
+
+static bool set_cd_word(CPUState *c) {
+    return exchange_cd_word(c, cd_state_address);
+}
+
+static bool check_cd_setters(void) {
+    const struct { u32 entry, address; } setters[] = {
+        {0x80012060, 0x80015824}, {0x80012120, 0x80015818},
+        {0x80012138, 0x8001581c}, {0x800145dc, 0x80015b44},
+    };
+    const u32 replacements[] = {0x80016234, 0};
+    for (unsigned i = 0; i < sizeof setters / sizeof setters[0]; i++) {
+        cd_state_address = setters[i].address;
+        u32 saved = MEM_R32(cd_state_address);
+        MEM_W32(cd_state_address, 0x87654321);
+        for (unsigned j = 0; j < sizeof replacements / sizeof replacements[0]; j++) {
+            u32 previous = MEM_R32(cd_state_address);
+            CPUState start = arguments(replacements[j], 0, 0, 9);
+            if (!compare(start, setters[i].entry, set_cd_word, 8) ||
+                nc_cpu.r[2] != previous || MEM_R32(cd_state_address) != replacements[j])
+                return false;
+        }
+        MEM_W32(cd_state_address, saved);
+    }
+    return true;
 }
 
 static bool check_cd_state(void) {
@@ -110,8 +136,8 @@ static bool check_cd_state(void) {
     };
     CPUState start = arguments(1, 2, 3, 7);
     for (unsigned i = 0; i < sizeof bytes / sizeof bytes[0]; i++) {
-        cd_byte_address = bytes[i].address;
-        MEM_W8(cd_byte_address, bytes[i].value);
+        cd_state_address = bytes[i].address;
+        MEM_W8(cd_state_address, bytes[i].value);
         if (!compare(start, bytes[i].entry, read_cd_byte, 6) || nc_cpu.r[2] != bytes[i].value)
             return false;
     }
@@ -669,6 +695,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_setters()) {
+        fprintf(stderr, "launcher CD state setters failed\n");
         return 1;
     }
     if (!check_cd_state()) {
