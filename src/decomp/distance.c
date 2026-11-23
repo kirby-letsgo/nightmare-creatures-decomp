@@ -3396,6 +3396,45 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_begin_untextured_triangles(CPUState *c) {
+    if (c->budget <= 34)
+        return false;
+    const u32 frame = R(29) - 0x68;
+    R(29) = frame;
+    R(8) = R(5);
+    R(9) = R(7);
+    MEM_W32(frame + 0x60, R(30));
+    R(30) = 0;
+    MEM_W32(frame + 0x64, R(31));
+    for (int reg = 23; reg >= 16; --reg)
+        MEM_W32(frame + 0x40 + 4 * (reg - 16), R(reg));
+    MEM_W32(frame + 0x10, R(6));
+    R(23) = MEM_R32(R(4) + 0x14);
+    R(21) = MEM_R32(R(28) + 0x354);
+    const u32 flags = MEM_R32(frame + 0x78);
+    R(22) = MEM_R32(R(28) + 0x3d0);
+    R(4) = MEM_R8(R(4));
+    R(2) = (flags & 7) ? 2 : 0;
+    MEM_W32(frame + 0x18, R(4));
+    c->budget -= 34;
+    return true;
+}
+
+bool nc_select_untextured_triangles(CPUState *c) {
+    const int cycles = R(4) ? 7 : 2;
+    if (c->budget <= cycles)
+        return false;
+    MEM_W8(R(29) + 0x20, R(2));
+    if (R(4)) {
+        R(7) = 0xffffff;
+        R(10) = 0xff000000;
+        R(20) = R(23) + 10;
+        R(19) = R(21) + 7;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_measure_untextured_triangle(CPUState *c) {
     if (c->budget <= 38)
         return false;

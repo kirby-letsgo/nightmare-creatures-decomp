@@ -850,7 +850,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80027B90:
             targets.update((0x80027C50, 0x80027CD0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027764:
-            targets.update((0x80027824, 0x80027880))
+            targets.update((0x800277C4, 0x80027824, 0x80027880))
         if self.mod.name == "psx2_exe" and f.addr in (0x80027764, 0x80027954, 0x80027B90):
             targets.add(
                 {0x80027764: 0x80027844, 0x80027954: 0x80027A5C, 0x80027B90: 0x80027C70}[f.addr]
@@ -1816,6 +1816,12 @@ class Emitter:
                 out.append(
                     f"    if (nc_measure_placement_quad(c, {textured})) goto L_{i.addr + 0x44:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027764:
+                out.append("    if (nc_begin_untextured_triangles(c)) goto L_800277C4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800277C4:
+                out.append("    if (nc_select_untextured_triangles(c)) {")
+                out.append("        if (R(4)) goto L_800277E0;")
+                out.append("        goto L_80027918; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800277E0:
                 out.append("    if (nc_measure_untextured_triangle(c)) goto L_80027824;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027600:
