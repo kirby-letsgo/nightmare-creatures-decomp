@@ -1,3 +1,4 @@
+#include "decomp/interrupt_control.h"
 #include "decomp/launcher.h"
 
 static void call_launcher_service(CPUState *c, u32 address, u32 resume) {
@@ -222,4 +223,23 @@ bool nc_launcher_global_callbacks(CPUState *c, bool constructors) {
     R(29) += 16;
     c->budget -= cycles;
     return true;
+}
+
+static const InterruptControlLayout interrupt_control = {
+    .state = 0x80014620,
+    .ports = 0x800156ac,
+    .stop = 0x80011000,
+    .restart = 0x800110ac,
+    .enter_critical = 0x80010a30,
+    .exit_critical = 0x80011a6c,
+    .reset_hook = 0x80011a4c,
+    .install_hook = 0x80011a5c,
+};
+
+bool nc_launcher_stop_interrupts(CPUState *c) {
+    return stop_driver_interrupts(c, &interrupt_control);
+}
+
+bool nc_launcher_restart_interrupts(CPUState *c) {
+    return restart_driver_interrupts(c, &interrupt_control);
 }

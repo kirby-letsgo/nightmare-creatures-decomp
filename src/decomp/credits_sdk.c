@@ -1,3 +1,4 @@
+#include "decomp/interrupt_control.h"
 #include "decomp/bios_service.h"
 #include "decomp/credits.h"
 #include "decomp/interrupt_driver.h"
@@ -91,15 +92,6 @@ bool nc_credits_string_length(CPUState *c) {
     }
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
-}
-
-static void set_reg(CPUState *c, unsigned reg, u32 value) {
-    R(reg) = value;
-    NC_POLL(c, NC_INSN_CYCLES);
-}
-static void load_word(CPUState *c, unsigned reg, u32 addr) {
-    R(reg) = MEM_R32(addr);
-    NC_POLL(c, NC_LOAD_CYCLES);
 }
 
 /* Both lengths are measured first. Strings with the same end address are
@@ -7165,116 +7157,23 @@ bool nc_credits_set_interrupt_handler(CPUState *c) {
     return true;
 }
 
-/* Save the IRQ mask and DMA priorities before disabling the interrupt driver. */
+static const InterruptControlLayout interrupt_control = {
+    .state = 0x80023418,
+    .ports = 0x800244a4,
+    .stop = 0x8001ac48,
+    .restart = 0x8001acf4,
+    .enter_critical = 0x8001a444,
+    .exit_critical = 0x8001ae78,
+    .reset_hook = 0x8001ae58,
+    .install_hook = 0x8001ae68,
+};
+
 bool nc_credits_stop_interrupts(CPUState *c) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = 0x80023418;
-    c->budget -= 3;
-    MEM_W32(R(29) + 20, R(31));
-    c->budget--;
-    bool active = MEM_R16(R(16)) != 0;
-    R(2) = 0;
-    c->budget -= NC_LOAD_CYCLES + 3;
-    if (active) {
-        R(31) = 0x8001ac74;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001a444); /* EnterCriticalSection */
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, 0x800244a8); /* I_MASK */
-        set_reg(c, 4, 0x80020000);
-        load_word(c, 4, 0x800244ac); /* DPCR */
-        R(3) = MEM_R16(R(2));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 1, 0x80020000);
-        MEM_W16(0x8002344a, (u16)R(3));
-        NC_POLL(c, 1);
-        load_word(c, 3, R(4));
-        set_reg(c, 4, 0x80020000);
-        load_word(c, 4, 0x800244a4); /* I_STAT */
-        set_reg(c, 1, 0x80020000);
-        MEM_W32(0x8002344c, R(3));
-        NC_POLL(c, 1);
-        MEM_W16(R(2), 0);
-        NC_POLL(c, 1);
-        R(2) = MEM_R16(R(2));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        NC_POLL(c, 1);
-        MEM_W16(R(4), (u16)R(2));
-        NC_POLL(c, 1);
-        set_reg(c, 4, 0x80020000);
-        load_word(c, 4, 0x800244ac);
-        set_reg(c, 3, 0x77770000);
-        load_word(c, 2, R(4));
-        set_reg(c, 3, 0x77777777);
-        set_reg(c, 2, R(2) & R(3));
-        MEM_W32(R(4), R(2));
-        NC_POLL(c, 1);
-        R(31) = 0x8001acd8;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001ae58); /* ResetEntryInt */
-        set_reg(c, 2, R(16));
-        MEM_W16(R(2), 0);
-        NC_POLL(c, 1);
-    }
-    load_word(c, 31, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return stop_driver_interrupts(c, &interrupt_control);
 }
 
-/* Reinstall the BIOS hook and restore the saved IRQ mask and DMA priorities. */
 bool nc_credits_restart_interrupts(CPUState *c) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = 0x80023418;
-    c->budget -= 3;
-    MEM_W32(R(29) + 20, R(31));
-    c->budget--;
-    R(2) = MEM_R16(R(16));
-    c->budget -= NC_LOAD_CYCLES + 3;
-    if (R(2) == 0) {
-        R(31) = 0x8001ad20;
-        R(4) = R(16) + 0x38;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001ae68); /* HookEntryInt */
-        set_reg(c, 4, 0x80020000);
-        load_word(c, 4, 0x800244a8);
-        set_reg(c, 3, 0x80020000);
-        R(3) = MEM_R16(0x8002344a);
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 2, 1);
-        MEM_W16(R(16), (u16)R(2));
-        NC_POLL(c, 1);
-        MEM_W16(R(4), (u16)R(3));
-        NC_POLL(c, 1);
-        set_reg(c, 3, 0x80020000);
-        load_word(c, 3, 0x800244ac);
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, 0x8002344c);
-        NC_POLL(c, 1);
-        MEM_W32(R(3), R(2));
-        NC_POLL(c, 1);
-        R(31) = 0x8001ad5c;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001ae78); /* ExitCriticalSection */
-        R(2) = R(16);
-        NC_POLL(c, 2);
-    } else {
-        set_reg(c, 2, 0);
-    }
-    load_word(c, 31, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return restart_driver_interrupts(c, &interrupt_control);
 }
 
 /* startIntr uses setjmp to build the BIOS interrupt entry context. */
