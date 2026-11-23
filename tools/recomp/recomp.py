@@ -786,8 +786,8 @@ class Emitter:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
-        if self.mod.name == "psx2_exe" and f.addr == 0x80027288:
-            targets.add(0x800272D8)
+        if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
+            targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
             targets.update((0x80028B0C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
@@ -1672,26 +1672,38 @@ class Emitter:
                 out.append("        goto L_80028C30; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028C30:
                 out.append("    if (nc_return_placement_projection(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027288:
-                out.append("    if (nc_begin_placement_vertex_projection(c)) goto L_800272D8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800272D8:
-                out.append("    if (nc_prepare_placement_vertex_groups(c)) {")
-                out.append("        if (R(9)) goto L_80027300;")
-                out.append("        goto L_80027388; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027388:
-                out.append("    if (nc_check_placement_vertex_remainder(c)) {")
-                out.append("        if (R(2)) goto L_8002739C;")
-                out.append("        goto L_800273E4; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800273E4:
-                out.append("    if (nc_return_placement_vertices(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027300:
-                out.append("    if (nc_project_placement_vertex_triple(c)) {")
-                out.append("        if (R(2)) goto L_80027300;")
-                out.append("        goto L_80027388; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002739C:
-                out.append("    if (nc_project_remaining_placement_vertex(c)) {")
-                out.append("        if (R(2)) goto L_8002739C;")
-                out.append("        goto L_800273E4; }")
+            if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
+                start = f.addr
+                groups = start + 0x50
+                triple = start + 0x78
+                remainder = start + 0x100
+                single = start + 0x114
+                sixteenth_depth = start == 0x800273F0
+                finish = 0x80027550 if sixteenth_depth else 0x800273E4
+                if i.addr == start:
+                    out.append(
+                        f"    if (nc_begin_placement_vertex_projection(c)) goto L_{groups:08X};"
+                    )
+                elif i.addr == groups:
+                    out.append("    if (nc_prepare_placement_vertex_groups(c)) {")
+                    out.append(f"        if (R(9)) goto L_{triple:08X};")
+                    out.append(f"        goto L_{remainder:08X}; }}")
+                elif i.addr == triple:
+                    shift = 4 if sixteenth_depth else 2
+                    out.append(f"    if (nc_project_placement_vertex_triple(c, {shift})) {{")
+                    out.append(f"        if (R(2)) goto L_{triple:08X};")
+                    out.append(f"        goto L_{remainder:08X}; }}")
+                elif i.addr == remainder:
+                    out.append("    if (nc_check_placement_vertex_remainder(c)) {")
+                    out.append(f"        if (R(2)) goto L_{single:08X};")
+                    out.append(f"        goto L_{finish:08X}; }}")
+                elif i.addr == single:
+                    sixteenth = "true" if sixteenth_depth else "false"
+                    out.append(f"    if (nc_project_remaining_placement_vertex(c, {sixteenth})) {{")
+                    out.append(f"        if (R(2)) goto L_{single:08X};")
+                    out.append(f"        goto L_{finish:08X}; }}")
+                elif i.addr == finish:
+                    out.append("    if (nc_return_placement_vertices(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")
