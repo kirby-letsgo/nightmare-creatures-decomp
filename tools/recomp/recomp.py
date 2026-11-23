@@ -569,6 +569,15 @@ def load_hooks(module: str) -> dict[int, str]:
 
 
 # First restored register, face counter register, capacity, and culled-face continuation.
+INDEXED_VERTEX_SCREEN_OFFSETS = {
+    0x800284B8: 0x10,
+    0x8002854C: 0x18,
+    0x800285E0: 0x20,
+    0x80028804: 0x10,
+    0x80028898: 0x18,
+    0x8002892C: 0x20,
+}
+
 PLACEMENT_FACE_CHECKS = {
     0x80027644: (7, 23, 0x400, 0x80027710),
     0x80027824: (7, 22, 0x80, 0x800278FC),
@@ -864,6 +873,8 @@ class Emitter:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80028340:
+            targets.update(pc + 0x2C for pc in INDEXED_VERTEX_SCREEN_OFFSETS)
         if self.mod.name == "psx2_exe" and f.addr == 0x80027DA4:
             targets.update((0x80027E28, 0x80027F0C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
@@ -1935,6 +1946,12 @@ class Emitter:
                 out.append(
                     f"    if (nc_init_textured_face_cursors(c, {quad_arg}))"
                     f" goto L_{i.addr + 0x14:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_SCREEN_OFFSETS:
+                offset = INDEXED_VERTEX_SCREEN_OFFSETS[i.addr]
+                out.append(
+                    f"    if (nc_project_indexed_vertex(c, 0x{offset:x}))"
+                    f" goto L_{i.addr + 0x2C:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr == 0x80027DA4:
                 out.append("    if (nc_begin_placement_lighting(c)) goto L_80027E28;")

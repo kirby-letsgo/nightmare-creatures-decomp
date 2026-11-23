@@ -4037,6 +4037,23 @@ bool nc_project_placement_vertex_triple(CPUState *c, unsigned depth_shift) {
     return true;
 }
 
+/* Each of the three indexed vertices has its own screen-coordinate slot.
+ * The depth output is shared and receives SZ3 in quarter-depth units. */
+bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset) {
+    if (c->budget <= 15)
+        return false;
+    const u32 vertex = R(2);
+    gte_write_data(c, 0, MEM_R32(vertex));
+    gte_write_data(c, 1, MEM_R32(vertex + 4));
+    gte_command(c, 0x0180001); /* RTPS */
+    R(2) = R(29) + screen_offset;
+    MEM_W32(R(2), gte_read_data(c, 14));
+    R(12) = gte_read_data(c, 19) >> 2;
+    MEM_W32(R(23), R(12));
+    c->budget -= 15;
+    return true;
+}
+
 /* Project one vertex left after the three-at-a-time loop. Each eight-byte
  * output holds packed screen coordinates and a scaled depth halfword. */
 bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth) {
