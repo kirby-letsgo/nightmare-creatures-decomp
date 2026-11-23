@@ -24,6 +24,36 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Down, R1 and L1 select action bytes in priority order. The alternate
+ * entry receives the Down result in v0 from an earlier delay slot. */
+u32 nc_player_down_shoulder_action(CPUState *c, bool test_down) {
+    if (c->budget <= (test_down ? 12 : 11))
+        return test_down ? 0x80044fc4 : 0x80044fc8;
+
+    const u32 buttons = R(17);
+    if (test_down) {
+        R(2) = buttons & 0x40;
+        c->budget -= 1;
+    }
+    if (R(2)) {
+        R(2) = 2;
+        c->budget -= 4;
+    } else if (buttons & 0x800) {
+        R(2) = 4;
+        c->budget -= 7;
+    } else if (buttons & 0x400) {
+        R(2) = 3;
+        c->budget -= 10;
+    } else {
+        R(2) = buttons & 0xa0;
+        R(4) = R(16);
+        c->budget -= 11;
+        return R(2) ? 0x800451d4 : 0x8004500c;
+    }
+    MEM_W8(R(16) + 0x39b, (u8)R(2));
+    return 0x800451d0;
+}
+
 /* Circle skips the Down path. The other entry already has the Down test
  * in v0 from the earlier branch's delay slot. */
 u32 nc_player_down_path(CPUState *c, bool check_circle) {

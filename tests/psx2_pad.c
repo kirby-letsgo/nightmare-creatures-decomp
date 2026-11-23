@@ -255,6 +255,43 @@ static bool cross_press(CPUState *cpu) {
     return nc_check_player_face_press(cpu, false);
 }
 
+static bool down_shoulder_entry(CPUState *cpu) {
+    return nc_player_down_shoulder_action(cpu, true) == cpu->r[31];
+}
+
+static bool down_shoulder_resume(CPUState *cpu) {
+    return nc_player_down_shoulder_action(cpu, false) == cpu->r[31];
+}
+
+static bool player_down_shoulder_actions(void) {
+    const struct {
+        u32 buttons, down, destination;
+        u8 action;
+    } cases[] = {
+        {0xce0, 1, 0x800451d0, 2},   {0xca0, 0, 0x800451d0, 4},   {0x4a0, 0, 0x800451d0, 3},
+        {0xa0, 0, 0x800451d4, 0x77}, {0x20, 0, 0x800451d4, 0x77}, {0x80, 0, 0x800451d4, 0x77},
+        {0, 0, 0x8004500c, 0x77},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        for (unsigned full = 0; full < 2; ++full) {
+            CPUState cpu = initial();
+            cpu.r[16] = 0x80160000;
+            /* Supply opposite Down bits at the alternate entry to catch a re-test. */
+            cpu.r[17] = (cases[i].buttons ^ (full ? 0 : 0x40)) | 0xffff0000;
+            cpu.r[2] = full ? !cases[i].down : cases[i].down;
+            cpu.r[31] = cases[i].destination;
+            const int cutoff = full ? 12 : 11;
+            cpu.budget = cutoff + 1;
+            MEM_W32(cpu.r[16] + 0x398, 0x77665544);
+            if (!compare(cpu, full ? 0x80044fc4 : 0x80044fc8,
+                         full ? down_shoulder_entry : down_shoulder_resume, cutoff) ||
+                MEM_R8(cpu.r[16] + 0x39b) != cases[i].action)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool player_down_entry(CPUState *cpu) {
     return nc_player_down_path(cpu, true) == cpu->r[31];
 }
@@ -3295,12 +3332,13 @@ int main(int argc, char **argv) {
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
         l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
-        player_r2_press() && player_r2_returns() && player_down_paths() &&
-        player_down_face_buttons() && player_face_presses() && player_triangle_actions() &&
-        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
-        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
-        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
-        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
+        player_r2_press() && player_r2_returns() && player_down_shoulder_actions() &&
+        player_down_paths() && player_down_face_buttons() && player_face_presses() &&
+        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
+        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
+        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+        ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

@@ -1067,6 +1067,17 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044FC4, 0x80044FC8):
+                test_down = "true" if i.addr == 0x80044FC4 else "false"
+                out.extend(
+                    [
+                        f"    switch (nc_player_down_shoulder_action(c, {test_down})) {{",
+                        "    case 0x800451D0: goto L_800451D0;",
+                        "    case 0x800451D4: goto L_800451D4;",
+                        "    case 0x8004500C: goto L_8004500C;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
                 check_circle = "true" if i.addr == 0x80045014 else "false"
                 out.extend(
