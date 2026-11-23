@@ -1011,6 +1011,8 @@ class Emitter:
                     0x80044780,
                     0x800447B8,
                     0x80044914,
+                    0x8004496C,
+                    0x80044990,
                     0x800449D8,
                     0x80044A08,
                     0x80044AC0,
@@ -1147,6 +1149,17 @@ class Emitter:
                         "    case 0x800451D0: goto L_800451D0;",
                         "    case 0x80044964: goto L_80044964;",
                         "    case 0x800451D4: goto L_800451D4;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044964, 0x8004497C):
+                check_incoming = "true" if i.addr == 0x80044964 else "false"
+                out.extend(
+                    [
+                        f"    switch (nc_player_secondary_flag_route(c, {check_incoming})) {{",
+                        "    case 0x8004496C: goto L_8004496C;",
+                        "    case 0x80044990: goto L_80044990;",
+                        "    case 0x800449A0: goto L_800449A0;",
                         "    }",
                     ]
                 )
