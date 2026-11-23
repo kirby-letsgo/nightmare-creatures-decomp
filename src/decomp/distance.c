@@ -4065,6 +4065,24 @@ bool nc_begin_projection_traversal(CPUState *c) {
     return true;
 }
 
+/* A nonzero actor halfword enables the second test. Its signed half
+ * remains in v0 from the branch delay slot even when the flag is clear. */
+bool nc_check_projection_effect(CPUState *c, bool *active) {
+    if (c->budget <= 7)
+        return false;
+    const u32 actor = R(21);
+    const u32 value = MEM_R16(actor + 0x362);
+    const int cycles = value ? 14 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = value << 16;
+    R(3) = 0x20000;
+    *active = value && (MEM_R32(actor + 0x2cc) & 0x20000);
+    R(2) = (u32)((s32)R(4) >> 17);
+    c->budget -= cycles;
+    return true;
+}
+
 /* A non-root starting pose selects the traversal mask from the actor's flag table. */
 bool nc_set_projection_pose_mask(CPUState *c) {
     if (c->budget <= 6)
