@@ -1,4 +1,5 @@
 #include "decomp/byte_scan.h"
+#include "decomp/cd_state.h"
 #include "decomp/interrupt_control.h"
 #include "decomp/bios_service.h"
 #include "decomp/credits.h"
@@ -9461,16 +9462,6 @@ bool nc_credits_cd_flush(CPUState *c) {
     return true;
 }
 
-/* CdStatus, CdMode and CdLastCom each return one cached unsigned byte. */
-static bool cd_state_byte(CPUState *c, u32 address) {
-    if (c->budget <= 6)
-        return false;
-    c->budget--; /* lui */
-    R(2) = MEM_R8(address);
-    c->budget -= NC_LOAD_CYCLES + 2; /* lbu, jr and its delay slot */
-    return true;
-}
-
 bool nc_credits_cd_status(CPUState *c) {
     return cd_state_byte(c, 0x8002476c);
 }
@@ -11408,11 +11399,7 @@ bool nc_credits_cd_set_test_parameter_count(CPUState *c) {
 }
 
 bool nc_credits_cd_last_position(CPUState *c) {
-    if (c->budget <= 4)
-        return false;
-    R(2) = 0x80024778; /* Address of the cached CD position. */
-    c->budget -= 4;
-    return true;
+    return cd_last_position(c, 0x80024778);
 }
 
 bool nc_credits_graph_status(CPUState *c, bool debug_level) {

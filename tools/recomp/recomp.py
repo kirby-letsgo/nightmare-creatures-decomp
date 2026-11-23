@@ -26,6 +26,11 @@ from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 
 FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
+LAUNCHER_CD_STATE_BYTES = {
+    0x80011F94: 0x80015828,  # CdStatus
+    0x80011FA4: 0x80015838,  # CdMode
+    0x80011FB4: 0x80015839,  # CdLastCom
+}
 LAUNCHER_BIOS_SERVICES = {
     0x800109D0: (0xA0, 0x39),  # InitHeap
     0x800109E0: (0xA0, 0x42),  # Load
@@ -1222,6 +1227,11 @@ class Emitter:
                 out.append("    if (set_dma_slot(c, 0x8001576c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
                 out.append("    if (set_vsync_slot(c, 0x80015740)) return;")
+            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
+                address = LAUNCHER_CD_STATE_BYTES[i.addr]
+                out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80011FC4:
+                out.append("    if (cd_last_position(c, 0x80015834)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_SERVICES:
                 table, service = LAUNCHER_BIOS_SERVICES[i.addr]
                 out.append(f"    if (bios_service(c, 0x{table:x}, 0x{service:x})) return;")
@@ -3753,6 +3763,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == LAUNCHER:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/byte_scan.h"')
+        header.append('#include "decomp/cd_state.h"')
         header.append('#include "decomp/launcher.h"')
         header.append('#include "decomp/jump_context.h"')
         header.append('#include "decomp/interrupt_driver.h"')
