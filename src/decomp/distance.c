@@ -3392,6 +3392,19 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 limit, bool *accept) {
+    const bool front_facing = (s32)R(2) > 0;
+    const int cycles = front_facing ? 16 : 14;
+    if (c->budget <= cycles)
+        return false;
+    for (unsigned i = 0; i < 4; ++i)
+        R(first_reg + i) = MEM_R32(R(29) + 0x30 + 4 * i);
+    R(2) = limit;
+    *accept = front_facing && count != limit;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Both traversals start with the root pose and an empty pending-pose stack.
  * Their delay slots copy the placement color even when projection is skipped. */
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {

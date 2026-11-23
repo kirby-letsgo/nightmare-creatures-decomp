@@ -30,6 +30,7 @@ bool nc_store_placement_angle_result(CPUState *c);
 bool nc_call_placement_part_traversal(CPUState *c);
 bool nc_place_record_pose(CPUState *c);
 bool nc_measure_placement_triangle(CPUState *c);
+bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 limit, bool *accept);
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
 bool nc_install_placement_matrices(CPUState *c, u32 continuation);
 bool nc_project_placement_depth(CPUState *c, u32 depth_offset);

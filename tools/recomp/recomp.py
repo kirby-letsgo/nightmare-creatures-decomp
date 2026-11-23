@@ -538,6 +538,15 @@ def load_hooks(module: str) -> dict[int, str]:
     return hooks
 
 
+# First restored register, face counter register, capacity, and culled-face continuation.
+PLACEMENT_FACE_CHECKS = {
+    0x80027644: (7, 23, 0x400, 0x80027710),
+    0x80027824: (7, 22, 0x80, 0x800278FC),
+    0x80027A3C: (8, 30, 0x200, 0x80027B3C),
+    0x80027C50: (8, 23, 0x80, 0x80027D4C),
+}
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
@@ -799,7 +808,11 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
-            targets.add(0x80027644)
+            targets.update((0x80027644, 0x80027664))
+        if self.mod.name == "psx2_exe" and f.addr in (0x80027764, 0x80027954, 0x80027B90):
+            targets.add(
+                {0x80027764: 0x80027844, 0x80027954: 0x80027A5C, 0x80027B90: 0x80027C70}[f.addr]
+            )
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
             targets.update((0x80028AAC, 0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
@@ -1675,6 +1688,14 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_CHECKS:
+                first, count, limit, reject = PLACEMENT_FACE_CHECKS[i.addr]
+                out.append("    { bool accept;")
+                out.append(
+                    f"    if (nc_check_placement_face(c, {first}, R({count}), {limit}, &accept)) {{"
+                )
+                out.append(f"          if (accept) goto L_{i.addr + 0x20:08X};")
+                out.append(f"          goto L_{reject:08X}; }} }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027600:
                 out.append("    if (nc_measure_placement_triangle(c)) goto L_80027644;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028A70, 0x80028C58):
