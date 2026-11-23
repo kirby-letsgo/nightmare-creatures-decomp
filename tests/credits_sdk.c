@@ -1247,6 +1247,53 @@ static bool check_gpu_fill_bytes(void) {
     return true;
 }
 
+static bool check_gpu_driver_reset(void) {
+    const u32 ports = 0x80061000, first = 0x80024d30, second = 0x80027488;
+    const u32 modes[] = {0, 1, 2, 3, 4, 5, 6, 7, 0x100, 0xfffffff9};
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Return the full mode plus seven from the version probe. */
+    MEM_W32(0x8001eb9c, 0x03e00008);
+    MEM_W32(0x8001eba0, 0x24820007);
+    MEM_W32(0x8002462c, ports);
+    MEM_W32(0x80024638, ports + 4);
+    MEM_W32(0x80024648, ports + 8);
+    MEM_W32(0x800244a8, ports + 12);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof modes / sizeof modes[0]; i++) {
+        MEM_W32(ports, 0x12345678);
+        MEM_W32(ports + 4, 0x01000201);
+        MEM_W32(ports + 8, 0x12345000);
+        MEM_W16(ports + 12, 0x145);
+        MEM_W32(0x8002465c, 2);
+        MEM_W32(0x80024660, 63);
+        memset(nc_fast_ptr(first - 1), 0xa5, 0x102);
+        memset(nc_fast_ptr(second - 1), 0xa5, 0x1802);
+        CPUState state = arguments(modes[i], 2, 3, i & 1 ? 7 : 4096);
+        u32 mode = modes[i] & 7;
+        bool full = mode == 0, reset = full || mode == 1 || mode == 3;
+        ok = compare(state, 0x8001e758, nc_credits_reset_gpu_driver, 6) &&
+             nc_cpu.r[2] == (full ? modes[i] + 7 : 0) &&
+             MEM_R32(0x8002465c) == 0 && MEM_R32(0x80024660) == 0 &&
+             MEM_R32(0x8002466c) == 0x145 && MEM_R16(ports + 12) == 0x145 &&
+             MEM_R32(ports) == (full ? 0 : reset ? 0x01000000u : 0x12345678u) &&
+             MEM_R32(ports + 4) == (reset ? 0x401 : 0x01000201) &&
+             MEM_R32(ports + 8) == (reset ? 0x12345800 : 0x12345000) &&
+             MEM_R8(first - 1) == 0xa5 && MEM_R8(first + 0x100) == 0xa5 &&
+             MEM_R8(second - 1) == 0xa5 && MEM_R8(second + 0x1800) == 0xa5;
+        for (unsigned j = 0; ok && j < 0x1800; j++)
+            ok = MEM_R8(second + j) == (full ? 0 : 0xa5) &&
+                 (j >= 0x100 || MEM_R8(first + j) == (full ? 0 : 0xa5));
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_queue_alarm_expiry(void) {
     const u32 ports = 0x80061000, trace = ports + 32;
     const u32 report[] = {
@@ -4182,6 +4229,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_queue_sync();
     pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_alarm_expiry();
+    pass = pass && check_gpu_driver_reset();
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
