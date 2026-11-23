@@ -503,6 +503,8 @@ psx2_exe     80042EFC    80042F40         pad.c
 psx2_exe     80042F40    80042F50         pad.c
 psx2_exe     80042F50    80042F54         pad.c
 psx2_exe     80042F54    80042F68         pad.c
+# Actor word comparison used by the Triangle action selector.
+psx2_exe     8004457C    800445AC         pad.c
 # Player button press detection and previous-word update.
 psx2_exe     800445AC    800445DC         pad.c
 # Reset the direction-repeat counter on an L2 press.
@@ -527,6 +529,7 @@ psx2_exe     80044DB8    80044DC0         pad.c
 psx2_exe     80044DDC    80044DE4         pad.c
 psx2_exe     80044E40    80044E74         pad.c
 psx2_exe     80044E74    80044EB4         pad.c
+psx2_exe     80044EB4    80044EC4         pad.c
 psx2_exe     80044F04    8004500C         pad.c
 psx2_exe     80045014    8004506C         pad.c
 psx2_exe     80045078    80045080         pad.c
