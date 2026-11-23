@@ -4787,6 +4787,61 @@ bool nc_advance_placement_scan(CPUState *c, bool increment) {
     return true;
 }
 
+/* Return the guest PC when the next traversal step may cross a timing poll.
+ * Deferred links live on the guest stack and may alias the transform data. */
+u32 nc_reset_placement_transforms(CPUState *c) {
+    if (c->budget <= 11)
+        return 0x8002a5f4;
+    R(29) -= 0x40;
+    R(3) = MEM_R32(R(4) + 4);
+    R(6) = 0;
+    c->budget -= 7;
+    if (R(3)) {
+        R(7) = R(29);
+        R(2) = 0;
+        R(5) = R(29);
+        c->budget -= 4;
+        for (;;) {
+            if (c->budget <= 24)
+                return 0x8002a620;
+            const u32 transform = R(3);
+            R(2) = MEM_R8(transform + 0x4d) & 0xfe;
+            R(4) = MEM_R32(transform + 0xc);
+            MEM_W32(transform + 0x48, 0);
+            MEM_W32(transform + 0x44, 0);
+            MEM_W32(transform + 0x40, 0);
+            MEM_W8(transform + 0x4d, R(2));
+            if (R(4)) {
+                MEM_W32(R(5), R(4));
+                R(5) += 4;
+                R(7) += 4;
+                ++R(6);
+                c->budget -= 4;
+            }
+            R(3) = MEM_R32(transform + 4);
+            c->budget -= 18;
+            if (R(3))
+                continue;
+            R(7) -= 4;
+            c->budget -= 2;
+            if (!R(6))
+                break;
+            if (c->budget <= 6)
+                return 0x8002a610;
+            --R(6);
+            R(3) = MEM_R32(R(7));
+            R(2) = R(6) << 2;
+            R(5) = R(29) + R(2);
+            c->budget -= 6;
+        }
+    }
+    if (c->budget <= 3)
+        return 0x8002a668;
+    R(29) += 0x40;
+    c->budget -= 3;
+    return 0;
+}
+
 bool nc_call_placement_transform_reset(CPUState *c) {
     if (c->budget <= 7)
         return false;
