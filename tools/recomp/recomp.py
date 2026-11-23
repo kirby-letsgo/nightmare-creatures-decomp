@@ -915,6 +915,8 @@ class Emitter:
             targets.update((0x80042E18, 0x80042E30, 0x80042E8C, 0x80042EF4, 0x80042F40))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067130:
             targets.update((0x800672B4, 0x800672BC))
+        if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
+            targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
             targets.update((0x80044754, 0x80044780, 0x800447B8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80067358:
@@ -986,6 +988,15 @@ class Emitter:
                 out.append("    if (nc_record_player_button_press(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800445DC:
                 out.append("    if (nc_reset_repeat_on_l2_press(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004460C:
+                out.extend(
+                    [
+                        "    if (nc_check_player_r2_press(c)) {",
+                        "        if (R(2)) goto L_8004463C;",
+                        "        goto L_80044674;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044724:
                 out.extend(
                     [

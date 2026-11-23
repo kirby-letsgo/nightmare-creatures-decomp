@@ -12,6 +12,7 @@ typedef enum {
 
 bool nc_record_player_button_press(CPUState *c);
 bool nc_reset_repeat_on_l2_press(CPUState *c);
+bool nc_check_player_r2_press(CPUState *c);
 bool nc_enter_player_input(CPUState *c);
 bool nc_leave_player_input(CPUState *c, bool store_buttons);
 bool nc_call_live_pad(CPUState *c, u32 return_address);
