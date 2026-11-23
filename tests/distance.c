@@ -4957,10 +4957,29 @@ static bool placement_step_returns(bool disc) {
         native.r[4] != input.r[17] || native.r[5] || native.r[6] ||
         native.r[16] != input.r[2] || native.r[31] != 0x8002979c || native.budget != input.budget - 5)
         return false;
-    input.r[31] = 0x80073dac;
-    if (!compare(input, 0x8002979c, nc_restore_placement_step_stack, disc, &native) ||
-        native.r[4] != input.r[16] || native.r[31] != 0x800297a4 || native.budget != input.budget - 2)
+    if (!compare(input, 0x8002a5b8, nc_call_flagged_placement_update, disc, &native) ||
+        native.r[4] != input.r[16] || native.r[5] != 1 || native.r[6] ||
+        native.r[16] != input.r[2] || native.r[31] != 0x8002a5cc || native.budget != input.budget - 5)
         return false;
+    const u32 restores[] = {0x8002979c, 0x8002a5cc};
+    for (unsigned i = 0; i < sizeof restores / sizeof restores[0]; ++i) {
+        CPUState guest = input;
+        guest.r[31] = 0x80073dac;
+        guest.budget = 2;
+        native = guest;
+        const u32 resume = restores[i] + 8;
+        if (nc_restore_placement_step_stack(&native, resume) || memcmp(&native, &guest, sizeof guest))
+            return false;
+        native.budget = ++guest.budget;
+        if (!nc_restore_placement_step_stack(&native, resume) || native.r[4] != guest.r[16] ||
+            native.r[31] != resume || native.budget != 1)
+            return false;
+        if (disc) {
+            interp_call(&guest, restores[i]);
+            if (memcmp(&native, &guest, sizeof guest))
+                return false;
+        }
+    }
     const u32 frame = SCRATCH_BASE + 0x180;
     const u32 entries[] = {0x800297a4, 0x800297ac, 0x800297b0};
     MEM_W32(frame + 0x20, 0x80010000);

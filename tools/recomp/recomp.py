@@ -1207,7 +1207,8 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C, 0x8002A250, 0x8002A5B8)
+                (0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C, 0x8002A250,
+                 0x8002A5B8, 0x8002A5CC)
             )
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
@@ -3185,10 +3186,15 @@ class Emitter:
                 out.append("    if (nc_call_placement_step_update(c)) {")
                 out.append(f"        {self.call(0x8002D580)}")
                 out.append("        goto L_8002979C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002979C:
-                out.append("    if (nc_restore_placement_step_stack(c)) {")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002A5B8:
+                out.append("    if (nc_call_flagged_placement_update(c)) {")
+                out.append(f"        {self.call(0x8002D580)}")
+                out.append("        goto L_8002A5CC; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x8002979C, 0x8002A5CC):
+                resume = i.addr + 8
+                out.append(f"    if (nc_restore_placement_step_stack(c, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(0x80073DAC)}")
-                out.append("        goto L_800297A4; }")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x800297A4, 0x800297AC, 0x800297B0):
                 out.append(f"    if (nc_return_placement_halfword_step(c, 0x{i.addr:08X})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002971C:
