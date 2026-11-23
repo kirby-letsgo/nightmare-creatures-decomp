@@ -4936,6 +4936,94 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_directory_cache(void) {
+    const u32 buffer = 0x80026a54, cache = 0x80024e54, trace = 0x80061000;
+    u8 volume[DISC_DATA_SECTOR], root[DISC_DATA_SECTOR];
+    if (!disc_read_data(16, volume))
+        return false;
+    u32 sector = volume[158] | (u32)volume[159] << 8 |
+                 (u32)volume[160] << 16 | (u32)volume[161] << 24;
+    if (!disc_read_data(sector, root))
+        return false;
+    enum { HIT, READ_ERROR, EMPTY, ROOT, SECTOR_LIMIT, ENTRY_LIMIT };
+    const struct { unsigned kind, debug; } cases[] = {
+        {HIT, 2}, {READ_ERROR, 0}, {READ_ERROR, 1}, {EMPTY, 0},
+        {ROOT, 2}, {SECTOR_LIMIT, 0}, {ENTRY_LIMIT, 0},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* The sector is preloaded. Record the requested LBA and buffer and
+     * return the scripted read result. Use the real name and BCD routines. */
+    MEM_W32(0x80022560, 0xade40000); /* sw a0,0(t7) */
+    MEM_W32(0x80022564, 0xade50004);
+    MEM_W32(0x80022568, 0xade60008);
+    MEM_W32(0x8002256c, 0x03e00008);
+    MEM_W32(0x80022570, 0x01c01021); /* v0 = t6 */
+    MEM_W32(0x80019a60, 0x03e00008);
+    MEM_W32(0x80019a64, 0x27180001); /* count printf calls */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        unsigned kind = cases[i].kind, entries = 0;
+        memset(nc_fast_ptr(cache), 0xcc, 64 * 24);
+        memset(nc_fast_ptr(buffer), 0, DISC_DATA_SECTOR);
+        if (kind == ROOT) {
+            memcpy(nc_fast_ptr(buffer), root, sizeof root);
+            for (unsigned off = 0; off < sizeof root && root[off] && entries < 64; off += root[off])
+                entries++;
+        } else if (kind == SECTOR_LIMIT || kind == ENTRY_LIMIT) {
+            unsigned stride = kind == SECTOR_LIMIT ? 128 : 31;
+            entries = kind == SECTOR_LIMIT ? 16 : 64;
+            for (unsigned j = 0; j < entries; j++)
+                MEM_W8(buffer + stride * j, (u8)stride);
+        }
+        MEM_W32(0x80025430 + 44, sector);
+        MEM_W32(0x80024a68, kind == HIT ? 1 : UINT32_MAX);
+        MEM_W32(0x80024768, cases[i].debug);
+        memset(nc_fast_ptr(trace), 0, 12);
+        const int threshold = 12 + NC_LOAD_CYCLES;
+        CPUState state = arguments(1, 2, 3, i & 1 ? threshold + 1 : 4096);
+        state.r[14] = kind != READ_ERROR;
+        state.r[15] = trace;
+        state.r[24] = 0;
+        ok = compare(state, 0x800222bc, nc_credits_cache_cd_directory, threshold) &&
+             nc_cpu.r[2] == (kind == READ_ERROR ? UINT32_MAX : 1u) &&
+             MEM_R32(0x80024a68) == (kind == READ_ERROR ? UINT32_MAX : 1u) &&
+             MEM_R32(trace) == (kind != HIT);
+        if (kind != HIT)
+            ok = ok && MEM_R32(trace + 4) == sector && MEM_R32(trace + 8) == buffer;
+        if (kind == ROOT) {
+            unsigned offset = 0;
+            for (unsigned j = 0; ok && j < entries; j++) {
+                const u8 *record = root + offset;
+                u32 entry = cache + j * 24;
+                ok = !memcmp(nc_fast_ptr(entry + 4), record + 10, 4);
+                if (j < 2)
+                    ok = ok && !memcmp(nc_fast_ptr(entry + 8), j ? ".." : ".", j + 2);
+                else
+                    ok = ok && !memcmp(nc_fast_ptr(entry + 8), record + 33, record[32]) &&
+                         MEM_R8(entry + 8 + record[32]) == 0;
+                offset += record[0];
+            }
+        }
+        if (kind == HIT || kind == READ_ERROR)
+            ok = ok && MEM_R8(cache + 8) == 0xcc;
+        else if (entries < 64)
+            ok = ok && MEM_R8(cache + entries * 24 + 8) == 0;
+        if (kind == ENTRY_LIMIT || kind == SECTOR_LIMIT)
+            ok = ok && MEM_R32(cache + (entries - 1) * 24 + 4) == 0 &&
+                 MEM_R32(0x80025430 + 44) == sector;
+        unsigned prints = kind == ROOT ? entries + 2 : (kind == READ_ERROR && cases[i].debug);
+        ok = ok && nc_cpu.r[24] == prints;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_search_directory(void) {
     const u32 parents = 0x80025458, name = 0x80060000;
     u8 saved[128 * 44];
@@ -5304,6 +5392,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_read_sync();
     pass = pass && check_cd_read_sectors();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_directory_cache();
     pass = pass && check_cd_search_directory();
     pass = pass && check_cd_copy_identifier();
     pass = pass && check_strcmp();
