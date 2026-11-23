@@ -1807,6 +1807,50 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_initialization(void) {
+    const u32 spu = 0x80062000, dpcr = 0x80062400;
+    const struct { u32 mode; u16 status; int budget; } cases[] = {
+        {0, 0, 4}, {0, 0xf800, 8192}, {1, 0, 4}, {UINT32_MAX, 1, 8192},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE); /* interpret the FIFO upload and all SPU delays */
+    MEM_W32(0x80024678, spu);
+    MEM_W32(0x80024688, dpcr);
+    MEM_W32(0x80019a60, 0x03e00008);
+    MEM_W32(0x80019a64, 0x27180001); /* count timeout diagnostics in t8 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(spu), 0xcc, 0x200);
+        memset(nc_fast_ptr(0x800273e6), 0xee, 24);
+        MEM_W32(dpcr, 0x10203040);
+        MEM_W16(spu + 0x1ae, cases[i].status);
+        CPUState state = arguments(cases[i].mode, 2, 3, cases[i].budget);
+        state.r[24] = 0;
+        bool full = cases[i].mode == 0;
+        ok = compare(state, 0x8001f12c, nc_credits_initialize_spu, 3) &&
+             nc_cpu.r[2] == 0 && nc_cpu.r[24] == (u32)((cases[i].status & 0x7ff) != 0) &&
+             MEM_R32(dpcr) == 0x102b3040 && MEM_R16(spu + 0x1aa) == 0xc000 &&
+             MEM_R32(0x800246ac) == 1 && MEM_R16(0x80024690) == (full ? 0x200 : 0) &&
+             MEM_R16(0x800273e6) == 0xeeee && MEM_R16(0x800273fc) == 0xeeee;
+        for (unsigned j = 0; ok && j < 10; j++)
+            ok = MEM_R16(0x800273e8 + 2 * j) == 0;
+        for (unsigned j = 0; ok && j < 24; j++) {
+            u32 voice = spu + 16 * j;
+            ok = MEM_R16(voice) == (full ? 0 : 0xcccc) &&
+                 MEM_R16(voice + 4) == (full ? 0x3fff : 0xcccc) &&
+                 MEM_R16(voice + 6) == (full ? 0x200 : 0xcccc) &&
+                 MEM_R16(voice + 12) == 0xcccc;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_spu_common_attributes(void) {
     const u32 attr = 0x80061000, regs = 0x80063000;
     u32 old_base = MEM_R32(0x80024678);
@@ -5604,6 +5648,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_initialization();
     pass = pass && check_spu_common_attributes();
     pass = pass && check_spu_fifo_write();
     pass = pass && check_spu_dma_complete();
