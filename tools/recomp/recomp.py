@@ -884,6 +884,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028340:
+            targets.update(INDEXED_VERTEX_INPUTS)
             targets.update(INDEXED_VERTEX_SCREEN_OFFSETS)
             targets.update(pc + 0x2C for pc in INDEXED_VERTEX_SCREEN_OFFSETS)
         if self.mod.name == "psx2_exe" and f.addr == 0x80027DA4:
@@ -1996,6 +1997,18 @@ class Emitter:
                 quad_arg = "true" if i.addr == 0x800279E4 else "false"
                 out.append(
                     f"    if (nc_init_textured_face_cursors(c, {quad_arg}))"
+                    f" goto L_{i.addr + 0x14:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x800284E4,
+                0x80028578,
+                0x80028830,
+                0x800288C4,
+            ):
+                first = i.addr in (0x800284E4, 0x80028830)
+                offset, next_pose = (0x14, 5) if first else (0x1C, 4)
+                out.append(
+                    f"    if (nc_store_indexed_vertex_depth(c, 0x{offset:x}, R({next_pose})))"
                     f" goto L_{i.addr + 0x14:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_INPUTS:

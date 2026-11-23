@@ -4432,6 +4432,47 @@ static bool indexed_vertex_inputs(bool disc) {
     return true;
 }
 
+static bool indexed_depth_stores(bool disc) {
+    const struct {
+        u32 pc, offset;
+        unsigned next_pose_reg;
+    } sites[] = {
+        {0x800284e4, 0x14, 5}, {0x80028578, 0x1c, 4}, {0x80028830, 0x14, 5}, {0x800288c4, 0x1c, 4}};
+    const s32 depths[] = {-5, 0, 3, 4, 16383, INT32_MIN};
+    const u32 frame = SCRATCH_BASE;
+    for (unsigned i = 0; i < sizeof sites / sizeof sites[0]; ++i) {
+        for (unsigned j = 0; j < sizeof depths / sizeof depths[0]; ++j) {
+            CPUState input = initial();
+            input.r[29] = frame;
+            input.r[31] = sites[i].pc + 0x14;
+            const u32 next_pose = input.r[sites[i].next_pose_reg];
+            MEM_W32(frame + 0x28, (u32)depths[j]);
+            MEM_W32(frame + sites[i].offset, 0xa5a55a5a);
+            u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 7;
+            CPUState native = input;
+            if (nc_store_indexed_vertex_depth(&native, sites[i].offset, next_pose) ||
+                memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_store_indexed_vertex_depth(&native, sites[i].offset, next_pose) ||
+                native.budget != 1 || native.r[2] != next_pose + 0x18 ||
+                MEM_R32(frame + sites[i].offset) != (0xa5a50000u | (u16)(depths[j] >> 2)))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, sites[i].pc);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool indexed_vertex_projections(bool disc) {
     const u32 vertex = SCRATCH_BASE, frame = vertex + 0x80;
     const struct {
@@ -6998,15 +7039,15 @@ int main(int argc, char **argv) {
         placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && indexed_vertex_inputs(disc) &&
-        indexed_vertex_projections(disc) && remaining_placement_vertices(disc, false) &&
-        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
-        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_vertex_triples(disc, true) && indexed_depth_stores(disc) &&
+        indexed_vertex_inputs(disc) && indexed_vertex_projections(disc) &&
+        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
+        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

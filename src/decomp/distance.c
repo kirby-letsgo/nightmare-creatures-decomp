@@ -4051,6 +4051,18 @@ bool nc_prepare_indexed_vertex(CPUState *c, u32 pose, u32 vertex_index) {
     return true;
 }
 
+/* The projection left SZ3 / 4 at sp+0x28. Store another two-bit
+ * reduction beside the packed screen coordinates, then select the next matrix. */
+bool nc_store_indexed_vertex_depth(CPUState *c, u32 depth_offset, u32 next_pose) {
+    if (c->budget <= 7)
+        return false;
+    const s32 depth = (s32)MEM_R32(R(29) + 0x28);
+    MEM_W16(R(29) + depth_offset, (u16)(depth >> 2));
+    R(2) = next_pose + 0x18;
+    c->budget -= 7;
+    return true;
+}
+
 /* Each of the three indexed vertices has its own screen-coordinate slot.
  * The depth output is shared and receives SZ3 in quarter-depth units. */
 bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset) {
