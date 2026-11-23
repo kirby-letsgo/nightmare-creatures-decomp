@@ -845,9 +845,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
-            targets.update((0x800275A8, 0x800275EC, 0x80027644, 0x80027664, 0x800276BC))
+            targets.update((0x800275A8, 0x800275EC, 0x80027644, 0x80027664, 0x800276BC, 0x800276D8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027954:
-            targets.update((0x800279A0, 0x800279E4, 0x80027A3C, 0x80027AE8))
+            targets.update((0x800279A0, 0x800279E4, 0x80027A3C, 0x80027AE8, 0x80027B04))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027B90:
             targets.update((0x80027BF0, 0x80027C50, 0x80027CD0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027764:
@@ -1821,6 +1821,11 @@ class Emitter:
                 out.append(f"    if (nc_advance_placement_face(c, {args})) {{")
                 out.append(f"        if (R(2)) goto L_{head:08X};")
                 out.append(f"        goto L_{done:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800276BC, 0x80027AE8):
+                quad_arg = "true" if i.addr == 0x80027AE8 else "false"
+                out.append(
+                    f"    if (nc_finish_textured_packet(c, {quad_arg})) goto L_{i.addr + 0x1C:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_PACKET_LINKS:
                 table, tag, address, size = PLACEMENT_PACKET_LINKS[i.addr]
                 out.append(

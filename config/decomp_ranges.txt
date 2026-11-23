@@ -97,6 +97,7 @@ psx2_exe     800275EC    80027600         distance.c
 psx2_exe     80027600    80027644         distance.c
 psx2_exe     80027644    80027664         distance.c
 psx2_exe     80027664    800276BC         distance.c
+psx2_exe     800276BC    800276D8         distance.c
 psx2_exe     800276D8    80027710         distance.c
 psx2_exe     80027710    80027728         distance.c
 psx2_exe     80027728    80027764         distance.c
@@ -115,6 +116,7 @@ psx2_exe     800279E4    800279F8         distance.c
 psx2_exe     800279F8    80027A3C         distance.c
 psx2_exe     80027A3C    80027A5C         distance.c
 psx2_exe     80027A5C    80027AE8         distance.c
+psx2_exe     80027AE8    80027B04         distance.c
 psx2_exe     80027B04    80027B3C         distance.c
 psx2_exe     80027B3C    80027B54         distance.c
 psx2_exe     80027B54    80027B90         distance.c
