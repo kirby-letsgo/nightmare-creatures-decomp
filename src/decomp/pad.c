@@ -1,4 +1,5 @@
 #include "decomp/pad.h"
+#include "decomp/distance.h"
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
@@ -924,6 +925,27 @@ u32 nc_player_r2_action_result(CPUState *c) {
     R(4) = R(16);
     c->budget -= 2;
     return R(2) ? 0x800451e8 : 0x800450bc;
+}
+
+/* Square saves the signed heading even when the first flag skips the second check. */
+u32 nc_player_square_heading(CPUState *c) {
+    if (c->budget <= 35)
+        return 0x800450d0;
+
+    R(31) = 0x800450d8;
+    R(4) = R(16);
+    c->budget -= 2;
+    nc_actor_heading(c);
+    R(3) = MEM_R32(R(16) + 0x2c8) & 0x8000;
+    MEM_W32(R(16) + 0x2d8, R(2));
+    c->budget -= 8;
+    if (R(3))
+        return 0x8004512c;
+
+    R(2) = MEM_R32(R(16) + 0x330) & 8;
+    R(4) = R(16);
+    c->budget -= 7;
+    return R(2) ? 0x8004514c : 0x80045104;
 }
 
 /* The face-button checks use the actor already in a0 for the press test.

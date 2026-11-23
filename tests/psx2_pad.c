@@ -236,6 +236,39 @@ static bool player_r2_action_call(void) {
     return true;
 }
 
+static bool square_heading_destination(CPUState *cpu) {
+    const u32 destination = cpu->r[31];
+    return nc_player_square_heading(cpu) == destination;
+}
+
+static bool player_square_headings(void) {
+    const u32 actor = 0x80160000, pose = 0x80162000, linked = 0x80163000;
+    const struct {
+        u32 heading, offset, flags, action_flags, destination;
+    } cases[] = {
+        {0x7fff, 1, 0x8000, 8, 0x8004512c},
+        {0xffff, 2, 0, 8, 0x8004514c},
+        {0x12345678, 0x4321, 1, 0x10, 0x80045104},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[4] = 0x80161000;
+        cpu.r[16] = actor;
+        cpu.r[31] = cases[i].destination;
+        cpu.budget = 36;
+        MEM_W32(actor + 0x20, pose);
+        MEM_W32(pose + 4, linked);
+        MEM_W32(pose + 0x48, cases[i].heading);
+        MEM_W32(linked + 0x40, cases[i].offset);
+        MEM_W32(actor + 0x2c8, cases[i].flags);
+        MEM_W32(actor + 0x330, cases[i].action_flags);
+        MEM_W32(actor + 0x2d8, 0xdeadbeef);
+        if (!compare(cpu, 0x800450d0, square_heading_destination, 35))
+            return false;
+    }
+    return true;
+}
+
 static bool player_r2_returns(void) {
     const struct {
         u32 entry, buttons;
@@ -4292,22 +4325,22 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_setup_call() && player_down_paths() && player_r2_action_call() &&
-        player_down_action_calls() && player_down_face_buttons() && player_level_flag_checks() &&
-        player_input_state_gates() && player_secondary_flag_routes() &&
-        player_input_action_gates() && player_state_three_circle_checks() &&
-        player_circle_held_triangle_checks() && player_vertical_action_checks() &&
-        player_shoulder_action_checks() && player_queued_action_calls() &&
-        player_queued_face_actions() && player_horizontal_directions() &&
-        player_face_button_gates() && player_face_button_calls() && flagged_shoulder_paths() &&
-        player_shoulder_action_calls() && player_circle_shoulder_paths() &&
-        player_up_action_six_checks() && player_action_thirteen_call() &&
-        player_action_thirteen_checks() && player_single_face_actions() && player_face_presses() &&
-        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
-        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        player_down_setup_call() && player_down_paths() && player_square_headings() &&
+        player_r2_action_call() && player_down_action_calls() && player_down_face_buttons() &&
+        player_level_flag_checks() && player_input_state_gates() &&
+        player_secondary_flag_routes() && player_input_action_gates() &&
+        player_state_three_circle_checks() && player_circle_held_triangle_checks() &&
+        player_vertical_action_checks() && player_shoulder_action_checks() &&
+        player_queued_action_calls() && player_queued_face_actions() &&
+        player_horizontal_directions() && player_face_button_gates() &&
+        player_face_button_calls() && flagged_shoulder_paths() && player_shoulder_action_calls() &&
+        player_circle_shoulder_paths() && player_up_action_six_checks() &&
+        player_action_thirteen_call() && player_action_thirteen_checks() &&
+        player_single_face_actions() && player_face_presses() && player_triangle_actions() &&
+        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
+        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
