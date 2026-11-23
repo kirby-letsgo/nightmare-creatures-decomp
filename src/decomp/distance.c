@@ -4863,6 +4863,21 @@ u32 nc_check_alternate_placement_counter(CPUState *c) {
     return R(4) == limit ? 0x80029060 : 0x800290a4;
 }
 
+/* On reaching the alternate counter limit, read the replacement stack
+ * before clearing the enable bit in the stack-switch call's delay slot. */
+bool nc_begin_alternate_placement_update(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    const u32 flags = R(16) + 0x2c;
+    R(3) = 0xefffffff;
+    R(2) = MEM_R32(flags) & R(3);
+    R(4) = MEM_R32(0x8008f050);
+    R(31) = 0x80029080;
+    MEM_W32(flags, R(2));
+    c->budget -= 12;
+    return true;
+}
+
 bool nc_call_placement_transform_reset(CPUState *c) {
     if (c->budget <= 7)
         return false;
