@@ -102,6 +102,22 @@ static bool player_source(u32 flags) {
     return true;
 }
 
+static bool player_button_suppression(void) {
+    const u32 actor = 0x80160000;
+    const u32 flags[] = {0,          0xfe87ffff, 0x00080000, 0x00100000,
+                         0x00200000, 0x00400000, 0x01000000, 0xffffffff};
+    for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[16] = actor;
+        cpu.r[31] = i < 2 ? 0x800448fc : 0x800448f4;
+        cpu.budget = 8;
+        MEM_W32(actor + 0x2c8, flags[i]);
+        if (!compare(cpu, 0x800448e0, nc_check_player_button_suppression, 7))
+            return false;
+    }
+    return true;
+}
+
 static bool button_dispatch(void) {
     const u32 actor = 0x80160000;
     const struct {
@@ -2933,9 +2949,9 @@ int main(int argc, char **argv) {
         menu_direction_selections() && menu_horizontal_inputs() && menu_vertical_inputs() &&
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
-        l2_direction_edges() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        l2_direction_edges() && player_button_suppression() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

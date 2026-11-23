@@ -104,6 +104,16 @@ u32 nc_dispatch_player_buttons(CPUState *c) {
     return (buttons & 0x100) ? 0x800447b8 : 0x800448d4;
 }
 
+/* Player control suppresses the button word when any masked actor flag is set. */
+bool nc_check_player_button_suppression(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(5) = MEM_R32(R(16) + 0x2c8);
+    R(2) = R(5) & 0x01780000;
+    c->budget -= 7;
+    return true;
+}
+
 /* The L2 branch records left/right press edges. Holding both gives left
  * priority, even when left was already down. Bit 1 marks an active sequence.
  * Bit 2 and the adjacent halfword track direction and repeat count. */
