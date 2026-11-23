@@ -945,7 +945,7 @@ class Emitter:
             targets.update((0x80028E14, 0x80028E2C, 0x80028E44))
             targets.update((0x80028C8C, 0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
-            targets.add(0x80028F30)
+            targets.update((0x80028F30, 0x80029470))
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
             targets.add(0x80029524)
@@ -2203,6 +2203,13 @@ class Emitter:
                 out.append("    if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800296B0:
                 out.append("    if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80029460, 0x80029464):
+                increment = "true" if i.addr == 0x80029460 else "false"
+                out.append(f"    if (nc_advance_placement_scan(c, {increment})) {{")
+                out.append("        if ((s32)R(20) < 320) goto L_80028F00;")
+                out.append("        goto L_80029470; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029470:
+                out.append("    if (nc_restore_placement_scan_frame(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028ECC:
                 out.append("    if (nc_begin_placement_scan(c)) goto L_80028F00;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028F00:
