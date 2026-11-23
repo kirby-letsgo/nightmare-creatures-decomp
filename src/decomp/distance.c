@@ -3384,6 +3384,24 @@ bool nc_project_placement_depth(CPUState *c) {
     return true;
 }
 
+/* Beyond the depth threshold, four times the excess depth supplies IR0
+ * for the GTE interpolation of the placement color toward the far color. */
+bool nc_apply_placement_depth_cue(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const u32 factor_slot = R(29) + 0x2d8;
+    const u32 color_slot = R(29) + 0x2dc;
+    MEM_W32(factor_slot, R(2) << 2);
+    R(2) = color_slot;
+    gte_write_data(c, 6, MEM_R32(color_slot));
+    R(8) = MEM_R32(factor_slot);
+    gte_write_data(c, 8, R(8));
+    gte_command(c, 0x0780010); /* DPCS */
+    MEM_W32(color_slot, gte_read_data(c, 22));
+    c->budget -= 15;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
