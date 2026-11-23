@@ -13,6 +13,7 @@ typedef enum {
 bool nc_player_triangle_fallback(CPUState *c);
 bool nc_call_player_square_scan(CPUState *c, bool flagged);
 u32 nc_player_square_scan_result(CPUState *c, bool flagged);
+bool nc_call_player_square_scan_match(CPUState *c);
 bool nc_call_player_square_actor_scan(CPUState *c);
 u32 nc_player_square_actor_scan_result(CPUState *c);
 u32 nc_player_square_heading(CPUState *c);
@@ -42,7 +43,7 @@ u32 nc_player_up_action_six(CPUState *c, bool check_stick);
 u32 nc_player_action_thirteen_check(CPUState *c);
 bool nc_call_player_action_thirteen(CPUState *c);
 bool nc_finish_player_action_thirteen(CPUState *c);
-bool nc_call_player_single_face_action(CPUState *c, bool cross);
+bool nc_call_player_single_face_action(CPUState *c, u32 action, u32 link);
 u32 nc_player_triangle_direct_action(CPUState *c);
 u32 nc_player_circle_triangle_check(CPUState *c);
 u32 nc_player_triangle_action_check(CPUState *c);

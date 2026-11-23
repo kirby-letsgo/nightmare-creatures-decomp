@@ -61,6 +61,14 @@ PSX2_PLAYER_DOWN_CALLS = {
     0x80045094: (2, 0x800450A0),
 }
 
+# Single face-button calls to 0x8004FA34, keyed by call site.
+PSX2_PLAYER_SINGLE_FACE_ACTIONS = {
+    0x80044DB0: 6,
+    0x80044DD4: 8,
+    0x8004514C: 5,
+    0x80045170: 7,
+}
+
 PSX2_PLAYER_BUTTON_STORE_JUMPS = {
     0x80044CC4,
     0x80044CD4,
@@ -1052,6 +1060,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
             targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.update(entry + 8 for entry in PSX2_PLAYER_SINGLE_FACE_ACTIONS)
             targets.update(dest for _, dest in PSX2_PLAYER_DOWN_CALLS.values())
             targets.update(dest for _, dest in PSX2_PLAYER_SHOULDER_CALLS.values())
             targets.update(entry + 20 for entry in PSX2_PLAYER_FACE_PRESSES)
@@ -1076,8 +1085,6 @@ class Emitter:
                     0x80044D48,
                     0x80044D8C,
                     0x80044D94,
-                    0x80044DB8,
-                    0x80044DDC,
                     0x80044E74,
                     0x80044EB4,
                     0x80044F2C,
@@ -1091,6 +1098,7 @@ class Emitter:
                     0x8004511C,
                     0x80045134,
                     0x8004513C,
+                    0x80045144,
                     0x800451DC,
                 )
             )
@@ -1420,10 +1428,13 @@ class Emitter:
                 out.append("    if (nc_call_player_action_thirteen(c)) goto L_80044D94;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044D94:
                 out.append("    if (nc_finish_player_action_thirteen(c)) goto L_800451E8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044DB0:
-                out.append("    if (nc_call_player_single_face_action(c, false)) goto L_80044DB8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044DD4:
-                out.append("    if (nc_call_player_single_face_action(c, true)) goto L_80044DDC;")
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_SINGLE_FACE_ACTIONS:
+                action = PSX2_PLAYER_SINGLE_FACE_ACTIONS[i.addr]
+                link = i.addr + 8
+                out.append(
+                    f"    if (nc_call_player_single_face_action(c, {action}, 0x{link:08X}u)) "
+                    f"goto L_{link:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044DE4:
                 out.extend(
                     [
@@ -1594,6 +1605,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004513C:
+                out.append("    if (nc_call_player_square_scan_match(c)) goto L_80045144;")
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_FACE_PRESSES:
                 mask, next_button = PSX2_PLAYER_FACE_PRESSES[i.addr]
                 link = i.addr + 12
