@@ -4275,6 +4275,47 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_effect_intensities(bool disc) {
+    static const struct {
+        u32 phase, previous, intensity;
+    } cases[] = {{0, 0, 127},
+                 {2, 65, 160},
+                 {1, 65, 32},
+                 {0xffffffff, 255, 127},
+                 {1, 0x80000000, 0x40000000},
+                 {0, 0x80000000, 0x4000007f}};
+    const u32 global = 0x800ce9cc, slot = SCRATCH_BASE + 0x2e8;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = cases[i].phase;
+        input.r[29] = SCRATCH_BASE;
+        input.r[31] = 0x80051568;
+        input.budget = 22;
+        MEM_W32(global, cases[i].previous);
+        MEM_W32(slot, 0xcafebabe);
+        CPUState native = input;
+        if (nc_apply_projection_intensity(&native) || memcmp(&native, &input, sizeof input) ||
+            MEM_R32(global) != cases[i].previous || MEM_R32(slot) != 0xcafebabe)
+            return false;
+        native.budget = ++input.budget;
+        const u32 intensity = cases[i].intensity, packed = intensity * 0x10101u;
+        if (!nc_apply_projection_intensity(&native) || native.budget != 1 ||
+            native.r[31] != 0x800280d0 || native.r[4] != input.r[21] || native.r[5] != 1 ||
+            native.r[7] != global || native.r[6] != intensity << 8 || native.r[3] != intensity ||
+            native.r[2] != packed || MEM_R32(global) != intensity || MEM_R32(slot) != packed)
+            return false;
+        if (disc) {
+            MEM_W32(global, cases[i].previous);
+            MEM_W32(slot, 0xcafebabe);
+            interp_call(&input, 0x80028080);
+            if (memcmp(&native, &input, sizeof input) || MEM_R32(global) != intensity ||
+                MEM_R32(slot) != packed)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool projection_effect_flags(bool disc) {
     static const struct {
         u16 value;
@@ -7723,6 +7764,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_effect_intensities(disc) &&
         projection_effect_flags(disc) &&
         projection_traversal_entries(disc) &&
         projection_face_calls(disc, true) && projection_face_calls(disc, false) &&

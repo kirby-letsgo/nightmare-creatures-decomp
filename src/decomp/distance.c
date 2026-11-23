@@ -4083,6 +4083,28 @@ bool nc_check_projection_effect(CPUState *c, bool *active) {
     return true;
 }
 
+/* Move the shared intensity halfway toward black or white. The MIPS
+ * subtraction wraps before the signed shift, which rounds down. */
+bool nc_apply_projection_intensity(CPUState *c) {
+    if (c->budget <= 22)
+        return false;
+    const u32 target = (R(2) & 1) ? 0 : 255;
+    const u32 slot = R(29) + 0x2e8;
+    R(4) = R(21);
+    R(7) = 0x800ce9cc;
+    MEM_W32(slot, target);
+    const u32 previous = MEM_R32(R(7));
+    R(3) = previous + (u32)((s32)(target - previous) >> 1);
+    R(5) = 1;
+    R(6) = R(3) << 8;
+    R(2) = (R(3) << 16) + R(6) + R(3);
+    MEM_W32(slot, R(2));
+    R(31) = 0x800280d0;
+    MEM_W32(R(7), R(3));
+    c->budget -= 22;
+    return true;
+}
+
 /* A non-root starting pose selects the traversal mask from the actor's flag table. */
 bool nc_set_projection_pose_mask(CPUState *c) {
     if (c->budget <= 6)
