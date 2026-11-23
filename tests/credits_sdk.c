@@ -1645,6 +1645,61 @@ static bool check_texture_window(void) {
     return true;
 }
 
+static bool check_set_draw_env(void) {
+    const u32 env = 0x80062000;
+    const struct { s16 x, y, w, h; bool clear, alias; } cases[] = {
+        {0, 0, 320, 240, false, false}, {64, 10, 320, 240, true, false},
+        {1, -2, 64, 24, true, false}, {64, 2, 65, 8, true, false},
+        {0, 0, -1, -2, true, false}, {0, 32767, 2000, 1000, true, false},
+        {-32768, -3, 64, -1, true, false}, {0, 0, 320, 240, true, true},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE); /* run the five GPU command builders from the disc */
+    MEM_W16(0x8002455c, 1024);
+    MEM_W16(0x8002455e, 512);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        u32 packet = cases[i].alias ? env : env + 28;
+        memset(nc_fast_ptr(env), 0xcc, 72);
+        MEM_W8(0x80024558, i & 1);
+        MEM_W16(env, (u16)cases[i].x);
+        MEM_W16(env + 2, (u16)cases[i].y);
+        MEM_W16(env + 4, (u16)cases[i].w);
+        MEM_W16(env + 6, (u16)cases[i].h);
+        MEM_W16(env + 8, 13);
+        MEM_W16(env + 10, (u16)-7);
+        MEM_W8(env + 24, cases[i].clear);
+        MEM_W8(env + 25, 0x12);
+        MEM_W8(env + 26, 0x34);
+        MEM_W8(env + 27, 0x56);
+        u32 link = MEM_R32(packet) & 0xffffff;
+        CPUState state = arguments(packet, env, 3, i & 1 ? 7 : 8192);
+        /* Overlap lets the E6 command overwrite isbg before the branch. */
+        bool clear = cases[i].clear && !cases[i].alias;
+        u32 length = clear ? 9 : 6;
+        ok = compare(state, 0x8001d1cc, nc_credits_set_draw_env, 6) &&
+             nc_cpu.r[2] == length && MEM_R32(packet) == ((length << 24) | link) &&
+             MEM_R32(packet + 24) == 0xe6000000;
+        if (clear) {
+            u32 w = cases[i].w < 0 ? 0 : cases[i].w > 1023 ? 1023 : cases[i].w;
+            u32 h = cases[i].h < 0 ? 0 : cases[i].h > 511 ? 511 : cases[i].h;
+            bool fill = ((cases[i].x | w) & 63) == 0;
+            u16 x = (u16)(cases[i].x - (fill ? 0 : 13));
+            u16 y = (u16)(cases[i].y + (fill ? 0 : 7));
+            ok = ok && MEM_R32(packet + 28) == ((fill ? 0x02000000u : 0x60000000u) | 0x563412) &&
+                 MEM_R32(packet + 32) == ((u32)y << 16 | x) &&
+                 MEM_R32(packet + 36) == (h << 16 | w);
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_draw_mode_packet(void) {
     const u32 packet = 0x80060500;
     const u32 rects[] = {0, SCRATCH_BASE + 8, packet, 0xa0060504, 0x801feed0};
@@ -5602,6 +5657,7 @@ int main(int argc, char **argv) {
     pass = pass && check_merge_primitives();
     pass = pass && check_transfer_packets();
     pass = pass && check_draw_mode_packet();
+    pass = pass && check_set_draw_env();
     pass = pass && check_texture_window();
     pass = pass && check_draw_offset();
     pass = pass && check_display_field();

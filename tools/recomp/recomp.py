@@ -190,6 +190,7 @@ CREDITS_ROUTINES = {
     0x8001D108: "nc_credits_draw_offset_packet(c)",
     0x8001D14C: "nc_credits_priority_packet(c)",
     0x8001D174: "nc_credits_draw_mode_packet(c)",
+    0x8001D1CC: "nc_credits_set_draw_env(c)",
     0x8001D470: "nc_credits_draw_mode_word(c)",
     0x8001D4CC: "nc_credits_draw_corner(c, false)",
     0x8001D598: "nc_credits_draw_corner(c, true)",
