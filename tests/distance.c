@@ -4275,6 +4275,31 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool placement_lighting_offsets(bool disc) {
+    static const struct {
+        s16 local;
+        u32 global, result;
+        int cycles;
+    } cases[] = {{-1, 1, 0, 15},           {-32768, 1, 0xffff8001, 17},
+                 {1, 254, 255, 17},        {-1, 257, 255, 18},
+                 {32767, 0, 255, 18},      {1, 0x7fffffff, 0x80000000, 17},
+                 {-1, 0x80000000, 255, 18}};
+    const u32 settings = SCRATCH_BASE + 0x40;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial(), native;
+        input.r[28] = SCRATCH_BASE;
+        input.r[31] = cases[i].result ? 0x80027e58 : 0x80027ed0;
+        MEM_W32(SCRATCH_BASE + 0x244, settings);
+        MEM_W16(settings + 0xc, cases[i].local);
+        MEM_W32(0x800d7c08, cases[i].global);
+        if (!compare(input, 0x80027e28, nc_placement_lighting_offset, disc, &native) ||
+            native.r[3] != cases[i].result || native.r[2] != (cases[i].cycles != 18) ||
+            native.budget != input.budget - cases[i].cycles)
+            return false;
+    }
+    return true;
+}
+
 static bool projection_lighting_calls(bool disc) {
     const u32 actor = SCRATCH_BASE, frame = SCRATCH_BASE + 0x80;
     CPUState input = initial(), native;
@@ -7807,6 +7832,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_lighting_offsets(disc) &&
         projection_lighting_calls(disc) &&
         projection_effect_intensities(disc) &&
         projection_effect_flags(disc) &&

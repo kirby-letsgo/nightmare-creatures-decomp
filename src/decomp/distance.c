@@ -3970,6 +3970,24 @@ bool nc_begin_placement_lighting(CPUState *c) {
     return true;
 }
 
+/* A zero sum bypasses the color adjustment. The signed upper bound
+ * leaves negative offsets intact, including after a wrapping addition. */
+bool nc_placement_lighting_offset(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const u32 settings = MEM_R32(R(28) + 0x244);
+    const u32 local = (u32)(s32)(s16)MEM_R16(settings + 0xc);
+    const u32 sum = MEM_R32(0x800d7c08) + local;
+    const bool clamp = (s32)sum >= 256;
+    const int cycles = !sum ? 15 : clamp ? 18 : 17;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = !clamp;
+    R(3) = clamp ? 255 : sum;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */
