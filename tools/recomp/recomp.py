@@ -2049,6 +2049,12 @@ class Emitter:
                 out.append(
                     f"    if (nc_write_indexed_face_packet(c, {textured})) goto L_{resume:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028688, 0x800289CC):
+                textured = "true" if i.addr == 0x80028688 else "false"
+                out.append(
+                    f"    if (nc_link_indexed_face_packet(c, {textured}))"
+                    f" goto L_{i.addr + 0x50:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_INPUTS:
                 pose, index = INDEXED_VERTEX_INPUTS[i.addr]
                 out.append(

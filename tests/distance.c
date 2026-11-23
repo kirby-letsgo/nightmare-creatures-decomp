@@ -4432,6 +4432,47 @@ static bool indexed_vertex_inputs(bool disc) {
     return true;
 }
 
+static bool indexed_packet_links(bool disc, bool textured) {
+    const u32 frame = SCRATCH_BASE, table = frame + 0x80;
+    const u32 entry = textured ? 0x80028688 : 0x800289cc;
+    for (unsigned alias = 0; alias < 2; ++alias) {
+        CPUState input = initial();
+        const u32 bucket = table + 4, packet = alias ? bucket : frame + 0xc0;
+        input.r[29] = frame;
+        input.r[31] = entry + 0x50;
+        input.r[textured ? 4 : 3] = 4;
+        input.r[16] = packet + 7;
+        input.r[17] = frame + 0x60;
+        input.r[18] = packet;
+        input.r[22] = 0x00ffffff;
+        MEM_W8(input.r[17], 0x20);
+        MEM_W8(frame + 0x48, 2);
+        MEM_W32(frame + 0x30, table);
+        MEM_W32(packet, 0x07000000);
+        MEM_W32(bucket, 0xab123456);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 32;
+        CPUState native = input;
+        if (nc_link_indexed_face_packet(&native, textured) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_link_indexed_face_packet(&native, textured) || native.budget != 1 ||
+            MEM_R32(bucket) != (0xab000000u | (packet & 0xffffff)) ||
+            (!alias && MEM_R32(packet) != 0x07123456) || MEM_R8(packet + 7) != 0x22)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool indexed_face_packets(bool disc, bool textured) {
     const int cycles = textured ? 42 : 38;
     const u32 frame = SCRATCH_BASE, colors = frame + 0x100;
@@ -7132,7 +7173,8 @@ int main(int argc, char **argv) {
         placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && indexed_face_packets(disc, true) &&
+        placement_vertex_triples(disc, true) && indexed_packet_links(disc, true) &&
+        indexed_packet_links(disc, false) && indexed_face_packets(disc, true) &&
         indexed_face_packets(disc, false) && indexed_face_windings(disc) &&
         indexed_depth_stores(disc) && indexed_vertex_inputs(disc) &&
         indexed_vertex_projections(disc) && remaining_placement_vertices(disc, false) &&

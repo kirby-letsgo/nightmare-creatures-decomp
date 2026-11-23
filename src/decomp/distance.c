@@ -3691,22 +3691,48 @@ bool nc_finish_textured_packet(CPUState *c, bool quad) {
     return true;
 }
 
+static u32 insert_packet_in_bucket(u32 packet, u32 bucket, u32 tag_mask, u32 address_mask) {
+    const u32 tag = MEM_R32(packet);
+    const u32 old_head = MEM_R32(bucket);
+    MEM_W32(packet, (tag & tag_mask) | (old_head & address_mask));
+    // Read again after the packet store, including when both addresses coincide.
+    const u32 new_head = (MEM_R32(bucket) & tag_mask) | (packet & address_mask);
+    MEM_W32(bucket, new_head);
+    return new_head;
+}
+
 bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32 address_mask,
                               u32 packet_size) {
     if (c->budget <= 22)
         return false;
     R(table_reg) = MEM_R32(R(29) + 0x10);
     const u32 packet = R(21);
-    const u32 tag = MEM_R32(packet);
     R(4) += R(table_reg);
-    const u32 old_head = MEM_R32(R(4));
-    MEM_W32(packet, (tag & tag_mask) | (old_head & address_mask));
+    R(2) = insert_packet_in_bucket(packet, R(4), tag_mask, address_mask);
     R(3) = packet & address_mask;
-    // Read the bucket again after writing the packet, as in the US code.
-    R(2) = (MEM_R32(R(4)) & tag_mask) | R(3);
     R(21) += packet_size;
-    MEM_W32(R(4), R(2));
     c->budget -= 22;
+    return true;
+}
+
+bool nc_link_indexed_face_packet(CPUState *c, bool textured) {
+    if (c->budget <= 32)
+        return false;
+    const u32 stride = textured ? 32 : 20;
+    const unsigned bucket_reg = textured ? 4 : 3;
+    const unsigned link_reg = textured ? 3 : 4;
+    const u8 command = MEM_R8(R(17));
+    const u8 flags = MEM_R8(R(29) + 0x48);
+    R(5) = 0xff000000;
+    MEM_W8(R(16), command | flags);
+    R(16) += stride;
+    R(9) = MEM_R32(R(29) + 0x30);
+    R(bucket_reg) += R(9);
+    const u32 packet = R(18);
+    R(2) = insert_packet_in_bucket(packet, R(bucket_reg), R(5), R(22));
+    R(link_reg) = packet & R(22);
+    R(18) += stride;
+    c->budget -= 32;
     return true;
 }
 
