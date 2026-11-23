@@ -6013,26 +6013,38 @@ static void cd_flush_port(CPUState *c, u32 slot) {
     NC_POLL(c, 1);
 }
 
-static void report_cd_wait_timeout(CPUState *c, bool dma) {
+/* The three SDK wait loops share the timeout instructions, with different
+ * call return addresses and saved registers for the diagnostic tables. */
+typedef struct {
+    u32 vsync_return, puts_return, printf_return, flush_return;
+    unsigned status_reg, names_reg;
+} CdWaitSite;
+
+static const CdWaitSite cd_sync_wait = {0x80020b50, 0x80020ba0, 0x80020bf4, 0x80020bfc, 18, 19};
+static const CdWaitSite cd_ready_wait = {0x80020dd8, 0x80020e28, 0x80020e7c, 0x80020e84, 18, 21};
+static const CdWaitSite cd_dma_wait = {0x80021940, 0x80021990, 0x800219e0, 0x800219e8, 17, 16};
+
+static void report_cd_wait_timeout(CPUState *c, const CdWaitSite *site) {
+    bool dma = site == &cd_dma_wait;
     set_reg(c, 4, 0x80020000);
     set_reg(c, 4, 0x80018890);
-    R(31) = dma ? 0x80021990 : 0x80020ba0;
+    R(31) = site->puts_return;
     NC_POLL(c, 2);
     nc_call(c, 0x8001a638); /* puts */
-    R(4) = MEM_R8(R(dma ? 17 : 18));
+    R(4) = MEM_R8(R(site->status_reg));
     NC_POLL(c, NC_LOAD_CYCLES);
-    R(2) = MEM_R8(R(dma ? 17 : 18) + 1);
+    R(2) = MEM_R8(R(site->status_reg) + 1);
     NC_POLL(c, NC_LOAD_CYCLES);
     set_reg(c, 5, 0x80020000);
     load_word(c, 5, 0x80024e50);
     set_reg(c, 2, R(2) << 2);
-    set_reg(c, 2, R(2) + R(dma ? 16 : 19));
+    set_reg(c, 2, R(2) + R(site->names_reg));
     set_reg(c, 4, R(4) << 2);
     load_word(c, 3, R(2)); /* second interrupt name, passed on the stack */
     set_reg(c, 2, 0x80020000);
     R(2) = MEM_R8(0x8002477d);
     NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 4, R(4) + R(dma ? 16 : 19));
+    set_reg(c, 4, R(4) + R(site->names_reg));
     set_reg(c, 2, R(2) << 2);
     if (dma)
         set_reg(c, 2, R(2) + R(19));
@@ -6048,18 +6060,18 @@ static void report_cd_wait_timeout(CPUState *c, bool dma) {
     load_word(c, 7, R(4)); /* first interrupt name */
     set_reg(c, 4, 0x80020000);
     set_reg(c, 4, 0x800188a0);
-    R(31) = dma ? 0x800219e0 : 0x80020bf4;
+    R(31) = site->printf_return;
     NC_POLL(c, 2);
     nc_call(c, 0x80019a60); /* printf */
-    R(31) = dma ? 0x800219e8 : 0x80020bfc;
+    R(31) = site->flush_return;
     NC_POLL(c, 2);
     nc_call(c, 0x800214c8); /* CD_flush */
     R(2) = UINT32_MAX;
     NC_POLL(c, 2);
 }
 
-static bool cd_wait_expired(CPUState *c, bool dma) {
-    R(31) = dma ? 0x80021940 : 0x80020b50;
+static bool cd_wait_expired(CPUState *c, const CdWaitSite *site) {
+    R(31) = site->vsync_return;
     R(4) = UINT32_MAX;
     NC_POLL(c, 2);
     nc_call(c, 0x8001a454); /* VSync(-1) */
@@ -6083,7 +6095,7 @@ static bool cd_wait_expired(CPUState *c, bool dma) {
         NC_POLL(c, 2);
     }
     if (expired)
-        report_cd_wait_timeout(c, dma);
+        report_cd_wait_timeout(c, site);
     else
         set_reg(c, 2, 0);
     expired = R(2) != 0;
@@ -6109,14 +6121,14 @@ static void start_cd_wait(CPUState *c, u32 operation_name) {
 
 /* CheckCallback requests synchronous draining when the IRQ dispatcher is
  * already active. Preserve the selected bank across all user callbacks. */
-static void drain_cd_sync_events(CPUState *c) {
+static void drain_cd_sync_events(CPUState *c, bool ready_wait) {
     cd_flush_port(c, 0x80024a20);
     R(2) = MEM_R8(R(2));
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, 1);
     set_reg(c, 17, R(2) & 3);
     for (;;) {
-        R(31) = 0x80020c40;
+        R(31) = ready_wait ? 0x80020ec8 : 0x80020c40;
         NC_POLL(c, 2);
         nc_call(c, 0x80020564); /* getintr */
         set_reg(c, 16, R(2));
@@ -6134,12 +6146,12 @@ static void drain_cd_sync_events(CPUState *c) {
             bool registered = R(2) != 0;
             NC_POLL(c, 2);
             if (registered) {
-                R(4) = MEM_R8(R(20));
+                R(4) = MEM_R8(R(ready_wait ? 22 : 20));
                 NC_POLL(c, NC_LOAD_CYCLES);
                 set_reg(c, 5, 0x80020000);
                 set_reg(c, 5, 0x80024e38);
                 u32 handler = R(2);
-                R(31) = 0x80020c7c;
+                R(31) = ready_wait ? 0x80020f04 : 0x80020c7c;
                 NC_POLL(c, 2);
                 nc_call(c, handler);
             }
@@ -6159,7 +6171,7 @@ static void drain_cd_sync_events(CPUState *c) {
             set_reg(c, 5, 0x80020000);
             set_reg(c, 5, 0x80024e30);
             u32 handler = R(2);
-            R(31) = 0x80020cb0;
+            R(31) = ready_wait ? 0x80020f38 : 0x80020cb0;
             NC_POLL(c, 2);
             nc_call(c, handler);
             NC_POLL(c, 2);
@@ -6168,6 +6180,22 @@ static void drain_cd_sync_events(CPUState *c) {
     cd_flush_port(c, 0x80024a20);
     MEM_W8(R(2), (u8)R(17));
     NC_POLL(c, 1);
+}
+
+static void copy_cd_response(CPUState *c) {
+    set_reg(c, 7, UINT32_MAX);
+    bool more;
+    do {
+        R(2) = MEM_R8(R(4));
+        NC_POLL(c, NC_LOAD_CYCLES);
+        set_reg(c, 4, R(4) + 1);
+        set_reg(c, 3, R(3) - 1);
+        MEM_W8(R(5), (u8)R(2));
+        NC_POLL(c, 1);
+        more = R(3) != R(7);
+        R(5)++;
+        NC_POLL(c, 2);
+    } while (more);
 }
 
 static void finish_cd_sync(CPUState *c) {
@@ -6180,20 +6208,8 @@ static void finish_cd_sync(CPUState *c) {
     bool copy = R(5) != 0;
     R(3) = 7;
     NC_POLL(c, 2);
-    if (copy) {
-        set_reg(c, 7, UINT32_MAX);
-        do {
-            R(2) = MEM_R8(R(4));
-            NC_POLL(c, NC_LOAD_CYCLES);
-            set_reg(c, 4, R(4) + 1);
-            set_reg(c, 3, R(3) - 1);
-            MEM_W8(R(5), (u8)R(2));
-            NC_POLL(c, 1);
-            copy = R(3) != R(7);
-            R(5)++;
-            NC_POLL(c, 2);
-        } while (copy);
-    }
+    if (copy)
+        copy_cd_response(c);
     R(2) = R(6);
     NC_POLL(c, 2);
 }
@@ -6226,14 +6242,14 @@ bool nc_credits_sync_cd_command(CPUState *c) {
     set_reg(c, 18, 0x80024a38);
     set_reg(c, 20, R(18) + 1);
     start_cd_wait(c, 0x80018918);
-    while (!cd_wait_expired(c, false)) {
+    while (!cd_wait_expired(c, &cd_sync_wait)) {
         R(31) = 0x80020c18;
         NC_POLL(c, 2);
         nc_call(c, 0x8001a7ec); /* CheckCallback */
         bool drain = R(2) != 0;
         NC_POLL(c, 2);
         if (drain)
-            drain_cd_sync_events(c);
+            drain_cd_sync_events(c, false);
         R(2) = MEM_R8(R(18));
         NC_POLL(c, NC_LOAD_CYCLES);
         NC_POLL(c, 1);
@@ -6264,6 +6280,101 @@ bool nc_credits_sync_cd_command(CPUState *c) {
     return true;
 }
 
+static bool take_cd_ready_event(CPUState *c, bool buffered) {
+    u32 address = buffered ? R(19) : R(19) - 1;
+    R(2) = MEM_R8(address);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    NC_POLL(c, 1);
+    set_reg(c, 6, R(2) & 0xff);
+    bool pending = R(6) != 0;
+    NC_POLL(c, 2);
+    if (!pending)
+        return false;
+
+    MEM_W8(buffered ? R(19) : R(19) - 1, 0);
+    NC_POLL(c, 1);
+    bool copy;
+    if (buffered) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80024e40);
+        copy = R(20) != 0;
+        R(5) = R(20);
+        NC_POLL(c, 2);
+        if (copy)
+            set_reg(c, 3, 7);
+    } else {
+        set_reg(c, 5, R(20));
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80024e38);
+        copy = R(5) != 0;
+        R(3) = 7;
+        NC_POLL(c, 2);
+    }
+    if (copy)
+        copy_cd_response(c);
+    R(2) = R(6);
+    NC_POLL(c, 2);
+    return true;
+}
+
+bool nc_credits_wait_cd_ready(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(29) -= 64;
+    c->budget--;
+    MEM_W32(R(29) + 52, R(23));
+    R(23) = R(4); /* zero waits, nonzero polls */
+    c->budget -= 2;
+    MEM_W32(R(29) + 40, R(20));
+    R(20) = R(5); /* optional response buffer */
+    R(4) = UINT32_MAX;
+    c->budget -= 3;
+    MEM_W32(R(29) + 56, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 48, R(22));
+    c->budget--;
+    MEM_W32(R(29) + 44, R(21));
+    c->budget--;
+    for (unsigned reg = 19; reg >= 17; reg--) {
+        MEM_W32(R(29) + 24 + (reg - 16) * 4, R(reg));
+        c->budget--;
+    }
+    R(31) = 0x80020d94;
+    MEM_W32(R(29) + 24, R(16));
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a454); /* VSync(-1) */
+    set_reg(c, 21, 0x80020000);
+    set_reg(c, 21, 0x80024800);
+    set_reg(c, 18, 0x80020000);
+    set_reg(c, 18, 0x80024a38);
+    set_reg(c, 22, R(18) + 1);
+    set_reg(c, 19, R(18) + 2);
+    start_cd_wait(c, 0x80018920);
+    while (!cd_wait_expired(c, &cd_ready_wait)) {
+        R(31) = 0x80020ea0;
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001a7ec); /* CheckCallback */
+        bool drain = R(2) != 0;
+        NC_POLL(c, 2);
+        if (drain)
+            drain_cd_sync_events(c, true);
+        /* The buffered response takes precedence when both slots are full. */
+        if (take_cd_ready_event(c, true) || take_cd_ready_event(c, false))
+            break;
+        bool blocking = R(23) == 0;
+        R(2) = 0;
+        NC_POLL(c, 2);
+        if (!blocking)
+            break;
+    }
+    load_word(c, 31, R(29) + 56);
+    for (unsigned reg = 23; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 24 + (reg - 16) * 4);
+    set_reg(c, 29, R(29) + 64);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_sync_cd_dma(CPUState *c) {
     if (c->budget <= 9)
         return false;
@@ -6290,7 +6401,7 @@ bool nc_credits_sync_cd_dma(CPUState *c) {
     set_reg(c, 16, 0x80020000);
     set_reg(c, 16, 0x80024800);
     start_cd_wait(c, 0x80018998);
-    while (!cd_wait_expired(c, true)) {
+    while (!cd_wait_expired(c, &cd_dma_wait)) {
         cd_flush_port(c, 0x80024a64);
         load_word(c, 2, R(2));
         set_reg(c, 3, 1u << 24);
