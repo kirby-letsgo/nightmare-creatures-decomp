@@ -215,6 +215,7 @@ credits_exe  8001A7EC    8001A7FC         credits_sdk.c
 credits_exe  8001A7FC    8001A814         credits_sdk.c
 credits_exe  8001A814    8001A830         credits_sdk.c
 credits_exe  8001A830    8001A90C         credits_sdk.c
+credits_exe  8001AAF4    8001AC48         credits_sdk.c
 credits_exe  8001AC48    8001ACF4         credits_sdk.c
 credits_exe  8001ACF4    8001AD7C         credits_sdk.c
 credits_exe  8001AD7C    8001ADA8         credits_sdk.c
