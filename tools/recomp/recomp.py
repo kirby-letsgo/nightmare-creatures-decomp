@@ -1069,6 +1069,16 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044F2C:
+                out.extend(
+                    [
+                        "    switch (nc_player_up_stick_bounds(c)) {",
+                        "    case 0x80044F94: goto L_80044F94;",
+                        "    case 0x80044F90: goto L_80044F90;",
+                        "    case 0x800451D0: goto L_800451D0;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80044F90, 0x80044F94):
                 test_up = "true" if i.addr == 0x80044F90 else "false"
                 out.extend(

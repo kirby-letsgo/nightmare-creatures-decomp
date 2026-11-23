@@ -24,6 +24,40 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* On the Up path, a Y sample above the threshold selects action 1.
+ * Below the threshold, X must lie strictly between the horizontal bounds. */
+u32 nc_player_up_stick_bounds(CPUState *c) {
+    if (c->budget <= 37)
+        return 0x80044f2c;
+
+    R(4) = MEM_R32(R(28) + 0x244);
+    R(5) = MEM_R8(0x8008f1b4);
+    R(3) = MEM_R8(R(4) + 0x1f);
+    c->budget -= 14;
+    if (R(5) <= R(3)) {
+        R(2) = R(17) & 0x10;
+        c->budget -= 3;
+        if (R(5) == R(3))
+            return 0x80044f94;
+
+        R(3) = MEM_R8(0x8008f1b0);
+        c->budget -= 11;
+        if (R(3) <= MEM_R8(R(4) + 0x1a))
+            return 0x80044f94;
+
+        const u8 upper = MEM_R8(R(4) + 0x1c);
+        c->budget -= 7;
+        if (R(3) >= upper) {
+            R(2) = 1;
+            return 0x80044f90;
+        }
+    }
+    R(2) = 1;
+    MEM_W8(R(16) + 0x39b, 1);
+    c->budget -= 2;
+    return 0x800451d0;
+}
+
 /* Up selects action 6 when the sample is below the configured threshold.
  * The alternate entry already has the Up result in v0. Both entries set
  * v0 to the Down bit in the first branch's delay slot. */
