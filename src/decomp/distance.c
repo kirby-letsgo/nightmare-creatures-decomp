@@ -3192,6 +3192,59 @@ bool nc_check_record_projection_limit(CPUState *c) {
     return true;
 }
 
+bool nc_begin_placement_point_scan(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u16 count = MEM_R16(R(16) + 0x38);
+    const int cycles = count < 2 ? 7 : 14;
+    if (c->budget <= cycles)
+        return false;
+    R(6) = count;
+    R(2) = count < 2;
+    if (count >= 2) {
+        R(5) = 0;
+        R(7) = MEM_R32(0x8008f0c8);
+        R(4) = R(16);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_test_placement_point_index(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    const u16 index = MEM_R16(R(4) + 0x3a);
+    R(3) = R(7) + 36u * index;
+    R(2) = MEM_R32(R(3)) & 0x10;
+    c->budget -= 15;
+    return true;
+}
+
+bool nc_advance_placement_point_index(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(5) += 1;
+    R(2) = (s32)R(5) < (s32)R(6);
+    R(4) += 2;
+    c->budget -= 4;
+    return true;
+}
+
+bool nc_finish_placement_point_scan(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u16 count = MEM_R16(R(16) + 0x38);
+    const bool exhausted = R(5) == count;
+    const int cycles = exhausted ? 8 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = count;
+    if (exhausted)
+        R(20) += 1;
+    c->budget -= cycles;
+    return true;
+}
+
 /* A zero point count bypasses the table and leaves v0 and v1 intact.
  * Otherwise, the first unsigned index selects a 36-byte point record. */
 bool nc_check_placement_point(CPUState *c) {
