@@ -1,3 +1,4 @@
+#include "vblank_wait.h"
 #include "cd_init.h"
 #include "cd_reset.h"
 #include "jump_context.h"
@@ -72,6 +73,11 @@ static bool run_constructors(CPUState *c) {
 
 static bool run_destructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, false);
+}
+
+static bool check_wait_vblank(void) {
+    const u32 drivers[] = {0x80013dd8, 0x80011a8c, 0x80011a9c};
+    return compare_vblank_wait(0x80013f70, nc_launcher_wait_vblank, 0x80015760, 0x800105c4, drivers);
 }
 
 static bool check_cd_init(void) {
@@ -1031,6 +1037,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_wait_vblank()) {
+        fprintf(stderr, "launcher VBlank wait failed\n");
         return 1;
     }
     if (!check_cd_init()) {
