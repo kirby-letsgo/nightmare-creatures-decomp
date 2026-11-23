@@ -3366,6 +3366,24 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* Project the signed pose coordinates and keep the latest GTE depth (SZ3).
+ * The branch compares depth and threshold before the delay-slot subtraction. */
+bool nc_project_placement_depth(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    const u32 point = R(18) + 0x10;
+    gte_write_data(c, 0, MEM_R32(point));
+    gte_write_data(c, 1, MEM_R32(point + 4));
+    gte_command(c, 0x0180001); /* RTPS */
+    const u32 depth_slot = R(29) + 0x2d8;
+    MEM_W32(depth_slot, gte_read_data(c, 19));
+    R(4) = MEM_R32(depth_slot);
+    R(3) = MEM_R32(0x8008f108);
+    R(2) = R(4) - R(3);
+    c->budget -= 23;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
