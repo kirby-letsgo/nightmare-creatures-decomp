@@ -1887,6 +1887,15 @@ u32 nc_menu_up_repeat(CPUState *c) {
     return dispatch_menu_up(c, 11);
 }
 
+/* Horizontal navigation reaches the repeat check with a fresh Up mask. */
+u32 nc_menu_up_from_buttons(CPUState *c) {
+    if (c->budget <= 24)
+        return 0x80068488;
+    R(2) = R(30) & 0x10;
+    --c->budget;
+    return nc_menu_up_repeat(c);
+}
+
 /* After the face-button checks, the same counter uses a threshold of six.
  * Up takes priority over Down, including on a suppressed repeat. */
 u32 nc_menu_vertical_repeat(CPUState *c) {
