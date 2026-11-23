@@ -1230,6 +1230,10 @@ class Emitter:
                 out.append("    if (nc_launcher_init_shared_record(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80010618:
                 out.append("    if (nc_launcher_run_modules(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x800119BC:
+                out.append("    if (save_irq_context(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x800119F8:
+                out.append("    restore_jump_context(c); return;")
             if self.mod.name == "credits_exe" and i.addr == 0x8001ADE4:
                 out.append("    nc_credits_restore_jump_context(c); return;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
@@ -3727,6 +3731,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == LAUNCHER:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/launcher.h"')
+        header.append('#include "decomp/jump_context.h"')
         header.append('#include "decomp/interrupt_driver.h"')
     if mod.name == "credits_exe":
         header.append('#include "decomp/credits.h"')
