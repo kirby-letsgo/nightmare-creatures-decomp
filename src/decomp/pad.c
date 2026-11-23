@@ -2,6 +2,28 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* Accept a masked press only when the previous word contains none of its bits.
+ * A successful press replaces the previous word with the entire requested mask. */
+bool nc_record_player_button_press(CPUState *c) {
+    if (c->budget <= 14)
+        return false;
+
+    const u32 mask = R(6);
+    R(5) &= mask;
+    R(2) = 0;
+    c->budget -= 5;
+    if (R(5)) {
+        const u32 previous_addr = R(4) + 0x2f8;
+        c->budget -= 7;
+        if (!(MEM_R32(previous_addr) & mask)) {
+            MEM_W32(previous_addr, mask);
+            R(2) = 1;
+            c->budget -= 2;
+        }
+    }
+    return true;
+}
+
 /* Save the player-control frame before deciding whether to read input.
  * v0 retains the blocking bits and v1 retains the full flags for the selector. */
 bool nc_enter_player_input(CPUState *c) {

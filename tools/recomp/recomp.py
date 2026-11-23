@@ -972,6 +972,8 @@ class Emitter:
                 out.append(f"L_{i.addr:08X}:;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
                 out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800445AC:
+                out.append("    if (nc_record_player_button_press(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044724:
                 out.extend(
                     [
