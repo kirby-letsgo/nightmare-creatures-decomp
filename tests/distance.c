@@ -4441,11 +4441,11 @@ static bool placement_color_record_entries(bool disc) {
     return true;
 }
 
-static bool placement_color_adjustments(bool disc) {
-    const u32 frame = SCRATCH_BASE;
+static bool placement_color_adjustments(bool disc, bool linked) {
+    const u32 frame = SCRATCH_BASE + (linked ? 0x158 : 0);
     for (unsigned mask = 0; mask < 10; ++mask) {
         u32 color = 0xa5000000, expected = color, offset = 1;
-        int cycles = 37;
+        int cycles = linked ? 33 : 37;
         if (mask < 8) {
             for (unsigned channel = 0; channel < 3; ++channel) {
                 const bool saturates = (mask >> channel) & 1;
@@ -4459,25 +4459,27 @@ static bool placement_color_adjustments(bool disc) {
             expected |= mask == 8 ? 0x7f7eff : 0x807f00;
         }
         CPUState input = initial();
-        input.r[29] = frame;
-        input.r[31] = 0x80027ed0;
+        input.r[29] = SCRATCH_BASE;
+        if (linked)
+            input.r[4] = color;
+        input.r[31] = linked ? 0x80028d2c : 0x80027ed0;
         input.r[3] = offset;
         input.budget = cycles;
         MEM_W32(frame, 0xcafebabe);
-        MEM_W32(frame + 0xc, color);
+        MEM_W32(frame + 0xc, linked ? ~color : color);
         CPUState native = input;
-        if (nc_adjust_placement_color(&native) || memcmp(&native, &input, sizeof input) ||
-            MEM_R32(frame) != 0xcafebabe || MEM_R32(frame + 0xc) != color)
+        if (nc_adjust_placement_color(&native, linked) || memcmp(&native, &input, sizeof input) ||
+            MEM_R32(frame) != 0xcafebabe || MEM_R32(frame + 0xc) != (linked ? ~color : color))
             return false;
         native.budget = ++input.budget;
-        if (!nc_adjust_placement_color(&native) || native.budget != 1 || native.r[2] != expected ||
-            native.r[6] != ((color >> 16) & 255) || MEM_R32(frame) != expected ||
-            MEM_R32(frame + 0xc) != expected)
+        if (!nc_adjust_placement_color(&native, linked) || native.budget != 1 ||
+            native.r[2] != expected || native.r[linked ? 4 : 6] != ((color >> 16) & 255) ||
+            MEM_R32(frame) != expected || MEM_R32(frame + 0xc) != expected)
             return false;
         if (disc) {
             MEM_W32(frame, 0xcafebabe);
-            MEM_W32(frame + 0xc, color);
-            interp_call(&input, 0x80027e58);
+            MEM_W32(frame + 0xc, linked ? ~color : color);
+            interp_call(&input, linked ? 0x80028cbc : 0x80027e58);
             if (memcmp(&input, &native, sizeof input) || MEM_R32(frame) != expected ||
                 MEM_R32(frame + 0xc) != expected)
                 return false;
@@ -4486,7 +4488,7 @@ static bool placement_color_adjustments(bool disc) {
     return true;
 }
 
-static bool placement_lighting_offsets(bool disc) {
+static bool placement_lighting_offsets(bool disc, bool linked) {
     static const struct {
         s16 local;
         u32 global, result;
@@ -4499,11 +4501,13 @@ static bool placement_lighting_offsets(bool disc) {
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial(), native;
         input.r[28] = SCRATCH_BASE;
-        input.r[31] = cases[i].result ? 0x80027e58 : 0x80027ed0;
+        input.r[31] = cases[i].result ? (linked ? 0x80028cbc : 0x80027e58)
+                                      : (linked ? 0x80028d2c : 0x80027ed0);
         MEM_W32(SCRATCH_BASE + 0x244, settings);
         MEM_W16(settings + 0xc, cases[i].local);
         MEM_W32(0x800d7c08, cases[i].global);
-        if (!compare(input, 0x80027e28, nc_placement_lighting_offset, disc, &native) ||
+        if (!compare(input, linked ? 0x80028c8c : 0x80027e28, nc_placement_lighting_offset, disc,
+                     &native) ||
             native.r[3] != cases[i].result || native.r[2] != (cases[i].cycles != 18) ||
             native.budget != input.budget - cases[i].cycles)
             return false;
@@ -8047,8 +8051,8 @@ int main(int argc, char **argv) {
         placement_lighting_returns(disc) &&
         placement_color_record_loop(disc) &&
         placement_color_record_entries(disc) &&
-        placement_color_adjustments(disc) &&
-        placement_lighting_offsets(disc) &&
+        placement_color_adjustments(disc, false) && placement_color_adjustments(disc, true) &&
+        placement_lighting_offsets(disc, false) && placement_lighting_offsets(disc, true) &&
         projection_lighting_calls(disc) &&
         projection_effect_intensities(disc) &&
         projection_effect_flags(disc) &&

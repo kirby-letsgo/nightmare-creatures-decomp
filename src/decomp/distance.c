@@ -3990,13 +3990,13 @@ bool nc_placement_lighting_offset(CPUState *c) {
 
 /* The original byte stores cap each signed sum at 255. Negative sums
  * keep their low byte, and the fourth byte passes through untouched. */
-bool nc_adjust_placement_color(CPUState *c) {
-    if (c->budget <= 37)
+bool nc_adjust_placement_color(CPUState *c, bool linked_pose) {
+    int cycles = linked_pose ? 33 : 37;
+    if (c->budget <= cycles)
         return false;
-    const u32 frame = R(29);
-    const u32 color = MEM_R32(frame + 0xc);
+    const u32 frame = R(29) + (linked_pose ? 0x158 : 0);
+    const u32 color = linked_pose ? R(4) : MEM_R32(frame + 0xc);
     u32 adjusted = color & 0xff000000;
-    int cycles = 37;
     for (unsigned shift = 0; shift < 24; shift += 8) {
         const u32 sum = ((color >> shift) & 0xff) + R(3);
         const bool clamp = (s32)sum >= 256;
@@ -4005,7 +4005,7 @@ bool nc_adjust_placement_color(CPUState *c) {
     }
     if (c->budget <= cycles)
         return false;
-    R(6) = (color >> 16) & 0xff;
+    R(linked_pose ? 4 : 6) = (color >> 16) & 0xff;
     R(2) = adjusted;
     MEM_W32(frame, adjusted);
     MEM_W32(frame + 0xc, adjusted);
