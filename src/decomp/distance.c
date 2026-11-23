@@ -4802,6 +4802,50 @@ bool nc_copy_placement_coordinates(CPUState *c) {
     return true;
 }
 
+bool nc_route_placement_selector(CPUState *c, u32 *next) {
+    if (c->budget <= 3)
+        return false;
+    const u32 flags = R(18);
+    if (!(flags & 0x400)) {
+        R(2) = flags & 0x800;
+        *next = 0x8002916c;
+        c->budget -= 3;
+        return true;
+    }
+    const bool alternate = (flags & 0x800) != 0;
+    if (c->budget <= (alternate ? 12 : 14))
+        return false;
+    const u32 record = R(16);
+    const u32 inhibit_mask = 0x04000000;
+    const bool inhibited = alternate && (MEM_R32(record + 0x30) & inhibit_mask);
+    const int cycles = alternate ? (inhibited ? 12 : 19) : 14;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = inhibit_mask;
+    if (inhibited) {
+        R(2) = inhibit_mask;
+        *next = 0x80029150;
+    } else {
+        R(2) = MEM_R32(record);
+        R(5) = MEM_R8(R(2) + (alternate ? 0x39 : 0x38));
+        *next = 0x8002913c;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_nonzero_placement_selector(CPUState *c) {
+    const int cycles = R(5) ? 5 : 3;
+    if (c->budget <= cycles)
+        return false;
+    if (R(5)) {
+        R(31) = 0x80029150;
+        R(4) = R(16);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* The selector can change the placement flags. Recheck the active bit
  * before testing coordinates, advancing the slot only on the skip path. */
 bool nc_recheck_placement_active(CPUState *c) {
