@@ -3481,6 +3481,45 @@ bool nc_begin_placement_vertex_projection(CPUState *c) {
     return true;
 }
 
+/* The lookup supplies the loop limit for groups of three vertices. */
+bool nc_prepare_placement_vertex_groups(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    const u32 count = MEM_R8(R(4) + 4);
+    const u32 limit = MEM_R8(0x8009e0d8 + count);
+    const int cycles = limit ? 14 : 11;
+    if (c->budget <= cycles)
+        return false;
+    R(1) = 0x800a0000 + count;
+    R(2) = count;
+    R(9) = limit;
+    R(5) = 0;
+    if (limit) {
+        R(11) = R(29) + 4;
+        R(10) = R(29) + 8;
+        R(6) += 20;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_check_placement_vertex_remainder(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(9) = MEM_R8(R(4) + 4);
+    R(2) = (s32)R(5) < (s32)R(9);
+    c->budget -= 7;
+    return true;
+}
+
+bool nc_return_placement_vertices(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) += 0x18;
+    c->budget -= 3;
+    return true;
+}
+
 /* RTPT projects three vertices into the GTE's screen and depth FIFOs.
  * The caller keeps a separate pointer to the third output depth field. */
 bool nc_project_placement_vertex_triple(CPUState *c) {
