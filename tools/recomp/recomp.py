@@ -211,6 +211,7 @@ CREDITS_ROUTINES = {
     0x8001EC78: "nc_credits_gpu_fill_bytes(c)",
     0x8001ECA4: "nc_credits_bios_gpu_command(c)",
     0x8001ECB4: "nc_credits_tim_info(c)",
+    0x8001F3C0: "nc_credits_spu_write_by_io(c)",
     0x8001F58C: "nc_credits_spu_dma_complete(c)",
     0x8001F65C: "nc_credits_spu_read_blocks(c)",
     0x8001F9A8: "nc_credits_spu_write(c)",
