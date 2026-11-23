@@ -296,6 +296,8 @@ psx2_exe     80047908    80047914         distance.c
 psx2_exe     80047920    80047948         distance.c
 slus_005_82  80010618    8001078C         launcher.c
 slus_005_82  8001078C    80010850         launcher.c
+slus_005_82  800108F8    80010968         launcher.c
+slus_005_82  80010968    800109D0         launcher.c
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
 credits_exe  80019454    8001949C         credits.c
