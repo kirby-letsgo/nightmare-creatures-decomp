@@ -1120,6 +1120,8 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80010618:
+                out.append("    if (nc_launcher_run_modules(c)) return;")
             if self.mod.name == "credits_exe" and i.addr == 0x8001ADE4:
                 out.append("    nc_credits_restore_jump_context(c); return;")
             if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
@@ -3443,6 +3445,8 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     em = Emitter(mod, launcher)
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
+    if mod.name == LAUNCHER:
+        header.append('#include "decomp/launcher.h"')
     if mod.name == "credits_exe":
         header.append('#include "decomp/credits.h"')
     if mod.name == "psx2_exe":
