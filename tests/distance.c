@@ -4322,6 +4322,22 @@ static bool placement_scan_exits(bool disc) {
     return true;
 }
 
+static bool placement_transform_reset_calls(bool disc) {
+    const u32 flags[] = {0, 0x40, 0xffffffbf, 0xffffffff};
+    for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+        const u32 reset = flags[i] & 0x40;
+        CPUState input = initial(), native;
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = reset ? 0x8002a5f4 : 0x800290c4;
+        MEM_W32(input.r[16] + 0x2c, flags[i]);
+        if (!compare(input, 0x800290a8, nc_call_placement_transform_reset, disc, &native) ||
+            native.r[2] != reset || native.r[4] != (reset ? input.r[16] : input.r[4]) ||
+            native.r[31] != 0x800290c4 || native.budget != input.budget - (reset ? 9 : 7))
+            return false;
+    }
+    return true;
+}
+
 static bool placement_coordinate_copies(bool disc) {
     const u32 record = SCRATCH_BASE + 0x100;
     const s16 points[][3] = {{-32768, 32767, -1}, {0, -1, 1}, {0x180, -2, 32767}};
@@ -8298,6 +8314,7 @@ int main(int argc, char **argv) {
         placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
+        placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
         placement_face_dispatch(disc) &&

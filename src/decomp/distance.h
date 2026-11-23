@@ -107,6 +107,7 @@ bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth);
 bool nc_call_indexed_pose_projection(CPUState *c);
 bool nc_advance_placement_scan(CPUState *c, bool increment);
 bool nc_restore_placement_scan_frame(CPUState *c);
+bool nc_call_placement_transform_reset(CPUState *c);
 bool nc_copy_placement_coordinates(CPUState *c);
 bool nc_route_placement_selector(CPUState *c, u32 *next);
 bool nc_call_nonzero_placement_selector(CPUState *c);
