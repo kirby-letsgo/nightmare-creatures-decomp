@@ -5414,6 +5414,30 @@ bool nc_call_flagged_placement_y_step(CPUState *c, bool record22) {
     return true;
 }
 
+/* The placement index sets the X target in 128-unit increments. Index 4
+ * adds one more increment and doubles the downward step. */
+bool nc_call_indexed_placement_x_step(CPUState *c) {
+    const bool fourth = R(4) == 4;
+    const int cycles = fourth ? 16 : 14;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = (u32)(s32)(s16)MEM_R16(R(16) + 0x1e);
+    R(2) = R(4) << 7;
+    R(18) = 4;
+    R(3) -= R(2);
+    if (fourth) {
+        R(3) -= 128;
+        R(17) = (u32)-4;
+    }
+    R(4) = R(16);
+    R(5) = R(16) + 0x18;
+    R(6) = (u32)(s32)(s16)R(17);
+    R(7) = (u32)(s32)(s16)R(3);
+    R(31) = 0x8002a23c;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The field may point into the new frame. Save all three registers before
  * reading it, and reserve enough budget for the longer, already-equal exit. */
 u32 nc_begin_placement_halfword_step(CPUState *c) {

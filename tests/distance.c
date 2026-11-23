@@ -4729,6 +4729,28 @@ static bool flagged_placement_y_steps(bool disc) {
     return true;
 }
 
+static bool indexed_placement_x_steps(bool disc) {
+    const s16 origins[] = {INT16_MIN, -100, 0, INT16_MAX};
+    for (u32 index = 0; index < 6; ++index) {
+        for (unsigned i = 0; i < sizeof origins / sizeof origins[0]; ++i) {
+            CPUState input = initial(), native;
+            input.r[4] = index;
+            input.r[16] = SCRATCH_BASE;
+            input.r[17] = (u32)-2;
+            input.r[31] = 0x800296e8;
+            MEM_W16(SCRATCH_BASE + 0x1e, (u16)origins[i]);
+            const s32 target = origins[i] - (s32)index * 128 - (index == 4 ? 128 : 0);
+            if (!compare(input, 0x8002a204, nc_call_indexed_placement_x_step, disc, &native) ||
+                native.r[3] != (u32)target || native.r[7] != (u32)(s32)(s16)target ||
+                native.r[6] != (index == 4 ? (u32)-4 : (u32)-2) ||
+                native.r[5] != SCRATCH_BASE + 0x18 || native.r[31] != 0x8002a23c ||
+                native.budget != input.budget - (index == 4 ? 16 : 14))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_halfword_entries(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const struct {
@@ -8901,7 +8923,8 @@ int main(int argc, char **argv) {
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
-        flagged_placement_y_steps(disc) && placement_halfword_entries(disc) &&
+        flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
+        placement_halfword_entries(disc) &&
         placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
