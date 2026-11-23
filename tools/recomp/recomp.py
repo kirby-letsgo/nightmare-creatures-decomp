@@ -864,7 +864,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80027DA4:
-            targets.add(0x80027E28)
+            targets.update((0x80027E28, 0x80027F0C))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
             targets.update((0x800275A8, 0x800275EC, 0x80027644, 0x80027664, 0x800276BC, 0x800276D8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027954:
@@ -1964,10 +1964,19 @@ class Emitter:
                     f"    if (nc_install_placement_matrices(c, 0x{resume:08X}))"
                     f" goto L_{resume:08X};"
                 )
-            if self.mod.name == "psx2_exe" and i.addr in (0x80028AD0, 0x80028D50):
-                depth_offset = 0x2D8 if i.addr == 0x80028AD0 else 0x160
-                out.append(f"    if (nc_project_placement_depth(c, 0x{depth_offset:x})) {{")
-                out.append(f"        if ((s32)R(4) > (s32)R(3)) goto L_{i.addr + 0x3C:08X};")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80027ED0, 0x80028AD0, 0x80028D50):
+                pose_reg, depth_reg, depth_offset = {
+                    0x80027ED0: (5, 5, 8),
+                    0x80028AD0: (18, 4, 0x2D8),
+                    0x80028D50: (18, 4, 0x160),
+                }[i.addr]
+                out.append(
+                    f"    if (nc_project_placement_depth(c, R({pose_reg}), "
+                    f"0x{depth_offset:x}, {depth_reg})) {{"
+                )
+                out.append(
+                    f"        if ((s32)R({depth_reg}) > (s32)R(3)) goto L_{i.addr + 0x3C:08X};"
+                )
                 out.append(f"        goto L_{i.addr + 0x68:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028B0C, 0x80028D8C):
                 depth_offset = 0x2D8 if i.addr == 0x80028B0C else 0x160

@@ -54,7 +54,7 @@ bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 lim
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
 bool nc_begin_placement_lighting(CPUState *c);
 bool nc_install_placement_matrices(CPUState *c, u32 continuation);
-bool nc_project_placement_depth(CPUState *c, u32 depth_offset);
+bool nc_project_placement_depth(CPUState *c, u32 pose, u32 depth_offset, unsigned depth_reg);
 bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset);
 bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset);
 bool nc_save_linked_placement_pose(CPUState *c);
