@@ -4842,6 +4842,27 @@ u32 nc_reset_placement_transforms(CPUState *c) {
     return 0;
 }
 
+/* The first branch tests the incoming selector bit before its delay slot
+ * replaces v0. Only an enabled alternate placement reads the descriptor. */
+u32 nc_check_alternate_placement_counter(CPUState *c) {
+    const u32 enable = 0x10000000;
+    const bool alternate = R(2) != 0;
+    const bool check_counter = alternate && (R(18) & enable);
+    const int cycles = check_counter ? 18 : alternate ? 5 : 2;
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    if (!check_counter) {
+        R(2) = alternate ? 0 : enable;
+        return 0x800290a8;
+    }
+    R(3) = MEM_R32(R(16));
+    R(4) = MEM_R8(R(3) + 0x37);
+    const u32 limit = MEM_R8(R(3) + 0x3c);
+    R(2) = R(4) + 1;
+    return R(4) == limit ? 0x80029060 : 0x800290a4;
+}
+
 bool nc_call_placement_transform_reset(CPUState *c) {
     if (c->budget <= 7)
         return false;

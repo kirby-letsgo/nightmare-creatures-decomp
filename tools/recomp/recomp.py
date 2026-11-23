@@ -996,6 +996,7 @@ class Emitter:
             targets.update((0x80028E14, 0x80028E2C, 0x80028E44))
             targets.update((0x80028C8C, 0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
+            targets.add(0x80029060)
             targets.update((0x80028F30, 0x800290F4, 0x800291B0, 0x800291D8, 0x80029470))
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -2406,6 +2407,16 @@ class Emitter:
                         "    case 0x8002a610: goto L_8002A610;",
                         "    case 0x8002a620: goto L_8002A620;",
                         "    case 0x8002a668: goto L_8002A668;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029030:
+                out.extend(
+                    [
+                        "    switch (nc_check_alternate_placement_counter(c)) {",
+                        "    case 0x80029060: goto L_80029060;",
+                        "    case 0x800290a4: goto L_800290A4;",
+                        "    case 0x800290a8: goto L_800290A8;",
                         "    }",
                     ]
                 )
