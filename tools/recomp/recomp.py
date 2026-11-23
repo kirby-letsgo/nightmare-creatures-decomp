@@ -1088,6 +1088,7 @@ class Emitter:
                     0x80045104,
                     0x8004510C,
                     0x80045114,
+                    0x8004511C,
                     0x80045134,
                     0x8004513C,
                     0x800451DC,
@@ -1573,6 +1574,17 @@ class Emitter:
                         f"    switch (nc_player_square_scan_result(c, {flagged})) {{",
                         f"    case 0x{taken:08X}: goto L_{taken:08X};",
                         f"    case 0x{i.addr + 8:08X}: goto L_{i.addr + 8:08X};",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80045114:
+                out.append("    if (nc_call_player_square_actor_scan(c)) goto L_8004511C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004511C:
+                out.extend(
+                    [
+                        "    switch (nc_player_square_actor_scan_result(c)) {",
+                        "    case 0x800451E8: goto L_800451E8;",
+                        "    case 0x8004514C: goto L_8004514C;",
                         "    }",
                     ]
                 )

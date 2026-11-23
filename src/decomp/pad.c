@@ -969,6 +969,26 @@ u32 nc_player_square_scan_result(CPUState *c, bool flagged) {
     return R(2) ? 0x800451e8 : 0x80045114;
 }
 
+bool nc_call_player_square_actor_scan(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x8004511c;
+    R(4) = R(16);
+    c->budget -= 2;
+    nc_call(c, 0x8003d264);
+    return true;
+}
+
+u32 nc_player_square_actor_scan_result(CPUState *c) {
+    const bool found = R(2) != 0;
+    const int cycles = found ? 2 : 4;
+    if (c->budget <= cycles)
+        return 0x8004511c;
+    R(4) = R(16);
+    c->budget -= cycles;
+    return found ? 0x800451e8 : 0x8004514c;
+}
+
 /* The face-button checks use the actor already in a0 for the press test.
  * The branch delay slot reloads a0 from s0 for the next action. */
 bool nc_check_player_face_press(CPUState *c, u32 mask, u32 link) {
