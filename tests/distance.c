@@ -4370,6 +4370,50 @@ static bool placement_coordinate_copies(bool disc) {
     return true;
 }
 
+static bool placement_scan_bounds(bool disc) {
+    static const struct {
+        u32 center;
+        u16 coordinate;
+        bool inside;
+        int cycles;
+        u32 result;
+    } cases[] = {{100, 94, false, 11, 105},
+                 {100, 95, true, 14, 0},
+                 {100, 105, true, 14, 0},
+                 {100, 106, false, 14, 1},
+                 {0xfffffffb, 0, true, 14, 0},
+                 {65535, 65535, true, 14, 0},
+                 {0x80000000, 0, false, 11, 0x80000005},
+                 {0x7fffffff, 65535, false, 11, 0x80000004}};
+    for (unsigned second = 0; second < 2; ++second) {
+        for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            CPUState input = initial();
+            input.r[16] = SCRATCH_BASE;
+            const u32 entry = second ? 0x800291b0 : 0x80029188;
+            input.r[31] = cases[i].inside ? entry + 0x28 : 0x80029460;
+            input.budget = cases[i].cycles;
+            MEM_W32(second ? 0x8008f180 : 0x8008f174, cases[i].center);
+            MEM_W16(SCRATCH_BASE + (second ? 0x36 : 0x34), cases[i].coordinate);
+            CPUState native = input;
+            bool inside = !cases[i].inside;
+            if (nc_check_placement_axis(&native, second, &inside) ||
+                memcmp(&input, &native, sizeof input) || inside == cases[i].inside)
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_check_placement_axis(&native, second, &inside) || native.budget != 1 ||
+                inside != cases[i].inside || native.r[2] != cases[i].result ||
+                native.r[3] != cases[i].coordinate || native.r[4] != cases[i].center)
+                return false;
+            if (disc) {
+                interp_call(&input, entry);
+                if (memcmp(&input, &native, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool placement_scan_slots(bool disc) {
     const u32 record = SCRATCH_BASE, slot = 0x800cf184 + 319 * 4;
     const u32 original = MEM_R32(slot);
@@ -8173,6 +8217,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_scan_bounds(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
         placement_face_dispatch(disc) &&
