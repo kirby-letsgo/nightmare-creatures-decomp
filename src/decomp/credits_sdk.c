@@ -1097,6 +1097,185 @@ static void load_image_halfword(CPUState *c, unsigned reg, u32 address, bool sig
     NC_POLL(c, NC_LOAD_CYCLES);
 }
 
+/* Both dimensions are bounded by the configured VRAM extent minus one. */
+static void clear_rect_limit(CPUState *c, u32 address) {
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, address);
+    load_image_halfword(c, 2, R(2), false);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) << 16);
+    set_reg(c, 2, (u32)((s32)R(2) >> 16));
+    set_reg(c, 4, R(2) - 1);
+    set_reg(c, 2, (s32)R(4) < (s32)R(3));
+}
+
+static bool prepare_clear_rectangle(CPUState *c) {
+    load_image_halfword(c, 3, R(8) + 4, true);
+    NC_POLL(c, 1);
+    bool negative = (s32)R(3) < 0;
+    R(9) = R(5); /* RGB and draw-to-display flag */
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 2, 0);
+    } else {
+        clear_rect_limit(c, 0x8002455c);
+        bool clip = R(2) != 0;
+        R(2) = R(3);
+        NC_POLL(c, 2);
+        if (clip) {
+            set_reg(c, 3, R(4));
+            R(2) = R(3);
+            NC_POLL(c, 2);
+        }
+    }
+    load_image_halfword(c, 3, R(8) + 6, true);
+    NC_POLL(c, 1);
+    negative = (s32)R(3) < 0;
+    MEM_W16(R(8) + 4, (u16)R(2));
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 3, 0);
+    } else {
+        clear_rect_limit(c, 0x8002455e);
+        bool clip = R(2) != 0;
+        NC_POLL(c, 2);
+        if (clip) {
+            R(3) = R(4);
+            NC_POLL(c, 2);
+        }
+    }
+    load_image_halfword(c, 2, R(8), false);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 63);
+    bool aligned = R(2) == 0;
+    MEM_W16(R(8) + 6, (u16)R(3));
+    NC_POLL(c, 2);
+    if (aligned) {
+        load_image_halfword(c, 2, R(8) + 4, false);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 63);
+        aligned = R(2) == 0;
+        R(2) = 0x05ff0000;
+        NC_POLL(c, 2);
+    }
+    return aligned;
+}
+
+static void build_vram_fill_packet(CPUState *c) {
+    set_reg(c, 2, R(2) | 0xffff);
+    set_reg(c, 3, 0x00ff0000);
+    set_reg(c, 3, R(3) | 0xffff);
+    store_gpu_global(c, 0x80024cec, 2); /* five GP0 words, end of list */
+    set_reg(c, 2, 0xe6000000);
+    set_reg(c, 3, R(9) & R(3));
+    set_reg(c, 5, 0x02000000); /* fill VRAM */
+    store_gpu_global(c, 0x80024cf0, 2);
+    load_gpu_global(c, 2, 0x8002462c);
+    set_reg(c, 3, R(3) | R(5));
+    load_word(c, 4, R(2));
+    set_reg(c, 2, R(9) >> 31);
+    set_reg(c, 2, R(2) << 10);
+    store_gpu_global(c, 0x80024cf8, 3);
+    set_reg(c, 3, 0xe1000000);
+    set_reg(c, 2, R(2) | R(3));
+    set_reg(c, 4, R(4) & 0x7ff);
+    set_reg(c, 4, R(4) | R(2));
+    store_gpu_global(c, 0x80024cf4, 4); /* draw mode */
+    load_word(c, 2, R(8));
+    store_gpu_global(c, 0x80024cfc, 2);
+    load_word(c, 2, R(8) + 4);
+    store_gpu_global(c, 0x80024d00, 2);
+}
+
+static void read_clear_draw_parameter(CPUState *c, u32 parameter, u32 resume) {
+    R(31) = resume;
+    R(4) = parameter;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001e124); /* _param */
+}
+
+/* Unaligned clears draw a flat rectangle with unrestricted drawing bounds.
+ * A second linked packet restores the original draw area and offset. */
+static void build_rect_clear_packets(CPUState *c) {
+    set_reg(c, 5, 0x00ff0000);
+    set_reg(c, 5, R(5) | 0xffff);
+    set_reg(c, 4, 0xe4ff0000);
+    set_reg(c, 4, R(4) | 0xffff);
+    set_reg(c, 7, 0x03ff0000);
+    set_reg(c, 6, 0x80020000);
+    set_reg(c, 6, 0x80024d10);
+    set_reg(c, 2, R(6) & R(5));
+    set_reg(c, 3, 0x08000000);
+    set_reg(c, 2, R(2) | R(3));
+    set_reg(c, 16, 0xe3000000);
+    set_reg(c, 17, 0xe5000000);
+    store_gpu_global(c, 0x80024cec, 2); /* eight words, link to restore packet */
+    set_reg(c, 2, 0xe6000000);
+    set_reg(c, 5, R(9) & R(5));
+    set_reg(c, 3, 0x60000000);
+    set_reg(c, 5, R(5) | R(3));
+    store_gpu_global(c, 0x80024cfc, 2);
+    load_gpu_global(c, 2, 0x8002462c);
+    set_reg(c, 3, 0xe1000000);
+    store_gpu_global(c, 0x80024cf0, 16);
+    store_gpu_global(c, 0x80024cf4, 4);
+    store_gpu_global(c, 0x80024cf8, 17);
+    load_word(c, 4, R(2));
+    set_reg(c, 2, R(9) >> 31);
+    set_reg(c, 2, R(2) << 10);
+    set_reg(c, 2, R(2) | R(3));
+    store_gpu_global(c, 0x80024d04, 5); /* rectangle opcode and RGB */
+    set_reg(c, 4, R(4) & 0x7ff);
+    set_reg(c, 4, R(4) | R(2));
+    store_gpu_global(c, 0x80024d00, 4);
+    load_word(c, 2, R(8));
+    set_reg(c, 7, R(7) | 0xffff);
+    store_gpu_global(c, 0x80024d08, 2);
+    load_word(c, 2, R(8) + 4);
+    MEM_W32(R(6), R(7));
+    NC_POLL(c, 1);
+    store_gpu_global(c, 0x80024d0c, 2);
+    read_clear_draw_parameter(c, 3, 0x8001da78);
+    set_reg(c, 2, R(2) | R(16));
+    store_gpu_global(c, 0x80024d14, 2);
+    read_clear_draw_parameter(c, 4, 0x8001da8c);
+    set_reg(c, 3, 0xe4000000);
+    set_reg(c, 2, R(2) | R(3));
+    store_gpu_global(c, 0x80024d18, 2);
+    read_clear_draw_parameter(c, 5, 0x8001daa4);
+    set_reg(c, 2, R(2) | R(17));
+    store_gpu_global(c, 0x80024d1c, 2);
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_clear_gpu_rectangle(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(29) -= 32;
+    R(8) = R(4);
+    c->budget -= 2;
+    MEM_W32(R(29) + 24, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 20, R(17));
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget--;
+    if (prepare_clear_rectangle(c))
+        build_vram_fill_packet(c);
+    else
+        build_rect_clear_packets(c);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80024cec);
+    gpu_sync_call(c, 0x8001e0d8, 0x8001db40); /* launch linked-list DMA */
+    set_reg(c, 2, 0);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Clamp the dimensions in the caller's RECT, then split the pixel count
  * into packed 32-bit words and 16-word DMA blocks. */
 static bool size_gpu_transfer(CPUState *c, bool readback) {

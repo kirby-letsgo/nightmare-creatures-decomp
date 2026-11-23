@@ -112,6 +112,7 @@ bool nc_credits_gpu_command_chain(CPUState *c);
 bool nc_credits_gpu_command_block(CPUState *c);
 bool nc_credits_gpu_control(CPUState *c);
 bool nc_credits_gpu_control_byte(CPUState *c);
+bool nc_credits_clear_gpu_rectangle(CPUState *c);
 bool nc_credits_upload_gpu_image(CPUState *c);
 bool nc_credits_read_gpu_image(CPUState *c);
 bool nc_credits_clear_ot_dma(CPUState *c);
