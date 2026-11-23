@@ -4122,6 +4122,36 @@ bool nc_project_placement_vertex_triple(CPUState *c, unsigned depth_shift) {
     return true;
 }
 
+/* Each unsigned selector packs a pose slot above an eight-bit vertex index.
+ * A missing pose skips the face before any vertex is projected. */
+bool nc_select_indexed_face_poses(CPUState *c, bool textured) {
+    if (c->budget <= 37)
+        return false;
+    const u32 face = R(17), actor = R(19);
+    const u32 first = MEM_R16(face + (textured ? 13 : 1));
+    const u32 second = MEM_R16(face + (textured ? 15 : 3));
+    const u32 third = MEM_R16(face + (textured ? 11 : 5));
+    R(6) = first & 0xff;
+    R(7) = second & 0xff;
+    R(8) = third & 0xff;
+    R(5) = second >> 8;
+    R(2) = actor + 4 * (first >> 8);
+    R(3) = MEM_R32(R(2) + 0x4c);
+    R(4) = third >> 8;
+    c->budget -= 22;
+    if (!R(3))
+        return true;
+    R(5) = MEM_R32(actor + 4 * R(5) + 0x4c);
+    R(2) = R(4) << 2;
+    c->budget -= 8;
+    if (!R(5))
+        return true;
+    R(4) = MEM_R32(actor + R(2) + 0x4c);
+    R(2) = R(3) + 0x18;
+    c->budget -= 7;
+    return true;
+}
+
 /* The face selects a pose and a vertex within that pose. The incoming v0
  * points at its rotation and translation, prepared before this block. */
 bool nc_prepare_indexed_vertex(CPUState *c, u32 pose, u32 vertex_index) {

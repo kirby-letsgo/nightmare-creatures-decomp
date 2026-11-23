@@ -2105,6 +2105,13 @@ class Emitter:
                 out.append("        goto L_80028388; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028A3C:
                 out.append("    if (nc_return_indexed_faces(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028400, 0x8002874C):
+                textured, skip = (
+                    ("true", 0x800286D8) if i.addr == 0x80028400 else ("false", 0x80028A1C)
+                )
+                out.append(f"    if (nc_select_indexed_face_poses(c, {textured})) {{")
+                out.append(f"        if (!R(3) || !R(5) || !R(4)) goto L_{skip:08X};")
+                out.append(f"        goto L_{i.addr + 0x64:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in INDEXED_VERTEX_INPUTS:
                 pose, index = INDEXED_VERTEX_INPUTS[i.addr]
                 out.append(
