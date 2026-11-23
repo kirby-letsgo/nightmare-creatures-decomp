@@ -4019,21 +4019,40 @@ bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset, unsigned factor
     return true;
 }
 
-/* The loop back-edge decrements the stack count in its delay slot and
- * enters at 0x80028B44 or 0x80028DC4 with the index of the pose to reload. */
-bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset) {
-    const bool reload = index_ready || R(19) != 0;
+/* On the loop back-edge the branch delay slot has already decremented the
+ * count. The alternate entry reloads that index without decrementing again. */
+static bool select_pose_from_stack(CPUState *c, bool index_ready, unsigned count_reg,
+                                   unsigned output_reg, u32 output_offset) {
+    const bool reload = index_ready || R(count_reg) != 0;
     const int cycles = index_ready ? 6 : reload ? 9 : 2;
     if (c->budget <= cycles)
         return false;
     if (reload) {
         if (!index_ready)
-            R(19)--;
-        R(2) = R(29) + (R(19) << 2);
+            R(count_reg)--;
+        R(2) = R(29) + (R(count_reg) << 2);
         R(18) = MEM_R32(R(2) + 0x18);
     }
-    R(17) = R(29) + output_offset;
+    R(output_reg) = R(29) + output_offset;
     c->budget -= cycles;
+    return true;
+}
+
+bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset) {
+    return select_pose_from_stack(c, index_ready, 19, 17, output_offset);
+}
+
+bool nc_select_projection_pose(CPUState *c, bool index_ready) {
+    return select_pose_from_stack(c, index_ready, 22, 23, 0x58);
+}
+
+bool nc_set_projection_pose_cursor(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(3) = R(29) + 0x18;
+    R(2) = R(22) << 2;
+    R(20) = R(3) + R(2);
+    c->budget -= 3;
     return true;
 }
 

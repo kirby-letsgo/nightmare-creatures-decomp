@@ -2168,6 +2168,11 @@ class Emitter:
                 out.append(f"    if (nc_load_indexed_packet_limit(c, {arg})) {{")
                 out.append(f"        if (R(21) == R(2)) goto L_{skip:08X};")
                 out.append(f"        goto L_{i.addr + 12:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028144, 0x80028150):
+                ready = "true" if i.addr == 0x80028150 else "false"
+                out.append(f"    if (nc_select_projection_pose(c, {ready})) goto L_80028160;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028160:
+                out.append("    if (nc_set_projection_pose_cursor(c)) goto L_8002816C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800282D8:
                 out.append("    if (nc_push_projection_pose(c)) goto L_800282F4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800282F4:

@@ -4226,6 +4226,43 @@ static bool placement_pose_stack(bool disc) {
     return true;
 }
 
+static bool projection_pose_selection(bool disc) {
+    const u32 frame = SCRATCH_BASE;
+    for (unsigned path = 0; path < 4; ++path) {
+        const bool ready = path >= 2;
+        const u32 count = (path & 1) ? 3 : 0;
+        const bool reload = ready || count;
+        const u32 slot = count - (reload && !ready);
+        const u32 pose = frame + 0x180 + 4 * path;
+        CPUState input = initial();
+        input.r[22] = count;
+        input.r[29] = frame;
+        input.r[31] = 0x80028160;
+        MEM_W32(frame + 0x18 + 4 * slot, pose);
+        input.budget = ready ? 6 : reload ? 9 : 2;
+        CPUState native = input;
+        if (nc_select_projection_pose(&native, ready) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_select_projection_pose(&native, ready) || native.budget != 1 ||
+            native.r[22] != slot || native.r[18] != (reload ? pose : input.r[18]) ||
+            native.r[23] != frame + 0x58)
+            return false;
+        if (disc) {
+            interp_call(&input, ready ? 0x80028150 : 0x80028144);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+        input = native;
+        input.r[31] = 0x8002816c;
+        input.budget = 64;
+        if (!compare(input, 0x80028160, nc_set_projection_pose_cursor, disc, &native) ||
+            native.r[20] != frame + 0x18 + 4 * slot || native.budget != 61)
+            return false;
+    }
+    return true;
+}
+
 static bool projection_pose_links(bool disc) {
     const u32 pose = SCRATCH_BASE + 0x80;
     for (unsigned path = 0; path < 4; ++path) {
@@ -7436,25 +7473,26 @@ int main(int argc, char **argv) {
         placement_depths(disc, 0x80027f0c, 8, 5, 5) &&
         placement_depth_cues(disc, 0x80027f0c, 8, 15) &&
         placement_depth_cues(disc, 0x80028b0c, 0x2d8, 8) &&
-        placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && projection_pose_links(disc) &&
-        placement_pose_stack(disc) && placement_pose_exits(disc, false) &&
-        placement_pose_exits(disc, true) && placement_vertex_dispatch(disc) &&
-        placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
-        indexed_face_lists(disc, true) && indexed_face_lists(disc, false) &&
-        indexed_face_frames(disc) && indexed_face_advances(disc, true) &&
-        indexed_face_advances(disc, false) && indexed_packet_links(disc, true) &&
-        indexed_packet_links(disc, false) && indexed_face_packets(disc, true) &&
-        indexed_face_packets(disc, false) && indexed_face_windings(disc) &&
-        indexed_depth_stores(disc) && indexed_face_selectors(disc, true) &&
-        indexed_face_selectors(disc, false) && indexed_vertex_inputs(disc) &&
-        indexed_vertex_projections(disc) && remaining_placement_vertices(disc, false) &&
-        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
-        indexed_pose_projection_calls(disc) && pose_vertex_projection_calls(disc) &&
-        placement_transform_flags(disc) && placement_projection_args(disc) &&
-        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && projection_pose_selection(disc) &&
+        projection_pose_links(disc) && placement_pose_stack(disc) &&
+        placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
+        placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
+        placement_vertex_triples(disc, true) && indexed_face_lists(disc, true) &&
+        indexed_face_lists(disc, false) && indexed_face_frames(disc) &&
+        indexed_face_advances(disc, true) && indexed_face_advances(disc, false) &&
+        indexed_packet_links(disc, true) && indexed_packet_links(disc, false) &&
+        indexed_face_packets(disc, true) && indexed_face_packets(disc, false) &&
+        indexed_face_windings(disc) && indexed_depth_stores(disc) &&
+        indexed_face_selectors(disc, true) && indexed_face_selectors(disc, false) &&
+        indexed_vertex_inputs(disc) && indexed_vertex_projections(disc) &&
+        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
+        placement_vertex_matrices(disc) && indexed_pose_projection_calls(disc) &&
+        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
+        placement_projection_args(disc) && placement_angle_entries(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
