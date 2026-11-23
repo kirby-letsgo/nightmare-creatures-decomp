@@ -3736,6 +3736,63 @@ bool nc_begin_indexed_faces(CPUState *c) {
     return true;
 }
 
+bool nc_set_indexed_face_flags(CPUState *c) {
+    if (c->budget <= 19)
+        return false;
+    const u32 actor = R(19), flags = R(29) + 0x48;
+    R(2) = MEM_R32(actor + 0x2c8) & 1;
+    MEM_W8(flags, 0);
+    c->budget -= 7;
+    if (R(2)) {
+        R(2) = (u32)(s32)(s16)MEM_R16(actor + 0x362);
+        c->budget -= 6;
+        if (R(2)) {
+            R(2) = MEM_R16(actor + 0x2ce) & 2;
+            MEM_W8(flags, (u8)R(2));
+            c->budget -= 6;
+        }
+    }
+    return true;
+}
+
+bool nc_begin_indexed_face_list(CPUState *c, bool textured) {
+    if (c->budget <= (textured ? 22 : 28))
+        return false;
+    const u32 descriptor = R(30);
+    R(3) = MEM_R32(descriptor + (textured ? 0x18 : 0x14));
+    c->budget -= 6;
+    if (!R(3))
+        return true;
+    if (!textured) {
+        R(9) = MEM_R32(R(19) + 0x2b4);
+        MEM_W32(R(29) + 0x40, R(9)); /* color-table branch delay slot */
+        c->budget -= 6;
+        if (!R(9))
+            return true;
+    }
+    R(18) = MEM_R32(R(28) + (textured ? 0x37c : 0x354));
+    R(2) = MEM_R8(descriptor + (textured ? 1 : 0));
+    R(21) = MEM_R32(R(28) + (textured ? 0x29c : 0x3d0));
+    R(20) = 0;
+    c->budget -= 11;
+    if (R(2)) {
+        R(23) = R(29) + 0x28;
+        R(22) = 0x00ffffff;
+        R(17) = R(3) + 3;
+        R(16) = R(18) + 7;
+        c->budget -= 5;
+    }
+    return true;
+}
+
+bool nc_load_indexed_packet_limit(CPUState *c, bool textured) {
+    if (c->budget <= 3)
+        return false;
+    R(2) = textured ? 0x400 : 0x80;
+    c->budget -= 3;
+    return true;
+}
+
 bool nc_return_indexed_faces(CPUState *c) {
     if (c->budget <= 33)
         return false;

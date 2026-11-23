@@ -4470,6 +4470,49 @@ static bool indexed_vertex_inputs(bool disc) {
     return true;
 }
 
+static bool indexed_face_lists(bool disc, bool textured) {
+    const u32 frame = SCRATCH_BASE, actor = frame, descriptor = frame + 0x100;
+    const u32 entry = textured ? 0x800283bc : 0x800286f8;
+    const int full_cost = textured ? 22 : 28;
+    for (unsigned path = 0; path < 4; ++path) {
+        const bool has_list = path != 0, has_colors = path != 1, has_faces = path == 3;
+        CPUState input = initial();
+        input.r[19] = actor;
+        input.r[28] = input.r[29] = frame;
+        input.r[30] = descriptor;
+        MEM_W32(descriptor + (textured ? 0x18 : 0x14), has_list ? frame + 0x200 : 0);
+        MEM_W32(actor + 0x2b4, has_colors ? frame + 0x300 : 0);
+        MEM_W8(descriptor + (textured ? 1 : 0), has_faces ? 255 : 0);
+        const bool skip = !has_list || (!textured && !has_colors);
+        if (skip)
+            input.r[31] = textured ? 0x800286f8 : 0x80028a3c;
+        else if (!has_faces)
+            input.r[31] = textured ? 0x800286f0 : 0x80028a34;
+        else
+            input.r[31] = textured ? 0x800283f4 : 0x80028740;
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = full_cost;
+        CPUState native = input;
+        if (nc_begin_indexed_face_list(&native, textured) ||
+            memcmp(&input, &native, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        const int elapsed = !has_list ? 6 : skip ? 12 : full_cost - (has_faces ? 0 : 5);
+        if (!nc_begin_indexed_face_list(&native, textured) ||
+            native.budget != input.budget - elapsed)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool indexed_face_frames(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     for (unsigned present = 0; present < 2; ++present) {
@@ -7316,7 +7359,8 @@ int main(int argc, char **argv) {
         placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && indexed_face_frames(disc) &&
+        placement_vertex_triples(disc, true) && indexed_face_lists(disc, true) &&
+        indexed_face_lists(disc, false) && indexed_face_frames(disc) &&
         indexed_face_advances(disc, true) && indexed_face_advances(disc, false) &&
         indexed_packet_links(disc, true) && indexed_packet_links(disc, false) &&
         indexed_face_packets(disc, true) && indexed_face_packets(disc, false) &&
