@@ -790,7 +790,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
-            targets.update((0x80028B0C, 0x80028C30))
+            targets.update((0x80028B0C, 0x80028B7C, 0x80028C30))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
+            targets.add(0x80028DFC)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -1705,6 +1707,13 @@ class Emitter:
                     out.append(f"        goto L_{finish:08X}; }}")
                 elif i.addr == finish:
                     out.append("    if (nc_return_placement_vertices(c)) return;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028B54, 0x80028DD4):
+                skip = 0x80028BF8 if i.addr == 0x80028B54 else 0x80028E5C
+                return_pc = i.addr + 0x28
+                out.append(f"    if (nc_call_pose_vertex_projection(c, 0x{return_pc:08X}u)) {{")
+                out.append(f"        if (!R(2)) goto L_{skip:08X};")
+                out.append(f"        {self.call(0x80027288)}")
+                out.append(f"        goto L_{return_pc:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")

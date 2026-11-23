@@ -3572,6 +3572,28 @@ bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth) {
     return true;
 }
 
+/* Both placement traversals project vertices when descriptor flag 0x02
+ * is set. The branch delay slot supplies the descriptor on either path. */
+bool nc_call_pose_vertex_projection(CPUState *c, u32 return_pc) {
+    if (c->budget <= 11)
+        return false;
+    const u32 descriptor = MEM_R32(R(18) + 0x38);
+    const u32 project = MEM_R8(descriptor + 5) & 2;
+    const int cycles = project ? 14 : 11;
+    if (c->budget <= cycles)
+        return false;
+    R(16) = descriptor;
+    R(4) = descriptor;
+    R(2) = project;
+    if (project) {
+        R(5) = R(18);
+        R(6) = R(17);
+        R(31) = return_pc;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
