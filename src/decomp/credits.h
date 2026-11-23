@@ -261,6 +261,7 @@ bool nc_credits_cd_read(CPUState *c);
 bool nc_credits_cd_read_sync(CPUState *c);
 bool nc_credits_cd_read_sectors(CPUState *c);
 bool nc_credits_cd_sector_to_position(CPUState *c);
+bool nc_credits_load_cd_paths(CPUState *c);
 bool nc_credits_cache_cd_directory(CPUState *c);
 bool nc_credits_cd_search_directory(CPUState *c);
 bool nc_credits_cd_copy_identifier(CPUState *c);

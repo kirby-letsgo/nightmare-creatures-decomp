@@ -4936,6 +4936,101 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_cd_path_table(void) {
+    const u32 sectors = 0x80060000, trace = sectors + 2 * DISC_DATA_SECTOR;
+    const u32 table = 0x80025454;
+    u8 volume[DISC_DATA_SECTOR], paths[DISC_DATA_SECTOR];
+    if (!disc_read_data(16, volume))
+        return false;
+    u32 path_lba = volume[140] | (u32)volume[141] << 8 |
+                   (u32)volume[142] << 16 | (u32)volume[143] << 24;
+    if (!disc_read_data(path_lba, paths))
+        return false;
+    enum { DISC_PATHS, BAD_ID, FIRST_ERROR, SECOND_ERROR, EMPTY, SECTOR_LIMIT, ENTRY_LIMIT };
+    const struct { unsigned kind, debug; } cases[] = {
+        {DISC_PATHS, 2}, {BAD_ID, 1}, {FIRST_ERROR, 0}, {FIRST_ERROR, 1},
+        {SECOND_ERROR, 1}, {EMPTY, 0}, {SECTOR_LIMIT, 0}, {ENTRY_LIMIT, 0},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* cd_read logs the sector number, copies the next preloaded sector to
+     * the requested destination, and can fail either read. */
+    const u32 read_stub[] = {
+        0xaf250000, 0x27390004, 0x00c04021, 0x24c90800, 0x8dea0000,
+        0x25ef0004, 0xad0a0000, 0x25080004, 0x1509fffb, 0,
+        0x032e1026, 0x0002102b, 0x03e00008, 0,
+    };
+    for (unsigned j = 0; j < sizeof read_stub / sizeof read_stub[0]; j++)
+        MEM_W32(0x80022560 + 4 * j, read_stub[j]);
+    MEM_W32(0x80019a60, 0x03e00008);
+    MEM_W32(0x80019a64, 0x27180001); /* count printf calls */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        unsigned kind = cases[i].kind;
+        memcpy(nc_fast_ptr(sectors), volume, sizeof volume);
+        u8 *records = nc_fast_ptr(sectors + DISC_DATA_SECTOR);
+        memset(records, 0, DISC_DATA_SECTOR);
+        if (kind == DISC_PATHS)
+            memcpy(records, paths, sizeof paths);
+        else if (kind == BAD_ID)
+            MEM_W8(sectors + 5, 'X');
+        else if (kind == SECTOR_LIMIT || kind == ENTRY_LIMIT) {
+            unsigned length = kind == SECTOR_LIMIT ? 24 : 1;
+            unsigned stride = 8 + length + (length & 1);
+            for (unsigned j = 0; j < (kind == SECTOR_LIMIT ? 64u : 129u); j++) {
+                u8 *record = records + stride * j;
+                record[0] = (u8)length;
+                record[2] = (u8)(42 + j);
+                record[6] = 1;
+                record[7] = 0xab; /* SDK reads only the low parent byte */
+                memset(record + 8, 'A' + j % 26, length);
+            }
+        }
+        memset(nc_fast_ptr(table), 0xcc, 44 * 128);
+        memset(nc_fast_ptr(trace), 0, 8);
+        MEM_W32(0x80024a68, 123);
+        MEM_W32(0x80024768, cases[i].debug);
+        CPUState state = arguments(1, 2, 3, i & 1 ? 13 : 8192);
+        state.r[14] = kind == FIRST_ERROR ? trace + 4 : kind == SECOND_ERROR ? trace + 8 : 0;
+        state.r[15] = sectors;
+        state.r[24] = 0;
+        state.r[25] = trace;
+        bool success = kind != BAD_ID && kind != FIRST_ERROR && kind != SECOND_ERROR;
+        bool second_read = kind != BAD_ID && kind != FIRST_ERROR;
+        ok = compare(state, 0x80021f38, nc_credits_load_cd_paths, 12) &&
+             nc_cpu.r[2] == (u32)success && MEM_R32(trace) == 16 &&
+             MEM_R32(trace + 4) == (second_read ? path_lba : 0) &&
+             MEM_R32(0x80024a68) == (success ? 0u : 123u);
+        unsigned count = 0;
+        if (success) {
+            for (unsigned off = 0; ok && off < DISC_DATA_SECTOR && count < 128 && records[off]; count++) {
+                u8 *record = records + off;
+                u32 entry = table + count * 44;
+                ok = MEM_R32(entry) == count + 1 && MEM_R32(entry + 4) == record[6] &&
+                     !memcmp(nc_fast_ptr(entry + 8), record + 2, 4) &&
+                     !memcmp(nc_fast_ptr(entry + 12), record + 8, record[0]) &&
+                     MEM_R8(entry + 12 + record[0]) == 0;
+                off += 8 + record[0] + (record[0] & 1);
+            }
+            if (count < 128)
+                ok = ok && MEM_R32(table + count * 44 + 4) == 0;
+            else
+                ok = ok && !memcmp(nc_fast_ptr(0x80026a54), records, DISC_DATA_SECTOR);
+        } else {
+            ok = ok && MEM_R32(table) == 0xcccccccc;
+        }
+        unsigned prints = cases[i].debug == 2 ? count + 2 : (!success && cases[i].debug);
+        ok = ok && nc_cpu.r[24] == prints;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_directory_cache(void) {
     const u32 buffer = 0x80026a54, cache = 0x80024e54, trace = 0x80061000;
     u8 volume[DISC_DATA_SECTOR], root[DISC_DATA_SECTOR];
@@ -5392,6 +5487,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_read_sync();
     pass = pass && check_cd_read_sectors();
     pass = pass && check_cd_sector_to_position();
+    pass = pass && check_cd_path_table();
     pass = pass && check_directory_cache();
     pass = pass && check_cd_search_directory();
     pass = pass && check_cd_copy_identifier();
