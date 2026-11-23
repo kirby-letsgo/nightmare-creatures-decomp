@@ -3424,6 +3424,30 @@ bool nc_write_projected_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_write_projected_quad(CPUState *c) {
+    if (c->budget <= 44)
+        return false;
+    const u32 first = R(16), second = R(17), third = R(18), packet = R(19);
+    const u32 index_addr = R(20) - 4, vertices = R(22);
+    const s32 fourth_index = (s16)MEM_R16(index_addr);
+    const u32 first_xy = MEM_R32(first);
+    R(5) = (u32)(s32)(s16)MEM_R16(second + 4);
+    R(6) = (u32)(s32)(s16)MEM_R16(first + 4);
+    R(7) = (u32)(s32)(s16)MEM_R16(third + 4);
+    const s32 fourth_z = (s16)MEM_R16(vertices + 8 * fourth_index + 4);
+    R(3) = (u32)((fourth_z + (s32)R(5) + (s32)R(6) + (s32)R(7)) >> 2);
+    MEM_W32(packet + 1, first_xy);
+    MEM_W32(packet + 5, MEM_R32(second));
+    MEM_W32(packet + 9, MEM_R32(third));
+    // The preceding packet writes can overlap the face's fourth index.
+    const s32 packet_index = (s16)MEM_R16(index_addr);
+    R(2) = MEM_R32(vertices + 8 * packet_index);
+    R(4) = R(3) & 0x7ff;
+    MEM_W32(packet + 13, R(2));
+    c->budget -= 44;
+    return true;
+}
+
 /* Both traversals start with the root pose and an empty pending-pose stack.
  * Their delay slots copy the placement color even when projection is skipped. */
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {
