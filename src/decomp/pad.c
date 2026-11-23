@@ -66,6 +66,48 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Left takes priority when both directions are down. Circle enables the
+ * side-specific stick comparison that selects direction 4 or 8. */
+u32 nc_player_horizontal_direction(CPUState *c) {
+    if (c->budget <= 26)
+        return 0x80044b98;
+
+    const u32 buttons = R(17);
+    R(2) = buttons & 0x100;
+    c->budget -= 3;
+    if (!(buttons & 0xa0))
+        return 0x80044c2c;
+
+    const bool keep_direction = R(2) != 0;
+    R(2) = buttons & 0x80;
+    c->budget -= 2;
+    if (keep_direction)
+        return 0x80044c30;
+
+    const bool left = R(2) != 0;
+    R(2) = left ? 1 : 2;
+    c->budget -= 4;
+    if (buttons & 0x2000) {
+        const u32 config = MEM_R32(R(28) + 0x244);
+        R(3) = MEM_R8(0x8008f1b0);
+        bool beyond_threshold;
+        if (left) {
+            beyond_threshold = MEM_R8(config + 0x1e) < R(3);
+        } else {
+            R(3) = R(3) < MEM_R8(config + 0x20);
+            beyond_threshold = R(3) != 0;
+        }
+        c->budget -= 14;
+        if (beyond_threshold)
+            R(2) = left ? 4 : 8;
+        else
+            c->budget--;
+    }
+    MEM_W8(R(16) + 0x399, (u8)R(2));
+    c->budget -= 2;
+    return 0x80044c30;
+}
+
 /* Actor flags decide whether to check Square and Cross before Circle.
  * One entry clears the direction byte before reading the flags. */
 u32 nc_player_face_button_gate(CPUState *c, bool clear_direction) {

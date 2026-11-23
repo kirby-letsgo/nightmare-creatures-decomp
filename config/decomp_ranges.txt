@@ -543,6 +543,7 @@ psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    800447B8         pad.c
 psx2_exe     800447B8    800448E0         pad.c
 psx2_exe     800448E0    800448FC         pad.c
+psx2_exe     80044B98    80044C2C         pad.c
 psx2_exe     80044C2C    80044C60         pad.c
 psx2_exe     80044C84    80044CBC         pad.c
 psx2_exe     80044CC4    80044CCC         pad.c
