@@ -283,6 +283,40 @@ static bool player_face_presses(void) {
     return true;
 }
 
+static bool triangle_press(CPUState *cpu) {
+    const u32 expected = cpu->r[31];
+    return nc_player_triangle_action(cpu, true) == expected;
+}
+
+static bool triangle_store(CPUState *cpu) {
+    return nc_player_triangle_action(cpu, false) == 0x800451e8;
+}
+
+static bool player_triangle_actions(void) {
+    const u32 actor = 0x80160000, next_actor = 0x80170000;
+    for (unsigned down = 0; down < 2; ++down) {
+        for (unsigned held = 0; held < 2; ++held) {
+            CPUState cpu = initial();
+            cpu.r[4] = actor;
+            cpu.r[16] = next_actor;
+            cpu.r[17] = 0xffff0001 | (down ? 0x1000 : 0);
+            cpu.r[31] = down && !held ? 0x800451e8 : 0x8004519c;
+            cpu.budget = 22;
+            MEM_W32(actor + 0x2f8, held ? 0x1000 : 0x100);
+            MEM_W32(next_actor + 0x398, 0xabcdef12);
+            if (!compare(cpu, 0x80045180, triangle_press, 21))
+                return false;
+        }
+    }
+    CPUState cpu = initial();
+    cpu.r[2] = 0x123456ab;
+    cpu.r[16] = next_actor;
+    cpu.r[31] = 0x800451e8;
+    cpu.budget = 3;
+    MEM_W32(next_actor + 0x398, 0x79123456);
+    return compare(cpu, 0x80045194, triangle_store, 2);
+}
+
 static bool player_trigger_calls(void) {
     const u32 actor = 0x80160000, alternate = 0x80170000;
     const u32 entries[] = {0x800451d0, 0x800451d4, 0x800451dc};
@@ -3164,10 +3198,10 @@ int main(int argc, char **argv) {
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
         l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
         player_r2_press() && player_r2_returns() && player_face_presses() &&
-        player_trigger_calls() && player_button_presses() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        player_triangle_actions() && player_trigger_calls() && player_button_presses() &&
+        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
+        sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

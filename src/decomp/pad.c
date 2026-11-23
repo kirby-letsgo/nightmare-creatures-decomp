@@ -40,6 +40,29 @@ bool nc_check_player_face_press(CPUState *c, bool square) {
     return true;
 }
 
+/* The Triangle branch loads 0x13 in its delay slot on both outcomes.
+ * The store also has a direct entry with the byte already in v0. */
+u32 nc_player_triangle_action(CPUState *c, bool check_press) {
+    if (c->budget <= (check_press ? 21 : 2))
+        return check_press ? 0x80045180 : 0x80045194;
+
+    if (check_press) {
+        R(5) = R(17);
+        R(31) = 0x8004518c;
+        R(6) = 0x1000;
+        c->budget -= 3;
+        nc_record_player_button_press(c);
+        const bool pressed = R(2) != 0;
+        R(2) = 0x13;
+        c->budget -= 2;
+        if (!pressed)
+            return 0x8004519c;
+    }
+    MEM_W8(R(16) + 0x39b, (u8)R(2));
+    c->budget -= 2;
+    return 0x800451e8;
+}
+
 /* A fresh L2 press resets the direction-repeat counter. */
 bool nc_reset_repeat_on_l2_press(CPUState *c) {
     if (c->budget <= 28)

@@ -1053,6 +1053,16 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80045180, 0x80045194):
+                check_press = "true" if i.addr == 0x80045180 else "false"
+                out.extend(
+                    [
+                        f"    switch (nc_player_triangle_action(c, {check_press})) {{",
+                        "    case 0x8004519C: goto L_8004519C;",
+                        "    case 0x800451E8: goto L_800451E8;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x800451D0, 0x800451D4, 0x800451DC):
                 resume = 0x800451E8 if i.addr == 0x800451DC else 0x800451DC
                 out.append(f"    if (nc_call_player_trigger(c, 0x{i.addr:X})) goto L_{resume:X};")
