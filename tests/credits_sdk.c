@@ -2880,63 +2880,6 @@ static bool check_gpu_image_transfer(bool readback) {
     return ok;
 }
 
-static bool check_set_interrupt_handler(void) {
-    const struct {
-        unsigned irq;
-        u32 old_handler, new_handler;
-        bool active;
-    } cases[] = {
-        {0, 0, 0x8001935c, true}, {0, 0x8001935c, 0, true},
-        {4, 0, 0x8001935c, true}, {5, 0x8001935c, 0, true},
-        {6, 0x8001935c, 0x800198ec, true}, {2, 0, 0x8001935c, true},
-        {2, 0x8001935c, 0x8001935c, true}, {2, 0x8001935c, 0, false},
-    };
-    StateIO saved = {0};
-    interrupt_start_state(&saved);
-    bios_serialize(&saved);
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        StateIO native = {0}, guest = {0};
-        u32 slot = 0x8002341c + 4 * cases[i].irq;
-        u16 bit = 1u << cases[i].irq;
-        u16 hardware = 0x280 | (cases[i].old_handler ? bit : 0);
-        u16 registered = 0x108 | (cases[i].old_handler ? bit : 0);
-        bool change = cases[i].active && cases[i].old_handler != cases[i].new_handler;
-        for (unsigned run = 0; ok && run < 2; run++) {
-            MEM_W16(0x80023418, cases[i].active);
-            MEM_W32(slot, cases[i].old_handler);
-            MEM_W16(0x80023448, registered);
-            MEM_W16(0x1f801074, hardware);
-            nc_cpu = arguments(cases[i].irq, cases[i].new_handler, 3, 19);
-            if (!run && nc_credits_set_interrupt_handler(&nc_cpu))
-                ok = false;
-            nc_cpu.budget = i & 1 ? 4096 : 20;
-            if (run)
-                interp_call(&nc_cpu, 0x8001aaf4);
-            else
-                ok = ok && nc_credits_set_interrupt_handler(&nc_cpu);
-            u16 enabled = cases[i].new_handler ? bit : 0;
-            ok = ok && nc_cpu.r[2] == cases[i].old_handler &&
-                 MEM_R32(slot) == (change ? cases[i].new_handler : cases[i].old_handler) &&
-                 MEM_R16(0x80023448) == (change ? ((registered & ~bit) | enabled) : registered) &&
-                 MEM_R16(0x1f801074) == (change ? ((hardware & ~bit) | enabled) : hardware);
-            StateIO *result = run ? &guest : &native;
-            interrupt_start_state(result);
-            bios_serialize(result);
-            saved.loading = true;
-            saved.pos = 0;
-            interrupt_start_state(&saved);
-            bios_serialize(&saved);
-        }
-        ok = ok && !native.error && !guest.error && native.len == guest.len &&
-             !memcmp(native.buf, guest.buf, guest.len);
-        free(native.buf);
-        free(guest.buf);
-    }
-    free(saved.buf);
-    return ok && !saved.error;
-}
-
 static bool check_interrupt_driver_control(bool stop) {
     u32 entry = stop ? 0x8001ac48 : 0x8001acf4;
     bool (*routine)(CPUState *) = stop ? nc_credits_stop_interrupts : nc_credits_restart_interrupts;
@@ -5710,7 +5653,7 @@ int main(int argc, char **argv) {
     pass = pass && check_restore_jump_context(0x8001ade4, nc_credits_restore_jump_context);
     pass = pass && compare_interrupt_start(0x8001a830, nc_credits_start_interrupts, 0x80023418,
                                            0x800244a0, 0x8001af58, 0x8001b184);
-    pass = pass && check_set_interrupt_handler();
+    pass = pass && compare_set_interrupt_handler(0x8001aaf4, nc_credits_set_interrupt_handler, 0x80023418);
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);
     pass = pass && check_cd_data_callback();

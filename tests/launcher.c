@@ -1066,6 +1066,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher shared record failed\n");
         return 1;
     }
+    if (!compare_set_interrupt_handler(0x80010eac, nc_launcher_set_interrupt_handler, 0x80014620)) {
+        fprintf(stderr, "launcher interrupt handler registration failed\n");
+        return 1;
+    }
     if (!compare_interrupt_start(0x80010be8, nc_launcher_start_interrupts, 0x80014620,
                                  0x800156a8, 0x80011b7c, 0x80011da8)) {
         fprintf(stderr, "launcher interrupt startup failed\n");
