@@ -4878,6 +4878,19 @@ bool nc_begin_alternate_placement_update(CPUState *c) {
     return true;
 }
 
+/* The counter path enters at the call with a0 already set. The other
+ * entry first loads the replacement stack from the placement global. */
+bool nc_call_placement_stack_switch(CPUState *c, bool load_stack) {
+    const int cycles = load_stack ? 6 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (load_stack)
+        R(4) = MEM_R32(0x8008f050);
+    R(31) = 0x80029010;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The stack switch returns the previous sp in v0. Keep it in s1 across
  * the placement update so the second switch can restore the scan stack. */
 bool nc_call_placement_scan_update(CPUState *c, u32 return_pc) {
