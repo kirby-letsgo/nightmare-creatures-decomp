@@ -4105,6 +4105,51 @@ bool nc_apply_projection_intensity(CPUState *c) {
     return true;
 }
 
+bool nc_disable_projection_effect(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(21);
+    R(31) = 0x800280e4;
+    R(5) = 0;
+    c->budget -= 3;
+    return true;
+}
+
+/* The active effect jumps over the flag clear. A traversal that bypassed
+ * the effect starts at the actor argument, just before the shared call. */
+bool nc_call_projection_lighting(CPUState *c, u32 entry) {
+    int cycles = 10;
+    switch (entry) {
+    case 0x800280d0:
+        cycles += 2;
+        break;
+    case 0x800280e4:
+        cycles += 8;
+        break;
+    case 0x800280f8:
+        cycles += 1;
+        break;
+    }
+    if (c->budget <= cycles)
+        return false;
+    const u32 actor = R(21);
+    if (entry == 0x800280e4) {
+        R(3) = 0xfffdffff;
+        R(2) = MEM_R32(actor + 0x2cc) & R(3);
+        MEM_W32(actor + 0x2cc, R(2));
+    }
+    if (entry != 0x800280fc)
+        R(4) = actor;
+    R(5) = R(18);
+    R(6) = MEM_R32(actor + 0x2e0);
+    R(8) = MEM_R32(R(29) + 0x2e8);
+    R(7) = R(29) + 0x2e0;
+    R(31) = 0x80028114;
+    R(6) += R(8);
+    c->budget -= cycles;
+    return true;
+}
+
 /* A non-root starting pose selects the traversal mask from the actor's flag table. */
 bool nc_set_projection_pose_mask(CPUState *c) {
     if (c->budget <= 6)
