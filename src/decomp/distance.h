@@ -52,6 +52,7 @@ bool nc_measure_placement_quad(CPUState *c, bool textured);
 bool nc_measure_placement_triangle(CPUState *c);
 bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 limit, bool *accept);
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
+bool nc_begin_placement_lighting(CPUState *c);
 bool nc_install_placement_matrices(CPUState *c, u32 continuation);
 bool nc_project_placement_depth(CPUState *c, u32 depth_offset);
 bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset);

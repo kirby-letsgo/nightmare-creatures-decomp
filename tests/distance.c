@@ -4009,6 +4009,39 @@ static bool pose_traversal_entries(bool disc) {
     return true;
 }
 
+static bool placement_lighting_entries(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x180;
+    for (unsigned alias = 0; alias < 2; ++alias) {
+        CPUState input = initial();
+        input.r[29] = frame + 0x18;
+        input.r[31] = 0x80027e28;
+        input.r[7] = alias ? frame + 0xc : frame + 0x24;
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 59;
+        CPUState native = input;
+        if (nc_begin_placement_lighting(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_placement_lighting(&native) || native.budget != 1 || native.r[29] != frame ||
+            native.r[15] != 0x800d7668 || MEM_R32(input.r[7]) != 0 ||
+            MEM_R32(frame + 0xc) != (alias ? 0 : input.r[6]))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            // Account for the initial stack adjustment so interp_call stops at the continuation.
+            input.r[29] = frame;
+            --input.budget;
+            interp_call(&input, 0x80027da8);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_projection_matrices(bool disc) {
     const u32 matrix = 0x800d7668, light = matrix + 0x40;
     u32 saved_matrix[8], saved_light[5];
@@ -4021,7 +4054,7 @@ static bool placement_projection_matrices(bool disc) {
         MEM_W32(light + 4 * i, 0xfffe8000u - 0x01010101u * i);
     }
     const u32 entries[] = {0x80028aac, 0x80028d2c};
-    bool ok = true;
+    bool ok = placement_lighting_entries(disc);
     for (unsigned i = 0; i < 2 && ok; ++i) {
         CPUState input = initial();
         const u32 continuation = entries[i] + 0x24;
