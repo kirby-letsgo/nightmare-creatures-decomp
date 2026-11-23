@@ -74,4 +74,22 @@ static inline bool cd_default_event(CPUState *c, u32 spec, u32 resume, u32 deliv
     return true;
 }
 
+/* Forward the caller's arguments and return the CD driver status. */
+static inline bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = return_pc;
+    c->budget -= 3;
+    nc_call(c, driver);
+    R(31) = MEM_R32(R(29) + 16);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(29) += 24;
+    NC_POLL(c, 1);
+    NC_POLL(c, 2);
+    return true;
+}
+
 #endif

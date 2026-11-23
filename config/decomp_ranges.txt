@@ -359,11 +359,15 @@ slus_005_82  80011F94    80011FA4         cd_state.h
 slus_005_82  80011FA4    80011FB4         cd_state.h
 slus_005_82  80011FB4    80011FC4         cd_state.h
 slus_005_82  80011FC4    80011FD4         cd_state.h
+slus_005_82  80012040    80012060         cd_state.h
 slus_005_82  80012060    80012078         cd_state.h
 slus_005_82  80012078    800120AC         cd_state.h
 slus_005_82  800120AC    800120E0         cd_state.h
+slus_005_82  800120E0    80012100         cd_state.h
+slus_005_82  80012100    80012120         cd_state.h
 slus_005_82  80012120    80012138         cd_state.h
 slus_005_82  80012138    80012150         cd_state.h
+slus_005_82  80012564    80012584         cd_state.h
 slus_005_82  800145DC    800145F4         cd_state.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
