@@ -69,6 +69,37 @@ bool nc_check_player_r2_press(CPUState *c) {
     return true;
 }
 
+/* This handler keeps the original input in s1 for the masked store after
+ * the action call. A held or absent R2 takes the plain return with v0 zero. */
+u32 nc_dispatch_player_r2_action(CPUState *c) {
+    if (c->budget <= 28)
+        return 0x8004468c;
+
+    R(29) -= 0x20;
+    MEM_W32(R(29) + 0x10, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x14, R(17));
+    R(17) = R(5);
+    MEM_W32(R(29) + 0x18, R(31));
+    R(31) = 0x800446ac;
+    R(6) = 0x200;
+    c->budget -= 8;
+    nc_record_player_button_press(c);
+    const bool pressed = R(2) != 0;
+    R(2) = 0; /* branch delay slot */
+    c->budget -= 2;
+    if (!pressed)
+        return 0x800446d4;
+
+    R(1) = 0x800d0000;
+    MEM_W16(0x800cbffa, 0);
+    R(31) = 0x800446c4;
+    R(4) = R(16);
+    c->budget -= 4;
+    nc_call(c, 0x80052b10);
+    return 0x800446c4;
+}
+
 /* Both R2 handlers restore the same frame. After an accepted action, the
  * second handler first saves the input word with both trigger bits cleared. */
 bool nc_leave_player_r2(CPUState *c, bool record_buttons) {

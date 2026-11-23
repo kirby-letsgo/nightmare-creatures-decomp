@@ -165,6 +165,14 @@ static bool finish_player_r2_check(CPUState *cpu) {
     return true;
 }
 
+static bool finish_player_r2_action(CPUState *cpu) {
+    const u32 resume = nc_dispatch_player_r2_action(cpu);
+    if (resume == 0x8004468c)
+        return false;
+    interp_resume_exe(cpu, resume);
+    return true;
+}
+
 static bool player_r2_press(void) {
     const u32 actor = 0x80160000;
     const struct {
@@ -174,7 +182,7 @@ static bool player_r2_press(void) {
         {0, 0x200, false},
         {0x02000000, 0, false},
         {0x300, 0x200, false},
-        {0x300, 0x100, true},
+        {0x80000380, 0x100, true},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState cpu = initial();
@@ -186,6 +194,15 @@ static bool player_r2_press(void) {
         MEM_W32(0x800cbff8, 0xabcd1234);
         if (!compare(cpu, 0x8004460c, finish_player_r2_check, 26) ||
             MEM_R16(0x800cbffa) != (cases[i].pressed ? 0 : 0xabcd))
+            return false;
+
+        MEM_W32(actor + 0x2f8, cases[i].previous);
+        MEM_W32(0x800cbff8, 0xabcd1234);
+        MEM_W8(actor + 0x38a, 4); /* action routine takes its early return */
+        if (!compare(cpu, 0x8004468c, finish_player_r2_action, 28) ||
+            MEM_R16(0x800cbffa) != (cases[i].pressed ? 0 : 0xabcd) ||
+            MEM_R32(actor + 0x2f8) !=
+                (cases[i].pressed ? cases[i].buttons & ~0x300u : cases[i].previous))
             return false;
     }
     return true;
