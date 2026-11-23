@@ -165,6 +165,7 @@ bool nc_credits_set_spu_common_attributes(CPUState *c);
 bool nc_credits_spu_dma_complete(CPUState *c);
 bool nc_credits_spu_read_blocks(CPUState *c);
 bool nc_credits_spu_write_by_io(CPUState *c);
+bool nc_credits_spu_transfer_command(CPUState *c);
 bool nc_credits_spu_write(CPUState *c);
 bool nc_credits_spu_read(CPUState *c);
 bool nc_credits_spu_write_register(CPUState *c);

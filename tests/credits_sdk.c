@@ -1989,6 +1989,69 @@ static bool check_spu_read_blocks(void) {
     return ok && !saved.error;
 }
 
+static bool check_spu_transfer_command(void) {
+    const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061018;
+    const struct { s32 command; u32 direction, size; bool ready; } cases[] = {
+        {-1, 5, 0, true}, {4, 5, 0, true}, {2, 5, 0, true},
+        {0, 5, 0, true}, {0, 5, 0, false},
+        {1, 5, 0, true}, {1, 5, 0, false},
+        {3, 1, 0, true}, {3, 0, 64, true}, {3, 1, 65, true},
+        {3, 5, UINT32_MAX, true}, {3, 1, 64, false}, {3, 0, 64, false},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE); /* interpret the delay-register callees */
+    MEM_W32(0x80024678, spu);
+    MEM_W32(0x8002467c, dma);
+    MEM_W32(0x80024680, dma + 4);
+    MEM_W32(0x80024684, dma + 8);
+    MEM_W32(0x8002468c, dma + 12);
+    MEM_W32(0x800246a0, 35); /* variable shifts use the low five bits */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        s32 cmd = cases[i].command;
+        bool ready = cases[i].ready;
+        bool reading = cases[i].direction == 1;
+        u16 control = 0x8104;
+        if (cmd == 3)
+            control |= ready ? (reading ? 0x30 : 0x20) : 0;
+        MEM_W16(spu + 0x1aa, control);
+        MEM_W16(spu + 0x1a6, ready ? 0x5432 : 0x1234);
+        MEM_W16(0x80024690, 0x5432);
+        MEM_W32(0x800246c8, cases[i].direction);
+        memset(nc_fast_ptr(dma), 0xff, 16);
+        CPUState state = arguments((u32)cmd, buffer, cases[i].size, i & 1 ? 12 : 4096);
+        ok = compare(state, 0x8001f718, nc_credits_spu_transfer_command, 11) &&
+             nc_cpu.r[2] == (ready ? 0u : (u32)-2);
+        if (cmd == 0 || cmd == 1) {
+            ok = ok && MEM_R32(0x800246c8) == (u32)(cmd == 0) &&
+                 MEM_R16(spu + 0x1aa) == (ready ? (cmd == 0 ? 0x8134 : 0x8124) : control);
+        } else if (cmd == 2) {
+            ok = ok && MEM_R16(spu + 0x1a6) == (u16)(buffer >> 3) &&
+                 MEM_R16(0x80024690) == (u16)(buffer >> 3);
+        } else if (cmd == 3 && ready) {
+            u32 blocks = cases[i].size / 64 + (cases[i].size % 64 != 0);
+            ok = ok && MEM_R32(dma) == buffer && MEM_R32(0x800246d0) == blocks &&
+                 MEM_R32(dma + 4) == (blocks << 16 | 16) &&
+                 MEM_R32(dma + 8) == (reading ? 0x01000200u : 0x01000201u);
+        }
+    }
+    /* Alias the address register to the direction word. The mode store makes
+     * the first retry succeed after the initial address comparison fails. */
+    MEM_W32(0x80024678, 0x800246c8 - 0x1a6);
+    MEM_W32(0x800246c8, 99);
+    MEM_W16(0x80024690, 1);
+    CPUState retry = arguments(0, buffer, 64, 12);
+    ok = ok && compare(retry, 0x8001f718, nc_credits_spu_transfer_command, 11) &&
+         nc_cpu.r[2] == 0 && nc_cpu.r[3] == 2;
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_spu_transfer(bool reading, bool io) {
     const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061000;
     const int threshold = reading ? 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES
@@ -5545,6 +5608,7 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_fifo_write();
     pass = pass && check_spu_dma_complete();
     pass = pass && check_spu_read_blocks();
+    pass = pass && check_spu_transfer_command();
     pass = pass && check_spu_transfer(true, false);
     pass = pass && check_spu_transfer(false, false);
     pass = pass && check_spu_transfer(false, true);

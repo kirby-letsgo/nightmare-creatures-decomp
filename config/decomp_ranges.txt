@@ -324,6 +324,7 @@ credits_exe  8001ED98    8001F12C         credits_sdk.c
 credits_exe  8001F3C0    8001F58C         credits_sdk.c
 credits_exe  8001F58C    8001F65C         credits_sdk.c
 credits_exe  8001F65C    8001F718         credits_sdk.c
+credits_exe  8001F718    8001F9A8         credits_sdk.c
 credits_exe  8001F9A8    8001FA30         credits_sdk.c
 credits_exe  8001FA30    8001FA98         credits_sdk.c
 credits_exe  8001FA98    8001FAE0         credits_sdk.c
