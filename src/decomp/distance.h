@@ -37,6 +37,8 @@ bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32
 bool nc_write_textured_quad(CPUState *c);
 bool nc_write_projected_triangle(CPUState *c);
 bool nc_write_projected_quad(CPUState *c);
+bool nc_read_textured_face_count(CPUState *c, bool quad);
+bool nc_init_textured_face_cursors(CPUState *c, bool quad);
 bool nc_apply_textured_face_flags(CPUState *c, bool quad);
 bool nc_begin_untextured_triangles(CPUState *c);
 bool nc_begin_untextured_quads(CPUState *c);
