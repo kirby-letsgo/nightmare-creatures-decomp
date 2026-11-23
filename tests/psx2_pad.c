@@ -634,6 +634,38 @@ static bool player_down_face_buttons(void) {
     return true;
 }
 
+static bool face_button_gate_destination(CPUState *cpu) {
+    return nc_player_face_button_gate(cpu, cpu->r[20] != 0) == cpu->r[31];
+}
+
+static bool player_face_button_gates(void) {
+    const struct {
+        u32 flags, action_flags, buttons, destination;
+    } cases[] = {
+        {0x8000, 0x800, 0xa000, 0x80044c88},     {0x8000, 0, 0x8000, 0x80044c88},
+        {0, 0xfffff7ff, 0x8000, 0x80044c84},     {0, 0x800, 0x6000, 0x80044c6c},
+        {0xffff7fff, 0x800, 0xc000, 0x80044c60},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        for (unsigned clear = 0; clear < 2; ++clear) {
+            CPUState cpu = initial();
+            const int cutoff = clear ? 17 : 16;
+            cpu.r[16] = 0x80160000;
+            cpu.r[17] = cases[i].buttons;
+            cpu.r[20] = clear;
+            cpu.r[31] = cases[i].destination;
+            cpu.budget = cutoff + 1;
+            MEM_W8(cpu.r[16] + 0x399, 4);
+            MEM_W32(cpu.r[16] + 0x2c8, cases[i].flags);
+            MEM_W32(cpu.r[16] + 0x330, cases[i].action_flags);
+            if (!compare(cpu, clear ? 0x80044c2c : 0x80044c30, face_button_gate_destination,
+                         cutoff))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool circle_shoulder_destination(CPUState *cpu) {
     return nc_player_circle_shoulder_path(cpu, cpu->r[20] != 0) == cpu->r[31];
 }
@@ -3691,12 +3723,13 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_paths() && player_down_face_buttons() && player_circle_shoulder_paths() &&
-        player_up_action_six_checks() && player_face_presses() && player_triangle_actions() &&
-        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
-        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
-        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
-        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
+        player_down_paths() && player_down_face_buttons() && player_face_button_gates() &&
+        player_circle_shoulder_paths() && player_up_action_six_checks() && player_face_presses() &&
+        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
+        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
+        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
+        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
+        ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

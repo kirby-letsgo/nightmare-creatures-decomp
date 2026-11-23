@@ -66,6 +66,34 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Actor flags decide whether to check Square and Cross before Circle.
+ * One entry clears the direction byte before reading the flags. */
+u32 nc_player_face_button_gate(CPUState *c, bool clear_direction) {
+    if (c->budget <= (clear_direction ? 17 : 16))
+        return clear_direction ? 0x80044c2c : 0x80044c30;
+
+    const u32 actor = R(16);
+    if (clear_direction) {
+        MEM_W8(actor + 0x399, 0);
+        c->budget--;
+    }
+    const u32 flags = MEM_R32(actor + 0x2c8);
+    R(2) = R(17) & 0x2000;
+    c->budget -= 7;
+    if (flags & 0x8000)
+        return 0x80044c88;
+
+    const u32 action_flags = MEM_R32(actor + 0x330);
+    R(2) = R(17) & 0x8000;
+    c->budget -= 7;
+    if (!(action_flags & 0x800))
+        return 0x80044c84;
+
+    R(4) = actor;
+    c->budget -= 2;
+    return R(2) ? 0x80044c60 : 0x80044c6c;
+}
+
 /* Circle routes to the stick check. Otherwise the shoulder buttons select
  * an action path, or pass the Up bit to the direct action-6 check. */
 u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle) {
