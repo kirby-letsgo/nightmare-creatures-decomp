@@ -551,6 +551,15 @@ PLACEMENT_FACE_CHECKS = {
 }
 
 
+# Temporary holding the table base, tag mask register, address mask register, packet size.
+PLACEMENT_PACKET_LINKS = {
+    0x800276D8: (11, 10, 30, 0x20),
+    0x800278C4: (11, 10, 7, 0x14),
+    0x80027B04: (12, 11, 8, 0x28),
+    0x80027D14: (12, 11, 9, 0x18),
+}
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
@@ -1721,6 +1730,12 @@ class Emitter:
                 out.append("    if (nc_write_projected_triangle(c)) {")
                 out.append("        if (!R(9)) goto L_8002789C;")
                 out.append("        goto L_80027880; }")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_PACKET_LINKS:
+                table, tag, address, size = PLACEMENT_PACKET_LINKS[i.addr]
+                out.append(
+                    f"    if (nc_link_placement_packet(c, {table}, R({tag}), R({address}), {size}))"
+                    f" goto L_{i.addr + 0x38:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_CHECKS:
                 first, count, limit, reject = PLACEMENT_FACE_CHECKS[i.addr]
                 out.append("    { bool accept;")

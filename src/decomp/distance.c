@@ -3432,6 +3432,25 @@ bool nc_write_textured_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32 address_mask,
+                              u32 packet_size) {
+    if (c->budget <= 22)
+        return false;
+    R(table_reg) = MEM_R32(R(29) + 0x10);
+    const u32 packet = R(21);
+    const u32 tag = MEM_R32(packet);
+    R(4) += R(table_reg);
+    const u32 old_head = MEM_R32(R(4));
+    MEM_W32(packet, (tag & tag_mask) | (old_head & address_mask));
+    R(3) = packet & address_mask;
+    // Read the bucket again after writing the packet, as in the US code.
+    R(2) = (MEM_R32(R(4)) & tag_mask) | R(3);
+    R(21) += packet_size;
+    MEM_W32(R(4), R(2));
+    c->budget -= 22;
+    return true;
+}
+
 bool nc_write_textured_quad(CPUState *c) {
     if (c->budget <= 65)
         return false;
