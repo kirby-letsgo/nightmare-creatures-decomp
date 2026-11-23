@@ -23,7 +23,7 @@ u32 nc_player_up_action(CPUState *c, bool test_up);
 u32 nc_player_down_shoulder_action(CPUState *c, bool test_down);
 u32 nc_player_down_path(CPUState *c, bool check_circle);
 u32 nc_player_triangle_action(CPUState *c, bool check_press);
-bool nc_check_player_face_press(CPUState *c, bool square);
+bool nc_check_player_face_press(CPUState *c, u32 mask, u32 link);
 bool nc_set_player_input_action(CPUState *c);
 bool nc_check_player_action_words(CPUState *c);
 bool nc_record_player_button_press(CPUState *c);
