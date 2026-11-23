@@ -4290,23 +4290,26 @@ static bool placement_face_dispatch(bool disc) {
             return false;
     }
     const u32 targets[] = {0x8002755c, 0x80027764, 0x80027954, 0x80027b90};
-    for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned i = 0; i < 8; ++i) {
         CPUState input = initial();
-        const u32 entry = 0x80028b98 + 0x18 * i, resume = entry + 0x18;
+        const u32 entry = (i < 4 ? 0x80028b98 : 0x80028dfc) + 0x18 * (i % 4), resume = entry + 0x18;
         const bool textured = i % 2 == 0;
+        const u32 light_offset = textured ? (i < 4 ? 0x2dc : 0x164) : 0;
         input.r[29] = SCRATCH_BASE;
-        input.r[31] = targets[i];
+        input.r[31] = targets[i % 4];
         input.budget = textured ? 8 : 6;
+        MEM_W32(SCRATCH_BASE + 0x164, 0xab654321);
         MEM_W32(SCRATCH_BASE + 0x2dc, 0xfe123456);
         MEM_W32(SCRATCH_BASE + 0x10, 0xffffffff);
         CPUState native = input;
-        if (nc_call_placement_faces(&native, textured, resume) ||
+        if (nc_call_placement_faces(&native, light_offset, resume) ||
             memcmp(&native, &input, sizeof input) || MEM_R32(SCRATCH_BASE + 0x10) != 0xffffffff)
             return false;
         native.budget = ++input.budget;
-        if (!nc_call_placement_faces(&native, textured, resume) || native.budget != 1 ||
+        if (!nc_call_placement_faces(&native, light_offset, resume) || native.budget != 1 ||
             native.r[31] != resume || native.r[4] != input.r[16] || native.r[5] != input.r[17] ||
-            native.r[6] != input.r[20] || native.r[7] != (textured ? 0xfe123456u : 0) ||
+            native.r[6] != input.r[20] ||
+            native.r[7] != (textured ? (i < 4 ? 0xfe123456u : 0xab654321u) : 0) ||
             MEM_R32(SCRATCH_BASE + 0x10))
             return false;
         if (disc) {
