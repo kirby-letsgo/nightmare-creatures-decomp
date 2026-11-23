@@ -3050,6 +3050,65 @@ static bool type7_pose_angles(bool disc) {
     return true;
 }
 
+static bool placement_angle_steps(bool disc) {
+    const u32 record = SCRATCH_BASE, pose = record + 0x80, child = pose + 0x80;
+    static const struct {
+        u16 type;
+        bool linked;
+        s16 angle, global_angle;
+    } cases[] = {{6, false, 0, 0},
+                 {5, true, -1, 1},
+                 {6, true, INT16_MIN, INT16_MAX},
+                 {6, true, INT16_MAX, INT16_MIN},
+                 {0, true, -0x200, -0x800}};
+    const u16 saved = MEM_R16(0x800d763a);
+    u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[3] = cases[i].type;
+        input.r[4] = record;
+        input.r[5] = record + 0x20;
+        input.r[7] = 0xffff0000u + i;
+        input.r[8] = pose;
+        memset(nc_scratch, 0xaa, sizeof before);
+        MEM_W32(record + 4, pose);
+        MEM_W32(pose + 4, cases[i].linked ? child : 0);
+        MEM_W16(record + 0x24, cases[i].angle);
+        MEM_W16(0x800d763a, cases[i].global_angle);
+        const bool writes = cases[i].linked && cases[i].type != 5;
+        for (unsigned finish = 0; finish < 2; ++finish) {
+            bool (*step)(CPUState *) =
+                finish ? nc_finish_placement_angle_step : nc_set_other_placement_angles;
+            input.r[31] = finish ? 0x80010000 : 0x80029584;
+            input.budget = finish ? 8 : writes ? 24 : cases[i].linked ? 9 : 6;
+            CPUState native = input;
+            memcpy(before, nc_scratch, sizeof before);
+            if (step(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!step(&native) || native.budget != 1 ||
+                MEM_R32(child + 0x40) != (writes ? (u32)(s32)cases[i].angle : 0xaaaaaaaau) ||
+                MEM_R32(pose + 0x48) !=
+                    (writes ? (u32)(cases[i].global_angle * 16 + 0x8000) : 0xaaaaaaaau) ||
+                MEM_R16(record + 0x24) != (u16)(cases[i].angle + (finish ? 0x200 : 0)) ||
+                (finish && native.r[2] != input.r[7]))
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, finish ? 0x80029584 : 0x80029544);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+            input = native;
+        }
+    }
+    MEM_W16(0x800d763a, saved);
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5376,10 +5435,11 @@ int main(int argc, char **argv) {
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
-        placement_point_scans(disc) && placement_point_flags(disc) && type7_pose_angles(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
+        type7_pose_angles(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
