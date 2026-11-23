@@ -351,6 +351,10 @@ slus_005_82  80011BA8    80011BD4         interrupt_control.h
 slus_005_82  80011BD4    80011C24         interrupt_control.h
 slus_005_82  80011DA8    80011E50         interrupt_driver.h
 slus_005_82  80011E50    80011E7C         interrupt_control.h
+slus_005_82  80011F0C    80011F34         cd_state.h
+slus_005_82  80011F34    80011F5C         cd_state.h
+slus_005_82  80011F5C    80011F84         cd_state.h
+slus_005_82  80011F84    80011F90         bios_service.h
 slus_005_82  80011F94    80011FA4         cd_state.h
 slus_005_82  80011FA4    80011FB4         cd_state.h
 slus_005_82  80011FB4    80011FC4         cd_state.h

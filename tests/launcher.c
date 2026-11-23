@@ -114,6 +114,44 @@ static bool cd_interrupt_name(CPUState *c) {
     return cd_lookup_name(c, 0x800158bc, 7, 0x80010364);
 }
 
+static u32 cd_event_spec, cd_event_resume;
+
+static bool deliver_cd_callback(CPUState *c) {
+    return cd_default_event(c, cd_event_spec, cd_event_resume, 0x80011f84);
+}
+
+static bool check_cd_events(void) {
+    const struct { u32 entry, spec; } callbacks[] = {
+        {0x80011f0c, 0x20}, {0x80011f34, 0x40}, {0x80011f5c, 0x40},
+    };
+    for (unsigned i = 0; i < sizeof callbacks / sizeof callbacks[0]; i++) {
+        cd_event_spec = callbacks[i].spec;
+        cd_event_resume = callbacks[i].entry + 24;
+        CPUState event = arguments(0xf0000003, cd_event_spec, 0x2000, 4096);
+        event.r[9] = 8; /* OpenEvent in polling mode */
+        bios_call(&event, 0xb0);
+        event.r[4] = event.r[2];
+        if (event.r[4] == UINT32_MAX)
+            return false;
+        event.r[9] = 12; /* EnableEvent */
+        bios_call(&event, 0xb0);
+        CPUState start = arguments(1, 2, 3, 7);
+        nc_cpu = start;
+        if (!deliver_cd_callback(&nc_cpu))
+            return false;
+        event.r[9] = 11; /* TestEvent consumes the notification. */
+        bios_call(&event, 0xb0);
+        if (!event.r[2] || !compare(start, callbacks[i].entry, deliver_cd_callback, 6))
+            return false;
+        bios_call(&event, 0xb0);
+        if (!event.r[2])
+            return false;
+        event.r[9] = 9; /* CloseEvent */
+        bios_call(&event, 0xb0);
+    }
+    return true;
+}
+
 static bool check_cd_names(void) {
     const struct { u32 entry, table, count; bool (*routine)(CPUState *); } lookups[] = {
         {0x80012078, 0x8001583c, 28, cd_command_name},
@@ -235,6 +273,7 @@ static bool check_bios_wrappers(void) {
         {0x80011a4c, 0xb0, 0x18, 0, 0},     /* ResetEntryInt */
         {0x80011a7c, 0xb0, 0x35, 1, 2},      /* write to the TTY */
         {0x80011a7c, 0xb0, 0x35, 99, ~0u},   /* invalid descriptor */
+        {0x80011f84, 0xb0, 0x07, 0xf0000003, 0}, /* DeliverEvent */
         {0x80011a8c, 0xb0, 0x5b, 1, 0},     /* ChangeClearPad */
         {0x80011a9c, 0xc0, 0x0a, 2, 1},     /* ChangeClearRCnt */
     };
@@ -722,6 +761,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_events()) {
+        fprintf(stderr, "launcher CD event callbacks failed\n");
         return 1;
     }
     if (!check_cd_names()) {
