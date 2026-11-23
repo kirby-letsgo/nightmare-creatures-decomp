@@ -3396,6 +3396,27 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_read_textured_face_count(CPUState *c, bool quad) {
+    if (c->budget <= 6)
+        return false;
+    R(4) = MEM_R8(R(4) + (quad ? 3 : 1));
+    R(quad ? 23 : 22) = 0;
+    MEM_W32(R(29) + 0x20, R(4));
+    c->budget -= 6;
+    return true;
+}
+
+bool nc_init_textured_face_cursors(CPUState *c, bool quad) {
+    if (c->budget <= 5)
+        return false;
+    R(quad ? 8 : 30) = 0x00ffffff;
+    R(quad ? 11 : 10) = 0xff000000;
+    R(quad ? 17 : 20) = R(3) + 3;
+    R(16) = R(21) + 0x16;
+    c->budget -= 5;
+    return true;
+}
+
 bool nc_apply_textured_face_flags(CPUState *c, bool quad) {
     const u32 flags = R(5) & 7;
     const int cycles = 8 + 2 * !!(flags & 1) + 2 * !!(flags & 2) + !!(flags & 4);

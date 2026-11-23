@@ -3252,6 +3252,63 @@ static bool placement_triangle_windings(bool disc) {
     return true;
 }
 
+static bool textured_face_cursors(bool disc) {
+    const u32 descriptor = SCRATCH_BASE, frame = descriptor + 0x180;
+    const u8 counts[] = {0, 1, 0xff};
+    for (unsigned quad = 0; quad < 2; ++quad) {
+        const u32 entry = quad ? 0x800279d4 : 0x800275dc;
+        for (unsigned i = 0; i < sizeof counts; ++i) {
+            CPUState input = initial();
+            input.r[4] = descriptor;
+            input.r[29] = frame;
+            input.r[3] = 0xfffffffe;
+            input.r[21] = 0xfffffff0;
+            input.r[31] = counts[i] ? entry + 0x10 : (quad ? 0x80027b54 : 0x80027728);
+            MEM_W8(descriptor + (quad ? 3 : 1), counts[i]);
+            MEM_W32(frame + 0x20, 0xfeedface);
+            u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 6;
+            CPUState native = input;
+            if (nc_read_textured_face_count(&native, quad) ||
+                memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_read_textured_face_count(&native, quad) || native.budget != 1 ||
+                native.r[4] != counts[i] || native.r[quad ? 23 : 22] ||
+                MEM_R32(frame + 0x20) != counts[i])
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, entry);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(after, nc_scratch, sizeof after))
+                    return false;
+            }
+            if (!counts[i])
+                continue;
+            input = native;
+            input.r[31] = entry + 0x24;
+            input.budget = 5;
+            native = input;
+            if (nc_init_textured_face_cursors(&native, quad) ||
+                memcmp(&native, &input, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_init_textured_face_cursors(&native, quad) || native.budget != 1 ||
+                native.r[quad ? 17 : 20] != 1 || native.r[16] != 6)
+                return false;
+            if (disc) {
+                interp_call(&input, entry + 0x10);
+                if (memcmp(&native, &input, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool textured_face_flags(bool disc) {
     const int costs[] = {8, 10, 10, 12, 9, 11, 11, 13};
     for (unsigned quad = 0; quad < 2; ++quad) {
@@ -6654,7 +6711,7 @@ int main(int argc, char **argv) {
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
         placement_quad_windings(disc) && placement_triangle_windings(disc) &&
-        placement_face_checks(disc) && textured_face_flags(disc) &&
+        placement_face_checks(disc) && textured_face_cursors(disc) && textured_face_flags(disc) &&
         untextured_face_entry(disc, false) && untextured_face_entry(disc, true) &&
         placement_face_returns(disc) && placement_face_advances(disc) &&
         placement_packet_links(disc) && textured_quad_packets(disc) &&
