@@ -21,4 +21,17 @@ static inline bool cd_last_position(CPUState *c, u32 address) {
     return true;
 }
 
+/* These CD setters return the previous word before installing a0. */
+static inline bool exchange_cd_word(CPUState *c, u32 address) {
+    if (c->budget <= 8)
+        return false;
+    c->budget--; /* lui */
+    R(2) = MEM_R32(address);
+    R(1) = (address + 0x8000u) & 0xffff0000u;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(address, R(4));
+    c->budget -= 3; /* sw, jr and its delay slot */
+    return true;
+}
+
 #endif
