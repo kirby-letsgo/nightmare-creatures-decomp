@@ -4275,6 +4275,42 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_traversal_entries(bool disc) {
+    const u32 frame = SCRATCH_BASE, actor = frame + 0x100;
+    for (unsigned bit = 0; bit <= 1; ++bit) {
+        CPUState input = initial();
+        input.r[4] = actor;
+        input.r[29] = frame + 0x320;
+        input.budget = 23;
+        memset(nc_scratch, 0xa5, SCRATCH_SIZE);
+        MEM_W32(actor + 0x2c8, 0xfffffffeu | bit);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_begin_projection_traversal(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_projection_traversal(&native) || native.budget != 1 ||
+            native.r[29] != frame || native.r[21] != actor || native.r[18] != input.r[5] ||
+            native.r[30] != input.r[6] || native.r[22] || native.r[2] != bit ||
+            MEM_R32(frame + 0x318) != input.r[30] || MEM_R32(frame + 0x31c) != input.r[31] ||
+            MEM_R32(frame + 0x2e8) || MEM_R32(frame + 0x2f0) || MEM_R32(frame + 0x2e0))
+            return false;
+        for (unsigned reg = 16; reg <= 23; ++reg)
+            if (MEM_R32(frame + 0x2f8 + 4 * (reg - 16)) != input.r[reg])
+                return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_continue_call(&input, 0x80028004, bit ? 0x80028058 : 0x800280f8, frame);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool projection_face_calls(bool disc, bool textured) {
     bool (*call)(CPUState *, bool) =
         textured ? nc_call_projection_textured_faces : nc_call_projection_untextured_faces;
@@ -7652,6 +7688,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_traversal_entries(disc) &&
         projection_face_calls(disc, true) && projection_face_calls(disc, false) &&
         untextured_projection_modes(disc) &&
         projection_packet_modes(disc) &&

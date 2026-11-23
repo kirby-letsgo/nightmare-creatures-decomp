@@ -894,6 +894,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028004:
+            targets.add(0x80028058)
             targets.add(0x800282C0)
             targets.update((0x8002817C, 0x800281E0, 0x80028214, 0x80028280, 0x80028298, 0x8002830C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028340:
@@ -2270,6 +2271,10 @@ class Emitter:
                 out.append("      if (nc_filter_projection_pose(c, &project)) {")
                 out.append("          if (project) goto L_800281E0;")
                 out.append("          goto L_800282D8; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028004:
+                out.append("    if (nc_begin_projection_traversal(c)) {")
+                out.append("        if (R(2)) goto L_80028058;")
+                out.append("        goto L_800280F8; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028114:
                 out.append("    if (nc_set_projection_pose_mask(c)) goto L_80028144;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002816C:
