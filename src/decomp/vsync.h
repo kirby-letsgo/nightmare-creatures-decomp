@@ -1,0 +1,129 @@
+#ifndef NC_DECOMP_VSYNC_H
+#define NC_DECOMP_VSYNC_H
+
+#include "decomp/interrupt_control.h"
+
+/* In interlaced mode the GPU must also advance to the opposite field. */
+static inline void wait_for_vsync_field(CPUState *c, u32 slots) {
+    set_reg(c, 2, 0x80000);
+    set_reg(c, 2, R(16) & R(2));
+    bool interlaced = R(2) != 0;
+    NC_POLL(c, 2);
+    if (!interlaced)
+        return;
+    set_reg(c, 3, (slots + 0x8000u) & 0xffff0000u);
+    load_word(c, 3, slots);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(16) ^ R(2));
+    bool same_field = (s32)R(2) >= 0;
+    NC_POLL(c, 2);
+    if (same_field)
+        set_reg(c, 4, 0x80000000);
+    while (same_field) {
+        load_word(c, 2, R(3));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(16) ^ R(2));
+        set_reg(c, 2, R(2) & R(4));
+        same_field = R(2) == 0;
+        NC_POLL(c, 2);
+    }
+}
+
+static inline void wait_for_vsync_frames(CPUState *c, u32 slots, u32 frame, u32 entry, u32 wait_entry) {
+    const u32 slots_hi = (slots + 0x8000u) & 0xffff0000u;
+    const u32 frame_hi = (frame + 0x8000u) & 0xffff0000u;
+    bool positive = (s32)R(4) > 0;
+    NC_POLL(c, 2);
+    set_reg(c, 2, slots_hi);
+    load_word(c, 2, slots + 12); /* last synchronized frame */
+    if (positive) {
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) - 1);
+        R(2) += R(4);
+        NC_POLL(c, 2);
+    }
+    positive = (s32)R(4) > 0;
+    R(5) = 0;
+    NC_POLL(c, 2);
+    if (positive)
+        set_reg(c, 5, R(4) - 1);
+    R(31) = entry + 0x98;
+    R(4) = R(2);
+    NC_POLL(c, 2);
+    nc_call(c, wait_entry); /* v_wait(target, timeout) */
+
+    set_reg(c, 2, slots_hi);
+    load_word(c, 2, slots);
+    NC_POLL(c, 1);
+    load_word(c, 16, R(2)); /* sample GPU status before the next VBlank */
+    set_reg(c, 4, frame_hi);
+    load_word(c, 4, frame);
+    set_reg(c, 5, 1);
+    R(31) = entry + 0xbc;
+    R(4)++;
+    NC_POLL(c, 2);
+    nc_call(c, wait_entry);
+    wait_for_vsync_field(c, slots);
+
+    set_reg(c, 2, frame_hi);
+    load_word(c, 2, frame);
+    set_reg(c, 3, slots_hi);
+    load_word(c, 3, slots + 4);
+    set_reg(c, 1, slots_hi);
+    MEM_W32(slots + 12, R(2));
+    NC_POLL(c, 1);
+    load_word(c, 3, R(3));
+    set_reg(c, 2, R(17));
+    set_reg(c, 1, slots_hi);
+    MEM_W32(slots + 8, R(3));
+    NC_POLL(c, 1);
+}
+
+static inline bool sdk_vsync(CPUState *c, u32 slots, u32 frame, u32 entry, u32 wait_entry) {
+    const u32 slots_hi = (slots + 0x8000u) & 0xffff0000u;
+    const u32 frame_hi = (frame + 0x8000u) & 0xffff0000u;
+    if (c->budget <= 1)
+        return false;
+    set_reg(c, 2, slots_hi);
+    load_word(c, 2, slots);
+    set_reg(c, 3, slots_hi);
+    load_word(c, 3, slots + 4);
+    set_reg(c, 29, R(29) - 32);
+    MEM_W32(R(29) + 24, R(31));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 20, R(17));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 16, R(16));
+    NC_POLL(c, 1);
+    load_word(c, 16, R(2));
+    load_word(c, 2, R(3));
+    set_reg(c, 3, slots_hi);
+    load_word(c, 3, slots + 8);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) - R(3));
+    bool query_frame = (s32)R(4) < 0;
+    R(17) = R(2) & 0xffff;
+    NC_POLL(c, 2);
+    if (query_frame) {
+        set_reg(c, 2, frame_hi);
+        load_word(c, 2, frame);
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 2, 1);
+        bool query_elapsed = R(4) == R(2);
+        R(2) = R(17);
+        NC_POLL(c, 2);
+        if (!query_elapsed)
+            wait_for_vsync_frames(c, slots, frame, entry, wait_entry);
+    }
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
+#endif

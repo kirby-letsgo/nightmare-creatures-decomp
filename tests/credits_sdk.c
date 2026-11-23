@@ -1,3 +1,4 @@
+#include "vsync.h"
 #include "vblank_wait.h"
 #include "cd_init.h"
 #include "sdk_putchar.h"
@@ -5090,70 +5091,6 @@ static bool check_cd_get_toc(void) {
     return ok && !saved.error;
 }
 
-static void advance_vsync_field(void) {
-    MEM_W32(0x80060800, 0x80080000);
-}
-
-static bool check_vsync(void) {
-    const u32 status = 0x80060800, timer = status + 4, trace = status + 16;
-    const u32 wait_stub[] = {
-        0xad040000, /* sw a0,0(t0) */
-        0xad050004, /* sw a1,4(t0) */
-        0x8d0a0008, /* lw t2,8(t0) */
-        0x2508000c, /* addiu t0,t0,12 */
-        0x03e00008, /* jr ra */
-        0xad2a0000, /* sw t2,0(t1) */
-    };
-    const struct {
-        s32 mode;
-        u32 before_field, after_field;
-        bool advance_on_vblank;
-    } cases[] = {
-        {-1, 0, 0, false}, {1, 0, 0, false}, {0, 0, 0, false},
-        {4, 0x80000, 0x80080000, false}, {2, 0x80000, 0x80000, true},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    void (*saved_hook)(void) = nc_frame_hook;
-    for (unsigned i = 0; i < sizeof wait_stub / sizeof wait_stub[0]; i++)
-        MEM_W32(0x8001a59c + i * 4, wait_stub[i]);
-    MEM_W32(0x80023400, status);
-    MEM_W32(0x80023404, timer);
-    MEM_W32(timer, 3);
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        bool waits = cases[i].mode == 0 || cases[i].mode > 1;
-        MEM_W32(0x800244d4, 9);
-        MEM_W32(0x8002340c, 7);
-        MEM_W32(0x80023408, 0xfffe);
-        MEM_W32(status, 0);
-        MEM_W32(trace + 8, cases[i].before_field);
-        MEM_W32(trace + 20, cases[i].after_field);
-        nc_frame_hook = cases[i].advance_on_vblank ? advance_vsync_field : NULL;
-        CPUState state = arguments((u32)cases[i].mode, 0, 0, i & 1 ? 2 : 4096);
-        state.r[8] = trace;
-        state.r[9] = status;
-        ok = compare(state, 0x8001a454, nc_credits_vsync, 1) &&
-             nc_cpu.r[2] == (cases[i].mode < 0 ? 9 : 5) &&
-             MEM_R32(0x8002340c) == (waits ? 9 : 7) &&
-             MEM_R32(0x80023408) == (waits ? 3 : 0xfffe) &&
-             nc_cpu.r[8] == trace + (waits ? 24 : 0);
-        if (waits) {
-            u32 skip = cases[i].mode > 0 ? (u32)cases[i].mode - 1 : 0;
-            ok = ok && MEM_R32(trace) == 7 + skip && MEM_R32(trace + 4) == skip &&
-                 MEM_R32(trace + 12) == 10 && MEM_R32(trace + 16) == 1;
-        }
-    }
-    nc_frame_hook = saved_hook;
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
-}
-
 static bool check_wait_vblank(void) {
     const u32 drivers[] = {0x8001a638, 0x8001a2ac, 0x8001a688};
     return compare_vblank_wait(0x8001a59c, nc_credits_wait_vblank, 0x800244d4, 0x800182f8, drivers);
@@ -6105,7 +6042,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_play_track();
     pass = pass && check_read_track_positions();
     pass = pass && check_cd_get_toc();
-    pass = pass && check_vsync();
+    pass = pass && compare_vsync(0x8001a454, nc_credits_vsync, 0x80023400, 0x800244d4, 0x8001a59c);
     pass = pass && check_wait_vblank();
     pass = pass && check_cd_init();
     pass = pass && check_cd_reset();

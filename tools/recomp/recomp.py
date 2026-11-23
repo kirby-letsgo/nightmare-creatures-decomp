@@ -1283,6 +1283,8 @@ class Emitter:
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800118D8:
                 out.append("    if (sdk_putchar(c, 0x800118d8, 0x80011a7c, 0x80015b7c, 0x800156bd)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013E28:
+                out.append("    if (nc_launcher_vsync(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013F70:
                 out.append("    if (nc_launcher_wait_vblank(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013DD8:

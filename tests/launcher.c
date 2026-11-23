@@ -1,3 +1,4 @@
+#include "vsync.h"
 #include "vblank_wait.h"
 #include "cd_init.h"
 #include "cd_reset.h"
@@ -1037,6 +1038,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!compare_vsync(0x80013e28, nc_launcher_vsync, 0x80015b34, 0x80015760, 0x80013f70)) {
+        fprintf(stderr, "launcher VSync failed\n");
         return 1;
     }
     if (!check_wait_vblank()) {
