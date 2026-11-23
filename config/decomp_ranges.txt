@@ -417,6 +417,7 @@ slus_005_82  80013CE8    80013CF8         cd_state.h
 slus_005_82  80013DD8    80013E28         sdk_puts.h
 slus_005_82  80013E28    80013F70         vsync.h
 slus_005_82  80013F70    8001400C         vblank_wait.h
+slus_005_82  80014510    800145DC         cd_read_sync.h
 slus_005_82  800145DC    800145F4         cd_state.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c

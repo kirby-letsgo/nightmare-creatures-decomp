@@ -17,6 +17,7 @@ bool nc_launcher_dispatch_vblank(CPUState *c);
 bool nc_launcher_clear_irq_words(CPUState *c);
 
 bool nc_launcher_cd_init(CPUState *c);
+bool nc_launcher_cd_read_sync(CPUState *c);
 bool nc_launcher_cd_init_interrupt(CPUState *c);
 
 bool nc_launcher_vsync(CPUState *c);
