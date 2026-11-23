@@ -2,6 +2,23 @@
 
 enum { PAD_PACKET = 0x8008f1c0u, PACKET_BYTES = 34, PAD_MASK = 0x238, PAD_INDEX = 0x23a };
 
+/* Triangle selects action 0x11 when the actor word differs from both
+ * comparison words. The original helper skips the second load on a match. */
+bool nc_check_player_action_words(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+
+    const u32 actor = R(4);
+    R(3) = MEM_R32(actor + 0x264);
+    R(2) = 0;
+    c->budget -= 11;
+    if (R(3) != MEM_R32(actor + 0xa0)) {
+        R(2) = R(3) != MEM_R32(actor + 0x98);
+        c->budget -= R(2) ? 6 : 7;
+    }
+    return true;
+}
+
 /* Accept a masked press only when the previous word contains none of its bits.
  * A successful press replaces the previous word with the entire requested mask. */
 bool nc_record_player_button_press(CPUState *c) {
@@ -83,6 +100,18 @@ u32 nc_player_triangle_action_check(CPUState *c) {
     R(4) = R(16);
     c->budget -= 3;
     return action_one ? 0x80044eb4 : 0x80044ef4;
+}
+
+u32 nc_player_triangle_action_one(CPUState *c) {
+    if (c->budget <= 22)
+        return 0x80044eb4;
+
+    R(31) = 0x80044ebc;
+    R(4) = R(16);
+    c->budget -= 2;
+    nc_check_player_action_words(c);
+    c->budget -= 2;
+    return R(2) ? 0x80044ec4 : 0x80044ed4;
 }
 
 /* The preceding Triangle check supplies 0x13 in v0. That action and
