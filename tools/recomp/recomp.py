@@ -1437,6 +1437,8 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80068698, 0x8006874C):
                 right = "true" if i.addr == 0x8006874C else "false"
                 out.append(f"    if (nc_menu_horizontal_feedback(c, {right})) goto L_80068764;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8006878C:
+                out.append("    if (nc_menu_dispatch_feedback_action(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068764:
                 out.append("    if (nc_menu_format_horizontal_feedback(c)) goto L_8006878C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068424:

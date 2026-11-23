@@ -38,6 +38,7 @@ bool nc_menu_scan_and_save_buttons(CPUState *c);
 u32 nc_menu_record_shoulders(CPUState *c);
 bool nc_menu_record_button_pairs(CPUState *c);
 u32 nc_menu_record_triangle(CPUState *c);
+bool nc_menu_dispatch_feedback_action(CPUState *c);
 bool nc_menu_dispatch_record_action(CPUState *c);
 u32 nc_menu_record_select(CPUState *c);
 bool nc_menu_apply_record_select(CPUState *c);

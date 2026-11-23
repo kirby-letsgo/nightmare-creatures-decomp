@@ -829,13 +829,25 @@ u32 nc_menu_record_triangle(CPUState *c) {
     return 0x8006893c;
 }
 
-bool nc_menu_dispatch_record_action(CPUState *c) {
-    if (c->budget <= 2)
-        return false;
-    R(31) = 0x80068944;
+static void call_offset_record_action(CPUState *c, u32 return_address) {
+    R(31) = return_address;
     R(5) += R(2); /* record address formed in the call delay slot */
     c->budget -= 2;
     nc_call(c, 0x80063b70);
+}
+
+bool nc_menu_dispatch_record_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    call_offset_record_action(c, 0x80068944);
+    return true;
+}
+
+bool nc_menu_dispatch_feedback_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    call_offset_record_action(c, 0x80068794);
+    NC_POLL(c, 2 * NC_INSN_CYCLES); /* jump to the menu scan and its delay slot */
     return true;
 }
 
