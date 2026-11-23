@@ -157,10 +157,41 @@ static inline bool clear_interrupt_words(CPUState *c) {
 
 typedef struct {
     u32 slots, entry, clear, register_irq, handler, setter;
-} VSyncInitLayout;
+} InterruptInitLayout;
+
+/* Clear the DMA callback table and DICR, then register the channel IRQ handler. */
+static inline bool start_dma(CPUState *c, const InterruptInitLayout *layout) {
+    if (c->budget <= 6)
+        return false;
+    R(29) -= 24;
+    R(4) = layout->slots;
+    c->budget -= 3;
+    MEM_W32(R(29) + 16, R(31));
+    R(31) = layout->entry + 0x18;
+    R(5) = 8;
+    c->budget -= 3;
+    nc_call(c, layout->clear); /* clear eight callback slots */
+
+    set_reg(c, 4, 3); /* DMA IRQ */
+    set_reg(c, 2, (layout->slots - 4 + 0x8000u) & 0xffff0000u);
+    load_word(c, 2, layout->slots - 4);
+    set_reg(c, 5, (layout->handler + 0x8000u) & 0xffff0000u);
+    set_reg(c, 5, layout->handler); /* trapIntrDMA */
+    MEM_W32(R(2), 0);
+    NC_POLL(c, 1);
+    R(31) = layout->entry + 0x38;
+    NC_POLL(c, 2);
+    nc_call(c, layout->register_irq); /* InterruptCallback */
+    set_reg(c, 2, (layout->setter + 0x8000u) & 0xffff0000u);
+    set_reg(c, 2, layout->setter); /* setIntrDMA */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
 
 /* Initialize timer 1 and the VBlank callback table, then return its slot setter. */
-static inline bool start_vsync(CPUState *c, const VSyncInitLayout *layout) {
+static inline bool start_vsync(CPUState *c, const InterruptInitLayout *layout) {
     if (c->budget <= 14)
         return false;
     R(29) -= 24;
