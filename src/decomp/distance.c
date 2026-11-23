@@ -4088,6 +4088,33 @@ bool nc_load_projection_pose_flags(CPUState *c) {
     return true;
 }
 
+/* With no traversal mask, only ungrouped poses pass. Otherwise at least
+ * one selected group must match before the per-pose flags are tested. */
+bool nc_filter_projection_pose(CPUState *c, bool *project) {
+    if (c->budget <= 8)
+        return false;
+    const u32 flags = R(17);
+    const u32 mask = MEM_R32(R(29) + 0x2f0);
+    const bool group_matches = mask ? (flags & mask) != 0 : (flags & 0x1f00) == 0;
+    const bool disabled = (flags & 0x20) != 0;
+    int cycles = mask ? 8 : group_matches ? 9 : 11;
+    if (group_matches)
+        cycles += disabled ? 2 : 5;
+    if (c->budget <= cycles)
+        return false;
+
+    R(8) = mask;
+    R(2) = flags & 0x20;
+    if (group_matches) {
+        R(3) = flags & 0x81;
+        if (!disabled)
+            R(2) = flags & 0x10;
+    }
+    *project = group_matches && !disabled && R(3) == 0x81;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_select_projection_pose(CPUState *c, bool index_ready) {
     return select_pose_from_stack(c, index_ready, 22, 23, 0x58);
 }
