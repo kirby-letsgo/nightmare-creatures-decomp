@@ -2470,6 +2470,91 @@ static void interrupt_start_state(StateIO *io) {
     irq_serialize(io);
 }
 
+static bool check_gpu_clear_rectangle(void) {
+    const u32 rect = 0x80061000, packet = 0x80024cec, gp0 = 0x1f801810;
+    const struct {
+        s16 x, width, height;
+        u16 expected_width, expected_height;
+        bool aligned;
+    } cases[] = {
+        {64, 64, 2, 64, 2, true}, {64, 67, 2, 67, 2, false},
+        {65, 64, 2, 64, 2, false}, {0, 200, 10, 128, 8, true},
+        {9, -2, 3, 0, 3, false}, {9, 3, -1, 3, 0, false},
+    };
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    gpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; ok && run < 2; run++) {
+            MEM_W32(0x1f801814, 0);
+            MEM_W32(0x80024628, gp0);
+            MEM_W32(0x8002462c, 0x1f801814);
+            MEM_W32(0x80024630, 0x1f8010a0);
+            MEM_W32(0x80024634, 0x1f8010a4);
+            MEM_W32(0x80024638, 0x1f8010a8);
+            MEM_W32(0x8002455c, 9u << 16 | 129);
+            /* Script the GPU info queries. The port currently implements
+             * GP0 reads for pixel transfers only. The DMA list runs normally. */
+            MEM_W32(0x8001e124, 0x00041080); /* sll v0,a0,2 */
+            MEM_W32(0x8001e128, 0x004a1021); /* addu v0,v0,t2 */
+            MEM_W32(0x8001e12c, 0x8c420000); /* lw v0,0(v0) */
+            MEM_W32(0x8001e130, 0x03e00008);
+            MEM_W32(0x8001e134, 0);
+            MEM_W32(rect + 32 + 12, 0x402);
+            MEM_W32(rect + 32 + 16, 0x32180);
+            MEM_W32(rect + 32 + 20, 0x801);
+            /* Distinct draw area and offset must survive a rectangle clear. */
+            MEM_W32(gp0, 0xe3000402);
+            MEM_W32(gp0, 0xe4032180);
+            MEM_W32(gp0, 0xe5000801);
+            memset(nc_fast_ptr(packet), 0x55, 52);
+            MEM_W16(rect, (u16)cases[i].x);
+            MEM_W16(rect + 2, 12);
+            MEM_W16(rect + 4, (u16)cases[i].width);
+            MEM_W16(rect + 6, (u16)cases[i].height);
+            u32 color = i & 1 ? 0x800000ff : 0xff;
+            nc_cpu = arguments(rect, color, 3, i & 1 ? 6 : 4096);
+            nc_cpu.r[10] = rect + 32;
+            if (run)
+                interp_call(&nc_cpu, 0x8001d8ec);
+            else
+                ok = nc_credits_clear_gpu_rectangle(&nc_cpu);
+            StateIO *result = run ? &guest : &native;
+            interrupt_start_state(result);
+            gpu_serialize(result);
+            ok = ok && nc_cpu.r[2] == 0 && MEM_R16(rect + 4) == cases[i].expected_width &&
+                 MEM_R16(rect + 6) == cases[i].expected_height;
+            if (cases[i].aligned)
+                ok = ok && MEM_R32(packet) == 0x05ffffff && MEM_R32(packet + 12) == 0x020000ff;
+            else
+                ok = ok && MEM_R32(packet) == 0x08024d10 && MEM_R32(packet + 24) == 0x600000ff &&
+                     MEM_R32(packet + 36) == 0x03ffffff && MEM_R32(packet + 40) == 0xe3000402 &&
+                     MEM_R32(packet + 44) == 0xe4032180 && MEM_R32(packet + 48) == 0xe5000801;
+            if (ok && cases[i].expected_width && cases[i].expected_height) {
+                MEM_W32(gp0, 0xc0000000); /* first cleared pixel */
+                MEM_W32(gp0, MEM_R32(rect));
+                MEM_W32(gp0, 0x00010001);
+                ok = (MEM_R32(gp0) & 0xffff) == 31;
+            }
+            saved.loading = true;
+            saved.pos = 0;
+            interrupt_start_state(&saved);
+            gpu_serialize(&saved);
+        }
+        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    nc_set_module(module);
+    free(saved.buf);
+    return ok;
+}
+
 static bool check_gpu_image_transfer(bool readback) {
     const u32 rect = 0x80061000, pixels = rect + 64, status = rect + 512;
     const u32 gp0 = 0x1f801810, gp1 = gp0 + 4;
@@ -5068,6 +5153,7 @@ int main(int argc, char **argv) {
     pass = pass && check_queue_alarm_expiry();
     pass = pass && check_gpu_driver_reset();
     pass = pass && check_reset_graph();
+    pass = pass && check_gpu_clear_rectangle();
     pass = pass && check_gpu_image_transfer(false);
     pass = pass && check_gpu_image_transfer(true);
     pass = pass && check_queue_command();
