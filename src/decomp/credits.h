@@ -51,6 +51,7 @@ bool nc_credits_string_length(CPUState *c);
 
 bool nc_credits_append_string(CPUState *c);
 
+bool nc_credits_format_output(CPUState *c);
 bool nc_credits_printf(CPUState *c);
 
 bool nc_credits_put_char(CPUState *c);
