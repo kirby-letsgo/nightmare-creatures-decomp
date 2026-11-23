@@ -725,6 +725,13 @@ PLACEMENT_FACE_RETURNS = {
     0x80027D68: (0x358, 0x3D8, 23),
 }
 
+PLACEMENT_Y_STEPS = {
+    0x800299C8: (-2, -440),
+    0x800299E4: (-2, -1000),
+    0x80029A20: (1, -370),
+    0x80029A3C: (1, -200),
+}
+
 
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
@@ -1182,6 +1189,8 @@ class Emitter:
             targets.add(0x80026414)
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
+        if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
+            targets.update(pc + 0x14 for pc in PLACEMENT_Y_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
             targets.update((0x80029788, 0x8002979C, 0x800297A4))
         table_cases: list[int] = []
@@ -3058,6 +3067,14 @@ class Emitter:
                 out.append("    if (nc_begin_record_point_heading(c)) {")
                 out.append("        if (R(2)) goto L_800296D0;")
                 out.append("        goto L_800295C4; }")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_Y_STEPS:
+                step, target = PLACEMENT_Y_STEPS[i.addr]
+                resume = i.addr + 0x14
+                out.append(
+                    f"    if (nc_call_placement_y_step(c, {step}, {target}, 0x{resume:08X})) {{"
+                )
+                out.append(f"        {self.call(0x800296E8)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x800296E8:
                 out.extend(
                     [

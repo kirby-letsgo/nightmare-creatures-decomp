@@ -4619,6 +4619,39 @@ static bool alternate_placement_counter_exits(bool disc) {
     return true;
 }
 
+static bool placement_y_step_calls(bool disc) {
+    const struct {
+        u32 pc;
+        s32 step, target;
+    } cases[] = {
+        {0x800299c8, -2, -440}, {0x800299e4, -2, -1000},
+        {0x80029a20, 1, -370}, {0x80029a3c, 1, -200},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = 0x800296e8;
+        input.budget = 5;
+        const u32 resume = cases[i].pc + 0x14;
+        CPUState native = input;
+        if (nc_call_placement_y_step(&native, cases[i].step, cases[i].target, resume) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_placement_y_step(&native, cases[i].step, cases[i].target, resume) ||
+            native.budget != 1 || native.r[4] != input.r[16] || native.r[5] != input.r[16] + 0x1a ||
+            native.r[6] != (u32)cases[i].step || native.r[7] != (u32)cases[i].target ||
+            native.r[31] != resume)
+            return false;
+        if (disc) {
+            interp_call(&input, cases[i].pc);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_halfword_entries(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const struct {
@@ -8790,6 +8823,7 @@ int main(int argc, char **argv) {
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_step_returns(disc) &&
+        placement_y_step_calls(disc) &&
         placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
