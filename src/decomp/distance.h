@@ -34,6 +34,7 @@ bool nc_apply_placement_depth_cue(CPUState *c);
 bool nc_select_placement_pose(CPUState *c, bool index_ready);
 bool nc_save_linked_placement_pose(CPUState *c);
 bool nc_advance_placement_pose(CPUState *c);
+bool nc_return_linked_pose_traversal(CPUState *c);
 bool nc_return_placement_projection(CPUState *c);
 bool nc_begin_placement_vertex_projection(CPUState *c);
 bool nc_prepare_placement_vertex_groups(CPUState *c);
