@@ -4322,6 +4322,47 @@ static bool placement_scan_exits(bool disc) {
     return true;
 }
 
+static bool primary_placement_counters(bool disc) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
+    const struct {
+        u32 original, saved, count, limit, next, result;
+        int cycles;
+    } cases[] = {
+        {0, 0xffffffff, 0, 0, 0x80028f8c, 0, 3},
+        {0x400, 0, 0, 0, 0x80029030, 0, 7},
+        {0x400, 0x800, 0, 0, 0x80029030, 0x800, 7},
+        {0x400, 0x08000000, 0, 0, 0x80028f68, 1, 20},
+        {0xffffffff, 0x08000800, 255, 0, 0x80028f84, 256, 20},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[3] = cases[i].original;
+        input.r[4] = cases[i].saved;
+        input.r[16] = record;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        MEM_W32(record, descriptor);
+        MEM_W8(descriptor + 0x37, cases[i].count);
+        MEM_W8(descriptor + 0x3c, cases[i].limit);
+        CPUState native = input;
+        if (nc_check_primary_placement_counter(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_check_primary_placement_counter(&native) != cases[i].next ||
+            native.r[18] != cases[i].saved || native.r[2] != cases[i].result ||
+            native.r[3] != (cases[i].cycles == 20 ? descriptor : input.r[3]) ||
+            native.r[4] != (cases[i].cycles == 20 ? cases[i].count : input.r[4]) ||
+            native.budget != 1)
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80028f30);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool alternate_placement_counters(bool disc) {
     const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
     const struct {
@@ -8530,6 +8571,7 @@ int main(int argc, char **argv) {
         placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
+        primary_placement_counters(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&

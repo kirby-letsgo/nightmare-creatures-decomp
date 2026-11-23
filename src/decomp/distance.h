@@ -108,6 +108,7 @@ bool nc_call_indexed_pose_projection(CPUState *c);
 bool nc_advance_placement_scan(CPUState *c, bool increment);
 bool nc_restore_placement_scan_frame(CPUState *c);
 u32 nc_reset_placement_transforms(CPUState *c);
+u32 nc_check_primary_placement_counter(CPUState *c);
 u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector);
 bool nc_begin_alternate_placement_update(CPUState *c);
 bool nc_call_placement_stack_switch(CPUState *c, bool load_stack);
