@@ -71,6 +71,15 @@ PSX2_PLAYER_SINGLE_FACE_ACTIONS = {
     0x80045170: 7,
 }
 
+# These calls pass the saved actor in the delay slot.
+PSX2_PLAYER_ACTION_SETUP = {
+    0x80044914: 0x8005426C,
+    0x80044954: 0x8003CD4C,
+    0x8004496C: 0x8003D20C,
+    0x80044990: 0x8003D06C,
+    0x8004500C: 0x8005426C,
+}
+
 PSX2_PLAYER_BUTTON_STORE_JUMPS = {
     0x80044CC4,
     0x80044CD4,
@@ -1062,6 +1071,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8004460C:
             targets.add(0x8004463C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80044724:
+            targets.update(entry + 8 for entry in PSX2_PLAYER_ACTION_SETUP)
             targets.update(entry + 8 for entry in PSX2_PLAYER_SINGLE_FACE_ACTIONS)
             targets.update(dest for _, dest in PSX2_PLAYER_DOWN_CALLS.values())
             targets.update(dest for _, dest in PSX2_PLAYER_SHOULDER_CALLS.values())
@@ -1072,7 +1082,6 @@ class Emitter:
                     0x80044780,
                     0x800447B8,
                     0x80044914,
-                    0x8004491C,
                     0x8004496C,
                     0x80044990,
                     0x800449D8,
@@ -1091,7 +1100,6 @@ class Emitter:
                     0x80044E74,
                     0x80044EB4,
                     0x80044F2C,
-                    0x80045014,
                     0x8004503C,
                     0x800450B4,
                     0x800450BC,
@@ -1535,12 +1543,19 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr in (0x80044914, 0x8004500C):
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_ACTION_SETUP:
+                handler = PSX2_PLAYER_ACTION_SETUP[i.addr]
                 link = i.addr + 8
                 out.append(
-                    f"    if (nc_call_player_action_setup(c, 0x{link:08X}u)) goto L_{link:08X};"
+                    f"    if (nc_call_player_action_setup(c, 0x{handler:08X}u, 0x{link:08X}u)) "
+                    f"goto L_{link:08X};"
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004491C:
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x8004491C,
+                0x8004495C,
+                0x80044974,
+                0x80044998,
+            ):
                 out.append("    if (nc_prepare_player_trigger_exit(c)) goto L_800451D4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
                 check_circle = "true" if i.addr == 0x80045014 else "false"

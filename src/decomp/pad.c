@@ -838,13 +838,13 @@ u32 nc_player_down_shoulder_action(CPUState *c, bool test_down) {
     return 0x800451d0;
 }
 
-bool nc_call_player_action_setup(CPUState *c, u32 link) {
+bool nc_call_player_action_setup(CPUState *c, u32 handler, u32 link) {
     if (c->budget <= 2)
         return false;
     R(31) = link;
     R(4) = R(16);
     c->budget -= 2;
-    nc_call(c, 0x8005426c);
+    nc_call(c, handler);
     return true;
 }
 

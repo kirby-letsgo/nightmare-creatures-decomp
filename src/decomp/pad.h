@@ -54,7 +54,7 @@ u32 nc_player_up_stick_bounds(CPUState *c);
 u32 nc_player_up_action(CPUState *c, bool test_up);
 u32 nc_player_down_shoulder_action(CPUState *c, bool test_down);
 bool nc_prepare_player_trigger_exit(CPUState *c);
-bool nc_call_player_action_setup(CPUState *c, u32 link);
+bool nc_call_player_action_setup(CPUState *c, u32 handler, u32 link);
 u32 nc_player_down_path(CPUState *c, bool check_circle);
 u32 nc_player_triangle_action(CPUState *c, bool check_press);
 bool nc_check_player_face_press(CPUState *c, u32 mask, u32 link);
