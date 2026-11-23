@@ -328,6 +328,8 @@ slus_005_82  80010BCC    80010BE8         interrupt_driver.h
 slus_005_82  80011000    800110AC         interrupt_control.h
 slus_005_82  800110AC    80011134         interrupt_control.h
 slus_005_82  80011134    80011160         interrupt_control.h
+slus_005_82  80011828    80011858         launcher.c
+slus_005_82  80011858    80011888         launcher.c
 slus_005_82  800119BC    800119F8         jump_context.h
 slus_005_82  800119F8    80011A34         jump_context.h
 slus_005_82  80011A3C    80011A48         bios_service.h
