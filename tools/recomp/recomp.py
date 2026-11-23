@@ -235,6 +235,7 @@ CREDITS_ROUTINES = {
     0x8001FF94: "nc_credits_cd_ready_callback(c)",
     0x8001FFAC: "nc_credits_cd_control(c)",
     0x800200E4: "nc_credits_cd_control_f(c)",
+    0x80020210: "nc_credits_cd_control_b(c)",
     0x80020354: "nc_credits_cd_mix(c)",
     0x80020378: "nc_credits_cd_get_sector(c)",
     0x8002039C: "nc_credits_cd_data_callback(c)",
@@ -1656,6 +1657,10 @@ class Emitter:
                 out.append("        goto L_80029584; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029524:
                 out.append("    if (nc_set_type7_linked_heading(c)) goto L_80029584;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029544:
+                out.append("    if (nc_set_other_placement_angles(c)) goto L_80029584;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029584:
+                out.append("    if (nc_finish_placement_angle_step(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002959C:
                 out.append("    if (nc_begin_record_point_heading(c)) {")
                 out.append("        if (R(2)) goto L_800296D0;")
