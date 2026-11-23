@@ -1235,6 +1235,10 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80011828, 0x80011858):
                 upper = "true" if i.addr == 0x80011828 else "false"
                 out.append(f"    if (nc_launcher_convert_case(c, {upper})) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80011888:
+                out.append("    if (sdk_find_byte(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x8001198C:
+                out.append("    if (sdk_string_length(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800119BC:
                 out.append("    if (save_irq_context(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800119F8:
@@ -3743,6 +3747,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
     if mod.name == LAUNCHER:
         header.append('#include "decomp/bios_service.h"')
+        header.append('#include "decomp/byte_scan.h"')
         header.append('#include "decomp/launcher.h"')
         header.append('#include "decomp/jump_context.h"')
         header.append('#include "decomp/interrupt_driver.h"')

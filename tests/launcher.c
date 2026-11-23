@@ -1,5 +1,6 @@
 #include "jump_context.h"
 #include "decomp/jump_context.h"
+#include "decomp/byte_scan.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/interrupt_driver.h"
@@ -85,6 +86,28 @@ static bool check_case_conversion(void) {
             nc_cpu.r[2] != cases[i].upper ||
             !compare(start, 0x80011858, launcher_tolower, NC_LOAD_CYCLES + 11) ||
             nc_cpu.r[2] != cases[i].lower)
+            return false;
+    }
+    return true;
+}
+
+static bool check_byte_scans(void) {
+    const u32 base = 0x80016201;
+    const u8 bytes[] = {0x78, 0xff, 0, 0xff};
+    memcpy(nc_fast_ptr(base), bytes, sizeof bytes);
+    const struct { u32 address, key, count, result; } searches[] = {
+        {0, 0, 4, 0}, {base, 0x78, 0, 0}, {base, 0x78, UINT32_MAX, 0},
+        {base, 0x1ff, 1, 0}, {base, 0x1ff, 4, base + 1}, {base, 0, 3, base + 2},
+    };
+    for (unsigned i = 0; i < sizeof searches / sizeof searches[0]; i++) {
+        CPUState start = arguments(searches[i].address, searches[i].key, searches[i].count, 10);
+        if (!compare(start, 0x80011888, sdk_find_byte, 9) || nc_cpu.r[2] != searches[i].result)
+            return false;
+    }
+    const u32 strings[] = {0, base + 2, base, base + 0x20000000};
+    for (unsigned i = 0; i < sizeof strings / sizeof strings[0]; i++) {
+        if (!compare(arguments(strings[i], 0, 0, 3), 0x8001198c, sdk_string_length, 2) ||
+            nc_cpu.r[2] != (i < 2 ? 0u : 2u))
             return false;
     }
     return true;
@@ -618,6 +641,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_byte_scans()) {
+        fprintf(stderr, "launcher byte scans failed\n");
         return 1;
     }
     if (!check_global_callbacks()) {
