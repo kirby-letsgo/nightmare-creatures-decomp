@@ -4042,6 +4042,52 @@ bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset) 
     return select_pose_from_stack(c, index_ready, 19, 17, output_offset);
 }
 
+/* A non-root starting pose selects the traversal mask from the actor's flag table. */
+bool nc_set_projection_pose_mask(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 root = MEM_R32(R(21) + 0x20);
+    const int cycles = root == R(18) ? 6 : 18;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = root;
+    MEM_W32(R(29) + 0x2e8, R(2));
+    if (root != R(18)) {
+        const u32 index = MEM_R8(R(18) + 0x4c);
+        R(2) = MEM_R16(R(21) + 0x10a + 2 * index) & 0x1f00;
+        MEM_W32(R(29) + 0x2f0, R(2));
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_load_projection_pose_descriptor(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(2) = MEM_R32(R(21) + 0x108);
+    R(19) = MEM_R32(R(18) + 0x38);
+    c->budget -= 8;
+    return true;
+}
+
+bool nc_load_projection_pose_flags(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 index = MEM_R8(R(18) + 0x4c);
+    const int cycles = index ? 12 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = index << 1;
+    if (index) {
+        R(2) += R(21);
+        R(17) = (u32)(s32)(s16)MEM_R16(R(2) + 0x10a);
+    } else {
+        R(17) = 0x81;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_select_projection_pose(CPUState *c, bool index_ready) {
     return select_pose_from_stack(c, index_ready, 22, 23, 0x58);
 }
