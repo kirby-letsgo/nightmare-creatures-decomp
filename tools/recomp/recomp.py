@@ -850,9 +850,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80027954:
             targets.update((0x800279A0, 0x800279E4, 0x80027A3C, 0x80027AE8, 0x80027B04))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027B90:
-            targets.update((0x80027BF0, 0x80027C50, 0x80027CD0))
+            targets.update((0x80027BF0, 0x80027C50, 0x80027CD0, 0x80027D14))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027764:
-            targets.update((0x800277C4, 0x80027824, 0x80027880))
+            targets.update((0x800277C4, 0x80027824, 0x80027880, 0x800278C4))
         if self.mod.name == "psx2_exe" and f.addr in (0x80027764, 0x80027954, 0x80027B90):
             targets.add(
                 {0x80027764: 0x80027844, 0x80027954: 0x80027A5C, 0x80027B90: 0x80027C70}[f.addr]
@@ -1841,6 +1841,25 @@ class Emitter:
                 quad_arg = "true" if i.addr == 0x80027AE8 else "false"
                 out.append(
                     f"    if (nc_finish_textured_packet(c, {quad_arg})) goto L_{i.addr + 0x1C:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x80027880,
+                0x8002789C,
+                0x80027CD0,
+                0x80027CEC,
+            ):
+                quad = i.addr in (0x80027CD0, 0x80027CEC)
+                indexed = i.addr in (0x80027880, 0x80027CD0)
+                args = f"{str(quad).lower()}, {str(indexed).lower()}"
+                finish = 0x80027CF8 if quad else 0x800278A8
+                out.append(
+                    f"    if (nc_set_untextured_packet_color(c, {args})) goto L_{finish:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr in (0x800278A8, 0x80027CF8):
+                quad_arg = "true" if i.addr == 0x80027CF8 else "false"
+                out.append(
+                    f"    if (nc_finish_untextured_packet(c, {quad_arg}))"
+                    f" goto L_{i.addr + 0x1C:08X};"
                 )
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_PACKET_LINKS:
                 table, tag, address, size = PLACEMENT_PACKET_LINKS[i.addr]
