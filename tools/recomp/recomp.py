@@ -810,6 +810,8 @@ class Emitter:
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
             targets.update((0x80027644, 0x80027664))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80027764:
+            targets.add(0x80027880)
         if self.mod.name == "psx2_exe" and f.addr in (0x80027764, 0x80027954, 0x80027B90):
             targets.add(
                 {0x80027764: 0x80027844, 0x80027954: 0x80027A5C, 0x80027B90: 0x80027C70}[f.addr]
@@ -1689,6 +1691,10 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027844:
+                out.append("    if (nc_write_projected_triangle(c)) {")
+                out.append("        if (!R(9)) goto L_8002789C;")
+                out.append("        goto L_80027880; }")
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_CHECKS:
                 first, count, limit, reject = PLACEMENT_FACE_CHECKS[i.addr]
                 out.append("    { bool accept;")
