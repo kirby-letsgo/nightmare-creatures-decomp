@@ -1,3 +1,4 @@
+#include "cd_init.h"
 #include "cd_reset.h"
 #include "jump_context.h"
 #include "decomp/jump_context.h"
@@ -71,6 +72,13 @@ static bool run_constructors(CPUState *c) {
 
 static bool run_destructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, false);
+}
+
+static bool check_cd_init(void) {
+    const u32 slots[] = {0x80015818, 0x8001581c, 0x80015b44};
+    const u32 handlers[] = {0x80011f0c, 0x80011f34, 0x80011f5c};
+    return check_cd_init_retries(0x80011e7c, nc_launcher_cd_init, 0x80011fd4,
+                                 0x80011160, 0x8001034c, slots, handlers);
 }
 
 static bool launcher_putchar(CPUState *c) {
@@ -1023,6 +1031,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_init()) {
+        fprintf(stderr, "launcher CD initialization failed\n");
         return 1;
     }
     if (!check_cd_init_interrupt()) {
