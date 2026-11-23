@@ -7526,28 +7526,8 @@ bool nc_credits_set_vsync_slot(CPUState *c) {
     return true;
 }
 
-/* The IRQ, VSync and DMA initializers use identical word-clear loops. */
 bool nc_credits_clear_irq_words(CPUState *c) {
-    if (c->budget <= 3)
-        return false;
-    R(29) -= 8;
-    bool more = R(5) != 0;
-    R(2) = R(5) - 1;
-    c->budget -= 3;
-    if (more) {
-        set_reg(c, 3, UINT32_MAX);
-        do {
-            MEM_W32(R(4), 0);
-            NC_POLL(c, 1);
-            set_reg(c, 2, R(2) - 1);
-            more = R(2) != R(3);
-            R(4) += 4;
-            NC_POLL(c, 2);
-        } while (more);
-    }
-    set_reg(c, 29, R(29) + 8);
-    NC_POLL(c, 2);
-    return true;
+    return clear_interrupt_words(c);
 }
 
 bool nc_credits_check_callback(CPUState *c) {

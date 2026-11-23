@@ -243,3 +243,7 @@ bool nc_launcher_stop_interrupts(CPUState *c) {
 bool nc_launcher_restart_interrupts(CPUState *c) {
     return restart_driver_interrupts(c, &interrupt_control);
 }
+
+bool nc_launcher_clear_irq_words(CPUState *c) {
+    return clear_interrupt_words(c);
+}
