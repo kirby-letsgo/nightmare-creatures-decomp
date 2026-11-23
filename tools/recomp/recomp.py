@@ -845,9 +845,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002755C:
-            targets.update((0x800275EC, 0x80027644, 0x80027664, 0x800276BC))
+            targets.update((0x800275A8, 0x800275EC, 0x80027644, 0x80027664, 0x800276BC))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027954:
-            targets.update((0x800279E4, 0x80027A3C, 0x80027AE8))
+            targets.update((0x800279A0, 0x800279E4, 0x80027A3C, 0x80027AE8))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027B90:
             targets.update((0x80027BF0, 0x80027C50, 0x80027CD0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80027764:
@@ -1852,6 +1852,10 @@ class Emitter:
                     f"    if (nc_init_textured_face_cursors(c, {quad_arg}))"
                     f" goto L_{i.addr + 0x14:08X};"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002755C:
+                out.append("    if (nc_begin_textured_faces(c, false)) goto L_800275A8;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80027954:
+                out.append("    if (nc_begin_textured_faces(c, true)) goto L_800279A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800275A8:
                 out.append("    if (nc_apply_textured_face_flags(c, false)) goto L_800275DC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800279A0:
