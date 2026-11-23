@@ -4395,6 +4395,32 @@ static bool alternate_placement_updates(bool disc) {
     return true;
 }
 
+static bool placement_scan_stack_switches(bool disc) {
+    const u32 stack_slot = 0x8008f050;
+    const u32 saved = MEM_R32(stack_slot);
+    MEM_W32(stack_slot, 0x801cf000);
+    for (unsigned load = 0; load <= 1; ++load) {
+        CPUState input = initial();
+        input.r[4] = 0x801de000;
+        input.r[31] = 0x80073dac;
+        input.budget = load ? 6 : 2;
+        CPUState native = input;
+        if (nc_call_placement_stack_switch(&native, load) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_placement_stack_switch(&native, load) || native.budget != 1 ||
+            native.r[4] != (load ? 0x801cf000 : input.r[4]) || native.r[31] != 0x80029010)
+            return false;
+        if (disc) {
+            interp_call(&input, load ? 0x80029000 : 0x80029008);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    MEM_W32(stack_slot, saved);
+    return true;
+}
+
 static bool placement_scan_update_calls(bool disc) {
     const u32 entries[] = {0x80029010, 0x80029080};
     for (unsigned i = 0; i < sizeof entries / sizeof entries[0]; ++i) {
@@ -8499,6 +8525,7 @@ int main(int argc, char **argv) {
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
+        placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
