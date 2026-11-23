@@ -779,6 +779,8 @@ class Emitter:
             targets.update((0x8002B260, 0x8002B304))
         if self.mod.name == "psx2_exe" and f.addr == 0x8002ADA0:
             targets.add(0x8002AE1C)
+        if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
+            targets.add(0x80028B0C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -1640,6 +1642,10 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028AD0:
+                out.append("    if (nc_project_placement_depth(c)) {")
+                out.append("        if ((s32)R(4) > (s32)R(3)) goto L_80028B0C;")
+                out.append("        goto L_80028B38; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")
