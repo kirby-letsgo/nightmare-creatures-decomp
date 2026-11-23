@@ -1,3 +1,4 @@
+#include "cd_control.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "decomp/cd_sector_dma.h"
@@ -92,6 +93,16 @@ static bool check_cd_interrupt_callback(void) {
         .callbacks = 0x80015818, .results = 0x80015b80,
     };
     return compare_cd_callbacks(&layout, nc_launcher_cd_interrupt_callback);
+}
+
+static bool check_cd_controls(void) {
+    const CdControlLayout layout = {
+        .location_table = 0x80015790, .callback = 0x80015818,
+        .writer = 0x800131cc, .sync = 0x80012c80,
+    };
+    return compare_cd_control(0x80012150, nc_launcher_cd_control, CD_CONTROL, &layout) &&
+           compare_cd_control(0x80012288, nc_launcher_cd_control_f, CD_CONTROL_FAST, &layout) &&
+           compare_cd_control(0x800123b4, nc_launcher_cd_control_b, CD_CONTROL_BLOCKING, &layout);
 }
 
 static bool check_cd_read(void) {
@@ -1084,6 +1095,10 @@ int main(int argc, char **argv) {
     }
     if (!check_cd_interrupt_callback()) {
         fprintf(stderr, "launcher CD interrupt callback failed\n");
+        return 1;
+    }
+    if (!check_cd_controls()) {
+        fprintf(stderr, "launcher CD control variants failed\n");
         return 1;
     }
     if (!check_cd_read()) {

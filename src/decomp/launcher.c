@@ -1,3 +1,4 @@
+#include "decomp/cd_control.h"
 #include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
@@ -354,4 +355,21 @@ bool nc_launcher_cd_interrupt_callback(CPUState *c) {
         .callbacks = 0x80015818, .results = 0x80015b80,
     };
     return cd_interrupt_callback(c, &layout);
+}
+
+static const CdControlLayout launcher_cd_control_layout = {
+    .location_table = 0x80015790, .callback = 0x80015818,
+    .writer = 0x800131cc, .sync = 0x80012c80,
+};
+
+bool nc_launcher_cd_control(CPUState *c) {
+    return cd_control(c, &launcher_cd_control_layout, 0x80012150, CD_CONTROL);
+}
+
+bool nc_launcher_cd_control_f(CPUState *c) {
+    return cd_control(c, &launcher_cd_control_layout, 0x80012288, CD_CONTROL_FAST);
+}
+
+bool nc_launcher_cd_control_b(CPUState *c) {
+    return cd_control(c, &launcher_cd_control_layout, 0x800123b4, CD_CONTROL_BLOCKING);
 }

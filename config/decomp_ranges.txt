@@ -407,6 +407,9 @@ slus_005_82  800120E0    80012100         cd_state.h
 slus_005_82  80012100    80012120         cd_state.h
 slus_005_82  80012120    80012138         cd_state.h
 slus_005_82  80012138    80012150         cd_state.h
+slus_005_82  80012150    80012288         cd_control.h
+slus_005_82  80012288    800123B4         cd_control.h
+slus_005_82  800123B4    800124F8         cd_control.h
 slus_005_82  800124F8    8001251C         cd_state.h
 slus_005_82  8001251C    80012540         cd_state.h
 slus_005_82  80012540    80012564         cd_state.h
