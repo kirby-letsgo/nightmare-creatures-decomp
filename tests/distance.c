@@ -4619,16 +4619,18 @@ static bool alternate_placement_counter_exits(bool disc) {
     return true;
 }
 
-static bool placement_y_step_calls(bool disc) {
+static bool placement_coordinate_step_calls(bool disc) {
     const struct {
-        u32 pc;
+        u32 pc, offset;
         s32 step, target;
     } cases[] = {
-        {0x800299c8, -2, -440}, {0x800299e4, -2, -1000},
-        {0x80029a20, 1, -370}, {0x80029a3c, 1, -200},
-        {0x80029ddc, -2, -730}, {0x80029df8, 4, -64},
-        {0x80029e14, -2, -850}, {0x80029e30, -2, -890},
-        {0x80029e68, -5, -610}, {0x8002a1d4, -6, -496},
+        {0x800299c8, 0x1a, -2, -440}, {0x800299e4, 0x1a, -2, -1000},
+        {0x80029a20, 0x1a, 1, -370}, {0x80029a3c, 0x1a, 1, -200},
+        {0x80029b58, 0x18, -16, -200}, {0x80029d28, 0x18, -1, 0x3be0},
+        {0x80029d64, 0x1c, 8, 0x3d00},
+        {0x80029ddc, 0x1a, -2, -730}, {0x80029df8, 0x1a, 4, -64},
+        {0x80029e14, 0x1a, -2, -850}, {0x80029e30, 0x1a, -2, -890},
+        {0x80029e68, 0x1a, -5, -610}, {0x8002a1d4, 0x1a, -6, -496},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
@@ -4637,12 +4639,14 @@ static bool placement_y_step_calls(bool disc) {
         input.budget = 5;
         const u32 resume = cases[i].pc + 0x14;
         CPUState native = input;
-        if (nc_call_placement_y_step(&native, cases[i].step, cases[i].target, resume) ||
+        if (nc_call_placement_coordinate_step(&native, cases[i].offset, cases[i].step,
+                                              cases[i].target, resume) ||
             memcmp(&native, &input, sizeof input))
             return false;
         native.budget = ++input.budget;
-        if (!nc_call_placement_y_step(&native, cases[i].step, cases[i].target, resume) ||
-            native.budget != 1 || native.r[4] != input.r[16] || native.r[5] != input.r[16] + 0x1a ||
+        if (!nc_call_placement_coordinate_step(&native, cases[i].offset, cases[i].step,
+                                              cases[i].target, resume) ||
+            native.budget != 1 || native.r[4] != input.r[16] || native.r[5] != input.r[16] + cases[i].offset ||
             native.r[6] != (u32)cases[i].step || native.r[7] != (u32)cases[i].target ||
             native.r[31] != resume)
             return false;
@@ -8854,7 +8858,7 @@ int main(int argc, char **argv) {
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_step_returns(disc) &&
-        placement_y_step_calls(disc) && shared_placement_y_steps(disc) &&
+        placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
