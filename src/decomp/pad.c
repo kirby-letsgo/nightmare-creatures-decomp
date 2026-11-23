@@ -66,6 +66,45 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* While action 9 is active, Square queues 6 and Cross queues 8. The
+ * original checks Cross last, so it takes priority when both are held. */
+u32 nc_player_queue_face_action(CPUState *c) {
+    if (c->budget <= 27)
+        return 0x80044b18;
+
+    const u32 actor = R(16);
+    const u32 mask = R(2);
+    R(3) = MEM_R32(actor + 0x330);
+    R(2) = 9;
+    c->budget -= 7;
+    if (!(R(3) & mask))
+        return 0x80044b6c;
+
+    R(3) = MEM_R8(actor + 0x39b);
+    c->budget -= 6;
+    if (R(3) != 9)
+        return 0x800448f4;
+
+    const u32 queued = MEM_R8(actor + 0x3a3);
+    R(2) = R(17) & 0x8000;
+    c->budget -= 6;
+    if (queued)
+        return 0x800448f4;
+
+    c->budget -= 2;
+    if (R(2)) {
+        MEM_W8(actor + 0x3a3, 6);
+        c->budget--;
+    }
+    R(2) = 8;
+    c->budget -= 3;
+    if (R(17) & 0x4000) {
+        MEM_W8(actor + 0x3a3, 8);
+        c->budget -= 2;
+    }
+    return 0x800448f4;
+}
+
 /* Left takes priority when both directions are down. Circle enables the
  * side-specific stick comparison that selects direction 4 or 8. */
 u32 nc_player_horizontal_direction(CPUState *c) {
