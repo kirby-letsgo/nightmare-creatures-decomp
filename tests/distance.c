@@ -3252,6 +3252,51 @@ static bool placement_triangle_windings(bool disc) {
     return true;
 }
 
+static bool placement_face_advances(bool disc) {
+    const struct {
+        bool textured, quad;
+        u32 entry, head, done;
+        unsigned index_reg;
+    } paths[] = {{true, false, 0x80027710, 0x80027600, 0x80027728, 22},
+                 {false, false, 0x800278fc, 0x800277e0, 0x80027918, 30},
+                 {true, true, 0x80027b3c, 0x800279f8, 0x80027b54, 23},
+                 {false, true, 0x80027d4c, 0x80027c0c, 0x80027d68, 8}};
+    const struct {
+        u32 index, count;
+        bool again;
+    } cases[] = {
+        {0, 2, true}, {0, 1, false}, {1, 1, false}, {0x7fffffff, 0, true}, {0, 0xffffffff, false}};
+    for (unsigned i = 0; i < sizeof paths / sizeof paths[0]; ++i) {
+        for (unsigned j = 0; j < sizeof cases / sizeof cases[0]; ++j) {
+            CPUState input = initial();
+            input.r[paths[i].index_reg] = cases[j].index;
+            input.r[29] = SCRATCH_BASE + 0x100;
+            input.r[31] = cases[j].again ? paths[i].head : paths[i].done;
+            MEM_W32(input.r[29] + (paths[i].textured ? 0x20 : 0x18), cases[j].count);
+            u8 before[SCRATCH_SIZE];
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = paths[i].textured ? 8 : 9;
+            CPUState native = input;
+            if (nc_advance_placement_face(&native, paths[i].textured, paths[i].quad) ||
+                memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_advance_placement_face(&native, paths[i].textured, paths[i].quad) ||
+                native.budget != 1 || native.r[2] != cases[j].again ||
+                native.r[paths[i].index_reg] != cases[j].index + 1 ||
+                memcmp(before, nc_scratch, sizeof before))
+                return false;
+            if (disc) {
+                interp_call(&input, paths[i].entry);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(before, nc_scratch, sizeof before))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool placement_packet_links(bool disc) {
     const struct {
         u32 entry, size;
@@ -6464,22 +6509,23 @@ int main(int argc, char **argv) {
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
         placement_quad_windings(disc) && placement_triangle_windings(disc) &&
-        placement_face_checks(disc) && placement_packet_links(disc) &&
-        textured_quad_packets(disc) && textured_triangle_packets(disc) &&
-        projected_triangle_packets(disc) && projected_quad_packets(disc) &&
-        pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
-        placement_depths(disc, false) && placement_depths(disc, true) &&
-        placement_depth_cues(disc, false) && placement_depth_cues(disc, true) &&
-        placement_pose_stack(disc) && placement_pose_exits(disc, false) &&
-        placement_pose_exits(disc, true) && placement_vertex_dispatch(disc) &&
-        placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
-        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
-        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
-        placement_transform_flags(disc) && placement_projection_args(disc) &&
-        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_face_checks(disc) && placement_face_advances(disc) &&
+        placement_packet_links(disc) && textured_quad_packets(disc) &&
+        textured_triangle_packets(disc) && projected_triangle_packets(disc) &&
+        projected_quad_packets(disc) && pose_traversal_entries(disc) &&
+        placement_projection_matrices(disc) && placement_depths(disc, false) &&
+        placement_depths(disc, true) && placement_depth_cues(disc, false) &&
+        placement_depth_cues(disc, true) && placement_pose_stack(disc) &&
+        placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
+        placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
+        placement_vertex_triples(disc, true) && remaining_placement_vertices(disc, false) &&
+        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
+        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
+        placement_projection_args(disc) && placement_angle_entries(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

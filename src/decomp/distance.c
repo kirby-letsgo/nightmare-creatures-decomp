@@ -3473,6 +3473,30 @@ bool nc_write_textured_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_advance_placement_face(CPUState *c, bool textured, bool quad) {
+    const int cycles = textured ? 8 : 9;
+    if (c->budget <= cycles)
+        return false;
+    const unsigned count_reg = quad ? 12 : 11;
+    if (textured) {
+        const unsigned index_reg = quad ? 23 : 22;
+        ++R(index_reg);
+        R(count_reg) = MEM_R32(R(29) + 0x20);
+        R(2) = (s32)R(index_reg) < (s32)R(count_reg);
+        R(quad ? 17 : 20) += quad ? 28 : 24;
+    } else {
+        const unsigned index_reg = quad ? 8 : 30;
+        const u32 stride = quad ? 16 : 12;
+        ++R(index_reg);
+        R(20) += stride;
+        R(count_reg) = MEM_R32(R(29) + 0x18);
+        R(2) = (s32)R(index_reg) < (s32)R(count_reg);
+        R(quad ? 30 : 23) += stride;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32 address_mask,
                               u32 packet_size) {
     if (c->budget <= 22)
