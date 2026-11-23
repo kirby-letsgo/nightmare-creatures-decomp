@@ -4000,6 +4000,68 @@ static bool check_cd_play_track(void) {
     return ok && !saved.error;
 }
 
+static bool check_read_track_positions(void) {
+    const u32 table = 0x80061000, script = table + 64, trace = script + 64;
+    const u32 control = 0x80020210, callback = 0x800198ec;
+    const struct {
+        u8 first, last, debug;
+        unsigned fail_at, requests, positions, result, prints;
+    } cases[] = {
+        {0x09, 0x11, 2, 0, 5, 4, 3, 5}, /* across the BCD tens boundary */
+        {0x12, 0x12, 0, 0, 3, 2, 1, 0},
+        {0x12, 0x11, 2, 0, 2, 1, 0, 2}, /* lead-out only */
+        {0x09, 0x11, 1, 1, 1, 0, 0, 1},
+        {0x09, 0x11, 0, 2, 2, 0, 0, 0},
+        {0x09, 0x11, 2, 4, 4, 2, 0, 2}, /* retain earlier positions on failure */
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* CdControlB records command and track, copies the scripted reply to a2,
+     * and returns zero when the reply cursor matches the failure address. */
+    const u32 commands[] = {
+        0x8d020000, 0x93a30010, 0xacc20000, 0xad440000, 0xad430004,
+        0x254a0008, 0x01091026, 0x0002102b, 0x03e00008, 0x25080004,
+    };
+    for (unsigned i = 0; i < sizeof commands / sizeof commands[0]; i++)
+        MEM_W32(control + i * 4, commands[i]);
+    MEM_W32(0x80019a60, 0x03e00008);
+    MEM_W32(0x80019a64, 0x256b0001); /* count debug messages */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(table), 0xa5, 32);
+        MEM_W32(script, (u32)cases[i].first << 8 | (u32)cases[i].last << 16);
+        for (unsigned j = 1; j < 5; j++)
+            MEM_W32(script + 4 * j, (0x10 + j) << 8 | (0x20 + j) << 16);
+        MEM_W32(0x80024768, cases[i].debug);
+        MEM_W32(0x8002475c, callback);
+        CPUState state = arguments(1, table, 3, i & 1 ? 12 : 4096);
+        state.r[8] = script;
+        state.r[9] = cases[i].fail_at ? script + 4 * (cases[i].fail_at - 1) : 0;
+        state.r[10] = trace;
+        state.r[11] = 0;
+        ok = compare(state, 0x800230d0, nc_credits_read_track_positions, 11) &&
+             nc_cpu.r[2] == cases[i].result && nc_cpu.r[11] == cases[i].prints &&
+             nc_cpu.r[10] == trace + 8 * cases[i].requests && MEM_R32(0x8002475c) == callback;
+        unsigned first = 10 * (cases[i].first >> 4) + (cases[i].first & 15);
+        for (unsigned j = 0; ok && j < cases[i].requests; j++) {
+            unsigned track = j < 2 ? 0 : first + j - 2;
+            u32 parameter = j ? (track / 10) * 16 + track % 10 : 1;
+            ok = MEM_R32(trace + 8 * j) == (j ? 0x14u : 0x13u) &&
+                 MEM_R32(trace + 8 * j + 4) == parameter;
+        }
+        for (unsigned j = 0; ok && j < cases[i].positions; j++)
+            ok = MEM_R32(table + 4 * j) == (0xa5002111u + j * 0x101);
+        ok = ok && MEM_R32(table + 4 * cases[i].positions) == 0xa5a5a5a5;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_get_toc(void) {
     const u32 driver = 0x800230d0;
     const u32 buffers[] = {0x80062000, SCRATCH_BASE + 16};
@@ -4879,6 +4941,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_playback_control();
     pass = pass && check_cd_audio_ready();
     pass = pass && check_cd_play_track();
+    pass = pass && check_read_track_positions();
     pass = pass && check_cd_get_toc();
     pass = pass && check_vsync();
     pass = pass && check_wait_vblank();
