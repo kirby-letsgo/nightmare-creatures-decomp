@@ -128,6 +128,30 @@ static bool forward_cd_call(CPUState *c) {
     return call_cd_status_driver(c, cd_driver, cd_driver_resume, cd_driver_result);
 }
 
+static bool register_cd_data(CPUState *c) {
+    return cd_data_callback(c, 0x80010ab0, 0x80012554);
+}
+
+static bool check_cd_data_callback(void) {
+    const u32 driver = 0x80016700, port = driver + 32;
+    const u32 slot = 0x8001576c + 3 * 4;
+    MEM_W32(0x800156a8, driver);
+    MEM_W32(driver + 4, 0x80011da8); /* setIntrDMA */
+    MEM_W32(0x80015768, port);
+    MEM_W32(port, 0);
+    MEM_W32(slot, 0);
+    const u32 handlers[] = {0x80016200, 0x80016300, 0};
+    for (unsigned i = 0; i < sizeof handlers / sizeof handlers[0]; i++) {
+        u32 previous = MEM_R32(slot);
+        CPUState start = arguments(handlers[i], 0, 0, 6);
+        if (!compare(start, 0x80012540, register_cd_data, 5) ||
+            nc_cpu.r[2] != previous || MEM_R32(slot) != handlers[i] ||
+            MEM_R32(port) != (handlers[i] ? 0x00880000u : 0x00800000u))
+            return false;
+    }
+    return true;
+}
+
 static bool check_cd_driver_calls(void) {
     const struct {
         u32 entry, driver;
@@ -805,6 +829,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_data_callback()) {
+        fprintf(stderr, "launcher CD data callback failed\n");
         return 1;
     }
     if (!check_cd_driver_calls()) {

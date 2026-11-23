@@ -7614,22 +7614,8 @@ bool nc_credits_cd_get_sector(CPUState *c) {
     return call_cd_status_driver(c, 0x80021a44, 0x80020388, CD_ZERO_IS_SUCCESS);
 }
 
-/* Register the CD data handler on DMA channel 3 and return its predecessor. */
 bool nc_credits_cd_data_callback(CPUState *c) {
-    if (c->budget <= 5)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(31));
-    R(5) = R(4);
-    R(31) = 0x800203b0;
-    R(4) = 3;
-    c->budget -= 4;
-    nc_call(c, 0x8001a6f8); /* DMACallback */
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return cd_data_callback(c, 0x8001a6f8, 0x800203b0);
 }
 
 bool nc_credits_cd_sync(CPUState *c) {
