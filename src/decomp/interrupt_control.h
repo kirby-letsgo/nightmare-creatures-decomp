@@ -155,4 +155,53 @@ static inline bool clear_interrupt_words(CPUState *c) {
     return true;
 }
 
+/* Count this VBlank and visit the live table so callbacks can change later slots. */
+static inline bool dispatch_vblank(CPUState *c, u32 slots, u32 resume) {
+    if (c->budget <= 18)
+        return false;
+    const u32 counter = slots + 8 * sizeof(u32);
+    c->budget--;
+    R(2) = MEM_R32(counter);
+    R(29) -= 32;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 20, R(17));
+    R(17) = 0;
+    c->budget -= 2;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = slots;
+    c->budget -= 3;
+    MEM_W32(R(29) + 24, R(31));
+    R(2)++;
+    R(1) = (counter + 0x8000u) & 0xffff0000u;
+    c->budget -= 3;
+    MEM_W32(counter, R(2));
+    c->budget -= 2;
+    load_word(c, 2, counter);
+
+    bool more;
+    do {
+        load_word(c, 2, R(16));
+        NC_POLL(c, 1);
+        bool occupied = R(2) != 0;
+        R(16) += 4;
+        NC_POLL(c, 2);
+        if (occupied) {
+            u32 callback = R(2);
+            R(31) = resume;
+            NC_POLL(c, 2);
+            nc_call(c, callback);
+        }
+        set_reg(c, 17, R(17) + 1);
+        set_reg(c, 2, (s32)R(17) < 8);
+        more = R(2) != 0;
+        NC_POLL(c, 2);
+    } while (more);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 #endif

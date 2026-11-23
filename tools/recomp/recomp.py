@@ -1209,6 +1209,8 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80010A30, 0x80011A6C):
                 selector = 1 if i.addr == 0x80010A30 else 2
                 out.append(f"    if (critical_section_syscall(c, {selector})) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80011B04:
+                out.append("    if (nc_launcher_dispatch_vblank(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
                 out.append("    if (set_vsync_slot(c, 0x80015740)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_SERVICES:

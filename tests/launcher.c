@@ -161,6 +161,31 @@ static bool launcher_set_vsync_slot(CPUState *c) {
     return set_vsync_slot(c, 0x80015740);
 }
 
+static bool check_vblank_dispatch(void) {
+    const u32 slots = 0x80015740, counter = slots + 32;
+    const u32 handler = 0x80016300, trace = handler + 16;
+    MEM_W32(handler, 0x03e00008);      /* jr ra */
+    MEM_W32(handler + 4, 0xacdf0000);  /* sw ra, 0(a2) */
+    for (unsigned active = 0; active < 2; active++) {
+        memset(nc_fast_ptr(slots), 0, 32);
+        MEM_W32(counter, UINT32_MAX);
+        MEM_W32(trace, 0);
+        if (active)
+            MEM_W32(slots, 0x80011b7c); /* install handler in slot seven */
+        CPUState start = {0};
+        start.r[4] = 7;
+        start.r[5] = handler;
+        start.r[6] = trace;
+        start.r[29] = 0x801fff00;
+        start.r[31] = 0x80010000;
+        start.budget = active ? 19 : 4096;
+        if (!compare(start, 0x80011b04, nc_launcher_dispatch_vblank, 18) ||
+            MEM_R32(counter) != 0 || MEM_R32(trace) != (active ? 0x80011b54u : 0))
+            return false;
+    }
+    return true;
+}
+
 static bool check_vsync_slots(void) {
     const u32 table = 0x80015740, handler = 0x80016200;
     const struct { u32 slot, previous, next; } cases[] = {
@@ -502,6 +527,10 @@ int main(int argc, char **argv) {
     }
     if (!check_bios_wrappers()) {
         fprintf(stderr, "launcher BIOS wrappers failed\n");
+        return 1;
+    }
+    if (!check_vblank_dispatch()) {
+        fprintf(stderr, "launcher VBlank dispatch failed\n");
         return 1;
     }
     if (!check_vsync_slots()) {
