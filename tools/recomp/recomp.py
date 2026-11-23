@@ -572,6 +572,15 @@ PLACEMENT_FACE_ADVANCES = {
 }
 
 
+# Global offsets for the next packet and emitted face count, and the count register.
+PLACEMENT_FACE_RETURNS = {
+    0x80027728: (0x37C, 0x29C, 23),
+    0x80027918: (0x354, 0x3D0, 22),
+    0x80027B54: (0x380, 0x2A0, 30),
+    0x80027D68: (0x358, 0x3D8, 23),
+}
+
+
 class Emitter:
     def __init__(self, mod: Module, launcher: Module | None):
         self.mod = mod
@@ -1760,6 +1769,12 @@ class Emitter:
                 out.append("    if (nc_write_projected_triangle(c)) {")
                 out.append("        if (!R(9)) goto L_8002789C;")
                 out.append("        goto L_80027880; }")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_RETURNS:
+                packet, count, reg = PLACEMENT_FACE_RETURNS[i.addr]
+                out.append(
+                    f"    if (nc_return_placement_faces(c, 0x{packet:x}, 0x{count:x}, R({reg})))"
+                    " return;"
+                )
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_FACE_ADVANCES:
                 textured, quad, head, done = PLACEMENT_FACE_ADVANCES[i.addr]
                 args = f"{str(textured).lower()}, {str(quad).lower()}"
