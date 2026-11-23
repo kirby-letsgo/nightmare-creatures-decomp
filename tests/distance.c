@@ -3246,17 +3246,20 @@ static bool placement_pose_stack(bool disc) {
     const struct {
         u32 pc, index, link;
         int cycles;
-    } cases[] = {{0x80028b38, 0, 0, 2}, {0x80028b38, 3, 0, 9},    {0x80028b44, 0, 0, 6},
-                 {0x80028b44, 2, 0, 6}, {0x80028bf8, 3, 0, 6},    {0x80028bf8, 2, pose, 10},
-                 {0x80028e5c, 3, 0, 6}, {0x80028e5c, 2, pose, 10}};
+    } cases[] = {{0x80028b38, 0, 0, 2}, {0x80028b38, 3, 0, 9}, {0x80028b44, 0, 0, 6},
+                 {0x80028b44, 2, 0, 6}, {0x80028bf8, 3, 0, 6}, {0x80028bf8, 2, pose, 10},
+                 {0x80028db8, 0, 0, 2}, {0x80028db8, 3, 0, 9}, {0x80028dc4, 0, 0, 6},
+                 {0x80028dc4, 2, 0, 6}, {0x80028e5c, 3, 0, 6}, {0x80028e5c, 2, pose, 10}};
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
         const bool save = cases[i].pc == 0x80028bf8 || cases[i].pc == 0x80028e5c;
-        const bool index_ready = cases[i].pc == 0x80028b44;
+        const bool index_ready = cases[i].pc == 0x80028b44 || cases[i].pc == 0x80028dc4;
+        const bool linked = cases[i].pc >= 0x80028db8;
+        const u32 output_offset = linked ? 0x58 : 0x38;
         input.r[18] = pose;
         input.r[19] = cases[i].index;
         input.r[29] = frame;
-        input.r[31] = save ? cases[i].pc + 0x20 : 0x80028b54;
+        input.r[31] = save ? cases[i].pc + 0x20 : linked ? 0x80028dd4 : 0x80028b54;
         MEM_W32(pose + 0xc, cases[i].link);
         for (unsigned j = 0; j < 4; ++j)
             MEM_W32(frame + 0x18 + 4 * j, pose + 0x20 * (j + 1));
@@ -3265,12 +3268,12 @@ static bool placement_pose_stack(bool disc) {
         input.budget = cases[i].cycles;
         CPUState native = input;
         if ((save ? nc_save_linked_placement_pose(&native)
-                  : nc_select_placement_pose(&native, index_ready)) ||
+                  : nc_select_placement_pose(&native, index_ready, output_offset)) ||
             memcmp(&native, &input, sizeof input) || memcmp(nc_scratch, before, sizeof before))
             return false;
         native.budget = ++input.budget;
         if (!(save ? nc_save_linked_placement_pose(&native)
-                   : nc_select_placement_pose(&native, index_ready)) ||
+                   : nc_select_placement_pose(&native, index_ready, output_offset)) ||
             native.budget != 1)
             return false;
         if (save) {
@@ -3279,7 +3282,7 @@ static bool placement_pose_stack(bool disc) {
                 return false;
         } else {
             const u32 index = cases[i].index - (!index_ready && cases[i].index != 0);
-            if (native.r[19] != index || native.r[17] != frame + 0x38 ||
+            if (native.r[19] != index || native.r[17] != frame + output_offset ||
                 native.r[18] != (index_ready || cases[i].index ? pose + 0x20 * (index + 1) : pose))
                 return false;
         }

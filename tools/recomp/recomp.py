@@ -1673,9 +1673,20 @@ class Emitter:
                     f"    if (nc_apply_placement_depth_cue(c, 0x{depth_offset:x}))"
                     f" goto L_{i.addr + 0x2C:08X};"
                 )
-            if self.mod.name == "psx2_exe" and i.addr in (0x80028B38, 0x80028B44):
-                index_ready = "true" if i.addr == 0x80028B44 else "false"
-                out.append(f"    if (nc_select_placement_pose(c, {index_ready})) goto L_80028B54;")
+            if self.mod.name == "psx2_exe" and i.addr in (
+                0x80028B38,
+                0x80028B44,
+                0x80028DB8,
+                0x80028DC4,
+            ):
+                linked = f.addr == 0x80028C58
+                index_ready = "true" if i.addr in (0x80028B44, 0x80028DC4) else "false"
+                output_offset = 0x58 if linked else 0x38
+                next_pose = 0x80028DD4 if linked else 0x80028B54
+                out.append(
+                    f"    if (nc_select_placement_pose(c, {index_ready}, 0x{output_offset:x}))"
+                    f" goto L_{next_pose:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80028BF8:
                 out.append("    if (nc_save_linked_placement_pose(c)) goto L_80028C18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028C18:
