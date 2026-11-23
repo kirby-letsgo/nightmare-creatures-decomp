@@ -37,6 +37,8 @@ bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32
 bool nc_write_textured_quad(CPUState *c);
 bool nc_write_projected_triangle(CPUState *c);
 bool nc_write_projected_quad(CPUState *c);
+bool nc_begin_untextured_triangles(CPUState *c);
+bool nc_select_untextured_triangles(CPUState *c);
 bool nc_measure_untextured_triangle(CPUState *c);
 bool nc_measure_placement_quad(CPUState *c, bool textured);
 bool nc_measure_placement_triangle(CPUState *c);
