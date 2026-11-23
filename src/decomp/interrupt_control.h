@@ -14,10 +14,106 @@ static inline void load_word(CPUState *c, unsigned reg, u32 addr) {
 
 typedef struct {
     u32 state, ports;
-    u32 stop, restart;
+    u32 start, stop, restart;
+    u32 clear, save_context, trap, start_vsync, start_dma, remove;
     u32 enter_critical, exit_critical;
     u32 reset_hook, install_hook;
 } InterruptControlLayout;
+
+static inline bool leave_interrupt_start(CPUState *c) {
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
+}
+
+/* The BIOS interrupt hook re-enters startIntr at the return address of setjmp. */
+static inline bool resume_interrupt_start(CPUState *c, const InterruptControlLayout *layout) {
+    const bool from_exception = R(2) != 0;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    if (from_exception) {
+        R(31) = layout->start + 0x78;
+        NC_POLL(c, 2 * NC_INSN_CYCLES);
+        nc_call(c, layout->trap); /* trapIntr */
+    }
+    set_reg(c, 16, (layout->state + 0x3c + 0x8000u) & 0xffff0000u);
+    set_reg(c, 16, layout->state + 0x3c);
+    set_reg(c, 4, R(16) - 4); /* saved jump buffer */
+    set_reg(c, 2, R(16) + 0xfdc);
+    R(31) = layout->start + 0x90;
+    MEM_W32(R(16), R(2)); /* interrupt stack pointer */
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->install_hook); /* HookEntryInt */
+    set_reg(c, 2, 1);
+    R(31) = layout->start + 0x9c;
+    MEM_W16(R(16) - 0x3c, (u16)R(2));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->start_vsync); /* startIntrVSync */
+    set_reg(c, 3, (layout->ports + 0x8000u) & 0xffff0000u);
+    load_word(c, 3, layout->ports - 4);
+    R(31) = layout->start + 0xac;
+    MEM_W32(R(3) + 20, R(2));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->start_dma); /* startIntrDMA */
+    set_reg(c, 4, (layout->ports + 0x8000u) & 0xffff0000u);
+    load_word(c, 4, layout->ports - 4);
+    R(31) = layout->start + 0xbc;
+    MEM_W32(R(4) + 4, R(2));
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->remove); /* _96_remove */
+    R(31) = layout->start + 0xc4;
+    R(16) -= 0x3c;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->exit_critical);
+    set_reg(c, 2, R(16));
+    return leave_interrupt_start(c);
+}
+
+static inline bool start_driver_interrupts(CPUState *c, const InterruptControlLayout *layout) {
+    if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = layout->state;
+    c->budget -= 3;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    R(2) = MEM_R16(R(16));
+    const bool active = R(2) != 0;
+    R(2) = 0;
+    c->budget -= NC_LOAD_CYCLES + 3;
+    if (active)
+        return leave_interrupt_start(c);
+
+    set_reg(c, 3, (layout->ports + 0x8000u) & 0xffff0000u);
+    load_word(c, 3, layout->ports);
+    set_reg(c, 2, (layout->ports + 0x8000u) & 0xffff0000u);
+    load_word(c, 2, layout->ports + 4);
+    set_reg(c, 5, 0x33330000);
+    MEM_W16(R(2), 0); /* mask IRQs before clearing pending requests */
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = MEM_R16(R(2));
+    NC_POLL(c, NC_LOAD_CYCLES);
+    set_reg(c, 5, R(5) | 0x3333);
+    MEM_W16(R(3), (u16)R(2));
+    NC_POLL(c, NC_INSN_CYCLES);
+    set_reg(c, 2, (layout->ports + 0x8000u) & 0xffff0000u);
+    load_word(c, 2, layout->ports + 8);
+    set_reg(c, 4, R(16));
+    MEM_W32(R(2), R(5)); /* reset DMA priorities */
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(31) = layout->start + 0x60;
+    R(5) = 0x41a;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->clear); /* memclr */
+    R(31) = layout->start + 0x68;
+    R(4) = R(16) + 0x38;
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    nc_call(c, layout->save_context); /* setjmp */
+    return resume_interrupt_start(c, layout);
+}
 
 /* Save the IRQ mask and DMA priorities before disabling the interrupt driver. */
 static inline bool stop_driver_interrupts(CPUState *c, const InterruptControlLayout *layout) {

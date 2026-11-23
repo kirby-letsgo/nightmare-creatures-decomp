@@ -9,6 +9,8 @@ bool nc_launcher_run_modules(CPUState *c);
 bool nc_launcher_init_shared_record(CPUState *c);
 bool nc_launcher_global_callbacks(CPUState *c, bool constructors);
 
+bool nc_launcher_start_interrupts(CPUState *c);
+bool nc_launcher_resume_interrupt_start(CPUState *c);
 bool nc_launcher_stop_interrupts(CPUState *c);
 bool nc_launcher_restart_interrupts(CPUState *c);
 bool nc_launcher_start_dma(CPUState *c);

@@ -1,3 +1,4 @@
+#include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
@@ -2936,48 +2937,6 @@ static bool check_set_interrupt_handler(void) {
     return ok && !saved.error;
 }
 
-static bool check_start_interrupts(void) {
-    const int threshold = 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
-    StateIO saved = {0};
-    interrupt_start_state(&saved);
-    bios_serialize(&saved);
-    bool ok = !saved.error;
-    for (unsigned active = 0; ok && active < 2; active++) {
-        StateIO native = {0}, guest = {0};
-        for (unsigned run = 0; ok && run < 2; run++) {
-            MEM_W16(0x80023418, active);
-            nc_cpu = arguments(1, 2, 3, threshold);
-            if (!run && nc_credits_start_interrupts(&nc_cpu))
-                ok = false;
-            nc_cpu.budget = active ? 4096 : threshold + 1;
-            if (run)
-                interp_call(&nc_cpu, 0x8001a830);
-            else
-                ok = ok && nc_credits_start_interrupts(&nc_cpu);
-            ok = ok && nc_cpu.r[2] == (active ? 0 : 0x80023418u);
-            if (!active) {
-                u32 table = MEM_R32(0x800244a0);
-                ok = ok && MEM_R16(0x80023418) == 1 && MEM_R32(0x80023450) == 0x8001a898 &&
-                     MEM_R32(0x80023454) == 0x80024430 && MEM_R32(table + 20) == 0x8001af58 &&
-                     MEM_R32(table + 4) == 0x8001b184;
-            }
-            StateIO *result = run ? &guest : &native;
-            interrupt_start_state(result);
-            bios_serialize(result);
-            saved.loading = true;
-            saved.pos = 0;
-            interrupt_start_state(&saved);
-            bios_serialize(&saved);
-        }
-        ok = ok && !native.error && !guest.error && native.len == guest.len &&
-             !memcmp(native.buf, guest.buf, guest.len);
-        free(native.buf);
-        free(guest.buf);
-    }
-    free(saved.buf);
-    return ok && !saved.error;
-}
-
 static bool check_interrupt_driver_control(bool stop) {
     u32 entry = stop ? 0x8001ac48 : 0x8001acf4;
     bool (*routine)(CPUState *) = stop ? nc_credits_stop_interrupts : nc_credits_restart_interrupts;
@@ -5749,7 +5708,8 @@ int main(int argc, char **argv) {
     pass = pass && check_critical_sections();
     pass = pass && check_save_irq_context(0x8001ada8, nc_credits_save_irq_context);
     pass = pass && check_restore_jump_context(0x8001ade4, nc_credits_restore_jump_context);
-    pass = pass && check_start_interrupts();
+    pass = pass && compare_interrupt_start(0x8001a830, nc_credits_start_interrupts, 0x80023418,
+                                           0x800244a0, 0x8001af58, 0x8001b184);
     pass = pass && check_set_interrupt_handler();
     pass = pass && check_interrupt_start(false);
     pass = pass && check_interrupt_start(true);

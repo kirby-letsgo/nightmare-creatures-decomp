@@ -1,3 +1,4 @@
+#include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
@@ -1063,6 +1064,11 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!compare_interrupt_start(0x80010be8, nc_launcher_start_interrupts, 0x80014620,
+                                 0x800156a8, 0x80011b7c, 0x80011da8)) {
+        fprintf(stderr, "launcher interrupt startup failed\n");
         return 1;
     }
     if (!compare_cd_sector_transfer(0x80013be8, launcher_cd_sector_dma, true)) {
