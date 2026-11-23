@@ -5492,6 +5492,25 @@ u32 nc_route_placement_selector_exit(CPUState *c, bool subtract_selector) {
     return 0x8006c2e4;
 }
 
+u32 nc_begin_flagged_placement_update(CPUState *c) {
+    /* Reserve the longer path before reading the flags. */
+    if (c->budget <= 15)
+        return 0;
+    const u32 field = R(16) + 0x30;
+    R(3) = MEM_R32(field);
+    if (!(R(3) & 0x08000000)) {
+        R(2) = 0xf7ff0000;
+        c->budget -= 7;
+        return 0x8002a5d4;
+    }
+    R(4) = MEM_R32(0x8008f050);
+    R(2) = R(3) & ~0x08000000u;
+    R(31) = 0x8002a5b8;
+    MEM_W32(field, R(2));
+    c->budget -= 15;
+    return 0x80073dac;
+}
+
 bool nc_advance_placement_x_index(CPUState *c) {
     /* Reserve both paths before reading the index. */
     if (c->budget <= 8)
