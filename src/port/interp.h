@@ -22,6 +22,8 @@ extern const unsigned nc_addr_patch_count;
 
 /* Runs guest code from `addr` until it returns to the current $ra with the stack restored. */
 void interp_call(CPUState *c, u32 addr);
+/* Continue at a restored guest PC with the calling frame's original return boundary. */
+void interp_continue_call(CPUState *c, u32 pc, u32 return_pc, u32 return_sp);
 void interp_resume_exe(CPUState *c, u32 pc);
 
 #endif
