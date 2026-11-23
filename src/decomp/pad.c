@@ -533,6 +533,16 @@ u32 nc_player_action_thirteen_check(CPUState *c) {
     return R(2) ? 0x800451e8 : 0x80044d8c;
 }
 
+bool nc_call_player_action_thirteen(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80044d94;
+    R(5) = 13;
+    c->budget -= 2;
+    nc_call(c, 0x8004f9c4);
+    return true;
+}
+
 bool nc_finish_player_action_thirteen(CPUState *c) {
     if (c->budget <= 9)
         return false;
