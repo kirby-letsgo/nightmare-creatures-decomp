@@ -651,9 +651,12 @@ psx2_exe     800450D0    80045104         pad.c
 psx2_exe     80045104    80045114         pad.c
 psx2_exe     80045114    8004512C         pad.c
 psx2_exe     8004512C    8004513C         pad.c
+psx2_exe     8004513C    80045144         pad.c
 psx2_exe     80045144    8004514C         pad.c
+psx2_exe     8004514C    80045154         pad.c
 psx2_exe     80045154    8004515C         pad.c
 psx2_exe     8004515C    80045170         pad.c
+psx2_exe     80045170    80045178         pad.c
 psx2_exe     80045178    80045180         pad.c
 psx2_exe     80045180    80045208         pad.c
 # Four-byte input sequences: level setup, stop, end-marker check, and player-control read.

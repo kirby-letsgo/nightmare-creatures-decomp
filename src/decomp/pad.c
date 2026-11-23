@@ -557,11 +557,11 @@ bool nc_finish_player_action_thirteen(CPUState *c) {
     return true;
 }
 
-bool nc_call_player_single_face_action(CPUState *c, bool cross) {
+bool nc_call_player_single_face_action(CPUState *c, u32 action, u32 link) {
     if (c->budget <= 2)
         return false;
-    R(31) = cross ? 0x80044ddc : 0x80044db8;
-    R(5) = cross ? 8 : 6;
+    R(31) = link;
+    R(5) = action;
     c->budget -= 2;
     nc_call(c, 0x8004fa34);
     return true;
@@ -987,6 +987,16 @@ u32 nc_player_square_actor_scan_result(CPUState *c) {
     R(4) = R(16);
     c->budget -= cycles;
     return found ? 0x800451e8 : 0x8004514c;
+}
+
+bool nc_call_player_square_scan_match(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80045144;
+    R(4) = R(16);
+    c->budget -= 2;
+    nc_call(c, 0x8003d148);
+    return true;
 }
 
 /* The face-button checks use the actor already in a0 for the press test.
