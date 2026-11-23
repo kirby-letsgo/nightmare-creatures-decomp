@@ -3432,6 +3432,37 @@ bool nc_write_textured_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_write_textured_quad(CPUState *c) {
+    if (c->budget <= 65)
+        return false;
+    const u32 packet = R(16), face = R(17), vertices = R(22);
+    const u32 first = R(18), second = R(19), third = R(20);
+    const s32 fourth_index = (s16)MEM_R16(face + 0x11);
+    R(3) = MEM_R32(first);
+    R(5) = (u32)(s32)(s16)MEM_R16(second + 4);
+    R(6) = (u32)(s32)(s16)MEM_R16(first + 4);
+    R(7) = (u32)(s32)(s16)MEM_R16(third + 4);
+    const s32 fourth_z = (s16)MEM_R16(vertices + 8 * fourth_index + 4);
+    R(4) = ((u32)fourth_z + R(5) + R(6) + R(7)) & 0x1ffc;
+    MEM_W32(packet - 14, R(3));
+    MEM_W32(packet - 6, MEM_R32(second));
+    MEM_W32(packet + 2, MEM_R32(third));
+    // Packet writes can change the fourth index after its depth was read.
+    const s32 packet_index = (s16)MEM_R16(face + 0x11);
+    R(12) = MEM_R32(R(29) + 0x18);
+    const u32 fourth_xy = MEM_R32(vertices + 8 * packet_index);
+    ++R(30);
+    MEM_W32(packet - 18, R(12));
+    MEM_W32(packet + 10, fourth_xy);
+    MEM_W32(packet - 10, MEM_R32(face + 1));
+    MEM_W32(packet - 2, MEM_R32(face + 5));
+    MEM_W16(packet + 6, MEM_R16(face + 9));
+    R(2) = MEM_R16(face + 13);
+    MEM_W16(packet + 14, R(2));
+    c->budget -= 65;
+    return true;
+}
+
 bool nc_write_projected_triangle(CPUState *c) {
     if (c->budget <= 27)
         return false;
