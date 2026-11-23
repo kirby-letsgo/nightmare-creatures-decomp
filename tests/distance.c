@@ -3197,42 +3197,56 @@ static bool placement_quad_windings(bool disc) {
 }
 
 static bool placement_triangle_windings(bool disc) {
-    const u32 face = SCRATCH_BASE + 3, vertices = SCRATCH_BASE + 0x80;
+    const u32 vertices = SCRATCH_BASE + 0x80;
     const struct {
         u32 second, third;
         s32 area;
     } cases[] = {
         {0x00000001, 0x00010000, 3}, {0x00010000, 0x00000001, -3}, {0x00000001, 0x00000001, 0}};
-    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
-        CPUState input = initial();
-        input.r[20] = face;
-        input.r[8] = vertices;
-        input.r[29] = SCRATCH_BASE + 0x100;
-        input.r[31] = 0x80027644;
-        MEM_W16(face + 0xd, 0xffff);
-        MEM_W16(face + 0xf, 0);
-        MEM_W16(face + 0xb, 1);
-        MEM_W32(vertices - 8, 0xffffffff);
-        MEM_W32(vertices, cases[i].second);
-        MEM_W32(vertices + 8, cases[i].third);
-        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
-        memcpy(before, nc_scratch, sizeof before);
-        input.budget = 38;
-        CPUState native = input;
-        if (nc_measure_placement_triangle(&native) || memcmp(&native, &input, sizeof input) ||
-            memcmp(nc_scratch, before, sizeof before))
-            return false;
-        native.budget = ++input.budget;
-        if (!nc_measure_placement_triangle(&native) || native.budget != 1 ||
-            (s32)native.r[2] != cases[i].area || native.r[19] != vertices - 8 ||
-            native.r[17] != vertices || native.r[18] != vertices + 8)
-            return false;
-        if (disc) {
-            memcpy(after, nc_scratch, sizeof after);
-            memcpy(nc_scratch, before, sizeof before);
-            interp_call(&input, 0x80027600);
-            if (memcmp(&native, &input, sizeof input) || memcmp(nc_scratch, after, sizeof after))
+    const struct {
+        u32 entry, face;
+        int first_offset, second_offset, third_offset;
+        unsigned first_reg, second_reg, third_reg;
+        bool (*measure)(CPUState *);
+    } layouts[] = {
+        {0x80027600, SCRATCH_BASE + 3, 13, 15, 11, 19, 17, 18, nc_measure_placement_triangle},
+        {0x800277e0, SCRATCH_BASE + 10, -6, -4, -2, 18, 16, 17, nc_measure_untextured_triangle}};
+    for (unsigned j = 0; j < sizeof layouts / sizeof layouts[0]; ++j) {
+        const u32 face = layouts[j].face;
+        for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            CPUState input = initial();
+            input.r[20] = face;
+            input.r[8] = vertices;
+            input.r[29] = SCRATCH_BASE + 0x100;
+            input.r[31] = layouts[j].entry + 0x44;
+            MEM_W16(face + layouts[j].first_offset, 0xffff);
+            MEM_W16(face + layouts[j].second_offset, 0);
+            MEM_W16(face + layouts[j].third_offset, 1);
+            MEM_W32(vertices - 8, 0xffffffff);
+            MEM_W32(vertices, cases[i].second);
+            MEM_W32(vertices + 8, cases[i].third);
+            u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+            memcpy(before, nc_scratch, sizeof before);
+            input.budget = 38;
+            CPUState native = input;
+            if (layouts[j].measure(&native) || memcmp(&native, &input, sizeof input) ||
+                memcmp(nc_scratch, before, sizeof before))
                 return false;
+            native.budget = ++input.budget;
+            if (!layouts[j].measure(&native) || native.budget != 1 ||
+                (s32)native.r[2] != cases[i].area ||
+                native.r[layouts[j].first_reg] != vertices - 8 ||
+                native.r[layouts[j].second_reg] != vertices ||
+                native.r[layouts[j].third_reg] != vertices + 8)
+                return false;
+            if (disc) {
+                memcpy(after, nc_scratch, sizeof after);
+                memcpy(nc_scratch, before, sizeof before);
+                interp_call(&input, layouts[j].entry);
+                if (memcmp(&native, &input, sizeof input) ||
+                    memcmp(nc_scratch, after, sizeof after))
+                    return false;
+            }
         }
     }
     return true;

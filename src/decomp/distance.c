@@ -3396,6 +3396,23 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_measure_untextured_triangle(CPUState *c) {
+    if (c->budget <= 38)
+        return false;
+    const u32 face = R(20), vertices = R(8);
+    const s32 first = (s16)MEM_R16(face - 6);
+    R(3) = (u32)(s32)(s16)MEM_R16(face - 4) * 8;
+    const s32 third = (s16)MEM_R16(face - 2);
+    R(18) = vertices + 8 * first;
+    R(16) = vertices + R(3);
+    R(17) = vertices + 8 * third;
+    R(4) = MEM_R32(R(18));
+    R(5) = MEM_R32(R(16));
+    R(6) = MEM_R32(R(17));
+    finish_placement_winding(c, 7, 0x80027824);
+    return true;
+}
+
 bool nc_measure_placement_quad(CPUState *c, bool textured) {
     if (c->budget <= 38)
         return false;
