@@ -233,6 +233,7 @@ CREDITS_ROUTINES = {
     0x8001FF5C: "nc_credits_cd_ready(c)",
     0x8001FF7C: "nc_credits_cd_sync_callback(c)",
     0x8001FF94: "nc_credits_cd_ready_callback(c)",
+    0x8001FFAC: "nc_credits_cd_control(c)",
     0x800200E4: "nc_credits_cd_control_f(c)",
     0x80020354: "nc_credits_cd_mix(c)",
     0x80020378: "nc_credits_cd_get_sector(c)",
