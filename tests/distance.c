@@ -3109,6 +3109,49 @@ static bool placement_angle_steps(bool disc) {
     return true;
 }
 
+static bool placement_angle_calls(bool disc) {
+    const u32 record = SCRATCH_BASE;
+    for (unsigned i = 0; i < 8; ++i) {
+        const bool enabled = i & 1, previous = i & 2, result = i & 4;
+        const u32 initial_flags = 0x80004001u | (previous ? 0x20000000u : 0);
+        CPUState input = initial(), native;
+        input.r[4] = input.r[16] = record;
+        input.r[31] = enabled ? 0x80029498 : 0x800293d4;
+        MEM_W32(record + 0x2c, enabled ? 0x40000001 : 1);
+        MEM_W32(record + 0x30, initial_flags);
+        if (!compare(input, 0x80029388, nc_call_placement_angle_update, disc, &native) ||
+            native.r[5] != record + 0x20 || native.budget != input.budget - (enabled ? 14 : 7))
+            return false;
+        if (!enabled)
+            continue;
+        if (native.r[6] != record + 0x28 || native.r[7] != (initial_flags & 0x20000000) ||
+            native.r[31] != 0x800293b0)
+            return false;
+        input = native;
+        input.r[2] = result ? UINT32_MAX : 0;
+        input.r[31] = 0x800293d4;
+        input.budget = 8;
+        native = input;
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        if (nc_store_placement_angle_result(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_store_placement_angle_result(&native) || native.budget != 1 ||
+            MEM_R32(record + 0x30) != (0x80004001u | (result ? 0x20000000u : 0)))
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x800293b0);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5436,7 +5479,7 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        type7_pose_angles(disc) && placement_traversal_calls(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
         record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
         point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
         heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
