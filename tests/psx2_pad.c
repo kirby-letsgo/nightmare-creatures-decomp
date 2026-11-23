@@ -1145,6 +1145,26 @@ static bool action_thirteen_destination(CPUState *cpu) {
     return nc_player_action_thirteen_check(cpu) == cpu->r[31];
 }
 
+static bool player_action_thirteen_call(void) {
+    const u32 actor = 0x80161000;
+    for (unsigned match = 0; match < 2; ++match) {
+        CPUState cpu = initial();
+        cpu.r[4] = actor;
+        cpu.r[16] = 0x80160000;
+        cpu.r[31] = 0x80044d94;
+        MEM_W32(gp + 0x244, config);
+        MEM_W32(config, 0x01000000);
+        MEM_W32(actor + 0x264, 7);
+        MEM_W32(actor + 0xa0, match ? 7 : 3);
+        MEM_W32(actor + 0x98, 5);
+        MEM_W32(actor + 0x330, 0x8018);
+        MEM_W8(actor + 0x38a, 0xff);
+        if (!compare(cpu, 0x80044d8c, nc_call_player_action_thirteen, 2))
+            return false;
+    }
+    return true;
+}
+
 static bool player_action_thirteen_checks(void) {
     const struct {
         u32 value, destination;
@@ -4170,12 +4190,12 @@ int main(int argc, char **argv) {
         player_queued_face_actions() && player_horizontal_directions() &&
         player_face_button_gates() && player_face_button_calls() && flagged_shoulder_paths() &&
         player_shoulder_action_calls() && player_circle_shoulder_paths() &&
-        player_up_action_six_checks() && player_action_thirteen_checks() && player_face_presses() &&
-        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
-        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        player_up_action_six_checks() && player_action_thirteen_call() &&
+        player_action_thirteen_checks() && player_face_presses() && player_triangle_actions() &&
+        player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
+        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {
