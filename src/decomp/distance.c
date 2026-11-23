@@ -4037,6 +4037,20 @@ bool nc_project_placement_vertex_triple(CPUState *c, unsigned depth_shift) {
     return true;
 }
 
+/* The face selects a pose and a vertex within that pose. The incoming v0
+ * points at its rotation and translation, prepared before this block. */
+bool nc_prepare_indexed_vertex(CPUState *c, u32 pose, u32 vertex_index) {
+    if (c->budget <= 41)
+        return false;
+    load_part_transform(c, R(2));
+    const u32 descriptor = MEM_R32(pose + 0x38);
+    const u32 vertices = MEM_R32(descriptor + 8);
+    R(3) = vertex_index << 3;
+    R(2) = vertices + R(3);
+    c->budget -= 41;
+    return true;
+}
+
 /* Each of the three indexed vertices has its own screen-coordinate slot.
  * The depth output is shared and receives SZ3 in quarter-depth units. */
 bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset) {
