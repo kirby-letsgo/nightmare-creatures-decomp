@@ -2481,6 +2481,15 @@ class Emitter:
                 out.append(
                     "    if (nc_finish_primary_placement_counter(c, false)) goto L_8002902C;"
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028F8C:
+                out.extend(
+                    [
+                        "    switch (nc_check_placement_descriptor(c)) {",
+                        "    case 0x80029000: goto L_80029000;",
+                        "    case 0x80029030: goto L_80029030;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x8002902C, 0x80029030):
                 reload = "true" if i.addr == 0x8002902C else "false"
                 out.extend(

@@ -4407,6 +4407,50 @@ static bool primary_placement_counter_exits(bool disc) {
     return true;
 }
 
+static bool placement_descriptor_checks(bool disc) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 0x80, actor = 0x801c8000;
+    const struct {
+        u32 flags, value;
+        s16 actor_value;
+        u32 actor_flags, next;
+        int cycles;
+    } cases[] = {
+        {0xdfff, 0, 0, 0, 0x80029030, 7},
+        {0x2000, 0x8000, 0, 0, 0x80029030, 22},
+        {0x2000, 0x7fff, -1, 0, 0x80029030, 22},
+        {0x2000, 0x8000, -32768, 0xfffeffff, 0x80029000, 32},
+        {0x2000, 0x8000, -32768, 0x10000, 0x80029030, 32},
+        {0x2000, 0xa000, -32768, 0, 0x80029030, 32},
+        {0x2000, 0xa000, -32768, 0x10000, 0x80029000, 34},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = record;
+        input.r[18] = i & 1 ? 0xffffffff : 0;
+        input.r[21] = actor;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        MEM_W32(record + 0x30, cases[i].flags);
+        MEM_W32(record, descriptor);
+        MEM_W16(descriptor + 0x48, cases[i].value);
+        MEM_W16(actor + 0x360, cases[i].actor_value);
+        MEM_W32(actor + 0x2c8, cases[i].actor_flags);
+        CPUState native = input;
+        if (nc_check_placement_descriptor(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_check_placement_descriptor(&native) != cases[i].next || native.budget != 1 ||
+            native.r[2] != (input.r[18] & 0x800))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80028f8c);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool alternate_placement_counters(bool disc) {
     const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
     const struct {
@@ -8616,6 +8660,7 @@ int main(int argc, char **argv) {
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         primary_placement_counters(disc) && primary_placement_counter_exits(disc) &&
+        placement_descriptor_checks(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&

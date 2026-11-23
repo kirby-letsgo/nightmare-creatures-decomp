@@ -110,6 +110,7 @@ bool nc_restore_placement_scan_frame(CPUState *c);
 u32 nc_reset_placement_transforms(CPUState *c);
 u32 nc_check_primary_placement_counter(CPUState *c);
 bool nc_finish_primary_placement_counter(CPUState *c, bool at_limit);
+u32 nc_check_placement_descriptor(CPUState *c);
 u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector);
 bool nc_begin_alternate_placement_update(CPUState *c);
 bool nc_call_placement_stack_switch(CPUState *c, bool load_stack);

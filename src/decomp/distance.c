@@ -4889,6 +4889,44 @@ bool nc_finish_primary_placement_counter(CPUState *c, bool at_limit) {
     return true;
 }
 
+/* The descriptor's bit 13 encodes the required state of actor bit 16.
+ * The remaining halfword is compared as a signed value. */
+u32 nc_check_placement_descriptor(CPUState *c) {
+    if (c->budget <= 7)
+        return 0;
+    const u32 record = R(16);
+    const u32 selector = R(18) & 0x800;
+    if (!(MEM_R32(record + 0x30) & 0x2000)) {
+        R(2) = selector;
+        c->budget -= 7;
+        return 0x80029030;
+    }
+    if (c->budget <= 22)
+        return 0;
+    const u32 descriptor = MEM_R32(record);
+    const u32 value = MEM_R16(descriptor + 0x48);
+    const s16 actor_value = (s16)MEM_R16(R(21) + 0x360);
+    int cycles = 22;
+    bool update = false;
+    u32 v1 = (u32)(s32)actor_value;
+    if ((s16)(value & 0xdfff) == actor_value) {
+        if (c->budget <= 32)
+            return 0;
+        v1 = 0x10000;
+        const bool required = (value & 0x2000) != 0;
+        const bool active = (MEM_R32(R(21) + 0x2c8) & v1) != 0;
+        update = required == active;
+        cycles = required && update ? 34 : 32;
+        if (c->budget <= cycles)
+            return 0;
+    }
+    R(2) = selector;
+    R(3) = v1;
+    R(4) = value;
+    c->budget -= cycles;
+    return update ? 0x80029000 : 0x80029030;
+}
+
 /* The first branch tests the incoming selector bit before its delay slot
  * replaces v0. Only an enabled alternate placement reads the descriptor. */
 u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector) {
