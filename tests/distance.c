@@ -4275,6 +4275,53 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool placement_scan_exits(bool disc) {
+    const u32 slots[] = {318, 319, 320, 0x7fffffff, 0xffffffff};
+    for (unsigned advance = 0; advance <= 1; ++advance) {
+        for (unsigned i = 0; i < sizeof slots / sizeof slots[0]; ++i) {
+            const u32 next = slots[i] + advance;
+            CPUState input = initial();
+            input.r[20] = slots[i];
+            input.r[31] = (s32)next < 320 ? 0x80028f00 : 0x80029470;
+            input.budget = advance ? 4 : 3;
+            CPUState native = input;
+            if (nc_advance_placement_scan(&native, advance) ||
+                memcmp(&input, &native, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_advance_placement_scan(&native, advance) || native.budget != 1 ||
+                native.r[20] != next || native.r[2] != next << 2)
+                return false;
+            if (disc) {
+                interp_call(&input, advance ? 0x80029460 : 0x80029464);
+                if (memcmp(&native, &input, sizeof input))
+                    return false;
+            }
+        }
+    }
+    CPUState input = initial();
+    const u32 frame = SCRATCH_BASE;
+    input.r[29] = frame;
+    input.budget = 24;
+    for (unsigned i = 0; i < 7; ++i)
+        MEM_W32(frame + 0x18 + 4 * i, 0x80011000 + 4 * i);
+    CPUState native = input;
+    if (nc_restore_placement_scan_frame(&native) || memcmp(&native, &input, sizeof input))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_restore_placement_scan_frame(&native) || native.budget != 1 ||
+        native.r[29] != frame + 0x38 || native.r[31] != 0x80011018)
+        return false;
+    for (unsigned i = 0; i < 6; ++i)
+        if (native.r[16 + i] != 0x80011000 + 4 * i)
+            return false;
+    if (disc) {
+        interp_continue_call(&input, 0x80029470, native.r[31], native.r[29]);
+        return !memcmp(&input, &native, sizeof input);
+    }
+    return true;
+}
+
 static bool placement_scan_slots(bool disc) {
     const u32 record = SCRATCH_BASE, slot = 0x800cf184 + 319 * 4;
     const u32 original = MEM_R32(slot);
@@ -8078,7 +8125,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
-        placement_scan_slots(disc) &&
+        placement_scan_exits(disc) && placement_scan_slots(disc) &&
         placement_face_dispatch(disc) &&
         placement_lighting_returns(disc) &&
         placement_color_record_loop(disc) &&

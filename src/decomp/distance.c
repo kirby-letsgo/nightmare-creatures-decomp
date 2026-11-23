@@ -4775,6 +4775,18 @@ bool nc_call_indexed_pose_projection(CPUState *c) {
     return true;
 }
 
+/* Some paths have already advanced the slot. Both loop entries leave its
+ * byte offset in v0, including the final iteration. */
+bool nc_advance_placement_scan(CPUState *c, bool increment) {
+    const int cycles = increment ? 4 : 3;
+    if (c->budget <= cycles)
+        return false;
+    R(20) += increment;
+    R(2) = R(20) << 2;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_begin_placement_scan(CPUState *c) {
     if (c->budget <= 15)
         return false;
@@ -5344,15 +5356,23 @@ bool nc_finish_point_update(CPUState *c) {
     return true;
 }
 
-bool nc_restore_point_update_frame(CPUState *c) {
+static bool restore_s0_to_s5_frame(CPUState *c, u32 size) {
     if (c->budget <= 24)
         return false;
-    R(31) = MEM_R32(R(29) + 0x40);
+    R(31) = MEM_R32(R(29) + size - 8);
     for (unsigned reg = 21; reg >= 16; --reg)
-        R(reg) = MEM_R32(R(29) + 0x28 + 4 * (reg - 16));
-    R(29) += 0x48;
+        R(reg) = MEM_R32(R(29) + size - 0x20 + 4 * (reg - 16));
+    R(29) += size;
     c->budget -= 24;
     return true;
+}
+
+bool nc_restore_point_update_frame(CPUState *c) {
+    return restore_s0_to_s5_frame(c, 0x48);
+}
+
+bool nc_restore_placement_scan_frame(CPUState *c) {
+    return restore_s0_to_s5_frame(c, 0x38);
 }
 
 /* Horizontal displacement is measured after subtracting the 24.8 positions.

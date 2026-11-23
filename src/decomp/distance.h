@@ -105,6 +105,8 @@ bool nc_write_indexed_face_packet(CPUState *c, bool textured);
 bool nc_project_indexed_vertex(CPUState *c, u32 screen_offset);
 bool nc_project_remaining_placement_vertex(CPUState *c, bool sixteenth_depth);
 bool nc_call_indexed_pose_projection(CPUState *c);
+bool nc_advance_placement_scan(CPUState *c, bool increment);
+bool nc_restore_placement_scan_frame(CPUState *c);
 bool nc_begin_placement_scan(CPUState *c);
 bool nc_check_placement_slot(CPUState *c);
 bool nc_check_placement_pose_callback(CPUState *c);
