@@ -4370,6 +4370,55 @@ static bool placement_coordinate_copies(bool disc) {
     return true;
 }
 
+static bool placement_selector_routes(bool disc) {
+    const u32 record = SCRATCH_BASE, descriptor = record + 0x100;
+    MEM_W32(record, descriptor);
+    MEM_W8(descriptor + 0x38, 0);
+    MEM_W8(descriptor + 0x39, 255);
+    const struct {
+        u32 flags, extra, next;
+        int cycles;
+    } cases[] = {{0, 0, 0x8002916c, 3},
+                 {0x800, 0, 0x8002916c, 3},
+                 {0x400, 0x04000000, 0x8002913c, 14},
+                 {0xc00, 0, 0x8002913c, 19},
+                 {0xc00, 0x04000000, 0x80029150, 12}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = record;
+        input.r[18] = cases[i].flags;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        MEM_W32(record + 0x30, cases[i].extra);
+        CPUState native = input;
+        u32 next = 0;
+        if (nc_route_placement_selector(&native, &next) || next ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_route_placement_selector(&native, &next) || next != cases[i].next ||
+            native.budget != 1 ||
+            native.r[5] != (next == 0x8002913c ? (cases[i].flags & 0x800 ? 255u : 0) : input.r[5]))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x800290f4);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    for (unsigned value = 0; value <= 255; value += 255) {
+        CPUState input = initial(), native;
+        input.r[16] = record;
+        input.r[5] = value;
+        input.r[31] = value ? 0x800297c8 : 0x80029150;
+        if (!compare(input, 0x8002913c, nc_call_nonzero_placement_selector, disc, &native) ||
+            native.r[4] != (value ? record : input.r[4]) || native.r[31] != 0x80029150 ||
+            native.budget != input.budget - (value ? 5 : 3))
+            return false;
+    }
+    return true;
+}
+
 static bool placement_scan_before_bounds(bool disc) {
     const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
     for (unsigned active = 0; active <= 1; ++active) {
@@ -8246,6 +8295,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         placement_coordinate_copies(disc) &&

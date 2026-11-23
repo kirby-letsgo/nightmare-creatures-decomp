@@ -2279,6 +2279,16 @@ class Emitter:
                 out.append("        goto L_80029460; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800290C4:
                 out.append("    if (nc_copy_placement_coordinates(c)) goto L_800290F4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800290F4:
+                out.append("    { u32 next;")
+                out.append("      if (nc_route_placement_selector(c, &next)) {")
+                out.append("          if (next == 0x8002916c) goto L_8002916C;")
+                out.append("          if (next == 0x80029150) goto L_80029150;")
+                out.append("          goto L_8002913C; } }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002913C:
+                out.append("    if (nc_call_nonzero_placement_selector(c)) {")
+                out.append(f"        if (R(5)) {{ {self.call(0x800297C8)} }}")
+                out.append("        goto L_80029150; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029150:
                 out.append("    if (nc_recheck_placement_active(c)) {")
                 out.append("        if (R(2)) goto L_80029188;")
