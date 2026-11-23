@@ -3291,6 +3291,44 @@ bool nc_call_placement_node_traversal(CPUState *c) {
     return true;
 }
 
+bool nc_call_placement_angle_update(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 record = R(16);
+    const u32 enabled = MEM_R32(record + 0x2c) & 0x40000000;
+    const int cycles = enabled ? 14 : 7;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = 0x40000000;
+    R(2) = enabled;
+    R(5) = record + 0x20;
+    if (enabled) {
+        R(6) = record + 0x28;
+        R(17) = 0x20000000;
+        R(7) = MEM_R32(record + 0x30) & R(17);
+        R(31) = 0x800293b0;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_store_placement_angle_result(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    const u32 address = R(16) + 0x30;
+    const u32 flags = MEM_R32(address);
+    if (R(2)) {
+        R(3) = 0xdfff0000;
+        R(2) = flags | R(17);
+    } else {
+        R(3) = 0xdfffffff;
+        R(2) = flags & R(3);
+    }
+    MEM_W32(address, R(2));
+    c->budget -= 8;
+    return true;
+}
+
 bool nc_call_placement_part_traversal(CPUState *c) {
     if (c->budget <= 6)
         return false;
