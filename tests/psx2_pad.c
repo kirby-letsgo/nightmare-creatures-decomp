@@ -632,6 +632,41 @@ static bool down_face_destination(CPUState *cpu) {
     return nc_player_down_face_buttons(cpu) == cpu->r[31];
 }
 
+static bool down_action_call(CPUState *cpu) {
+    return nc_call_player_down_action(cpu, cpu->r[20], cpu->r[31], cpu->r[21] != 0);
+}
+
+static bool player_down_action_calls(void) {
+    const struct {
+        u32 entry, link, action;
+        bool reload_actor;
+    } cases[] = {
+        {0x8004506c, 0x80045078, 0x23, true},
+        {0x80045080, 0x8004508c, 5, true},
+        {0x80045084, 0x8004508c, 5, false},
+        {0x80045094, 0x800450a0, 2, true},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        for (unsigned flagged = 0; flagged < 2; ++flagged) {
+            CPUState cpu = initial();
+            cpu.r[4] = 0x80161000;
+            cpu.r[16] = 0x80160000;
+            cpu.r[20] = cases[i].action;
+            cpu.r[21] = cases[i].reload_actor;
+            cpu.r[31] = cases[i].link;
+            const u32 actor = cases[i].reload_actor ? cpu.r[16] : cpu.r[4];
+            MEM_W32(actor + 0x330, flagged ? 0x8018 : 0x18);
+            MEM_W8(actor + 0x38a, 1);
+            MEM_W8(actor + 0x38e, 3);
+            MEM_W8(actor + 0x39b, 4);
+            MEM_W8(actor + 0x39c, 6);
+            if (!compare(cpu, cases[i].entry, down_action_call, cases[i].reload_actor ? 3 : 2))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool player_down_face_buttons(void) {
     const struct {
         u8 mode;
@@ -4229,8 +4264,8 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_setup_call() && player_down_paths() && player_down_face_buttons() &&
-        player_level_flag_checks() && player_input_state_gates() &&
+        player_down_setup_call() && player_down_paths() && player_down_action_calls() &&
+        player_down_face_buttons() && player_level_flag_checks() && player_input_state_gates() &&
         player_secondary_flag_routes() && player_input_action_gates() &&
         player_state_three_circle_checks() && player_circle_held_triangle_checks() &&
         player_vertical_action_checks() && player_shoulder_action_checks() &&
