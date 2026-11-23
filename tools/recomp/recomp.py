@@ -1207,8 +1207,8 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x800297FC, 0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C, 0x8002A250,
-                 0x8002A5B8, 0x8002A5CC)
+                (0x800297FC, 0x80029810, 0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
+                 0x8002A250, 0x8002A5B8, 0x8002A5CC)
             )
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
@@ -3127,6 +3127,8 @@ class Emitter:
                 out.append("    if (nc_begin_placement_dispatch(c)) {")
                 out.append("        if (R(2)) goto L_800297FC;")
                 out.append("        goto L_8002A560; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800297FC:
+                out.append("    if (nc_load_placement_selector_target(c)) goto L_80029810;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002A5D4:
                 out.append("    if (nc_return_placement_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029D18, 0x80029E4C):

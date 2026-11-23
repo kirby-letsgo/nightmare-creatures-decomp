@@ -136,6 +136,7 @@ bool nc_set_type7_pose_angles(CPUState *c);
 bool nc_set_type7_linked_heading(CPUState *c);
 bool nc_set_other_placement_angles(CPUState *c);
 bool nc_begin_placement_dispatch(CPUState *c);
+bool nc_load_placement_selector_target(CPUState *c);
 bool nc_return_placement_dispatch(CPUState *c);
 bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc);
 bool nc_prepare_shared_placement_y_step(CPUState *c, bool jump);
