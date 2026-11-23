@@ -1070,6 +1070,7 @@ class Emitter:
                     0x80044780,
                     0x800447B8,
                     0x80044914,
+                    0x8004491C,
                     0x8004496C,
                     0x80044990,
                     0x800449D8,
@@ -1530,8 +1531,13 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004500C:
-                out.append("    if (nc_call_player_down_setup(c)) goto L_80045014;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044914, 0x8004500C):
+                link = i.addr + 8
+                out.append(
+                    f"    if (nc_call_player_action_setup(c, 0x{link:08X}u)) goto L_{link:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004491C:
+                out.append("    if (nc_prepare_player_trigger_exit(c)) goto L_800451D4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
                 check_circle = "true" if i.addr == 0x80045014 else "false"
                 out.extend(
