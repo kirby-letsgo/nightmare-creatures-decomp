@@ -79,6 +79,7 @@ u32 nc_menu_check_record_29(CPUState *c);
 bool nc_menu_mode_record_call(CPUState *c);
 bool nc_leave_menu_input(CPUState *c);
 bool nc_menu_mode_record_result(CPUState *c);
+bool nc_menu_dispatch_input_action(CPUState *c);
 bool nc_menu_dispatch_direction(CPUState *c);
 u32 nc_menu_mode_up(CPUState *c);
 bool nc_menu_record_cross(CPUState *c);

@@ -1210,7 +1210,7 @@ u32 nc_menu_mode_down(CPUState *c) {
     return 0x80068f0c;
 }
 
-/* Both dispatch sites call the selected record and save the full button word. */
+/* These dispatch sites call the selected record and save the full button word. */
 static void dispatch_menu_record(CPUState *c, u32 return_address) {
     R(5) = 0x800883c0 + 12 * R(2);
     R(2) = 0x800883c0;
@@ -1219,6 +1219,15 @@ static void dispatch_menu_record(CPUState *c, u32 return_address) {
     nc_call(c, 0x80063b70);
     MEM_W32(R(28) + 0x18c, R(30));
     NC_POLL(c, NC_INSN_CYCLES);
+}
+
+/* The common Up, Down, Cross and Triangle path resumes at the menu scan. */
+bool nc_menu_dispatch_input_action(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    dispatch_menu_record(c, 0x80068618);
+    NC_POLL(c, 2 * NC_INSN_CYCLES);
+    return true;
 }
 
 bool nc_menu_dispatch_direction(CPUState *c) {
