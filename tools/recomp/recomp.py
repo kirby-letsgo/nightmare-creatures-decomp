@@ -33,6 +33,8 @@ PSX2_PLAYER_SHOULDER_CALLS = {
     0x80044CBC: (9, 0x80044CC4),
     0x80044CCC: (0x15, 0x80044CD4),
     0x80044CDC: (0x16, 0x80044CE8),
+    0x80044CF8: (3, 0x80044D00),
+    0x80044D08: (4, 0x80044D10),
 }
 
 PSX2_PLAYER_BUTTON_STORE_JUMPS = {
@@ -1030,6 +1032,7 @@ class Emitter:
                     0x80044B88,
                     0x80044C60,
                     0x80044CBC,
+                    0x80044CF8,
                     0x80044D48,
                     0x80044D8C,
                     0x80044E74,
@@ -1296,6 +1299,15 @@ class Emitter:
                         "    case 0x80044CDC: goto L_80044CDC;",
                         "    case 0x80044CCC: goto L_80044CCC;",
                         "    case 0x80044CBC: goto L_80044CBC;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044CF0:
+                out.extend(
+                    [
+                        "    switch (nc_player_flagged_shoulder_path(c)) {",
+                        "    case 0x80044CF8: goto L_80044CF8;",
+                        "    case 0x80044D08: goto L_80044D08;",
                         "    }",
                     ]
                 )
