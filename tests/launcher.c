@@ -1,3 +1,4 @@
+#include "cd_reset.h"
 #include "jump_context.h"
 #include "decomp/jump_context.h"
 #include "decomp/byte_scan.h"
@@ -327,6 +328,10 @@ static bool check_cd_volume(void) {
     }
     memcpy(nc_fast_ptr(slots), saved, sizeof saved);
     return true;
+}
+
+static bool reset_cd_controller(CPUState *c) {
+    return cd_reset(c, 0x80011fd4, 0x80013840, 0x80013890, 0x8001374c);
 }
 
 static bool flush_cd_controller(CPUState *c) {
@@ -1005,6 +1010,11 @@ int main(int argc, char **argv) {
     }
     if (!check_cd_volume()) {
         fprintf(stderr, "launcher CD volume failed\n");
+        return 1;
+    }
+    const u32 reset_drivers[] = {0x80013840, 0x80013890, 0x8001374c};
+    if (!check_cd_reset_modes(0x80011fd4, reset_cd_controller, reset_drivers)) {
+        fprintf(stderr, "launcher CD reset failed\n");
         return 1;
     }
     if (!check_cd_flush_controller()) {
