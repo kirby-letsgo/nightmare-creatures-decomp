@@ -153,6 +153,16 @@ u32 nc_player_input_action_gate(CPUState *c) {
     return R(2) ? 0x800449ec : 0x800449d8;
 }
 
+bool nc_call_player_button_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x800449e0;
+    R(5) = R(17);
+    c->budget -= 2;
+    nc_call(c, 0x800530f4);
+    return true;
+}
+
 /* The entry after the input call tests its low halfword. The direct entry
  * starts at the actor state check and preserves the incoming a0. */
 u32 nc_player_state_three_circle(CPUState *c, bool after_call) {

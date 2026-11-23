@@ -743,6 +743,7 @@ static bool player_state_action_calls(void) {
     } cases[] = {
         {0x80044954, 0x8003cd4c, 0x100},
         {0x8004496c, 0x8003d20c, 0x80},
+        {0x80044a08, 0x80039964, 0},
         {0x80044990, 0x8003d06c, 0},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
@@ -763,6 +764,28 @@ static bool player_state_action_calls(void) {
         cpu.r[31] = 0x800451d4;
         cpu.budget = 3;
         if (!compare(cpu, cases[i].entry + 8, nc_prepare_player_trigger_exit, 2))
+            return false;
+    }
+    return true;
+}
+
+static bool player_button_action_call(void) {
+    const u32 actor = 0x80161000;
+    const u8 states[] = {3, 1};
+    for (unsigned i = 0; i < sizeof states / sizeof states[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[4] = actor;
+        cpu.r[16] = 0x80160000;
+        cpu.r[17] = 0x8040;
+        cpu.r[31] = 0x800449e0;
+        MEM_W32(gp + 0x244, config);
+        MEM_W32(config + 4, 0);
+        MEM_W8(actor + 0x388, 0);
+        MEM_W8(actor + 0x38a, states[i]);
+        MEM_W32(actor + 0x330, 0);
+        MEM_W16(0x800cc42c, 4);
+        MEM_W16(0x800cc430, 0);
+        if (!compare(cpu, 0x800449d8, nc_call_player_button_action, 2))
             return false;
     }
     return true;
@@ -4445,10 +4468,10 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_action_setup_calls() && player_state_action_calls() && player_down_paths() &&
-        player_square_actor_scans() && player_square_scans() && player_square_headings() &&
-        player_r2_action_call() && player_down_action_calls() && player_down_face_buttons() &&
-        player_level_flag_checks() && player_input_state_gates() &&
+        player_action_setup_calls() && player_button_action_call() && player_state_action_calls() &&
+        player_down_paths() && player_square_actor_scans() && player_square_scans() &&
+        player_square_headings() && player_r2_action_call() && player_down_action_calls() &&
+        player_down_face_buttons() && player_level_flag_checks() && player_input_state_gates() &&
         player_secondary_flag_routes() && player_input_action_gates() &&
         player_state_three_circle_checks() && player_circle_held_triangle_checks() &&
         player_vertical_action_checks() && player_shoulder_action_checks() &&

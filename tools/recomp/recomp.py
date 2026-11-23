@@ -79,6 +79,7 @@ PSX2_PLAYER_ACTION_SETUP = {
     0x80044954: 0x8003CD4C,
     0x8004496C: 0x8003D20C,
     0x80044990: 0x8003D06C,
+    0x80044A08: 0x80039964,
     0x8004500C: 0x8005426C,
 }
 
@@ -1087,6 +1088,7 @@ class Emitter:
                     0x8004496C,
                     0x80044990,
                     0x800449D8,
+                    0x800449E0,
                     0x80044A08,
                     0x80044A94,
                     0x80044AC0,
@@ -1294,6 +1296,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800449D8:
+                out.append("    if (nc_call_player_button_action(c)) goto L_800449E0;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800449E0, 0x800449EC):
                 after_call = "true" if i.addr == 0x800449E0 else "false"
                 out.extend(
@@ -1557,6 +1561,7 @@ class Emitter:
                 0x8004495C,
                 0x80044974,
                 0x80044998,
+                0x80044A10,
             ):
                 out.append("    if (nc_prepare_player_trigger_exit(c)) goto L_800451D4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
