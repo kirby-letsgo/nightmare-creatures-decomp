@@ -49,6 +49,35 @@ static bool check_shared_record(void) {
     return compare(start, 0x8001078c, nc_launcher_init_shared_record, 1);
 }
 
+static bool run_constructors(CPUState *c) {
+    return nc_launcher_global_callbacks(c, true);
+}
+
+static bool run_destructors(CPUState *c) {
+    return nc_launcher_global_callbacks(c, false);
+}
+
+static bool check_global_callbacks(void) {
+    const u32 flags[] = {0, 1, 0x80000000};
+    for (unsigned ctor = 0; ctor < 2; ctor++)
+        for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; i++) {
+            CPUState start = {0};
+            start.r[1] = 0x3456;
+            start.r[8] = 0x1234;
+            start.r[16] = 0x6789;
+            start.r[17] = 0x9876;
+            start.r[29] = 0x801ffe00;
+            start.r[31] = 0x80010000;
+            start.budget = i ? 4096 : 31;
+            MEM_W32(0x800145f4, flags[i]);
+            u32 entry = ctor ? 0x800108f8 : 0x80010968;
+            if (!compare(start, entry, ctor ? run_constructors : run_destructors, 30) ||
+                MEM_R32(0x800145f4) != (ctor && !flags[i] ? 1 : flags[i]))
+                return false;
+        }
+    return true;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -121,6 +150,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_global_callbacks()) {
+        fprintf(stderr, "launcher global callbacks failed\n");
         return 1;
     }
     for (unsigned selection = 0; selection < 6; selection++)

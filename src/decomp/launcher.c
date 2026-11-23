@@ -191,3 +191,35 @@ bool nc_launcher_init_shared_record(CPUState *c) {
     NC_POLL(c, 2);
     return true;
 }
+
+/* The linker encoded a zero callback count in both SN runtime tables.
+ * __main sets the guard on first use. The destructor entry only reads it. */
+bool nc_launcher_global_callbacks(CPUState *c, bool constructors) {
+    if (c->budget <= 30)
+        return false;
+    R(8) = MEM_R32(0x800145f4);
+    R(29) -= 16;
+    MEM_W32(R(29) + 4, R(16));
+    MEM_W32(R(29) + 8, R(17));
+    MEM_W32(R(29) + 12, R(31));
+    bool initialized = R(8) != 0;
+    int cycles = 22;
+    if (constructors)
+        R(8) = 1;
+    if (constructors != initialized) {
+        if (constructors) {
+            R(1) = 0x80010000;
+            MEM_W32(0x800145f4, R(8));
+            cycles += 2;
+        }
+        R(16) = 0x80010000;
+        R(17) = 0;
+        cycles += 6;
+    }
+    R(31) = MEM_R32(R(29) + 12);
+    R(17) = MEM_R32(R(29) + 8);
+    R(16) = MEM_R32(R(29) + 4);
+    R(29) += 16;
+    c->budget -= cycles;
+    return true;
+}

@@ -1133,6 +1133,9 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr in (0x800108F8, 0x80010968):
+                constructors = "true" if i.addr == 0x800108F8 else "false"
+                out.append(f"    if (nc_launcher_global_callbacks(c, {constructors})) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x8001078C:
                 out.append("    if (nc_launcher_init_shared_record(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80010618:
