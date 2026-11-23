@@ -1083,6 +1083,8 @@ class Emitter:
                     0x80044F2C,
                     0x80045014,
                     0x8004503C,
+                    0x800450B4,
+                    0x800450BC,
                     0x800451DC,
                 )
             )
@@ -1526,6 +1528,17 @@ class Emitter:
                 out.append(
                     f"    if (nc_call_player_down_action(c, {action}, 0x{link:08X}u, "
                     f"{reload_actor})) goto L_{link:08X};"
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800450A8:
+                out.append("    if (nc_call_player_r2_action(c)) goto L_800450B4;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800450B4:
+                out.extend(
+                    [
+                        "    switch (nc_player_r2_action_result(c)) {",
+                        "    case 0x800451E8: goto L_800451E8;",
+                        "    case 0x800450BC: goto L_800450BC;",
+                        "    }",
+                    ]
                 )
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_FACE_PRESSES:
                 mask, next_button = PSX2_PLAYER_FACE_PRESSES[i.addr]

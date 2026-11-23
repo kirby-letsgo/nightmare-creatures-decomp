@@ -907,6 +907,25 @@ bool nc_call_player_down_action(CPUState *c, u32 action, u32 link, bool reload_a
     return true;
 }
 
+bool nc_call_player_r2_action(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(16);
+    R(31) = 0x800450b4;
+    R(5) = R(17);
+    c->budget -= 3;
+    nc_call(c, 0x8004468c);
+    return true;
+}
+
+u32 nc_player_r2_action_result(CPUState *c) {
+    if (c->budget <= 2)
+        return 0x800450b4;
+    R(4) = R(16);
+    c->budget -= 2;
+    return R(2) ? 0x800451e8 : 0x800450bc;
+}
+
 /* The face-button checks use the actor already in a0 for the press test.
  * The branch delay slot reloads a0 from s0 for the next action. */
 bool nc_check_player_face_press(CPUState *c, u32 mask, u32 link) {
