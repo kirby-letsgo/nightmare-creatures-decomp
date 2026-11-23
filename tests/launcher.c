@@ -261,6 +261,23 @@ static bool check_cd_setters(void) {
     return true;
 }
 
+static bool set_test_parameter_count(CPUState *c) {
+    return cd_set_test_parameter_count(c, 0x80015ac0);
+}
+
+static bool check_test_parameter_count(void) {
+    const u32 address = 0x80015ac0, saved = MEM_R32(address);
+    const u32 counts[] = {0x87654321, 0};
+    for (unsigned i = 0; i < sizeof counts / sizeof counts[0]; i++) {
+        CPUState start = arguments(counts[i], 0, 0, 5);
+        if (!compare(start, 0x80013ce8, set_test_parameter_count, 4) ||
+            MEM_R32(address) != counts[i] || nc_cpu.r[2] != start.r[2])
+            return false;
+    }
+    MEM_W32(address, saved);
+    return true;
+}
+
 static bool check_cd_state(void) {
     const struct { u32 entry, address; u8 value; } bytes[] = {
         {0x80011f94, 0x80015828, 0x81},
@@ -849,6 +866,10 @@ int main(int argc, char **argv) {
     }
     if (!check_cd_setters()) {
         fprintf(stderr, "launcher CD state setters failed\n");
+        return 1;
+    }
+    if (!check_test_parameter_count()) {
+        fprintf(stderr, "launcher CD test parameter count failed\n");
         return 1;
     }
     if (!check_cd_state()) {
