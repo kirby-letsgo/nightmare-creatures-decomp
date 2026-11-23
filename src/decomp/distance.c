@@ -5360,6 +5360,41 @@ bool nc_set_other_placement_angles(CPUState *c) {
     return true;
 }
 
+/* Step the halfword before testing for a crossing. The guest keeps the
+ * full sum in a1/a2 but compares its signed low half against the target. */
+u32 nc_step_placement_halfword(CPUState *c) {
+    const u32 previous = R(2);
+    const u32 sum = previous + R(6);
+    const s32 stepped = (s16)sum;
+    const bool descending = (s32)R(4) >= (s32)R(7);
+    int cycles = descending ? 11 : 6;
+    u32 next = 0x80029778;
+    u32 result = 0;
+    u32 target = R(3);
+    if (!descending || (s32)R(7) < stepped) {
+        target = (u32)(s32)(s16)target;
+        cycles += 7;
+        if ((s32)target < (s16)previous) {
+            next = 0x800297b0;
+        } else {
+            cycles += 5;
+            result = stepped < (s32)target;
+            if (result)
+                next = 0x800297ac;
+        }
+    }
+    if (c->budget <= cycles)
+        return 0;
+    MEM_W16(R(5), (u16)sum);
+    R(8) = previous;
+    R(6) = sum;
+    R(5) = sum;
+    R(3) = target;
+    R(2) = result;
+    c->budget -= cycles;
+    return next;
+}
+
 bool nc_finish_placement_angle_step(CPUState *c) {
     if (c->budget <= 8)
         return false;

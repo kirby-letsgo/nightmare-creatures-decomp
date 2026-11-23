@@ -4619,6 +4619,48 @@ static bool alternate_placement_counter_exits(bool disc) {
     return true;
 }
 
+static bool placement_halfword_steps(bool disc) {
+    const struct {
+        s16 start, target;
+        s32 step;
+        u32 next;
+        int cycles;
+    } cases[] = {
+        {10, 5, -5, 0x80029778, 11}, {10, 5, -1, 0x800297b0, 18},
+        {-8, -3, 2, 0x800297ac, 18}, {-8, -3, 6, 0x80029778, 18},
+        {32767, -32768, 1, 0x80029778, 11}, {-32768, 32767, -1, 0x80029778, 18},
+        {0, 2, 0x10001, 0x800297ac, 18},
+    };
+    const u32 field = SCRATCH_BASE + 2;
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[2] = input.r[4] = (u32)(s32)cases[i].start;
+        input.r[3] = 0x12340000 | (u16)cases[i].target;
+        input.r[5] = field;
+        input.r[6] = (u32)cases[i].step;
+        input.r[7] = (u32)(s32)cases[i].target;
+        input.r[31] = cases[i].next;
+        input.budget = cases[i].cycles;
+        const u32 sum = input.r[2] + input.r[6];
+        MEM_W16(field, cases[i].start);
+        CPUState native = input;
+        if (nc_step_placement_halfword(&native) || memcmp(&native, &input, sizeof input) ||
+            MEM_R16(field) != (u16)cases[i].start)
+            return false;
+        native.budget = ++input.budget;
+        if (nc_step_placement_halfword(&native) != cases[i].next || native.budget != 1 ||
+            MEM_R16(field) != (u16)sum || native.r[5] != sum || native.r[6] != sum)
+            return false;
+        if (disc) {
+            MEM_W16(field, cases[i].start);
+            interp_call(&input, 0x8002971c);
+            if (memcmp(&native, &input, sizeof input) || MEM_R16(field) != (u16)sum)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_trees(bool disc) {
     const u32 record = SCRATCH_BASE, root = record + 0x80;
     const unsigned sizes[] = {0, 1, 5};
@@ -8664,6 +8706,7 @@ int main(int argc, char **argv) {
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
+        placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&

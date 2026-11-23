@@ -3038,6 +3038,16 @@ class Emitter:
                 out.append("    if (nc_begin_record_point_heading(c)) {")
                 out.append("        if (R(2)) goto L_800296D0;")
                 out.append("        goto L_800295C4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002971C:
+                out.extend(
+                    [
+                        "    switch (nc_step_placement_halfword(c)) {",
+                        "    case 0x80029778: goto L_80029778;",
+                        "    case 0x800297ac: goto L_800297AC;",
+                        "    case 0x800297b0: goto L_800297B0;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x800296D0:
                 out.append("    if (nc_return_record_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800295C4:
