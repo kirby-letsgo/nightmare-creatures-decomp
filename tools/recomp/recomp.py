@@ -48,8 +48,11 @@ LAUNCHER_IRQ_WRAPPERS = {
 }
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
-# Entry -> (action, return address at the button-history store).
+# Entry -> (action, return address).
 PSX2_PLAYER_SHOULDER_CALLS = {
+    0x80044AC0: (3, 0x80044AC8),
+    0x80044AEC: (4, 0x80044AF4),
+    0x80044B08: (1, 0x80044B10),
     0x80044CBC: (9, 0x80044CC4),
     0x80044CCC: (0x15, 0x80044CD4),
     0x80044CDC: (0x16, 0x80044CE8),
@@ -57,8 +60,9 @@ PSX2_PLAYER_SHOULDER_CALLS = {
     0x80044D08: (4, 0x80044D10),
 }
 
-# Entry -> (action, return address at the button-history store).
+# Entry -> (action, return address).
 PSX2_PLAYER_DOWN_CALLS = {
+    0x80044A94: (2, 0x80044A9C),
     0x8004506C: (0x23, 0x80045078),
     0x80045080: (5, 0x8004508C),
     0x80045084: (5, 0x8004508C),
@@ -1562,6 +1566,10 @@ class Emitter:
                 0x80044974,
                 0x80044998,
                 0x80044A10,
+                0x80044A9C,
+                0x80044AC8,
+                0x80044AF4,
+                0x80044B10,
             ):
                 out.append("    if (nc_prepare_player_trigger_exit(c)) goto L_800451D4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80045014, 0x80045020):
@@ -1587,7 +1595,8 @@ class Emitter:
                 )
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_DOWN_CALLS:
                 action, link = PSX2_PLAYER_DOWN_CALLS[i.addr]
-                reload_actor = "false" if i.addr == 0x80045084 else "true"
+                # Three-instruction entries copy s0 to a0 before the call.
+                reload_actor = "true" if link - i.addr == 12 else "false"
                 out.append(
                     f"    if (nc_call_player_down_action(c, {action}, 0x{link:08X}u, "
                     f"{reload_actor})) goto L_{link:08X};"

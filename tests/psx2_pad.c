@@ -733,7 +733,12 @@ static bool player_action_setup_calls(void) {
     cpu.r[16] = 0x80160000;
     cpu.r[31] = 0x800451d4;
     cpu.budget = 3;
-    return compare(cpu, 0x8004491c, nc_prepare_player_trigger_exit, 2);
+    const u32 exits[] = {0x8004491c, 0x80044a9c, 0x80044ac8, 0x80044af4, 0x80044b10};
+    for (unsigned i = 0; i < sizeof exits / sizeof exits[0]; ++i) {
+        if (!compare(cpu, exits[i], nc_prepare_player_trigger_exit, 2))
+            return false;
+    }
+    return true;
 }
 
 static bool player_state_action_calls(void) {
@@ -831,9 +836,8 @@ static bool player_down_action_calls(void) {
         u32 entry, link, action;
         bool reload_actor;
     } cases[] = {
-        {0x8004506c, 0x80045078, 0x23, true},
-        {0x80045080, 0x8004508c, 5, true},
-        {0x80045084, 0x8004508c, 5, false},
+        {0x80044a94, 0x80044a9c, 2, false}, {0x8004506c, 0x80045078, 0x23, true},
+        {0x80045080, 0x8004508c, 5, true},  {0x80045084, 0x8004508c, 5, false},
         {0x80045094, 0x800450a0, 2, true},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
@@ -1293,6 +1297,8 @@ static bool player_shoulder_action_calls(void) {
     const struct {
         u32 entry, dest, action, previous, flags;
     } cases[] = {
+        {0x80044ac0, 0x80044ac8, 3, 9, 0x8018}, {0x80044aec, 0x80044af4, 4, 9, 0x8018},
+        {0x80044b08, 0x80044b10, 1, 9, 0x8018}, {0x80044b08, 0x80044b10, 1, 1, 0x8018},
         {0x80044cbc, 0x80044cc4, 9, 9, 0},      {0x80044cbc, 0x80044cc4, 9, 0x15, 0x8018},
         {0x80044ccc, 0x80044cd4, 0x15, 0, 8},   {0x80044cdc, 0x80044ce8, 0x16, 0, 8},
         {0x80044cf8, 0x80044d00, 3, 9, 0x8018}, {0x80044d08, 0x80044d10, 4, 9, 0x8018},
