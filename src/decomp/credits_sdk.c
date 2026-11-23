@@ -7629,6 +7629,342 @@ static void load_cd_command_table(CPUState *c, unsigned reg, unsigned offset_reg
     load_word(c, reg, R(1) + table);
 }
 
+static void load_cd_byte(CPUState *c, unsigned reg, u32 address) {
+    R(reg) = MEM_R8(address);
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+static void cd_irq_address(CPUState *c, unsigned reg, u32 address) {
+    set_reg(c, reg, 0x80020000);
+    set_reg(c, reg, address);
+}
+
+static void cd_irq_store_byte(CPUState *c, u32 address, u32 value) {
+    MEM_W8(address, (u8)value);
+    NC_POLL(c, 1);
+}
+
+/* The controller may change interrupt reasons between reads. Keep sampling
+ * until two reasons agree, then drain up to eight bytes and pad the reply. */
+static void read_cd_irq_response(CPUState *c) {
+    NC_POLL(c, 2);
+    for (;;) {
+        load_cd_byte(c, 2, R(4));
+        load_cd_byte(c, 3, R(29) + 16);
+        set_reg(c, 2, R(2) & 7);
+        bool stable = R(3) == R(2);
+        R(16) = 0;
+        NC_POLL(c, 2);
+        if (stable)
+            break;
+        load_cd_byte(c, 2, R(4));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 7);
+        cd_irq_store_byte(c, R(29) + 16, R(2));
+    }
+    set_reg(c, 3, R(29) + 24);
+    for (;;) {
+        cd_flush_port(c, 0x80024a20);
+        load_cd_byte(c, 2, R(2));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 0x20);
+        bool available = R(2) != 0;
+        R(2) = (s32)R(16) < 8;
+        NC_POLL(c, 2);
+        if (!available)
+            break;
+        cd_flush_port(c, 0x80024a24);
+        load_cd_byte(c, 2, R(2));
+        set_reg(c, 16, R(16) + 1);
+        cd_irq_store_byte(c, R(3), R(2));
+        set_reg(c, 2, (s32)R(16) < 8);
+        bool more = R(2) != 0;
+        R(3)++;
+        NC_POLL(c, 2);
+        if (!more) {
+            set_reg(c, 2, (s32)R(16) < 8);
+            break;
+        }
+    }
+    bool pad = R(2) != 0;
+    R(2) = R(29) + 24;
+    NC_POLL(c, 2);
+    if (pad) {
+        set_reg(c, 3, R(16) + R(2));
+        set_reg(c, 4, R(29) + 32);
+        bool more;
+        do {
+            cd_irq_store_byte(c, R(3), 0);
+            set_reg(c, 3, R(3) + 1);
+            set_reg(c, 2, (s32)R(3) < (s32)R(4));
+            more = R(2) != 0;
+            NC_POLL(c, 2);
+        } while (more);
+    }
+    load_cd_port(c, 3, 0x80024a20);
+    set_reg(c, 2, 1);
+    cd_irq_store_byte(c, R(3), R(2));
+    load_cd_port(c, 2, 0x80024a2c);
+    set_reg(c, 3, 7);
+    cd_irq_store_byte(c, R(2), R(3));
+    cd_flush_port(c, 0x80024a28);
+    cd_irq_store_byte(c, R(2), R(3));
+}
+
+static void update_cd_irq_status(CPUState *c) {
+    load_cd_byte(c, 2, R(29) + 16);
+    set_reg(c, 3, 3);
+    set_reg(c, 2, R(2) & 0xff);
+    bool ack = R(2) == R(3);
+    NC_POLL(c, 2);
+    if (ack) {
+        set_reg(c, 2, 0x80020000);
+        load_cd_byte(c, 2, 0x8002477d);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) << 2);
+        load_cd_command_table(c, 2, 2, 0x4920);
+        NC_POLL(c, 1);
+        bool has_status = R(2) != 0;
+        NC_POLL(c, 2);
+        if (!has_status)
+            return;
+    }
+    cd_flush_port(c, 0x8002476c);
+    set_reg(c, 2, R(2) & 0x10);
+    bool lid_was_closed = !R(2);
+    NC_POLL(c, 2);
+    if (lid_was_closed) {
+        load_cd_byte(c, 2, R(29) + 24);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 0x10);
+        bool opened = R(2) != 0;
+        NC_POLL(c, 2);
+        if (opened) {
+            cd_flush_port(c, 0x80024774);
+            set_reg(c, 2, R(2) + 1);
+            store_gpu_global(c, 0x80024774, 2);
+        }
+    }
+    load_cd_byte(c, 2, R(29) + 24);
+    load_cd_byte(c, 3, R(29) + 25);
+    set_reg(c, 2, R(2) & 0xff);
+    set_reg(c, 17, R(2) & 0x1d);
+    store_gpu_global(c, 0x8002476c, 2);
+    store_gpu_global(c, 0x80024770, 3);
+}
+
+static void report_cd_irq_error(CPUState *c) {
+    load_cd_byte(c, 2, R(29) + 16);
+    set_reg(c, 3, 5);
+    set_reg(c, 2, R(2) & 0xff);
+    bool error = R(2) == R(3);
+    NC_POLL(c, 2);
+    if (!error)
+        return;
+    cd_irq_address(c, 4, 0x800188bc);
+    gpu_sync_call(c, 0x8001a638, 0x80020740);
+    cd_flush_port(c, 0x80024768);
+    bool verbose = (s32)R(2) > 0;
+    NC_POLL(c, 2);
+    if (verbose) {
+        set_reg(c, 2, 0x80020000);
+        load_cd_byte(c, 2, 0x8002477d);
+        load_cd_port(c, 6, 0x8002476c);
+        load_cd_port(c, 7, 0x80024770);
+        set_reg(c, 2, R(2) << 2);
+        load_cd_command_table(c, 5, 2, 0x4780);
+        cd_irq_address(c, 4, 0x800188c8);
+        gpu_sync_call(c, 0x80019a60, 0x8002078c);
+    }
+}
+
+/* Each interrupt publishes the padded reply in one or two SDK buffers. */
+static void copy_cd_irq_bytes(CPUState *c, unsigned dest, unsigned count) {
+    set_reg(c, 6, UINT32_MAX);
+    bool more;
+    do {
+        load_cd_byte(c, 2, R(5));
+        set_reg(c, 5, R(5) + 1);
+        set_reg(c, count, R(count) - 1);
+        cd_irq_store_byte(c, R(dest), R(2));
+        more = R(count) != R(6);
+        R(dest)++;
+        NC_POLL(c, 2);
+    } while (more);
+}
+
+static void publish_cd_irq_response(CPUState *c, u32 dest) {
+    cd_irq_address(c, 3, dest);
+    R(5) = R(29) + 24;
+    NC_POLL(c, 2);
+    set_reg(c, 4, 7);
+    copy_cd_irq_bytes(c, 3, 4);
+}
+
+static void cd_irq_ack(CPUState *c) {
+    bool error = R(17) != 0;
+    R(2) = 5;
+    NC_POLL(c, 2);
+    bool second_ack = false;
+    if (!error) {
+        set_reg(c, 2, 0x80020000);
+        load_cd_byte(c, 2, 0x8002477d);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) << 2);
+        load_cd_command_table(c, 2, 2, 0x4820);
+        NC_POLL(c, 1);
+        second_ack = R(2) != 0;
+        R(2) = 3;
+        NC_POLL(c, 2);
+    }
+    cd_irq_address(c, 3, 0x80024a38);
+    if (!error && !second_ack)
+        set_reg(c, 2, 2);
+    cd_irq_store_byte(c, R(3), R(2));
+    publish_cd_irq_response(c, 0x80024e30);
+    R(2) = second_ack ? 1 : 2;
+    NC_POLL(c, 2);
+}
+
+static void cd_irq_complete(CPUState *c) {
+    bool error = R(17) != 0;
+    R(2) = 2;
+    NC_POLL(c, 2);
+    if (error)
+        set_reg(c, 2, 5);
+    set_reg(c, 1, 0x80020000);
+    cd_irq_store_byte(c, 0x80024a38, R(2));
+    publish_cd_irq_response(c, 0x80024e30);
+    R(2) = 2;
+    NC_POLL(c, 2);
+}
+
+static void cd_irq_data_ready(CPUState *c) {
+    bool error = R(17) != 0;
+    R(2) = 1;
+    NC_POLL(c, 2);
+    if (error) {
+        set_reg(c, 2, 1);
+        bool single = R(16) == R(2);
+        NC_POLL(c, 2);
+        if (single)
+            set_reg(c, 17, 0);
+        error = R(17) != 0;
+        R(2) = 1;
+        NC_POLL(c, 2);
+        if (error)
+            set_reg(c, 2, 5);
+    }
+    set_reg(c, 1, 0x80020000);
+    cd_irq_store_byte(c, 0x80024a39, R(2));
+    publish_cd_irq_response(c, 0x80024e38);
+    cd_flush_port(c, 0x80024a20);
+    cd_irq_store_byte(c, R(2), 0);
+    load_cd_port(c, 3, 0x80024a2c);
+    set_reg(c, 2, 4);
+    cd_irq_store_byte(c, R(3), 0);
+    NC_POLL(c, 2);
+}
+
+static void cd_irq_end_or_error(CPUState *c, bool error) {
+    u32 status = error ? 0x80024a39 : 0x80024a3a;
+    cd_irq_address(c, 4, error ? 0x80024e30 : 0x80024e40);
+    set_reg(c, 5, R(29) + 24);
+    set_reg(c, 2, error ? 5 : 4);
+    set_reg(c, 1, 0x80020000);
+    cd_irq_store_byte(c, status, R(2));
+    set_reg(c, 3, 0x80020000);
+    load_cd_byte(c, 3, status);
+    cd_irq_address(c, 2, status - 1);
+    cd_irq_store_byte(c, R(2), R(3));
+    R(3) = 7;
+    NC_POLL(c, 2);
+    copy_cd_irq_bytes(c, 4, 3);
+    publish_cd_irq_response(c, 0x80024e38);
+    R(2) = error ? 6 : 4;
+    NC_POLL(c, 2);
+}
+
+/* getintr returns the SDK event mask for a pending CD controller interrupt. */
+bool nc_credits_get_cd_interrupt(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    set_reg(c, 29, R(29) - 48);
+    load_cd_port(c, 3, 0x80024a20);
+    set_reg(c, 2, 1);
+    MEM_W32(R(29) + 40, R(31));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 36, R(17));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 32, R(16));
+    NC_POLL(c, 1);
+    cd_irq_store_byte(c, R(3), R(2));
+    load_cd_port(c, 4, 0x80024a2c);
+    NC_POLL(c, 1);
+    load_cd_byte(c, 2, R(4));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 7);
+    cd_irq_store_byte(c, R(29) + 16, R(2));
+    load_cd_byte(c, 2, R(29) + 16);
+    NC_POLL(c, 1);
+    bool pending = R(2) != 0;
+    R(17) = 0;
+    NC_POLL(c, 2);
+    if (pending) {
+        read_cd_irq_response(c);
+        update_cd_irq_status(c);
+        report_cd_irq_error(c);
+        load_cd_byte(c, 2, R(29) + 16);
+        NC_POLL(c, 1);
+        set_reg(c, 3, R(2) - 1);
+        set_reg(c, 2, R(3) < 5);
+        bool known = R(2) != 0;
+        R(2) = R(3) << 2;
+        NC_POLL(c, 2);
+        if (known) {
+            load_cd_command_table(c, 2, 2, 0xffff8904);
+            NC_POLL(c, 1);
+            u32 target = R(2);
+            NC_POLL(c, 2);
+            switch (target) {
+            case 0x800207bc:
+                cd_irq_ack(c);
+                break;
+            case 0x800208bc:
+                cd_irq_complete(c);
+                break;
+            case 0x80020908:
+                cd_irq_data_ready(c);
+                break;
+            case 0x8002098c:
+                cd_irq_end_or_error(c, false);
+                break;
+            case 0x80020a14:
+                cd_irq_end_or_error(c, true);
+                break;
+            default:
+                nc_jump(c, target);
+                return true;
+            }
+        } else {
+            cd_irq_address(c, 4, 0x800188e4);
+            gpu_sync_call(c, 0x8001a638, 0x80020aac);
+            load_cd_byte(c, 5, R(29) + 16);
+            cd_irq_address(c, 4, 0x800188f8);
+            gpu_sync_call(c, 0x80019a60, 0x80020ac0);
+            set_reg(c, 2, 0);
+        }
+    } else {
+        set_reg(c, 2, 0);
+    }
+    load_word(c, 31, R(29) + 40);
+    load_word(c, 17, R(29) + 36);
+    load_word(c, 16, R(29) + 32);
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 static void print_cd_command(CPUState *c, unsigned index_reg, u32 format, u32 resume) {
     load_cd_command_table(c, 5, index_reg, 0x4780);
     set_reg(c, 4, 0x80020000);
@@ -8512,15 +8848,10 @@ bool nc_credits_cd_play_track(CPUState *c) {
     return true;
 }
 
-static void load_toc_byte(CPUState *c, unsigned reg, u32 address) {
-    R(reg) = MEM_R8(address);
-    NC_POLL(c, NC_LOAD_CYCLES);
-}
-
 /* Track numbers in both the GetTN reply and GetTD command are packed BCD. */
 static void decode_toc_track_range(CPUState *c) {
-    load_toc_byte(c, 4, R(29) + 25);
-    load_toc_byte(c, 5, R(29) + 26);
+    load_cd_byte(c, 4, R(29) + 25);
+    load_cd_byte(c, 5, R(29) + 26);
     set_reg(c, 3, R(4) >> 4);
     set_reg(c, 2, R(3) << 2);
     set_reg(c, 2, R(2) + R(3));
@@ -8589,11 +8920,11 @@ static bool read_toc_positions(CPUState *c) {
     if (!received)
         return false;
 
-    load_toc_byte(c, 2, R(29) + 25);
+    load_cd_byte(c, 2, R(29) + 25);
     NC_POLL(c, 1);
     MEM_W8(R(20), (u8)R(2));
     NC_POLL(c, 1);
-    load_toc_byte(c, 2, R(29) + 26);
+    load_cd_byte(c, 2, R(29) + 26);
     MEM_W8(R(20) + 2, 0);
     NC_POLL(c, 1);
     MEM_W8(R(20) + 1, (u8)R(2));
@@ -8611,11 +8942,11 @@ static bool read_toc_positions(CPUState *c) {
         NC_POLL(c, 2);
         if (!received)
             return false;
-        load_toc_byte(c, 2, R(29) + 25);
+        load_cd_byte(c, 2, R(29) + 25);
         NC_POLL(c, 1);
         MEM_W8(R(17), (u8)R(2));
         NC_POLL(c, 1);
-        load_toc_byte(c, 2, R(29) + 26);
+        load_cd_byte(c, 2, R(29) + 26);
         set_reg(c, 16, R(16) + 1);
         MEM_W8(R(17) + 2, 0);
         NC_POLL(c, 1);
@@ -8645,8 +8976,8 @@ static void finish_toc_positions(CPUState *c) {
         while (print_position) {
             set_reg(c, 4, 0x80020000);
             set_reg(c, 4, 0x80018c5c);
-            load_toc_byte(c, 5, R(16));
-            load_toc_byte(c, 6, R(16) + 1);
+            load_cd_byte(c, 5, R(16));
+            load_cd_byte(c, 6, R(16) + 1);
             set_reg(c, 16, R(16) + 4);
             R(31) = 0x80023280;
             R(18)++;
@@ -9865,7 +10196,7 @@ static void cache_path_table(CPUState *c) {
     set_reg(c, 21, R(20) + 4);
     bool full = false;
     for (;;) {
-        load_toc_byte(c, 2, R(17));
+        load_cd_byte(c, 2, R(17));
         NC_POLL(c, 1);
         bool end = R(2) == 0;
         R(2) = R(7) << 1;
@@ -9877,7 +10208,7 @@ static void cache_path_table(CPUState *c) {
         copy_directory_word(c, 3, R(17) + 2, R(2));
         set_reg(c, 18, R(16) + R(21));
         set_reg(c, 4, R(18));
-        load_toc_byte(c, 2, R(17) + 6); /* low byte of parent number */
+        load_cd_byte(c, 2, R(17) + 6); /* low byte of parent number */
         set_reg(c, 19, R(7) + 1);
         set_reg(c, 1, 0x80020000);
         set_reg(c, 1, R(1) + R(16));
@@ -9887,17 +10218,17 @@ static void cache_path_table(CPUState *c) {
         set_reg(c, 1, R(1) + R(16));
         MEM_W32(R(1) + 0x5458, R(2));
         NC_POLL(c, 1);
-        load_toc_byte(c, 6, R(17));
+        load_cd_byte(c, 6, R(17));
         R(31) = 0x80022100;
         R(5) = R(17) + 8;
         NC_POLL(c, 2);
         nc_call(c, 0x800225cc);
-        load_toc_byte(c, 2, R(17));
+        load_cd_byte(c, 2, R(17));
         NC_POLL(c, 1);
         set_reg(c, 2, R(18) + R(2));
         MEM_W8(R(2), 0);
         NC_POLL(c, 1);
-        load_toc_byte(c, 3, R(17));
+        load_cd_byte(c, 3, R(17));
         NC_POLL(c, 1);
         set_reg(c, 2, R(3) & 1); /* ISO identifiers pad to an even length */
         set_reg(c, 2, R(2) + 8);
@@ -10039,14 +10370,14 @@ bool nc_credits_load_cd_paths(CPUState *c) {
 /* Copy one path component to the guest stack. Leave the cursor on its
  * delimiter. The original reads the delimiter again before consuming it. */
 static bool read_cd_path_component(CPUState *c) {
-    load_toc_byte(c, 2, R(16));
+    load_cd_byte(c, 2, R(16));
     NC_POLL(c, 1);
     bool separator = R(2) == R(20);
     R(17) = R(29) + 16;
     NC_POLL(c, 2);
     if (!separator) {
         set_reg(c, 3, 92);
-        load_toc_byte(c, 2, R(16));
+        load_cd_byte(c, 2, R(16));
         for (;;) {
             NC_POLL(c, 1);
             bool end = !R(2);
@@ -10054,11 +10385,11 @@ static bool read_cd_path_component(CPUState *c) {
             NC_POLL(c, 2);
             if (end)
                 return false;
-            load_toc_byte(c, 2, R(16));
+            load_cd_byte(c, 2, R(16));
             set_reg(c, 16, R(16) + 1);
             MEM_W8(R(17), (u8)R(2));
             NC_POLL(c, 1);
-            load_toc_byte(c, 2, R(16));
+            load_cd_byte(c, 2, R(16));
             NC_POLL(c, 1);
             separator = R(2) == R(3);
             R(17)++;
@@ -10066,7 +10397,7 @@ static bool read_cd_path_component(CPUState *c) {
             if (separator)
                 break;
         }
-        load_toc_byte(c, 2, R(16));
+        load_cd_byte(c, 2, R(16));
     }
     NC_POLL(c, 1);
     bool directory = R(2) != 0;
@@ -10110,7 +10441,7 @@ static bool find_cd_parent_directory(CPUState *c) {
     bool depth_ok = R(2) != 0;
     NC_POLL(c, 2);
     if (depth_ok) {
-        load_toc_byte(c, 2, R(29) + 16);
+        load_cd_byte(c, 2, R(29) + 16);
         NC_POLL(c, 1);
         bool have_name = R(2) != 0;
         NC_POLL(c, 2);
@@ -10190,7 +10521,7 @@ static void find_cached_cd_file(CPUState *c) {
     for (;;) {
         set_reg(c, 1, 0x80020000);
         set_reg(c, 1, R(1) + R(17));
-        load_toc_byte(c, 2, R(1) + 0x4e5c);
+        load_cd_byte(c, 2, R(1) + 0x4e5c);
         NC_POLL(c, 1);
         bool end = R(2) == 0;
         R(4) = R(19);
@@ -10285,7 +10616,7 @@ bool nc_credits_search_cd_file(CPUState *c) {
         }
     }
     if (current) {
-        load_toc_byte(c, 3, R(19));
+        load_cd_byte(c, 3, R(19));
         set_reg(c, 2, 92);
         bool absolute = R(3) == R(2);
         R(4) = 1;
@@ -10333,12 +10664,12 @@ static void cache_directory_name(CPUState *c) {
         return;
     }
     NC_POLL(c, 2);
-    load_toc_byte(c, 6, R(16) + 32);
+    load_cd_byte(c, 6, R(16) + 32);
     R(31) = 0x80022444;
     R(5) = R(16) + 33;
     NC_POLL(c, 2);
     nc_call(c, 0x800225cc); /* copy ISO identifier */
-    load_toc_byte(c, 2, R(16) + 32);
+    load_cd_byte(c, 2, R(16) + 32);
     NC_POLL(c, 1);
     set_reg(c, 2, R(19) + R(2));
     MEM_W8(R(2), 0);
@@ -10349,7 +10680,7 @@ static void report_directory_entry(CPUState *c) {
     for (unsigned reg = 5; reg <= 7; reg++) {
         set_reg(c, 1, 0x80020000);
         set_reg(c, 1, R(1) + R(17));
-        load_toc_byte(c, reg, R(1) + 0x4e54 + reg - 5);
+        load_cd_byte(c, reg, R(1) + 0x4e54 + reg - 5);
     }
     set_reg(c, 1, 0x80020000);
     set_reg(c, 1, R(1) + R(17));
@@ -10384,7 +10715,7 @@ static void cache_directory_records(CPUState *c) {
     set_reg(c, 17, 0);
     set_reg(c, 20, R(21));
     for (;;) {
-        load_toc_byte(c, 2, R(16));
+        load_cd_byte(c, 2, R(16));
         NC_POLL(c, 1);
         bool end = R(2) == 0;
         NC_POLL(c, 2);
@@ -10409,7 +10740,7 @@ static void cache_directory_records(CPUState *c) {
         if (verbose)
             report_directory_entry(c);
         set_reg(c, 19, R(19) + 24);
-        load_toc_byte(c, 2, R(16));
+        load_cd_byte(c, 2, R(16));
         set_reg(c, 18, R(18) + 1);
         set_reg(c, 16, R(16) + R(2));
         set_reg(c, 2, (s32)R(18) < 64);
