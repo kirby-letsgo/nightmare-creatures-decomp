@@ -308,6 +308,7 @@ slus_005_82  800109F0    800109FC         bios_service.h
 slus_005_82  80010A00    80010A0C         bios_service.h
 slus_005_82  80010A18    80010A24         bios_service.h
 slus_005_82  80010A30    80010A40         bios_service.h
+slus_005_82  80010A40    80010A4C         launcher.c
 slus_005_82  80010A50    80010A80         interrupt_driver.h
 slus_005_82  80010A80    80010AB0         interrupt_driver.h
 slus_005_82  80010AB0    80010AE0         interrupt_driver.h

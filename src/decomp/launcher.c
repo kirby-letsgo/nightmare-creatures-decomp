@@ -45,6 +45,16 @@ static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
     NC_POLL(c, 2);
 }
 
+/* Return the previous stack pointer and install the caller's stack. */
+bool nc_launcher_switch_stack(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(2) = R(29);
+    R(29) = R(4);
+    c->budget -= 3;
+    return true;
+}
+
 /* Resident launcher main. Returning overlays select the next executable by
  * writing its index into the shared record at offset 0x24. */
 bool nc_launcher_run_modules(CPUState *c) {
