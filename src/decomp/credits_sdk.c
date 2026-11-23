@@ -948,6 +948,113 @@ bool nc_credits_gpu_fill_bytes(CPUState *c) {
     return true;
 }
 
+/* Read DMA2 CHCR or GPUSTAT through the driver's port pointer. */
+static void read_gpu_sync_bit(CPUState *c, u32 port_slot, u32 mask) {
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, port_slot);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(2));
+    set_reg(c, 3, mask);
+    set_reg(c, 2, R(2) & R(3));
+}
+
+static bool gpu_queue_ready(CPUState *c, bool blocking) {
+    read_gpu_sync_bit(c, 0x80024638, 1u << 24);
+    bool dma_busy = R(2) != 0;
+    NC_POLL(c, 2);
+    if (dma_busy)
+        return false;
+    read_gpu_sync_bit(c, 0x8002462c, 1u << 26);
+    bool ready = R(2) != 0;
+    if (blocking)
+        R(2) = 0; /* delay slot supplies the success result */
+    NC_POLL(c, 2);
+    return ready;
+}
+
+static void gpu_sync_call(CPUState *c, u32 target, u32 resume) {
+    R(31) = resume;
+    NC_POLL(c, 2);
+    nc_call(c, target);
+}
+
+static bool gpu_sync_timed_out(CPUState *c, u32 resume) {
+    gpu_sync_call(c, 0x8001ea30, resume); /* get_alarm */
+    bool expired = R(2) != 0;
+    R(2) = UINT32_MAX;
+    NC_POLL(c, 2);
+    return expired;
+}
+
+static void drain_gpu_queue(CPUState *c) {
+    gpu_sync_call(c, 0x8001e9fc, 0x8001e8cc); /* set_alarm */
+    NC_POLL(c, 2);
+    for (;;) {
+        set_reg(c, 3, 0x80020000);
+        load_word(c, 3, 0x8002465c);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80024660);
+        NC_POLL(c, 1);
+        bool empty = R(3) == R(2);
+        NC_POLL(c, 2);
+        if (empty)
+            break;
+        NC_POLL(c, 2);
+        gpu_sync_call(c, 0x8001e45c, 0x8001e8dc); /* _exeque */
+        if (gpu_sync_timed_out(c, 0x8001e8e4))
+            return;
+    }
+    while (!gpu_queue_ready(c, true)) {
+        if (gpu_sync_timed_out(c, 0x8001e918))
+            return;
+    }
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_sync_gpu_queue(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 24;
+    c->budget--;
+    MEM_W32(R(29) + 20, R(31));
+    c->budget--;
+    bool blocking = R(4) == 0;
+    MEM_W32(R(29) + 16, R(16));
+    c->budget -= 2;
+    if (blocking) {
+        drain_gpu_queue(c);
+    } else {
+        /* Report the original depth even if _exeque advances the queue. */
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x8002465c);
+        set_reg(c, 3, 0x80020000);
+        load_word(c, 3, 0x80024660);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) - R(3));
+        set_reg(c, 16, R(2) & 63);
+        bool queued = R(16) != 0;
+        NC_POLL(c, 2);
+        if (queued)
+            gpu_sync_call(c, 0x8001e45c, 0x8001e994);
+        if (gpu_queue_ready(c, false)) {
+            set_reg(c, 2, R(16));
+        } else {
+            bool empty = R(16) == 0;
+            R(2) = R(16);
+            NC_POLL(c, 2);
+            if (empty) {
+                R(2) = 1;
+                NC_POLL(c, 2);
+            }
+        }
+    }
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_set_queue_alarm(CPUState *c) {
     if (c->budget <= 4)
         return false;
