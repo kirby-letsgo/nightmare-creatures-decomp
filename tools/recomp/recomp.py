@@ -776,6 +776,8 @@ class Emitter:
             targets.add(0x8002AE1C)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380))
+        if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
+            targets.add(0x80029524)
         if self.mod.name == "psx2_exe" and f.addr == 0x8002959C:
             targets.update((0x800295C4, 0x800295E0, 0x800295F8, 0x80029620, 0x80029658, 0x800296B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x8001AC28:
@@ -1642,6 +1644,13 @@ class Emitter:
                 out.append("    if (nc_check_record_projection_limit(c)) {")
                 out.append("        if (R(2)) goto L_80029460;")
                 out.append("        goto L_800292D4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x800294F0:
+                out.append("    if (nc_set_type7_pose_angles(c)) {")
+                out.append("        if (R(3) != 7) goto L_80029544;")
+                out.append("        if (R(8)) goto L_80029524;")
+                out.append("        goto L_80029584; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029524:
+                out.append("    if (nc_set_type7_linked_heading(c)) goto L_80029584;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002959C:
                 out.append("    if (nc_begin_record_point_heading(c)) {")
                 out.append("        if (R(2)) goto L_800296D0;")
