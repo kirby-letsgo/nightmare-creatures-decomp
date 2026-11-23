@@ -148,6 +148,7 @@ bool nc_credits_put_draw_env(CPUState *c);
 bool nc_credits_draw_otag(CPUState *c);
 bool nc_credits_draw_sync(CPUState *c);
 bool nc_credits_draw_sync_callback(CPUState *c);
+bool nc_credits_set_graph_reverse(CPUState *c);
 bool nc_credits_set_graph_queue(CPUState *c);
 bool nc_credits_set_graph_debug(CPUState *c);
 bool nc_credits_tim_info(CPUState *c);
