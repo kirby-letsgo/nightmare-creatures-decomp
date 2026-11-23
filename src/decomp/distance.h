@@ -52,6 +52,7 @@ bool nc_measure_placement_quad(CPUState *c, bool textured);
 bool nc_measure_placement_triangle(CPUState *c);
 bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 limit, bool *accept);
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame);
+bool nc_return_placement_lighting(CPUState *c, bool has_records);
 bool nc_light_placement_color_record(CPUState *c);
 bool nc_begin_placement_color_records(CPUState *c, bool *has_records);
 bool nc_adjust_placement_color(CPUState *c);
