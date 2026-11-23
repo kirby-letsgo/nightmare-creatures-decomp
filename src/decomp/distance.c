@@ -3396,6 +3396,42 @@ bool nc_measure_placement_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_begin_textured_faces(CPUState *c, bool quad) {
+    if (c->budget <= 27)
+        return false;
+    const u32 frame = R(29) - 0x68;
+    R(29) = frame;
+    if (quad)
+        MEM_W32(frame + 0x58, R(22));
+    R(quad ? 22 : 8) = R(5);
+    MEM_W32(frame + 0x54, R(21));
+    R(21) = MEM_R32(R(28) + (quad ? 0x380 : 0x37c));
+    R(5) = MEM_R32(frame + 0x78);
+    if (quad) {
+        R(9) = 0;
+        MEM_W32(frame + 0x60, R(30));
+        R(30) = MEM_R32(R(28) + 0x2a0);
+        MEM_W32(frame + 0x64, R(31));
+        MEM_W32(frame + 0x5c, R(23));
+    } else {
+        MEM_W32(frame + 0x18, R(7));
+        R(7) = 0;
+        MEM_W32(frame + 0x5c, R(23));
+        R(23) = MEM_R32(R(28) + 0x29c);
+        MEM_W32(frame + 0x64, R(31));
+        MEM_W32(frame + 0x60, R(30));
+        MEM_W32(frame + 0x58, R(22));
+    }
+    for (int reg = 20; reg >= 16; --reg)
+        MEM_W32(frame + 0x40 + 4 * (reg - 16), R(reg));
+    MEM_W32(frame + 0x10, R(6));
+    if (quad)
+        MEM_W32(frame + 0x18, R(7));
+    R(3) = MEM_R32(R(4) + (quad ? 0x20 : 0x18));
+    c->budget -= 27;
+    return true;
+}
+
 bool nc_read_textured_face_count(CPUState *c, bool quad) {
     if (c->budget <= 6)
         return false;
