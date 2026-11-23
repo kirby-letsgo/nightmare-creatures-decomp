@@ -107,6 +107,23 @@ u32 nc_player_input_state_gate(CPUState *c) {
     return 0x800451d4;
 }
 
+/* The first branch loads the mask even when it takes the action call.
+ * The second entry consumes the mask already in v1. */
+u32 nc_player_secondary_flag_route(CPUState *c, bool check_incoming) {
+    if (c->budget <= (check_incoming ? 9 : 7))
+        return check_incoming ? 0x80044964 : 0x8004497c;
+
+    if (check_incoming) {
+        R(3) = 0x10000000;
+        c->budget -= 2;
+        if (R(2))
+            return 0x8004496c;
+    }
+    R(2) = MEM_R32(R(16) + 0x2cc) & R(3);
+    c->budget -= 7;
+    return R(2) ? 0x80044990 : 0x800449a0;
+}
+
 /* Actions 13, 14 and 24, and states 13 and 14, skip the next input
  * call. Otherwise flag 0x8000 selects the direct state check. */
 u32 nc_player_input_action_gate(CPUState *c) {
