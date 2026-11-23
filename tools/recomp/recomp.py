@@ -1274,6 +1274,8 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80011F0C, 0x80011F34, 0x80011F5C):
                 spec = 0x20 if i.addr == 0x80011F0C else 0x40
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013DD8:
+                out.append("    if (sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011160:
                 out.append("    if (sdk_printf(c, 0x8001119c, 0x8001118c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800135E4:
@@ -3919,6 +3921,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/cd_position.h"')
         header.append('#include "decomp/launcher.h"')
         header.append('#include "decomp/sdk_printf.h"')
+        header.append('#include "decomp/sdk_puts.h"')
         header.append('#include "decomp/jump_context.h"')
         header.append('#include "decomp/interrupt_driver.h"')
     if mod.name == "credits_exe":
