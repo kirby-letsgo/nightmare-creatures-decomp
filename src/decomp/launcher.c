@@ -6,7 +6,7 @@
 #include "decomp/vblank_wait.h"
 #include "decomp/cd_init.h"
 #include "decomp/cd_state.h"
-#include "decomp/interrupt_control.h"
+#include "decomp/interrupt_dispatch.h"
 #include "decomp/launcher.h"
 
 static void call_launcher_service(CPUState *c, u32 address, u32 resume) {
@@ -262,6 +262,10 @@ bool nc_launcher_global_callbacks(CPUState *c, bool constructors) {
 }
 
 static const InterruptControlLayout interrupt_control = {
+    .uninitialized_message = 0x800100d4,
+    .unhandled_message = 0x800100f0,
+    .print = 0x80011160,
+    .return_from_exception = 0x80011a3c,
     .set_handler = 0x80010eac,
     .clear_pad = 0x80011a8c,
     .clear_rcnt = 0x80011a9c,
@@ -281,6 +285,10 @@ static const InterruptControlLayout interrupt_control = {
     .reset_hook = 0x80011a4c,
     .install_hook = 0x80011a5c,
 };
+
+bool nc_launcher_dispatch_interrupts(CPUState *c) {
+    return dispatch_interrupts(c, &interrupt_control);
+}
 
 bool nc_launcher_set_interrupt_handler(CPUState *c) {
     return set_interrupt_handler(c, &interrupt_control);

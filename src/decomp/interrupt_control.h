@@ -18,6 +18,7 @@ typedef struct {
     u32 set_handler, clear_pad, clear_rcnt;
     u32 clear, save_context, trap, start_vsync, start_dma, remove;
     u32 enter_critical, exit_critical;
+    u32 uninitialized_message, unhandled_message, print, return_from_exception;
     u32 reset_hook, install_hook;
 } InterruptControlLayout;
 

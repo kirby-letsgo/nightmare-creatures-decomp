@@ -1,3 +1,4 @@
+#include "interrupt_dispatch.h"
 #include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_interrupt_callback.h"
@@ -1064,6 +1065,11 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!compare_interrupt_dispatch(0x80010cc4, nc_launcher_dispatch_interrupts, 0x80014620,
+                                    0x800156ac, 0x80011160, 0x80011a3c, 0x800100d4, 0x800100f0)) {
+        fprintf(stderr, "launcher interrupt dispatch failed\n");
         return 1;
     }
     if (!compare_set_interrupt_handler(0x80010eac, nc_launcher_set_interrupt_handler, 0x80014620)) {

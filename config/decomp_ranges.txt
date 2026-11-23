@@ -369,6 +369,7 @@ slus_005_82  80010BA4    80010BB4         interrupt_driver.h
 slus_005_82  80010BB4    80010BCC         interrupt_driver.h
 slus_005_82  80010BCC    80010BE8         interrupt_driver.h
 slus_005_82  80010BE8    80010CC4         interrupt_control.h
+slus_005_82  80010CC4    80010EAC         interrupt_dispatch.h
 slus_005_82  80010EAC    80011000         interrupt_control.h
 slus_005_82  80011000    800110AC         interrupt_control.h
 slus_005_82  800110AC    80011134         interrupt_control.h
@@ -492,7 +493,7 @@ credits_exe  8001A7EC    8001A7FC         credits_sdk.c
 credits_exe  8001A7FC    8001A814         credits_sdk.c
 credits_exe  8001A814    8001A830         credits_sdk.c
 credits_exe  8001A830    8001A90C         credits_sdk.c
-credits_exe  8001A90C    8001AAF4         credits_sdk.c
+credits_exe  8001A90C    8001AAF4         interrupt_dispatch.h
 credits_exe  8001AAF4    8001AC48         credits_sdk.c
 credits_exe  8001AC48    8001ACF4         credits_sdk.c
 credits_exe  8001ACF4    8001AD7C         credits_sdk.c

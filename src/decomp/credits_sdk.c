@@ -14,7 +14,7 @@
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
 #include "decomp/cd_volume.h"
-#include "decomp/interrupt_control.h"
+#include "decomp/interrupt_dispatch.h"
 #include "decomp/bios_service.h"
 #include "decomp/credits.h"
 #include "decomp/interrupt_driver.h"
@@ -6368,180 +6368,11 @@ bool nc_credits_exit_critical_section(CPUState *c) {
     return critical_section_syscall(c, 2);
 }
 
-static void load_irq_halfword(CPUState *c, unsigned reg, u32 address) {
-    R(reg) = MEM_R16(address);
-    NC_POLL(c, NC_LOAD_CYCLES);
-}
-
-/* a0 holds the I_STAT pointer on entry. Only dispatch enabled sources with
- * a bit set in both I_STAT and I_MASK. */
-static bool sample_pending_interrupts(CPUState *c) {
-    set_reg(c, 2, 0x80020000);
-    load_irq_halfword(c, 2, 0x80023448);
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x800244a8);
-    load_irq_halfword(c, 4, R(4));
-    load_irq_halfword(c, 3, R(3));
-    set_reg(c, 2, R(2) & R(4));
-    set_reg(c, 16, R(3) & R(2));
-    bool pending = R(16) != 0;
-    NC_POLL(c, 2);
-    return pending;
-}
-
-static void dispatch_irq_slots(CPUState *c) {
-    R(17) = 0; /* source index, in the branch delay slot */
-    NC_POLL(c, 2);
-    set_reg(c, 18, R(20));
-    for (;;) {
-        set_reg(c, 2, (s32)R(17) < 11);
-        bool valid = R(2) != 0;
-        R(2) = R(16) & 1;
-        NC_POLL(c, 2);
-        if (!valid)
-            break;
-        bool active = R(2) != 0;
-        R(2) = R(19) << (R(17) & 31);
-        NC_POLL(c, 2);
-        if (active) {
-            set_reg(c, 3, 0x80020000);
-            load_word(c, 3, 0x800244a4);
-            set_reg(c, 2, ~R(2));
-            MEM_W16(R(3), (u16)R(2)); /* acknowledge before calling the handler */
-            NC_POLL(c, 1);
-            load_word(c, 2, R(18));
-            NC_POLL(c, 1);
-            bool installed = R(2) != 0;
-            NC_POLL(c, 2);
-            if (installed) {
-                u32 target = R(2);
-                R(31) = 0x8001a9f4;
-                NC_POLL(c, 2);
-                nc_call(c, target);
-            }
-        }
-        set_reg(c, 18, R(18) + 4);
-        set_reg(c, 16, R(16) >> 1);
-        set_reg(c, 2, R(16) & 0xffff);
-        bool more = R(2) != 0;
-        R(17)++;
-        NC_POLL(c, 2);
-        if (!more)
-            break;
-    }
-}
-
-bool nc_credits_dispatch_interrupts(CPUState *c) {
-    if (c->budget <= 9)
-        return false;
-    R(29) -= 40;
-    c->budget--;
-    MEM_W32(R(29) + 20, R(17));
-    c->budget--;
-    R(17) = 0x80023418;
-    c->budget -= 2;
-    MEM_W32(R(29) + 36, R(31));
-    c->budget--;
-    for (unsigned reg = 20; reg >= 18; reg--) {
-        MEM_W32(R(29) + 16 + 4 * (reg - 16), R(reg));
-        c->budget--;
-    }
-    MEM_W32(R(29) + 16, R(16));
-    c->budget--;
-    load_irq_halfword(c, 2, R(17));
-    NC_POLL(c, 1);
-    bool initialized = R(2) != 0;
-    NC_POLL(c, 2);
-    if (!initialized) {
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, 0x800244a4);
-        NC_POLL(c, 1);
-        load_irq_halfword(c, 5, R(2));
-        set_reg(c, 4, 0x80020000);
-        set_reg(c, 4, 0x80018344);
-        R(31) = 0x8001a960;
-        NC_POLL(c, 2);
-        nc_call(c, 0x80019a60); /* printf */
-        R(31) = 0x8001a968;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001ae48); /* ReturnFromException */
-    }
-
-    set_reg(c, 4, 0x80020000);
-    load_word(c, 4, 0x800244a4);
-    set_reg(c, 2, 1);
-    set_reg(c, 1, 0x80020000);
-    MEM_W16(0x8002341a, (u16)R(2)); /* inside interrupt handler */
-    NC_POLL(c, 1);
-    if (sample_pending_interrupts(c)) {
-        set_reg(c, 19, 1);
-        set_reg(c, 20, R(17) + 4);
-        do {
-            dispatch_irq_slots(c);
-            set_reg(c, 4, 0x80020000);
-            load_word(c, 4, 0x800244a4);
-        } while (sample_pending_interrupts(c));
-    }
-
-    /* Count consecutive entries with an unhandled interrupt still asserted. */
-    set_reg(c, 5, 0x80020000);
-    load_word(c, 5, 0x800244a4);
-    set_reg(c, 6, 0x80020000);
-    load_word(c, 6, 0x800244a8);
-    load_irq_halfword(c, 2, R(5));
-    load_irq_halfword(c, 3, R(6));
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(2) & R(3));
-    bool unhandled = R(2) != 0;
-    NC_POLL(c, 2);
-    if (unhandled) {
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, 0x800244b0);
-        NC_POLL(c, 1);
-        set_reg(c, 3, R(2) + 1);
-        set_reg(c, 2, (s32)R(2) < 0x801);
-        set_reg(c, 1, 0x80020000);
-        MEM_W32(0x800244b0, R(3));
-        NC_POLL(c, 1);
-        bool report = !R(2);
-        NC_POLL(c, 2);
-        if (report) {
-            set_reg(c, 4, 0x80020000);
-            set_reg(c, 4, 0x80018360);
-            load_irq_halfword(c, 5, R(5));
-            load_irq_halfword(c, 6, R(6));
-            R(31) = 0x8001aa9c;
-            NC_POLL(c, 2);
-            nc_call(c, 0x80019a60);
-            set_reg(c, 2, 0x80020000);
-            load_word(c, 2, 0x800244a4);
-            set_reg(c, 1, 0x80020000);
-            MEM_W32(0x800244b0, 0);
-            NC_POLL(c, 1);
-            MEM_W16(R(2), 0);
-            NC_POLL(c, 1);
-            NC_POLL(c, 2);
-        }
-    } else {
-        set_reg(c, 1, 0x80020000);
-        MEM_W32(0x800244b0, 0);
-        NC_POLL(c, 1);
-    }
-    set_reg(c, 1, 0x80020000);
-    MEM_W16(0x8002341a, 0);
-    NC_POLL(c, 1);
-    R(31) = 0x8001aad0;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001ae48);
-    load_word(c, 31, R(29) + 36);
-    for (unsigned reg = 20; reg >= 16; reg--)
-        load_word(c, reg, R(29) + 16 + 4 * (reg - 16));
-    set_reg(c, 29, R(29) + 40);
-    NC_POLL(c, 2);
-    return true;
-}
-
 static const InterruptControlLayout interrupt_control = {
+    .uninitialized_message = 0x80018344,
+    .unhandled_message = 0x80018360,
+    .print = 0x80019a60,
+    .return_from_exception = 0x8001ae48,
     .set_handler = 0x8001aaf4,
     .clear_pad = 0x8001a2ac,
     .clear_rcnt = 0x8001a688,
@@ -6561,6 +6392,10 @@ static const InterruptControlLayout interrupt_control = {
     .reset_hook = 0x8001ae58,
     .install_hook = 0x8001ae68,
 };
+
+bool nc_credits_dispatch_interrupts(CPUState *c) {
+    return dispatch_interrupts(c, &interrupt_control);
+}
 
 bool nc_credits_set_interrupt_handler(CPUState *c) {
     return set_interrupt_handler(c, &interrupt_control);
