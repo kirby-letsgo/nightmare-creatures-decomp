@@ -5378,6 +5378,17 @@ bool nc_begin_placement_dispatch(CPUState *c) {
     return true;
 }
 
+bool nc_load_placement_selector_target(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 offset = R(3) << 2;
+    /* The lui uses the rounded high half for the signed load displacement. */
+    R(1) = 0x80020000u + offset;
+    R(2) = MEM_R32(0x80018348u + offset);
+    c->budget -= 7;
+    return true;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
