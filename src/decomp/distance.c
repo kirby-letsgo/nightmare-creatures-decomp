@@ -3843,18 +3843,18 @@ bool nc_install_placement_matrices(CPUState *c, u32 continuation) {
 
 /* Project the signed pose coordinates and keep the latest GTE depth (SZ3).
  * The branch compares depth and threshold before the delay-slot subtraction. */
-bool nc_project_placement_depth(CPUState *c, u32 depth_offset) {
+bool nc_project_placement_depth(CPUState *c, u32 pose, u32 depth_offset, unsigned depth_reg) {
     if (c->budget <= 23)
         return false;
-    const u32 point = R(18) + 0x10;
+    const u32 point = pose + 0x10;
     gte_write_data(c, 0, MEM_R32(point));
     gte_write_data(c, 1, MEM_R32(point + 4));
     gte_command(c, 0x0180001); /* RTPS */
     const u32 depth_slot = R(29) + depth_offset;
     MEM_W32(depth_slot, gte_read_data(c, 19));
-    R(4) = MEM_R32(depth_slot);
+    R(depth_reg) = MEM_R32(depth_slot);
     R(3) = MEM_R32(0x8008f108);
-    R(2) = R(4) - R(3);
+    R(2) = R(depth_reg) - R(3);
     c->budget -= 23;
     return true;
 }

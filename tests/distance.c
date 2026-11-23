@@ -4082,9 +4082,8 @@ static bool placement_projection_matrices(bool disc) {
     return ok;
 }
 
-static bool placement_depths(bool disc, bool small_frame) {
-    const u32 depth_offset = small_frame ? 0x160 : 0x2d8;
-    const u32 cue_pc = small_frame ? 0x80028d8c : 0x80028b0c;
+static bool placement_depths(bool disc, u32 cue_pc, u32 depth_offset, unsigned pose_reg,
+                             unsigned depth_reg) {
     const u32 frame = SCRATCH_BASE, pose = frame + 0x40;
     const u32 saved_limit = MEM_R32(0x8008f108);
     static const struct {
@@ -4097,7 +4096,7 @@ static bool placement_depths(bool disc, bool small_frame) {
                  {INT16_MAX, 0, 1, INT32_MIN, 1}};
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
-        input.r[18] = pose;
+        input.r[pose_reg] = pose;
         input.r[29] = frame;
         input.r[31] = (s32)cases[i].depth > cases[i].limit ? cue_pc : cue_pc + 0x2c;
         for (unsigned reg = 0; reg < 5; ++reg)
@@ -4111,12 +4110,13 @@ static bool placement_depths(bool disc, bool small_frame) {
         memcpy(before, nc_scratch, sizeof before);
         input.budget = 23;
         CPUState native = input;
-        if (nc_project_placement_depth(&native, depth_offset) ||
+        if (nc_project_placement_depth(&native, native.r[pose_reg], depth_offset, depth_reg) ||
             memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_project_placement_depth(&native, depth_offset) || native.budget != 1 ||
-            native.r[4] != cases[i].depth || native.r[3] != (u32)cases[i].limit ||
+        if (!nc_project_placement_depth(&native, native.r[pose_reg], depth_offset, depth_reg) ||
+            native.budget != 1 || native.r[depth_reg] != cases[i].depth ||
+            native.r[3] != (u32)cases[i].limit ||
             native.r[2] != cases[i].depth - (u32)cases[i].limit ||
             MEM_R32(frame + depth_offset) != cases[i].depth)
             return false;
@@ -6904,18 +6904,20 @@ int main(int argc, char **argv) {
         textured_quad_packets(disc) && textured_triangle_packets(disc) &&
         projected_triangle_packets(disc) && projected_quad_packets(disc) &&
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
-        placement_depths(disc, false) && placement_depths(disc, true) &&
-        placement_depth_cues(disc, false) && placement_depth_cues(disc, true) &&
-        placement_pose_stack(disc) && placement_pose_exits(disc, false) &&
-        placement_pose_exits(disc, true) && placement_vertex_dispatch(disc) &&
-        placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
-        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
-        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
-        placement_transform_flags(disc) && placement_projection_args(disc) &&
-        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
+        placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_depths(disc, 0x80027f0c, 8, 5, 5) && placement_depth_cues(disc, false) &&
+        placement_depth_cues(disc, true) && placement_pose_stack(disc) &&
+        placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
+        placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
+        placement_vertex_triples(disc, true) && remaining_placement_vertices(disc, false) &&
+        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
+        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
+        placement_projection_args(disc) && placement_angle_entries(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
