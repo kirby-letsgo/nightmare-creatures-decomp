@@ -3152,6 +3152,54 @@ static bool placement_angle_calls(bool disc) {
     return true;
 }
 
+static bool placement_depths(bool disc) {
+    const u32 frame = SCRATCH_BASE, pose = frame + 0x40;
+    const u32 saved_limit = MEM_R32(0x8008f108);
+    static const struct {
+        s16 x, y, z;
+        s32 limit;
+        u32 depth;
+    } cases[] = {{0, 0, 0, 0, 0},
+                 {INT16_MIN, INT16_MAX, -1, 1, 0},
+                 {0, -1, INT16_MAX, INT16_MAX - 1, INT16_MAX},
+                 {INT16_MAX, 0, 1, INT32_MIN, 1}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[18] = pose;
+        input.r[29] = frame;
+        input.r[31] = (s32)cases[i].depth > cases[i].limit ? 0x80028b0c : 0x80028b38;
+        for (unsigned reg = 0; reg < 5; ++reg)
+            gte_write_ctrl(&input, reg, reg % 2 == 0 ? 4096 : 0);
+        MEM_W16(pose + 0x10, cases[i].x);
+        MEM_W16(pose + 0x12, cases[i].y);
+        MEM_W16(pose + 0x14, cases[i].z);
+        MEM_W32(0x8008f108, (u32)cases[i].limit);
+        MEM_W32(frame + 0x2d8, 0xdeadbeef);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 23;
+        CPUState native = input;
+        if (nc_project_placement_depth(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_project_placement_depth(&native) || native.budget != 1 ||
+            native.r[4] != cases[i].depth || native.r[3] != (u32)cases[i].limit ||
+            native.r[2] != cases[i].depth - (u32)cases[i].limit ||
+            MEM_R32(frame + 0x2d8) != cases[i].depth)
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            interp_call(&input, 0x80028ad0);
+            if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    MEM_W32(0x8008f108, saved_limit);
+    return true;
+}
+
 static bool placement_transform_flags(bool disc) {
     const u32 record = SCRATCH_BASE, owner = record + 0x80, descriptor = owner + 0x80;
     for (unsigned flags = 0; flags < 4; ++flags) {
@@ -5571,11 +5619,12 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        placement_transform_flags(disc) && placement_projection_args(disc) &&
-        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
-        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_depths(disc) && placement_transform_flags(disc) &&
+        placement_projection_args(disc) && placement_angle_entries(disc) &&
+        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

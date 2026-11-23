@@ -1247,6 +1247,71 @@ static bool check_gpu_fill_bytes(void) {
     return true;
 }
 
+static bool check_queue_alarm_expiry(void) {
+    const u32 ports = 0x80061000, trace = ports + 32;
+    const u32 report[] = {
+        0xad240000, /* sw a0,0(t1) */
+        0xad250004, /* sw a1,4(t1) */
+        0xad260008, /* sw a2,8(t1) */
+        0xad27000c, /* sw a3,12(t1) */
+        0x03e00008, /* jr ra */
+        0x25290010, /* addiu t1,t1,16 */
+    };
+    const struct {
+        u32 frame, deadline, count;
+        bool expired, count_advanced;
+    } cases[] = {
+        {7, 7, 0xf0000, false, true}, {7, 7, 0xf0001, true, true},
+        {8, 7, 3, true, false}, {0xffffffff, 0, 0xffffffff, false, true},
+        {0, 0xffffffff, 2, true, false},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    for (unsigned j = 0; j < sizeof report / sizeof report[0]; j++)
+        MEM_W32(0x80019a60 + 4 * j, report[j]);
+    MEM_W32(0x8002462c, ports);      /* GPUSTAT / GP1 */
+    MEM_W32(0x80024630, ports + 4);  /* MADR */
+    MEM_W32(0x80024638, ports + 8);  /* CHCR */
+    MEM_W32(0x80024648, ports + 12); /* DPCR */
+    MEM_W32(0x800244a8, ports + 16); /* I_MASK */
+    MEM_W32(0x80023400, ports);
+    MEM_W32(0x80023404, ports + 4);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W32(0x800244d4, cases[i].frame);
+        MEM_W32(0x80024670, cases[i].deadline);
+        MEM_W32(0x80024674, cases[i].count);
+        MEM_W32(0x8002465c, 2);
+        MEM_W32(0x80024660, 63);
+        MEM_W32(ports, 0x12345678);
+        MEM_W32(ports + 4, 0x807654);
+        MEM_W32(ports + 8, 0x01000201);
+        MEM_W32(ports + 12, 0x12345000);
+        MEM_W16(ports + 16, 0x145);
+        CPUState state = arguments(1, 2, 3, i & 1 ? 5 : 4096);
+        state.r[9] = trace;
+        ok = compare(state, 0x8001ea30, nc_credits_check_queue_alarm, 4) &&
+             nc_cpu.r[2] == (cases[i].expired ? UINT32_MAX : 0) &&
+             MEM_R32(0x80024674) == cases[i].count + cases[i].count_advanced &&
+             nc_cpu.r[9] == trace + (cases[i].expired ? 32 : 0) &&
+             MEM_R16(ports + 16) == 0x145;
+        if (cases[i].expired)
+            ok = ok && MEM_R32(trace) == 0x80018660 && MEM_R32(trace + 4) == 3 &&
+                 MEM_R32(trace + 8) == 0x12345678 && MEM_R32(trace + 12) == 0x01000201 &&
+                 MEM_R32(trace + 16) == 0x80018694 && MEM_R32(state.r[29] - 16) == 0x807654 &&
+                 MEM_R32(0x8002465c) == 0 && MEM_R32(0x80024660) == 0 &&
+                 MEM_R32(0x8002466c) == 0x145 && MEM_R32(ports) == 0x01000000 &&
+                 MEM_R32(ports + 8) == 0x401 && MEM_R32(ports + 12) == 0x12345800;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_set_queue_alarm(void) {
     const u32 frames[] = {0, 1, 0x7fffffff, 0xffffff0f, 0xffffff10, 0xffffffff};
     const int budgets[] = {5, 15, 32, 4096};
@@ -4116,6 +4181,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_fill_bytes();
     pass = pass && check_gpu_queue_sync();
     pass = pass && check_set_queue_alarm();
+    pass = pass && check_queue_alarm_expiry();
     pass = pass && check_queue_command();
     disc_close();
     return pass ? 0 : 1;
