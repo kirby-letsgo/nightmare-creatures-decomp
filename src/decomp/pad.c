@@ -153,6 +153,23 @@ bool nc_leave_player_input(CPUState *c, bool store_buttons) {
     return true;
 }
 
+/* The shorter L2 entry already has its actor in a0. Both calls pass the
+ * full button word from s1, including when L2 has modified the previous word. */
+bool nc_call_player_trigger(CPUState *c, u32 entry) {
+    const int cycles = entry == 0x800451d4 ? 2 : 3;
+    if (c->budget <= cycles)
+        return false;
+
+    if (entry != 0x800451d4)
+        R(4) = R(16);
+    const bool r2 = entry == 0x800451dc;
+    R(31) = r2 ? 0x800451e8 : 0x800451dc;
+    R(5) = R(17);
+    c->budget -= cycles;
+    nc_call(c, r2 ? 0x8004460c : 0x800445dc);
+    return true;
+}
+
 /* Both live-input callers pass (0x800d7c04, 1). Only player control
  * resumes at the modern-controls hook with the decoded word in v0. */
 bool nc_call_live_pad(CPUState *c, u32 return_address) {
