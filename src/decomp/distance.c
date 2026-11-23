@@ -3481,6 +3481,27 @@ bool nc_begin_placement_vertex_projection(CPUState *c) {
     return true;
 }
 
+/* Project one vertex left after the three-at-a-time loop. Each eight-byte
+ * output holds packed screen coordinates and a halfword of quarter-depth. */
+bool nc_project_remaining_placement_vertex(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    const u32 vertex = R(8), output = R(7);
+    gte_write_data(c, 0, MEM_R32(vertex));
+    gte_write_data(c, 1, MEM_R32(vertex + 4));
+    gte_command(c, 0x0180001); /* RTPS */
+    R(5)++;
+    R(8) = vertex + 8;
+    MEM_W32(output, gte_read_data(c, 14));
+    R(12) = (u32)((s32)gte_read_data(c, 19) >> 2);
+    MEM_W32(R(29), R(12));
+    MEM_W16(output + 4, (u16)MEM_R32(R(29)));
+    R(2) = (s32)R(5) < (s32)R(9);
+    R(7) = output + 8;
+    c->budget -= 24;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
