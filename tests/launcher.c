@@ -15,6 +15,40 @@ static void install_recorder(u32 entry, u32 body, const u32 *actions, unsigned c
     MEM_W32(body + 4 * count + 4, 0x26310004); /* advance trace */
 }
 
+static bool check_shared_record(void) {
+    ExecInfo info;
+    if (!exe_load("cdrom:\\SLUS_005.82;1", &info))
+        return false;
+    const u32 record = 0x80016400;
+    const u32 locations[] = {record, 0xa0016400, SCRATCH_BASE + 32};
+    const int budgets[] = {2, 7, 31, 4096};
+    for (unsigned i = 0; i < sizeof locations / sizeof locations[0]; i++) {
+        u32 base = locations[i];
+        for (unsigned j = 0; j < sizeof budgets / sizeof budgets[0]; j++) {
+            memset(nc_fast_ptr(base - 1), 0xa5, 42);
+            CPUState start = {0};
+            start.r[28] = 0x80016300;
+            start.r[29] = 0x801fff00;
+            start.r[31] = 0x80010000;
+            start.budget = budgets[j];
+            MEM_W32(start.r[28], base);
+            if (!compare(start, 0x8001078c, nc_launcher_init_shared_record, 1) ||
+                MEM_R32(base + 4) != 0x08000000 || MEM_R32(base + 0x24) != 0 ||
+                MEM_R8(base - 1) != 0xa5 || MEM_R8(base + 0x23) != 0xa5 ||
+                MEM_R8(base + 0x28) != 0xa5)
+                return false;
+        }
+    }
+    /* The store at offset 0x20 redirects subsequent pointer reads. */
+    CPUState start = {0};
+    start.r[28] = record + 0x20;
+    start.r[29] = 0x801fff00;
+    start.r[31] = 0x80010000;
+    start.budget = 16;
+    MEM_W32(start.r[28], record);
+    return compare(start, 0x8001078c, nc_launcher_init_shared_record, 1);
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -85,6 +119,10 @@ int main(int argc, char **argv) {
     fclose(file);
     if (!disc_open(argv[1]))
         return 1;
+    if (!check_shared_record()) {
+        fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
     for (unsigned selection = 0; selection < 6; selection++)
         for (unsigned missing = 0; missing < 2; missing++)
             if (!check_handoff(selection, missing)) {

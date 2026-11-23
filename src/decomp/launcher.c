@@ -117,3 +117,77 @@ bool nc_launcher_run_modules(CPUState *c) {
         load_launcher_module(c, arm, path);
     }
 }
+
+static void load_record_pointer(CPUState *c, unsigned reg) {
+    R(reg) = MEM_R32(R(28));
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+static void set_record_byte(CPUState *c, u32 offset, u8 value) {
+    load_record_pointer(c, 3);
+    R(2) = value;
+    NC_POLL(c, 1);
+    MEM_W8(R(3) + offset, (u8)R(2));
+    NC_POLL(c, 1);
+}
+
+/* Initialize the shared record before the PSX.EXE handoff. The guest
+ * reloads its pointer between byte stores and leaves several gaps intact. */
+bool nc_launcher_init_shared_record(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    load_record_pointer(c, 2);
+    NC_POLL(c, 1);
+    MEM_W8(R(2) + 0x22, 0);
+    NC_POLL(c, 1);
+    load_record_pointer(c, 3);
+    R(4) = 10;
+    NC_POLL(c, 1);
+    MEM_W32(R(2), 0);
+    NC_POLL(c, 1);
+    MEM_W32(R(2) + 4, 0);
+    NC_POLL(c, 1);
+    R(2) = 0x80;
+    NC_POLL(c, 1);
+    MEM_W16(R(3) + 0x0c, 0);
+    NC_POLL(c, 1);
+    const unsigned offsets[] = {0x08, 0x0a, 0x10, 0x16};
+    for (unsigned i = 0; i < sizeof offsets / sizeof offsets[0]; i++) {
+        MEM_W16(R(3) + offsets[i], (u16)R(2));
+        NC_POLL(c, 1);
+    }
+    MEM_W8(R(3) + 0x18, (u8)R(4));
+    NC_POLL(c, 1);
+    set_record_byte(c, 0x19, 5);
+    set_record_byte(c, 0x1a, 0x4d);
+    set_record_byte(c, 0x1e, 0x13);
+    set_record_byte(c, 0x1b, 0x4c);
+    load_record_pointer(c, 2);
+    NC_POLL(c, 1);
+    MEM_W8(R(2) + 0x1f, (u8)R(4));
+    NC_POLL(c, 1);
+    set_record_byte(c, 0x1c, 0xb2);
+    load_record_pointer(c, 2);
+    R(4) = 0xec;
+    NC_POLL(c, 1);
+    MEM_W8(R(2) + 0x20, (u8)R(4));
+    NC_POLL(c, 1);
+    set_record_byte(c, 0x1d, 0xb1);
+    load_record_pointer(c, 2);
+    NC_POLL(c, 1);
+    MEM_W8(R(2) + 0x21, (u8)R(4));
+    NC_POLL(c, 1);
+    load_record_pointer(c, 4);
+    NC_POLL(c, 1);
+    R(2) = MEM_R32(R(4) + 4);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(3) = 0x08000000;
+    NC_POLL(c, 1);
+    MEM_W32(R(4) + 0x24, 0); /* first module selector */
+    NC_POLL(c, 1);
+    R(2) |= R(3);
+    NC_POLL(c, 1);
+    MEM_W32(R(4) + 4, R(2));
+    NC_POLL(c, 2);
+    return true;
+}

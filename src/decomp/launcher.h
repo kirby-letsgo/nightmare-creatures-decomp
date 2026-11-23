@@ -4,5 +4,6 @@
 #include "port/recomp.h"
 
 bool nc_launcher_run_modules(CPUState *c);
+bool nc_launcher_init_shared_record(CPUState *c);
 
 #endif
