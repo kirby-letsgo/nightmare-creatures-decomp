@@ -6285,6 +6285,179 @@ bool nc_credits_cd_read_retry(CPUState *c) {
     return true;
 }
 
+static void load_cd_read_word(CPUState *c, unsigned reg, u32 address) {
+    set_reg(c, reg, 0x80020000);
+    load_word(c, reg, address);
+}
+
+static void advance_cd_read_word(CPUState *c, u32 address, u32 increment) {
+    load_cd_read_word(c, 2, address);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) + increment);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(address, R(2));
+    NC_POLL(c, 1);
+    load_cd_read_word(c, 2, address);
+}
+
+static void collect_cd_read_sector(CPUState *c) {
+    load_cd_read_word(c, 3, 0x80024a84);
+    set_reg(c, 2, 512);
+    bool check_position = R(3) == R(2);
+    R(4) = R(29) + 16;
+    NC_POLL(c, 2);
+    if (check_position) {
+        R(31) = 0x80022738;
+        R(5) = 3;
+        NC_POLL(c, 2);
+        nc_call(c, 0x80020378); /* read the sector header */
+        R(31) = 0x80022740;
+        R(4) = R(29) + 16;
+        NC_POLL(c, 2);
+        nc_call(c, 0x800204e4); /* CdPosToInt */
+        load_cd_read_word(c, 3, 0x80024a94);
+        NC_POLL(c, 1);
+        bool mismatch = R(2) != R(3);
+        NC_POLL(c, 2);
+        if (mismatch) {
+            cd_call_with_pointer(c, 0x80018b90, 0x8001a638, 0x80022764);
+            set_reg(c, 2, UINT32_MAX);
+            MEM_W32(R(16), R(2));
+            NC_POLL(c, 1);
+        }
+    }
+    /* The driver consumes the payload even after a header mismatch. */
+    set_reg(c, 16, 0x80020000);
+    set_reg(c, 16, 0x80024a7c);
+    load_word(c, 4, R(16));
+    load_cd_read_word(c, 5, 0x80024a84);
+    cd_read_call(c, 0x80020378, 0x80022788);
+    load_cd_read_word(c, 2, 0x80024a84);
+    load_word(c, 3, R(16));
+    set_reg(c, 2, R(2) << 2);
+    set_reg(c, 2, R(2) + R(3));
+    MEM_W32(R(16), R(2));
+    NC_POLL(c, 1);
+    advance_cd_read_word(c, 0x80024a88, UINT32_MAX);
+    advance_cd_read_word(c, 0x80024a94, 1);
+    NC_POLL(c, 2);
+}
+
+static bool cd_callback_deadline_passed(CPUState *c, u32 resume) {
+    R(31) = resume;
+    R(4) = UINT32_MAX;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a454);
+    load_cd_read_word(c, 3, 0x80024a90);
+    NC_POLL(c, 1);
+    set_reg(c, 3, R(3) + 1200);
+    set_reg(c, 3, (s32)R(3) < (s32)R(2));
+    return R(3) != 0;
+}
+
+static void finish_cd_read_callback(CPUState *c) {
+    load_cd_read_word(c, 4, 0x80024a98);
+    cd_read_call(c, 0x8001ff7c, 0x8002289c);
+    load_cd_read_word(c, 4, 0x80024a9c);
+    cd_read_call(c, 0x8001ff94, 0x800228ac);
+    set_reg(c, 4, 9); /* CdlPause */
+    set_reg(c, 5, 0);
+    retry_cd_control(c, 0x800228bc);
+    load_cd_read_word(c, 3, 0x80024a70);
+    NC_POLL(c, 1);
+    bool notify = R(3) != 0;
+    NC_POLL(c, 2);
+    if (notify) {
+        load_cd_read_word(c, 2, 0x80024a88);
+        NC_POLL(c, 1);
+        bool complete = R(2) == 0;
+        R(4) = 5; /* CdlDiskError */
+        NC_POLL(c, 2);
+        if (complete)
+            set_reg(c, 4, 2); /* CdlComplete */
+        u32 callback = R(3);
+        R(31) = 0x800228f0;
+        R(5) = R(17);
+        NC_POLL(c, 2);
+        nc_call(c, callback);
+    }
+}
+
+bool nc_credits_handle_cd_read(CPUState *c) {
+    if (c->budget <= 8)
+        return false;
+    R(29) -= 48;
+    c->budget--;
+    MEM_W32(R(29) + 36, R(17));
+    R(17) = R(5);
+    R(4) &= 0xff;
+    R(2) = 1;
+    c->budget -= 4;
+    MEM_W32(R(29) + 40, R(31));
+    c->budget--;
+    bool data_ready = R(4) == R(2);
+    MEM_W32(R(29) + 32, R(16));
+    c->budget -= 2;
+    if (data_ready) {
+        set_reg(c, 16, 0x80020000);
+        set_reg(c, 16, 0x80024a88);
+        load_word(c, 2, R(16));
+        NC_POLL(c, 1);
+        bool remaining = (s32)R(2) > 0;
+        NC_POLL(c, 2);
+        if (remaining)
+            collect_cd_read_sector(c);
+    } else {
+        set_reg(c, 3, 0x80020000);
+        set_reg(c, 3, 0x80024a88);
+        set_reg(c, 2, UINT32_MAX);
+        MEM_W32(R(3), R(2));
+        NC_POLL(c, 1);
+    }
+    R(31) = 0x80022800;
+    R(4) = UINT32_MAX;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a454);
+    set_reg(c, 3, 0x80020000);
+    set_reg(c, 3, 0x80024a8c);
+    MEM_W32(R(3), R(2));
+    NC_POLL(c, 1);
+    load_cd_read_word(c, 2, 0x80024a88);
+    NC_POLL(c, 1);
+    bool retry = (s32)R(2) < 0;
+    NC_POLL(c, 2);
+    if (retry) {
+        R(31) = 0x80022828;
+        R(4) = 1;
+        NC_POLL(c, 2);
+        nc_call(c, 0x80022908);
+    }
+    bool expired = cd_callback_deadline_passed(c, 0x80022830);
+    R(2) = UINT32_MAX;
+    NC_POLL(c, 2);
+    if (expired) {
+        set_reg(c, 1, 0x80020000);
+        MEM_W32(0x80024a88, R(2));
+        NC_POLL(c, 1);
+    }
+    load_cd_read_word(c, 2, 0x80024a88);
+    NC_POLL(c, 1);
+    bool finish = R(2) == 0;
+    NC_POLL(c, 2);
+    if (!finish) {
+        finish = cd_callback_deadline_passed(c, 0x80022870);
+        NC_POLL(c, 2);
+    }
+    if (finish)
+        finish_cd_read_callback(c);
+    load_word(c, 31, R(29) + 40);
+    load_word(c, 17, R(29) + 36);
+    load_word(c, 16, R(29) + 32);
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Start a sector read, saving the current callbacks for the retry handler. */
 bool nc_credits_cd_read(CPUState *c) {
     const u32 mode = 0x80024a80, sector_words = 0x80024a84;

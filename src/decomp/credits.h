@@ -246,6 +246,7 @@ bool nc_credits_cd_control_f(CPUState *c);
 bool nc_credits_cd_command_name(CPUState *c);
 bool nc_credits_cd_interrupt_name(CPUState *c);
 bool nc_credits_cd_interrupt_callback(CPUState *c);
+bool nc_credits_handle_cd_read(CPUState *c);
 bool nc_credits_cd_read_retry(CPUState *c);
 bool nc_credits_cd_read(CPUState *c);
 bool nc_credits_cd_read_sync(CPUState *c);
