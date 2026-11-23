@@ -4322,6 +4322,54 @@ static bool placement_scan_exits(bool disc) {
     return true;
 }
 
+static bool placement_transform_trees(bool disc) {
+    const u32 record = SCRATCH_BASE, root = record + 0x80;
+    const unsigned sizes[] = {0, 1, 5};
+    for (unsigned tree = 0; tree < sizeof sizes / sizeof sizes[0]; ++tree) {
+        const unsigned count = sizes[tree];
+        memset(nc_scratch, 0xab, SCRATCH_SIZE);
+        MEM_W32(record + 4, count ? root : 0);
+        for (unsigned i = 0; i < count; ++i) {
+            const u32 node = root + i * 0x60;
+            MEM_W32(node + 4, count == 5 && i < 2 ? node + 0x60 : 0);
+            MEM_W32(node + 0xc, count == 5 && i < 2 ? root + (4 - i) * 0x60 : 0);
+        }
+        CPUState input = initial();
+        input.r[29] = SCRATCH_BASE + 0x380;
+        input.r[4] = record;
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState expected = input;
+        if (nc_reset_placement_transforms(&expected) ||
+            expected.budget != input.budget - (count == 5 ? 130 : count ? 34 : 10) ||
+            expected.r[29] != input.r[29])
+            return false;
+        for (unsigned i = 0; i < count; ++i) {
+            const u32 node = root + i * 0x60;
+            if (MEM_R8(node + 0x4d) != 0xaa || MEM_R32(node + 0x40) ||
+                MEM_R32(node + 0x44) || MEM_R32(node + 0x48))
+                return false;
+        }
+        if (!disc)
+            continue;
+        memcpy(after, nc_scratch, sizeof after);
+        /* Give the interpreter enough time to finish each partial traversal
+         * without a poll. Include the cycles already spent by the helper. */
+        for (int budget = 1; budget <= 160; ++budget) {
+            memcpy(nc_scratch, before, sizeof before);
+            CPUState cpu = input;
+            cpu.budget = budget;
+            u32 pc = nc_reset_placement_transforms(&cpu);
+            cpu.budget += input.budget - budget;
+            if (pc)
+                interp_continue_call(&cpu, pc, input.r[31], input.r[29]);
+            if (memcmp(&cpu, &expected, sizeof cpu) || memcmp(nc_scratch, after, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_transform_reset_calls(bool disc) {
     const u32 flags[] = {0, 0x40, 0xffffffbf, 0xffffffff};
     for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
@@ -8314,7 +8362,7 @@ int main(int argc, char **argv) {
         placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
-        placement_transform_reset_calls(disc) &&
+        placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
         placement_face_dispatch(disc) &&
