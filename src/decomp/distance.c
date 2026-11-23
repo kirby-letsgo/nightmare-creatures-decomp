@@ -3648,6 +3648,19 @@ bool nc_advance_placement_face(CPUState *c, bool textured, bool quad) {
     return true;
 }
 
+bool nc_finish_textured_packet(CPUState *c, bool quad) {
+    if (c->budget <= 11)
+        return false;
+    const u32 packet = R(16);
+    R(2) = MEM_R16(packet) | R(quad ? 10 : 9);
+    R(3) = MEM_R8(R(quad ? 17 : 20)) | R(quad ? 9 : 7);
+    MEM_W16(packet, R(2));
+    MEM_W8(packet - 15, R(3));
+    R(16) += quad ? 40 : 32;
+    c->budget -= 11;
+    return true;
+}
+
 bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32 address_mask,
                               u32 packet_size) {
     if (c->budget <= 22)
