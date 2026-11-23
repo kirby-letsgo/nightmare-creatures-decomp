@@ -2900,6 +2900,54 @@ static bool placement_point_flags(bool disc) {
     return true;
 }
 
+static bool placement_point_scans(bool disc) {
+    const u32 record = SCRATCH_BASE, table = 0x80120000;
+    const u32 saved_table = MEM_R32(0x8008f0c8);
+    MEM_W32(0x8008f0c8, table);
+    static const u16 indices[] = {0, 7, 3};
+    for (unsigned i = 0; i < 3; ++i)
+        MEM_W16(record + 0x3a + 2 * i, indices[i]);
+    for (unsigned count = 0; count <= 3; ++count) {
+        for (unsigned match = 0; match <= count; ++match) {
+            CPUState input = initial(), native;
+            input.r[16] = record;
+            input.r[20] = UINT32_MAX;
+            input.r[31] = count < 2 ? 0x80029254 : 0x80029200;
+            MEM_W16(record + 0x38, count);
+            if (!compare(input, 0x800291d8, nc_begin_placement_point_scan, disc, &native) ||
+                native.r[6] != count || native.budget != input.budget - (count < 2 ? 7 : 14))
+                return false;
+            if (count < 2)
+                continue;
+            for (unsigned i = 0; i < count; ++i) {
+                const u32 entry = table + 36 * indices[i];
+                const u32 saved_flags = MEM_R32(entry);
+                MEM_W32(entry, i == match ? 0x11 : 1);
+                input = native;
+                input.r[31] = i == match ? 0x8002923c : 0x8002922c;
+                if (!compare(input, 0x80029200, nc_test_placement_point_index, disc, &native) ||
+                    native.r[3] != entry || native.r[2] != (i == match ? 0x10u : 0u))
+                    return false;
+                MEM_W32(entry, saved_flags);
+                if (i == match)
+                    break;
+                input = native;
+                input.r[31] = i + 1 < count ? 0x80029200 : 0x8002923c;
+                if (!compare(input, 0x8002922c, nc_advance_placement_point_index, disc, &native) ||
+                    native.r[4] != record + 2 * (i + 1) || native.r[5] != i + 1)
+                    return false;
+            }
+            input = native;
+            input.r[31] = match == count ? 0x80029464 : 0x80029310;
+            if (!compare(input, 0x8002923c, nc_finish_placement_point_scan, disc, &native) ||
+                native.r[20] != (match == count ? 0u : UINT32_MAX))
+                return false;
+        }
+    }
+    MEM_W32(0x8008f0c8, saved_table);
+    return true;
+}
+
 static bool point_strides(bool disc) {
     static const struct {
         u32 position, sample;
@@ -5225,10 +5273,10 @@ int main(int argc, char **argv) {
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
-        record_point_projections(disc) && placement_point_flags(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        record_point_projections(disc) && placement_point_scans(disc) &&
+        placement_point_flags(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
