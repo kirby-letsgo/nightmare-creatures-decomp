@@ -57,6 +57,7 @@ bool nc_install_placement_matrices(CPUState *c, u32 continuation);
 bool nc_project_placement_depth(CPUState *c, u32 pose, u32 depth_offset, unsigned depth_reg);
 bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset, unsigned factor_reg);
 bool nc_begin_projection_traversal(CPUState *c);
+bool nc_check_projection_effect(CPUState *c, bool *active);
 bool nc_set_projection_pose_mask(CPUState *c);
 bool nc_load_projection_pose_descriptor(CPUState *c);
 bool nc_load_projection_pose_flags(CPUState *c);

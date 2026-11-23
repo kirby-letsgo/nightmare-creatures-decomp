@@ -4275,6 +4275,41 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_effect_flags(bool disc) {
+    static const struct {
+        u16 value;
+        u32 half;
+    } cases[] = {
+        {0, 0}, {1, 0}, {2, 1}, {0x7fff, 0x3fff}, {0x8000, 0xffffc000}, {0xffff, 0xffffffff}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        for (unsigned flag = 0; flag <= 1; ++flag) {
+            CPUState input = initial();
+            const bool expected = flag && cases[i].value;
+            input.r[21] = SCRATCH_BASE;
+            input.r[31] = expected ? 0x80028080 : 0x800280d8;
+            input.budget = cases[i].value ? 14 : 7;
+            MEM_W16(SCRATCH_BASE + 0x362, cases[i].value);
+            MEM_W32(SCRATCH_BASE + 0x2cc, flag ? 0xffffffff : 0xfffdffff);
+            CPUState native = input;
+            bool active = !expected;
+            if (nc_check_projection_effect(&native, &active) || active == expected ||
+                memcmp(&native, &input, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (!nc_check_projection_effect(&native, &active) || active != expected ||
+                native.budget != 1 || native.r[2] != cases[i].half || native.r[3] != 0x20000 ||
+                native.r[4] != (u32)cases[i].value << 16)
+                return false;
+            if (disc) {
+                interp_call(&input, 0x80028058);
+                if (memcmp(&native, &input, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool projection_traversal_entries(bool disc) {
     const u32 frame = SCRATCH_BASE, actor = frame + 0x100;
     for (unsigned bit = 0; bit <= 1; ++bit) {
@@ -7688,6 +7723,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_effect_flags(disc) &&
         projection_traversal_entries(disc) &&
         projection_face_calls(disc, true) && projection_face_calls(disc, false) &&
         untextured_projection_modes(disc) &&
