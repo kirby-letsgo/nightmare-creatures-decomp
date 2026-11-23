@@ -5394,6 +5394,26 @@ bool nc_call_shared_placement_y_step(CPUState *c) {
     return true;
 }
 
+/* Selectors looking up record 2 and record 22 use opposite directions
+ * for flag 0x400. On record 22, flag 0x800 takes the shorter branch. */
+bool nc_call_flagged_placement_y_step(CPUState *c, bool record22) {
+    const u32 flags = record22 ? R(3) : R(2);
+    const bool flagged = (flags & 0x400) != 0;
+    const bool override = record22 && (flags & 0x800);
+    const bool rising = record22 ? (override || !flagged) : flagged;
+    const int cycles = record22 ? (override ? 9 : 11) : (flagged ? 9 : 8);
+    if (c->budget <= cycles)
+        return false;
+    R(2) = flags & 0x400;
+    R(4) = R(16);
+    R(5) = R(16) + 0x1a;
+    R(6) = rising ? 2 : (u32)-2;
+    R(7) = rising ? (u32)-448 : (u32)-704;
+    R(31) = record22 ? 0x80029fa8 : 0x80029f24;
+    c->budget -= cycles;
+    return true;
+}
+
 /* The field may point into the new frame. Save all three registers before
  * reading it, and reserve enough budget for the longer, already-equal exit. */
 u32 nc_begin_placement_halfword_step(CPUState *c) {
