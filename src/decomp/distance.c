@@ -3165,6 +3165,18 @@ bool nc_select_point_update_row(CPUState *c) {
     return true;
 }
 
+/* For zero or one placement point, either flag sends the record straight
+ * to the pose stores. Otherwise the caller checks the X/Z projection. */
+bool nc_check_projection_bypass(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    const u32 settings = MEM_R32(R(28) + 0x244);
+    R(3) = 0x00800020;
+    R(2) = MEM_R32(settings + 4) & R(3);
+    c->budget -= 11;
+    return true;
+}
+
 /* The point stores reflected Z. The branch tests the signed low word of
  * the dot product; HI and LO retain the final Z multiplication. */
 bool nc_project_record_point(CPUState *c) {

@@ -2782,6 +2782,23 @@ static bool record_heading_frames(bool disc) {
     return true;
 }
 
+static bool projection_bypass_flags(bool disc) {
+    const u32 gp = SCRATCH_BASE, settings = gp + 0x100;
+    static const u32 flags[] = {0, 0x20, 0x800000, 0x800020, ~0x800020u};
+    MEM_W32(gp + 0x244, settings);
+    for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; ++i) {
+        CPUState input = initial(), native;
+        input.r[28] = gp;
+        const u32 bypass = flags[i] & 0x800020;
+        input.r[31] = bypass ? 0x80029310 : 0x80029270;
+        MEM_W32(settings + 4, flags[i]);
+        if (!compare(input, 0x80029254, nc_check_projection_bypass, disc, &native) ||
+            native.r[2] != bypass || native.r[3] != 0x800020 || native.budget != input.budget - 11)
+            return false;
+    }
+    return true;
+}
+
 static bool record_point_projections(bool disc) {
     const u32 record = SCRATCH_BASE, point = record + 0x80;
     static const struct {
@@ -5273,10 +5290,11 @@ int main(int argc, char **argv) {
         point_row_records(disc) && point_update_entries(disc) && record_point_bearings(disc) &&
         linked_heading_offsets(disc) && linked_heading_traversal(disc) &&
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
-        record_point_projections(disc) && placement_point_scans(disc) &&
-        placement_point_flags(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
-        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
-        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        projection_bypass_flags(disc) && record_point_projections(disc) &&
+        placement_point_scans(disc) && placement_point_flags(disc) &&
+        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
+        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
+        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&
