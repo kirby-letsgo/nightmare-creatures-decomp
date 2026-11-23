@@ -341,6 +341,17 @@ u32 nc_prepare_player_queued_action(CPUState *c) {
     return 0x80044b88;
 }
 
+bool nc_call_player_queued_action(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+
+    R(31) = 0x80044b90;
+    MEM_W32(R(16) + 0x330, R(2));
+    c->budget -= 2;
+    nc_call(c, 0x8004fa34);
+    return true;
+}
+
 bool nc_clear_player_queued_action(CPUState *c) {
     if (c->budget <= 2)
         return false;

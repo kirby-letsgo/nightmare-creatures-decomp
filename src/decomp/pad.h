@@ -33,6 +33,7 @@ u32 nc_player_up_action_one(CPUState *c);
 u32 nc_player_shoulder_action_check(CPUState *c, bool left);
 u32 nc_player_queue_face_action(CPUState *c);
 u32 nc_prepare_player_queued_action(CPUState *c);
+bool nc_call_player_queued_action(CPUState *c);
 bool nc_clear_player_queued_action(CPUState *c);
 u32 nc_player_horizontal_direction(CPUState *c);
 u32 nc_player_face_button_gate(CPUState *c, bool clear_direction);
