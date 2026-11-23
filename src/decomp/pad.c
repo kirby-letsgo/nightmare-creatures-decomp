@@ -69,6 +69,25 @@ bool nc_check_player_r2_press(CPUState *c) {
     return true;
 }
 
+/* Both R2 handlers restore the same frame. After an accepted action, the
+ * second handler first saves the input word with both trigger bits cleared. */
+bool nc_leave_player_r2(CPUState *c, bool record_buttons) {
+    const int cycles = record_buttons ? 16 : 12;
+    if (c->budget <= cycles)
+        return false;
+    if (record_buttons) {
+        R(2) = 1;
+        R(3) = R(17) & ~0x300u;
+        MEM_W32(R(16) + 0x2f8, R(3));
+    }
+    R(31) = MEM_R32(R(29) + 0x18);
+    R(17) = MEM_R32(R(29) + 0x14);
+    R(16) = MEM_R32(R(29) + 0x10);
+    R(29) += 0x20;
+    c->budget -= cycles;
+    return true;
+}
+
 /* Save the player-control frame before deciding whether to read input.
  * v0 retains the blocking bits and v1 retains the full flags for the selector. */
 bool nc_enter_player_input(CPUState *c) {
