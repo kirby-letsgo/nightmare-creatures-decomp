@@ -34,6 +34,8 @@ LAUNCHER_BIOS_SERVICES = {
     0x80010A18: (0xA0, 0x72),  # _96_remove
     0x80011A4C: (0xB0, 0x18),  # ResetEntryInt
     0x80011A5C: (0xB0, 0x19),  # HookEntryInt
+    0x80011A8C: (0xB0, 0x5B),  # ChangeClearPad
+    0x80011A9C: (0xC0, 0x0A),  # ChangeClearRCnt
 }
 LAUNCHER_IRQ_WRAPPERS = {
     0x80010A50: 12,  # ResetCallback
