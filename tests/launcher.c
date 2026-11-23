@@ -1,6 +1,7 @@
 #include "jump_context.h"
 #include "decomp/jump_context.h"
 #include "decomp/byte_scan.h"
+#include "decomp/cd_state.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
 #include "decomp/interrupt_driver.h"
@@ -89,6 +90,33 @@ static bool check_case_conversion(void) {
             return false;
     }
     return true;
+}
+
+static u32 cd_byte_address;
+
+static bool read_cd_byte(CPUState *c) {
+    return cd_state_byte(c, cd_byte_address);
+}
+
+static bool get_cd_position(CPUState *c) {
+    return cd_last_position(c, 0x80015834);
+}
+
+static bool check_cd_state(void) {
+    const struct { u32 entry, address; u8 value; } bytes[] = {
+        {0x80011f94, 0x80015828, 0x81},
+        {0x80011fa4, 0x80015838, 0xfe},
+        {0x80011fb4, 0x80015839, 0x9c},
+    };
+    CPUState start = arguments(1, 2, 3, 7);
+    for (unsigned i = 0; i < sizeof bytes / sizeof bytes[0]; i++) {
+        cd_byte_address = bytes[i].address;
+        MEM_W8(cd_byte_address, bytes[i].value);
+        if (!compare(start, bytes[i].entry, read_cd_byte, 6) || nc_cpu.r[2] != bytes[i].value)
+            return false;
+    }
+    MEM_W32(0x80015834, 0x12345678);
+    return compare(start, 0x80011fc4, get_cd_position, 4) && nc_cpu.r[2] == 0x80015834;
 }
 
 static bool check_byte_scans(void) {
@@ -641,6 +669,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_state()) {
+        fprintf(stderr, "launcher CD state accessors failed\n");
         return 1;
     }
     if (!check_byte_scans()) {
