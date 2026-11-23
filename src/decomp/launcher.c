@@ -254,6 +254,14 @@ bool nc_launcher_restart_interrupts(CPUState *c) {
     return restart_driver_interrupts(c, &interrupt_control);
 }
 
+bool nc_launcher_start_vsync(CPUState *c) {
+    static const VSyncInitLayout layout = {
+        .slots = 0x80015740, .entry = 0x80011aac, .clear = 0x80011ba8,
+        .register_irq = 0x80010a80, .handler = 0x80011b04, .setter = 0x80011b7c,
+    };
+    return start_vsync(c, &layout);
+}
+
 bool nc_launcher_dispatch_vblank(CPUState *c) {
     return dispatch_vblank(c, 0x80015740, 0x80011b54);
 }

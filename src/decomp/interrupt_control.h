@@ -155,6 +155,45 @@ static inline bool clear_interrupt_words(CPUState *c) {
     return true;
 }
 
+typedef struct {
+    u32 slots, entry, clear, register_irq, handler, setter;
+} VSyncInitLayout;
+
+/* Initialize timer 1 and the VBlank callback table, then return its slot setter. */
+static inline bool start_vsync(CPUState *c, const VSyncInitLayout *layout) {
+    if (c->budget <= 14)
+        return false;
+    R(29) -= 24;
+    R(4) = layout->slots;
+    c->budget -= 4;
+    R(3) = MEM_R32(layout->slots + 36);
+    R(2) = 0x107;
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(29) + 16, R(31));
+    c->budget--;
+    MEM_W32(R(3), R(2));
+    R(1) = (layout->slots + 32 + 0x8000u) & 0xffff0000u;
+    c->budget -= 2;
+    MEM_W32(layout->slots + 32, 0); /* VBlank count */
+    R(31) = layout->entry + 0x30;
+    R(5) = 8;
+    c->budget -= 3;
+    nc_call(c, layout->clear); /* clear the callback slots */
+
+    set_reg(c, 5, (layout->handler + 0x8000u) & 0xffff0000u);
+    set_reg(c, 5, layout->handler); /* trapIntrVSync */
+    R(31) = layout->entry + 0x40;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, layout->register_irq); /* InterruptCallback */
+    set_reg(c, 2, (layout->setter + 0x8000u) & 0xffff0000u);
+    set_reg(c, 2, layout->setter); /* setIntrVSync */
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Count this VBlank and visit the live table so callbacks can change later slots. */
 static inline bool dispatch_vblank(CPUState *c, u32 slots, u32 resume) {
     if (c->budget <= 18)
