@@ -5360,6 +5360,18 @@ bool nc_set_other_placement_angles(CPUState *c) {
     return true;
 }
 
+bool nc_call_placement_y_step(CPUState *c, s32 step, s32 target, u32 return_pc) {
+    if (c->budget <= 5)
+        return false;
+    R(4) = R(16);
+    R(5) = R(16) + 0x1a;
+    R(6) = (u32)step;
+    R(31) = return_pc;
+    R(7) = (u32)target;
+    c->budget -= 5;
+    return true;
+}
+
 /* The field may point into the new frame. Save all three registers before
  * reading it, and reserve enough budget for the longer, already-equal exit. */
 u32 nc_begin_placement_halfword_step(CPUState *c) {
