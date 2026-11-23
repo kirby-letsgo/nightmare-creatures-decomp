@@ -1059,6 +1059,16 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004503C:
+                out.extend(
+                    [
+                        "    switch (nc_player_down_face_buttons(c)) {",
+                        "    case 0x8004506C: goto L_8004506C;",
+                        "    case 0x80045080: goto L_80045080;",
+                        "    case 0x80045084: goto L_80045084;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x800450BC, 0x8004515C):
                 square = i.addr == 0x800450BC
                 next_button = 0x8004515C if square else 0x80045180
