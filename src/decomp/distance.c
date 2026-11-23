@@ -5411,6 +5411,23 @@ u32 nc_begin_placement_link_scan(CPUState *c) {
     return 0x80029854;
 }
 
+u32 nc_scan_placement_link(CPUState *c) {
+    if (c->budget <= 19)
+        return 0;
+    const u32 index = MEM_R16(R(4) + 0x3a);
+    R(3) = R(7) + 36 * index;
+    R(2) = MEM_R32(R(3)) & 0x10;
+    if (R(2)) {
+        c->budget -= 15;
+        return 0x80029890;
+    }
+    R(5)++;
+    R(2) = (s32)R(5) < (s32)R(6);
+    R(4) += 2;
+    c->budget -= 19;
+    return R(2) ? 0x80029854 : 0x80029890;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
