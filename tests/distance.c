@@ -4432,6 +4432,57 @@ static bool indexed_vertex_inputs(bool disc) {
     return true;
 }
 
+static bool indexed_face_frames(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100;
+    for (unsigned present = 0; present < 2; ++present) {
+        CPUState input = initial();
+        input.r[29] = frame + 0x88;
+        input.r[4] = SCRATCH_BASE;
+        input.r[5] = frame; /* The descriptor load precedes the color store at the same address. */
+        MEM_W32(input.r[4] + 0x2e4, 0xff801234);
+        MEM_W32(frame + 0x38, present ? SCRATCH_BASE + 0x80 : 0);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 22;
+        CPUState native = input;
+        if (nc_begin_indexed_faces(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_begin_indexed_faces(&native) || native.budget != 1 || native.r[29] != frame ||
+            native.r[30] != (present ? SCRATCH_BASE + 0x80 : 0) ||
+            MEM_R32(frame + 0x38) != 0xff801234)
+            return false;
+        memcpy(after, nc_scratch, sizeof after);
+        if (disc) {
+            CPUState guest = input;
+            memcpy(nc_scratch, before, sizeof before);
+            interp_continue_call(&guest, 0x80028340, present ? 0x80028388 : 0x80028a3c, frame);
+            if (memcmp(&native, &guest, sizeof guest) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+        for (unsigned reg = 16; reg <= 23; ++reg)
+            native.r[reg] = 0;
+        native.r[30] = native.r[31] = 0;
+        native.budget = 33;
+        CPUState guest = native;
+        if (nc_return_indexed_faces(&native) || memcmp(&guest, &native, sizeof guest))
+            return false;
+        native.budget = ++guest.budget;
+        if (!nc_return_indexed_faces(&native) || native.budget != 1 ||
+            native.r[29] != input.r[29] || native.r[30] != input.r[30] ||
+            native.r[31] != input.r[31] || memcmp(&native.r[16], &input.r[16], 8 * sizeof(u32)) ||
+            memcmp(after, nc_scratch, sizeof after))
+            return false;
+        if (disc) {
+            interp_continue_call(&guest, 0x80028a3c, input.r[31], input.r[29]);
+            if (memcmp(&native, &guest, sizeof guest) || memcmp(after, nc_scratch, sizeof after))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool indexed_face_advances(bool disc, bool textured) {
     const u32 entry = textured ? 0x800286d8 : 0x80028a1c;
     const u32 save = entry + 0x18;
@@ -7227,11 +7278,11 @@ int main(int argc, char **argv) {
         placement_depth_cues(disc, 0x80028d8c, 0x160, 8) && placement_pose_stack(disc) &&
         placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
         placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && indexed_face_advances(disc, true) &&
-        indexed_face_advances(disc, false) && indexed_packet_links(disc, true) &&
-        indexed_packet_links(disc, false) && indexed_face_packets(disc, true) &&
-        indexed_face_packets(disc, false) && indexed_face_windings(disc) &&
-        indexed_depth_stores(disc) && indexed_vertex_inputs(disc) &&
+        placement_vertex_triples(disc, true) && indexed_face_frames(disc) &&
+        indexed_face_advances(disc, true) && indexed_face_advances(disc, false) &&
+        indexed_packet_links(disc, true) && indexed_packet_links(disc, false) &&
+        indexed_face_packets(disc, true) && indexed_face_packets(disc, false) &&
+        indexed_face_windings(disc) && indexed_depth_stores(disc) && indexed_vertex_inputs(disc) &&
         indexed_vertex_projections(disc) && remaining_placement_vertices(disc, false) &&
         remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
         pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&

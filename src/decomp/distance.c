@@ -3715,6 +3715,40 @@ bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32
     return true;
 }
 
+bool nc_begin_indexed_faces(CPUState *c) {
+    if (c->budget <= 22)
+        return false;
+    const u32 frame = R(29) - 0x88;
+    R(29) = frame;
+    MEM_W32(frame + 0x6c, R(19));
+    R(19) = R(4);
+    MEM_W32(frame + 0x84, R(31));
+    MEM_W32(frame + 0x80, R(30));
+    for (int reg = 23; reg >= 16; --reg) {
+        if (reg != 19)
+            MEM_W32(frame + 0x60 + 4 * (reg - 16), R(reg));
+    }
+    MEM_W32(frame + 0x30, R(6));
+    R(9) = MEM_R32(R(19) + 0x2e4);
+    R(30) = MEM_R32(R(5) + 0x38);
+    MEM_W32(frame + 0x38, R(9)); /* descriptor branch delay slot */
+    c->budget -= 22;
+    return true;
+}
+
+bool nc_return_indexed_faces(CPUState *c) {
+    if (c->budget <= 33)
+        return false;
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0x84);
+    R(30) = MEM_R32(frame + 0x80);
+    for (int reg = 23; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x60 + 4 * (reg - 16));
+    R(29) = frame + 0x88;
+    c->budget -= 33;
+    return true;
+}
+
 bool nc_advance_indexed_face(CPUState *c, bool textured) {
     if (c->budget <= 8)
         return false;
