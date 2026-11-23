@@ -2897,6 +2897,82 @@ static bool check_cd_dma_wait(void) {
     return ok && !saved.error;
 }
 
+static bool check_cd_read_retry(void) {
+    const u32 trace = 0x80061000, control = 0x8001ffac, fast = 0x800200e4;
+    const struct {
+        u32 retry, lid, frame, mode, fail_command;
+        unsigned commands;
+        u8 sequence[4];
+    } cases[] = {
+        {0, 1, 64, 0, 0, 1, {1}}, {1, 1, 65, 0, 0, 1, {1}},
+        {0, 0, 20, 0x80, 0, 1, {6}}, {0, 0, 20, 0, 0, 2, {14, 6}},
+        {1, 0, 21, 0x80, 0, 4, {9, 2, 14, 6}},
+        {1, 0, 22, 0, 2, 2, {9, 2}}, {0, 0, 23, 0, 14, 1, {14}},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Trace both command wrappers. Only the selected command returns zero. */
+    const u32 wrappers[] = {control, fast};
+    for (unsigned i = 0; i < 2; i++) {
+        u32 entry = wrappers[i];
+        MEM_W32(entry, 0xad040000);      /* sw a0,0(t0) */
+        MEM_W32(entry + 4, 0xad050004);  /* sw a1,4(t0) */
+        MEM_W32(entry + 8, 0x25080008);  /* addiu t0,t0,8 */
+        MEM_W32(entry + 12, 0x03e00008);
+        MEM_W32(entry + 16, 0x008f1026); /* xor v0,a0,t7 */
+    }
+    MEM_W32(0x8001a638, 0x03e00008); /* puts records its string */
+    MEM_W32(0x8001a63c, 0xad240000);
+    MEM_W32(0x8001fe9c, 0x03e00008); /* CdFlush */
+    MEM_W32(0x8001fea0, 0);
+    MEM_W32(0x80023400, trace + 64);
+    MEM_W32(0x80023404, trace + 68);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W32(trace + 32, 0);
+        MEM_W32(0x800244d4, cases[i].frame);
+        MEM_W8(0x8002476c, cases[i].lid << 4);
+        MEM_W8(0x8002477c, cases[i].mode);
+        MEM_W32(0x80024778, 0x00000300); /* 00:03:00, sector 75 */
+        MEM_W32(0x8002475c, 0x8001935c);
+        MEM_W32(0x80024760, 0x8001935c);
+        MEM_W32(0x80024a80, 0x180);
+        MEM_W32(0x80024a74, 12);
+        MEM_W32(0x80024a78, 0x80062000);
+        MEM_W32(0x80024a8c, 0);
+        MEM_W32(0x80024a90, 0);
+        CPUState state = arguments(cases[i].retry, 2, 3, i & 1 ? 8 : 4096);
+        state.r[8] = trace;
+        state.r[9] = trace + 32;
+        state.r[15] = cases[i].fail_command;
+        bool started = !cases[i].lid && !cases[i].fail_command;
+        ok = compare(state, 0x80022908, nc_credits_cd_read_retry, 7) &&
+             nc_cpu.r[2] == (started ? 12u : UINT32_MAX) &&
+             MEM_R32(0x80024a88) == nc_cpu.r[2] && MEM_R32(0x8002475c) == 0 &&
+             MEM_R32(0x80024760) == (started ? 0x800226e4u : 0) &&
+             nc_cpu.r[8] == trace + cases[i].commands * 8 &&
+             MEM_R32(0x80024a8c) == (started ? cases[i].frame : 0) &&
+             MEM_R32(0x80024a90) == (cases[i].lid ? cases[i].frame : 0);
+        if (started)
+            ok = ok && MEM_R32(0x80024a94) == 75 && MEM_R32(0x80024a7c) == 0x80062000;
+        u32 message = cases[i].lid ? (cases[i].frame % 64 == 0 ? 0x80018ba8 : 0)
+                                   : (cases[i].retry ? 0x80018bc0 : 0);
+        ok = ok && MEM_R32(trace + 32) == message;
+        for (unsigned j = 0; ok && j < cases[i].commands; j++) {
+            u32 cmd = cases[i].sequence[j];
+            u32 param = cmd == 14 ? state.r[29] - 24 : cmd == 2 ? 0x80024778 : 0;
+            ok = MEM_R32(trace + 8 * j) == cmd && MEM_R32(trace + 8 * j + 4) == param;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_data_sync(void) {
     const u32 scratch = 0x80061000;
     StateIO saved = {0};
@@ -4466,6 +4542,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_sync();
     pass = pass && check_cd_ready();
     pass = pass && check_cd_data_sync();
+    pass = pass && check_cd_read_retry();
     pass = pass && check_cd_dma_wait();
     pass = pass && check_dma_slot();
     pass = pass && check_dma_interrupt_dispatch();
