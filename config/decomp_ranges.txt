@@ -578,8 +578,11 @@ psx2_exe     80044B98    80044C2C         pad.c
 psx2_exe     80044C2C    80044C60         pad.c
 psx2_exe     80044C60    80044C84         pad.c
 psx2_exe     80044C84    80044CBC         pad.c
+psx2_exe     80044CBC    80044CC4         pad.c
 psx2_exe     80044CC4    80044CCC         pad.c
+psx2_exe     80044CCC    80044CD4         pad.c
 psx2_exe     80044CD4    80044CDC         pad.c
+psx2_exe     80044CDC    80044CE8         pad.c
 psx2_exe     80044CE8    80044CF0         pad.c
 psx2_exe     80044D00    80044D08         pad.c
 psx2_exe     80044D10    80044D18         pad.c
