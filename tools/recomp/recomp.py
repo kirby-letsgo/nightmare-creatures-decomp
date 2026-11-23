@@ -1066,6 +1066,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x8004519C:
+                out.append("    if (nc_player_triangle_fallback(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800451D0, 0x800451D4, 0x800451DC):
                 resume = 0x800451E8 if i.addr == 0x800451DC else 0x800451DC
                 out.append(f"    if (nc_call_player_trigger(c, 0x{i.addr:X})) goto L_{resume:X};")

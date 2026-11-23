@@ -63,6 +63,39 @@ u32 nc_player_triangle_action(CPUState *c, bool check_press) {
     return 0x800451e8;
 }
 
+/* When Triangle has no new press, four actor states keep the current action.
+ * Each taken branch leaves its delay-slot value in v0. */
+bool nc_player_triangle_fallback(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(3) = MEM_R8(R(16) + 0x38a);
+    switch (R(3)) {
+    case 3:
+        R(2) = 9;
+        c->budget -= 6;
+        break;
+    case 9:
+        R(2) = 0x22;
+        c->budget -= 8;
+        break;
+    case 0x22:
+        R(2) = 0xa;
+        c->budget -= 10;
+        break;
+    case 0xa:
+        R(2) = 0xa;
+        c->budget -= 12;
+        break;
+    default:
+        R(2) = 0xa;
+        MEM_W8(R(16) + 0x39b, 0);
+        MEM_W8(R(16) + 0x38a, 0);
+        c->budget -= 15;
+        break;
+    }
+    return true;
+}
+
 /* A fresh L2 press resets the direction-repeat counter. */
 bool nc_reset_repeat_on_l2_press(CPUState *c) {
     if (c->budget <= 28)
