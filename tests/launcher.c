@@ -122,18 +122,31 @@ static bool deliver_cd_callback(CPUState *c) {
 
 static u32 cd_driver, cd_driver_resume;
 
+static enum CdDriverResult cd_driver_result;
+
 static bool forward_cd_call(CPUState *c) {
-    return call_cd_status_driver(c, cd_driver, cd_driver_resume);
+    return call_cd_status_driver(c, cd_driver, cd_driver_resume, cd_driver_result);
 }
 
 static bool check_cd_driver_calls(void) {
-    const struct { u32 entry, driver; } calls[] = {
-        {0x80012040, 0x8001366c}, {0x800120e0, 0x80012c80},
-        {0x80012100, 0x80012f00}, {0x80012564, 0x80013a7c},
+    const struct {
+        u32 entry, driver;
+        enum CdDriverResult result;
+        u32 input, expected;
+    } calls[] = {
+        {0x80012040, 0x8001366c, CD_RETURN_STATUS, 11, 11},
+        {0x800120e0, 0x80012c80, CD_RETURN_STATUS, 22, 22},
+        {0x80012100, 0x80012f00, CD_RETURN_STATUS, 33, 33},
+        {0x80012564, 0x80013a7c, CD_RETURN_STATUS, 44, 44},
+        {0x800124f8, 0x800135e4, CD_RETURN_ONE, 0, 1},
+        {0x800124f8, 0x800135e4, CD_RETURN_ONE, UINT32_MAX, 1},
+        {0x8001251c, 0x80013be8, CD_ZERO_IS_SUCCESS, 0, 1},
+        {0x8001251c, 0x80013be8, CD_ZERO_IS_SUCCESS, UINT32_MAX, 0},
     };
     const u32 trace = 0x80016200;
     for (unsigned i = 0; i < sizeof calls / sizeof calls[0]; i++) {
         cd_driver = calls[i].driver;
+        cd_driver_result = calls[i].result;
         cd_driver_resume = calls[i].entry + 16;
         u32 saved[3];
         memcpy(saved, nc_fast_ptr(cd_driver), sizeof saved);
@@ -141,9 +154,9 @@ static bool check_cd_driver_calls(void) {
         MEM_W32(cd_driver + 4, 0x03e00008); /* jr ra */
         MEM_W32(cd_driver + 8, 0x00801021); /* move v0, a0 */
         MEM_W32(trace, 0);
-        CPUState start = arguments(0x12340000 + i, trace, 0, 5);
+        CPUState start = arguments(calls[i].input, trace, 0, 5);
         bool ok = compare(start, calls[i].entry, forward_cd_call, 4) &&
-                  nc_cpu.r[2] == start.r[4] && MEM_R32(trace) == cd_driver_resume;
+                  nc_cpu.r[2] == calls[i].expected && MEM_R32(trace) == cd_driver_resume;
         memcpy(nc_fast_ptr(cd_driver), saved, sizeof saved);
         if (!ok)
             return false;
