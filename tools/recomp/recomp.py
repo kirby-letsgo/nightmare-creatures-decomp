@@ -79,6 +79,7 @@ CREDITS_ROUTINES = {
     0x8001A3E4: "nc_credits_patch_pad(c)",
     0x8001A434: "nc_credits_flush_cache(c)",
     0x8001A444: "nc_credits_enter_critical_section(c)",
+    0x8001A454: "nc_credits_vsync(c)",
     0x8001A59C: "nc_credits_wait_vblank(c)",
     0x8001A638: "nc_credits_put_string(c)",
     0x8001A688: "nc_credits_change_clear_counter(c)",
@@ -1659,6 +1660,8 @@ class Emitter:
                 out.append("    if (nc_check_record_projection_limit(c)) {")
                 out.append("        if (R(2)) goto L_80029460;")
                 out.append("        goto L_800292D4; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029498:
+                out.append("    if (nc_begin_placement_angle_update(c)) goto L_800294F0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800294F0:
                 out.append("    if (nc_set_type7_pose_angles(c)) {")
                 out.append("        if (R(3) != 7) goto L_80029544;")
