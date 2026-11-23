@@ -426,6 +426,8 @@ psx2_exe     80068488    800684D0         pad.c
 # Menu Start press, Down counter and Down repeat decision.
 psx2_exe     800684D0    8006851C         pad.c
 psx2_exe     800685D8    800685FC         pad.c
+# Dispatch the selected menu action and save the current buttons.
+psx2_exe     800685FC    80068624         pad.c
 # Menu Cross and Triangle press decisions.
 psx2_exe     8006851C    80068578         pad.c
 # Vertical input after the menu face-button checks.
