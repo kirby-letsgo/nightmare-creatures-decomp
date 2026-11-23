@@ -8172,6 +8172,221 @@ static void copy_directory_word(CPUState *c, unsigned reg, u32 source, u32 dest)
     NC_POLL(c, 1);
 }
 
+/* v0 already contains twice the entry index. Each cached path occupies
+ * 44 bytes: directory number, parent, extent sector, and identifier. */
+static void path_table_offset(CPUState *c, unsigned dest) {
+    set_reg(c, 2, R(2) + R(7));
+    set_reg(c, 2, R(2) << 2);
+    set_reg(c, 2, R(2) - R(7));
+    set_reg(c, dest, R(2) << 2);
+}
+
+static void report_path_entry(CPUState *c) {
+    const u32 fields[] = {0x545c, 0x5454, 0x5458};
+    for (unsigned i = 0; i < 3; i++) {
+        set_reg(c, 1, 0x80020000);
+        set_reg(c, 1, R(1) + R(16));
+        load_word(c, 5 + i, R(1) + fields[i]);
+    }
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80018ad8);
+    R(31) = 0x80022170;
+    MEM_W32(R(29) + 16, R(18));
+    NC_POLL(c, 2);
+    nc_call(c, 0x80019a60);
+}
+
+static void cache_path_table(CPUState *c) {
+    load_cd_port(c, 2, 0x80024768);
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(2) < 2);
+    bool verbose = !R(2);
+    R(17) = R(16); /* cursor in the path-table sector */
+    NC_POLL(c, 2);
+    if (verbose) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018ab8);
+        cd_read_call(c, 0x80019a60, 0x8002207c);
+    }
+    set_reg(c, 2, 1);
+    R(7) = 0; /* number of paths cached */
+    NC_POLL(c, 2);
+    set_reg(c, 20, 0x80020000);
+    set_reg(c, 20, 0x8002545c);
+    set_reg(c, 21, R(20) + 4);
+    bool full = false;
+    for (;;) {
+        load_toc_byte(c, 2, R(17));
+        NC_POLL(c, 1);
+        bool end = R(2) == 0;
+        R(2) = R(7) << 1;
+        NC_POLL(c, 2);
+        if (end)
+            break;
+        path_table_offset(c, 16);
+        set_reg(c, 2, R(16) + R(20));
+        copy_directory_word(c, 3, R(17) + 2, R(2));
+        set_reg(c, 18, R(16) + R(21));
+        set_reg(c, 4, R(18));
+        load_toc_byte(c, 2, R(17) + 6); /* low byte of parent number */
+        set_reg(c, 19, R(7) + 1);
+        set_reg(c, 1, 0x80020000);
+        set_reg(c, 1, R(1) + R(16));
+        MEM_W32(R(1) + 0x5454, R(19));
+        NC_POLL(c, 1);
+        set_reg(c, 1, 0x80020000);
+        set_reg(c, 1, R(1) + R(16));
+        MEM_W32(R(1) + 0x5458, R(2));
+        NC_POLL(c, 1);
+        load_toc_byte(c, 6, R(17));
+        R(31) = 0x80022100;
+        R(5) = R(17) + 8;
+        NC_POLL(c, 2);
+        nc_call(c, 0x800225cc);
+        load_toc_byte(c, 2, R(17));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(18) + R(2));
+        MEM_W8(R(2), 0);
+        NC_POLL(c, 1);
+        load_toc_byte(c, 3, R(17));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(3) & 1); /* ISO identifiers pad to an even length */
+        set_reg(c, 2, R(2) + 8);
+        set_reg(c, 3, R(3) + R(2));
+        load_cd_port(c, 2, 0x80024768);
+        NC_POLL(c, 1);
+        set_reg(c, 2, (s32)R(2) < 2);
+        verbose = !R(2);
+        R(17) += R(3);
+        NC_POLL(c, 2);
+        if (verbose)
+            report_path_entry(c);
+        set_reg(c, 7, R(19));
+        set_reg(c, 2, (s32)R(7) < 128);
+        full = !R(2);
+        NC_POLL(c, 2);
+        if (full)
+            break;
+        set_reg(c, 2, 0x80020000);
+        set_reg(c, 2, 0x80027254);
+        set_reg(c, 2, R(17) < R(2));
+        bool in_sector = R(2) != 0;
+        NC_POLL(c, 2);
+        if (!in_sector)
+            break;
+    }
+    if (!full) {
+        set_reg(c, 2, (s32)R(7) < 128);
+        bool room = R(2) != 0;
+        R(2) = R(7) << 1;
+        NC_POLL(c, 2);
+        if (room) {
+            path_table_offset(c, 2);
+            set_reg(c, 1, 0x80020000);
+            set_reg(c, 1, R(1) + R(2));
+            MEM_W32(R(1) + 0x5458, 0); /* end marker */
+            NC_POLL(c, 1);
+        }
+    }
+    load_cd_port(c, 2, 0x80024768);
+    store_gpu_global(c, 0x80024a68, 0); /* invalidate the file cache */
+    set_reg(c, 2, (s32)R(2) < 2);
+    verbose = !R(2);
+    R(2) = 1;
+    NC_POLL(c, 2);
+    if (verbose) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018aec);
+        R(31) = 0x800221e8;
+        R(5) = R(7);
+        NC_POLL(c, 2);
+        nc_call(c, 0x80019a60);
+        set_reg(c, 2, 1);
+    }
+}
+
+static void report_media_failure(CPUState *c, u32 format, u32 resume, bool include_sector) {
+    load_cd_port(c, 2, 0x80024768);
+    NC_POLL(c, 1);
+    bool report = (s32)R(2) > 0;
+    R(2) = 0;
+    NC_POLL(c, 2);
+    if (report) {
+        if (include_sector)
+            load_word(c, 5, R(29) + 24);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, format);
+        cd_read_call(c, 0x80019a60, resume);
+        R(2) = 0;
+        NC_POLL(c, 2);
+    }
+}
+
+bool nc_credits_load_cd_paths(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    R(29) -= 64;
+    R(4) = 1;
+    R(5) = 16; /* primary volume descriptor */
+    c->budget -= 3;
+    MEM_W32(R(29) + 32, R(16));
+    R(16) = 0x80026a54;
+    R(6) = R(16);
+    c->budget -= 4;
+    MEM_W32(R(29) + 56, R(31));
+    c->budget--;
+    for (unsigned reg = 21; reg >= 18; reg--) {
+        MEM_W32(R(29) + 32 + 4 * (reg - 16), R(reg));
+        c->budget--;
+    }
+    R(31) = 0x80021f70;
+    MEM_W32(R(29) + 36, R(17));
+    NC_POLL(c, 2);
+    nc_call(c, 0x80022560);
+    set_reg(c, 17, R(2));
+    set_reg(c, 2, 1);
+    bool received = R(17) == R(2);
+    R(4) = R(16) + 1;
+    NC_POLL(c, 2);
+    if (!received) {
+        report_media_failure(c, 0x80018a30, 0x80021fa4, false);
+    } else {
+        set_reg(c, 5, 0x80020000);
+        set_reg(c, 5, 0x80018a5c);
+        R(31) = 0x80021fbc;
+        R(6) = 5;
+        NC_POLL(c, 2);
+        nc_call(c, 0x80022664); /* check "CD001" */
+        bool iso = R(2) == 0;
+        NC_POLL(c, 2);
+        if (!iso) {
+            report_media_failure(c, 0x80018a64, 0x80021fe8, false);
+        } else {
+            set_reg(c, 5, 0x80020000);
+            set_reg(c, 5, 0x80026ae0);
+            copy_directory_word(c, 2, R(5), R(29) + 24);
+            set_reg(c, 4, 1);
+            load_word(c, 5, R(29) + 24);
+            R(31) = 0x8002201c;
+            R(6) = R(16);
+            NC_POLL(c, 2);
+            nc_call(c, 0x80022560); /* first little-endian path-table sector */
+            received = R(2) == R(17);
+            NC_POLL(c, 2);
+            if (received)
+                cache_path_table(c);
+            else
+                report_media_failure(c, 0x80018a94, 0x8002204c, true);
+        }
+    }
+    load_word(c, 31, R(29) + 56);
+    for (unsigned reg = 21; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 32 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 64);
+    NC_POLL(c, 2);
+    return true;
+}
+
 static void cache_directory_name(CPUState *c) {
     bool first = R(18) == 0;
     R(2) = 1;

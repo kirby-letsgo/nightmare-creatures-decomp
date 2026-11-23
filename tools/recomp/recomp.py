@@ -266,6 +266,7 @@ CREDITS_ROUTINES = {
     0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
     0x80021B54: "nc_credits_cd_interrupt_callback(c)",
     0x80021F14: "nc_credits_cd_names_equal(c)",
+    0x80021F38: "nc_credits_load_cd_paths(c)",
     0x80022214: "nc_credits_cd_search_directory(c)",
     0x800222BC: "nc_credits_cache_cd_directory(c)",
     0x80022560: "nc_credits_cd_read_sectors(c)",
