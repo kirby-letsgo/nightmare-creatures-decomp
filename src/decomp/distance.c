@@ -4190,6 +4190,19 @@ bool nc_advance_projection_pose(CPUState *c) {
     return advance_pose_link(c, 22);
 }
 
+bool nc_return_projection_traversal(CPUState *c) {
+    if (c->budget <= 33)
+        return false;
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0x31c);
+    R(30) = MEM_R32(frame + 0x318);
+    for (int reg = 23; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x2f8 + 4 * (reg - 16));
+    R(29) = frame + 0x320;
+    c->budget -= 33;
+    return true;
+}
+
 /* The traversal at 0x80028C58 saves s0 through s4 and ra in a 0x180-byte frame. */
 bool nc_return_linked_pose_traversal(CPUState *c) {
     if (c->budget <= 21)

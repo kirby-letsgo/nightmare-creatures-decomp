@@ -4275,6 +4275,30 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_traversal_return(bool disc) {
+    CPUState input = initial();
+    const u32 frame = SCRATCH_BASE;
+    input.r[29] = frame;
+    input.budget = 33;
+    for (unsigned i = 0; i < 10; ++i)
+        MEM_W32(frame + 0x2f8 + 4 * i, 0x80011000 + 4 * i);
+    CPUState native = input;
+    if (nc_return_projection_traversal(&native) || memcmp(&input, &native, sizeof input))
+        return false;
+    native.budget = ++input.budget;
+    if (!nc_return_projection_traversal(&native) || native.budget != 1 ||
+        native.r[29] != frame + 0x320 || native.r[30] != 0x80011020 || native.r[31] != 0x80011024)
+        return false;
+    for (unsigned reg = 16; reg <= 23; ++reg)
+        if (native.r[reg] != 0x80011000 + 4 * (reg - 16))
+            return false;
+    if (disc) {
+        interp_continue_call(&input, 0x8002830c, native.r[31], native.r[29]);
+        return !memcmp(&native, &input, sizeof input);
+    }
+    return true;
+}
+
 static bool projection_pose_filters(bool disc) {
     const struct {
         u32 flags, mask;
@@ -7553,6 +7577,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_traversal_return(disc) &&
         placement_depths(disc, 0x80027f0c, 8, 5, 5) &&
         placement_depth_cues(disc, 0x80027f0c, 8, 15) &&
         placement_depth_cues(disc, 0x80028b0c, 0x2d8, 8) &&
