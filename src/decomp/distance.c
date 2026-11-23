@@ -3809,16 +3809,33 @@ bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {
     return true;
 }
 
+static void load_placement_light_matrix(CPUState *c) {
+    const u32 light = 0x800d76a8;
+    for (unsigned i = 0; i < 5; ++i)
+        gte_write_ctrl(c, 8 + i, MEM_R32(light + 4 * i));
+}
+
+bool nc_begin_placement_lighting(CPUState *c) {
+    if (c->budget <= 59)
+        return false;
+    R(29) -= 0x18;
+    MEM_W32(R(29) + 0xc, R(6));
+    MEM_W32(R(7), 0);
+    load_placement_light_matrix(c);
+    R(15) = 0x800d7668;
+    load_part_transform(c, R(15));
+    c->budget -= 59;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */
 bool nc_install_placement_matrices(CPUState *c, u32 continuation) {
     if (c->budget <= 67)
         return false;
-    const u32 light = 0x800d76a8;
-    for (unsigned i = 0; i < 5; ++i)
-        gte_write_ctrl(c, 8 + i, MEM_R32(light + 4 * i));
-    R(16) = light - 0x40;
+    load_placement_light_matrix(c);
+    R(16) = 0x800d7668;
     install_node_matrix(c, R(16), continuation);
     c->budget -= 67;
     return true;
