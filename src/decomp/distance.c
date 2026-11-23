@@ -3405,6 +3405,25 @@ bool nc_check_placement_face(CPUState *c, unsigned first_reg, u32 count, u32 lim
     return true;
 }
 
+bool nc_write_projected_triangle(CPUState *c) {
+    if (c->budget <= 27)
+        return false;
+    const u32 first = R(18), second = R(16), third = R(17), packet = R(19);
+    const u32 first_xy = MEM_R32(first);
+    const s32 third_z = (s16)MEM_R16(third + 4);
+    const s32 second_z = (s16)MEM_R16(second + 4);
+    const s32 first_z = (s16)MEM_R16(first + 4);
+    R(5) = (u32)first_z;
+    R(3) = (u32)((first_z + second_z + 2 * third_z) >> 2);
+    R(4) = R(3) & 0x7ff;
+    MEM_W32(packet + 1, first_xy);
+    MEM_W32(packet + 5, MEM_R32(second));
+    R(2) = MEM_R32(third);
+    MEM_W32(packet + 9, R(2));
+    c->budget -= 27;
+    return true;
+}
+
 /* Both traversals start with the root pose and an empty pending-pose stack.
  * Their delay slots copy the placement color even when projection is skipped. */
 bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {
