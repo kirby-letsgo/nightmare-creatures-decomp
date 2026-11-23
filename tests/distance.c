@@ -4751,6 +4751,41 @@ static bool indexed_placement_x_steps(bool disc) {
     return true;
 }
 
+static bool placement_x_indices(bool disc) {
+    const u16 indices[] = {0, 3, 4, 5, 6, UINT16_MAX};
+    for (unsigned i = 0; i < sizeof indices / sizeof indices[0]; ++i) {
+        const u32 index = indices[i];
+        const u32 field = SCRATCH_BASE + 0x56;
+        CPUState input = initial(), native;
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = index < 6 ? 0x8002a204 : 0x8002a560;
+        MEM_W16(field, index);
+        if (!compare(input, 0x8002a1f0, nc_begin_indexed_placement_x_step, disc, &native) ||
+            native.r[4] != index || native.r[2] != (index < 6) ||
+            native.r[17] != (u32)-2 || native.budget != input.budget - 7)
+            return false;
+        input.r[18] = 4;
+        input.r[31] = 0x8002a560;
+        input.budget = 8;
+        native = input;
+        if (nc_advance_placement_x_index(&native) || memcmp(&input, &native, sizeof input) ||
+            MEM_R16(field) != index)
+            return false;
+        native.budget = ++input.budget;
+        const u16 expected = index == 4 ? 5 : index;
+        if (!nc_advance_placement_x_index(&native) || MEM_R16(field) != expected ||
+            native.r[2] != index + 1 || native.budget != (index == 4 ? 1 : 3))
+            return false;
+        if (disc) {
+            MEM_W16(field, index);
+            interp_call(&input, 0x8002a258);
+            if (memcmp(&input, &native, sizeof input) || MEM_R16(field) != expected)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_halfword_entries(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const struct {
@@ -8924,6 +8959,7 @@ int main(int argc, char **argv) {
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
+        placement_x_indices(disc) &&
         placement_halfword_entries(disc) &&
         placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&

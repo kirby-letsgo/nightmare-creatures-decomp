@@ -5414,6 +5414,16 @@ bool nc_call_flagged_placement_y_step(CPUState *c, bool record22) {
     return true;
 }
 
+bool nc_begin_indexed_placement_x_step(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    R(4) = MEM_R16(R(16) + 0x56);
+    R(2) = R(4) < 6;
+    R(17) = (u32)-2;
+    c->budget -= 7;
+    return true;
+}
+
 /* The placement index sets the X target in 128-unit increments. Index 4
  * adds one more increment and doubles the downward step. */
 bool nc_call_indexed_placement_x_step(CPUState *c) {
@@ -5435,6 +5445,21 @@ bool nc_call_indexed_placement_x_step(CPUState *c) {
     R(7) = (u32)(s32)(s16)R(3);
     R(31) = 0x8002a23c;
     c->budget -= cycles;
+    return true;
+}
+
+bool nc_advance_placement_x_index(CPUState *c) {
+    /* Reserve both paths before reading the index. */
+    if (c->budget <= 8)
+        return false;
+    const u32 index = MEM_R16(R(16) + 0x56);
+    R(2) = index + 1;
+    if (index == R(18)) {
+        MEM_W16(R(16) + 0x56, (u16)R(2));
+        c->budget -= 8;
+    } else {
+        c->budget -= 6;
+    }
     return true;
 }
 
