@@ -4042,6 +4042,29 @@ bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset) 
     return select_pose_from_stack(c, index_ready, 19, 17, output_offset);
 }
 
+/* The traversal keeps its actor, pose and projection argument in s5, s2
+ * and fp while it walks the pose links. */
+bool nc_begin_projection_traversal(CPUState *c) {
+    if (c->budget <= 23)
+        return false;
+    const u32 frame = R(29) - 0x320;
+    R(29) = frame;
+    for (int reg = 16; reg <= 23; ++reg)
+        MEM_W32(frame + 0x2f8 + 4 * (reg - 16), R(reg));
+    MEM_W32(frame + 0x318, R(30));
+    MEM_W32(frame + 0x31c, R(31));
+    R(21) = R(4);
+    R(18) = R(5);
+    R(30) = R(6);
+    MEM_W32(frame + 0x2e8, 0);
+    R(2) = MEM_R32(R(21) + 0x2c8) & 1;
+    R(22) = 0;
+    MEM_W32(frame + 0x2f0, 0);
+    MEM_W32(frame + 0x2e0, 0);
+    c->budget -= 23;
+    return true;
+}
+
 /* A non-root starting pose selects the traversal mask from the actor's flag table. */
 bool nc_set_projection_pose_mask(CPUState *c) {
     if (c->budget <= 6)
