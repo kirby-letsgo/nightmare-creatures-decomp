@@ -3020,6 +3020,93 @@ static bool check_clear_otag_reverse(void) {
     return ok;
 }
 
+static bool check_dma_interrupt_dispatch(void) {
+    const u32 trace = 0x80061000, callback = trace + 0x100, dicr = 0x1f8010f4;
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    bool ok = !saved.error;
+    for (unsigned scenario = 0; ok && scenario < 5; scenario++) {
+        StateIO native = {0}, guest = {0};
+        for (unsigned run = 0; ok && run < 2; run++) {
+            /* Channel six submits a second zero-length GPU DMA in its delay
+             * slot. The handler must resample DICR after its first pass. */
+            memset(nc_fast_ptr(0x800244e0), 0, 7 * 4);
+            MEM_W32(0x800244e0 + 24, callback);
+            if (scenario == 1)
+                MEM_W32(0x800244e0 + 8, callback + 16);
+            MEM_W32(callback, 0xad100000);      /* sw s0,0(t0) */
+            MEM_W32(callback + 4, 0x25080004);  /* addiu t0,t0,4 */
+            MEM_W32(callback + 8, 0x03e00008);  /* jr ra */
+            MEM_W32(callback + 12, 0xad2a0000); /* sw t2,0(t1): start DMA2 */
+            MEM_W32(callback + 16, 0xad100000);
+            MEM_W32(callback + 20, 0x03e00008);
+            MEM_W32(callback + 24, 0x25080004);
+            MEM_W32(0x80019a60, 0xad040000); /* record printf format and arguments */
+            MEM_W32(0x80019a64, 0xad050004);
+            MEM_W32(0x80019a68, 0xad060008);
+            MEM_W32(0x80019a6c, 0x03e00008);
+            MEM_W32(0x80019a70, 0x2508000c);
+            bool diagnostic = scenario >= 3;
+            if (diagnostic) {
+                MEM_W32(0x800244dc, callback + 32);
+                MEM_W32(callback + 32, scenario == 3 ? 0x80000000 : 0x8000);
+                MEM_W32(0x80024500, callback + 64);
+                for (unsigned i = 0; i < 7; i++)
+                    MEM_W32(callback + 64 + i * 16, 0x12340000 + i);
+            } else {
+                MEM_W32(0x800244dc, dicr);
+                MEM_W32(dicr, 0x7fc40000); /* enable channels two and six, clear flags */
+                if (scenario) {
+                    MEM_W32(0x1f8010a4, 0);
+                    MEM_W32(0x1f8010a8, 0x01000200);
+                    MEM_W32(0x1f8010e0, 0x62000);
+                    MEM_W32(0x1f8010e4, 1);
+                    MEM_W32(0x1f8010e8, 0x01000002);
+                }
+            }
+            nc_cpu = arguments(1, 2, 3, scenario & 1 ? 21 : 4096);
+            nc_cpu.r[8] = trace;
+            nc_cpu.r[9] = 0x1f8010a8;
+            nc_cpu.r[10] = 0x01000200;
+            if (run)
+                interp_call(&nc_cpu, 0x8001b000);
+            else
+                ok = nc_credits_dispatch_dma_interrupt(&nc_cpu);
+            if (diagnostic) {
+                ok = ok && nc_cpu.r[8] == trace + 96 && MEM_R32(trace) == 0x8001837c &&
+                     MEM_R32(trace + 4) == MEM_R32(callback + 32);
+                for (unsigned i = 0; ok && i < 7; i++) {
+                    u32 row = trace + 12 + i * 12;
+                    ok = MEM_R32(row) == 0x80018398 && MEM_R32(row + 4) == i &&
+                         MEM_R32(row + 8) == 0x12340000 + i;
+                }
+            } else {
+                ok = ok && MEM_R32(dicr) == 0xc40000;
+                if (scenario == 1)
+                    ok = ok && nc_cpu.r[8] == trace + 12 && MEM_R32(trace) == 2 &&
+                         MEM_R32(trace + 4) == 6 && MEM_R32(trace + 8) == 2;
+                else if (scenario == 2)
+                    ok = ok && nc_cpu.r[8] == trace + 4 && MEM_R32(trace) == 6;
+                else
+                    ok = ok && nc_cpu.r[8] == trace;
+            }
+            interrupt_start_state(run ? &guest : &native);
+            saved.loading = true;
+            saved.pos = 0;
+            interrupt_start_state(&saved);
+        }
+        ok = ok && !native.error && !guest.error && native.len == guest.len &&
+             !memcmp(native.buf, guest.buf, guest.len);
+        free(native.buf);
+        free(guest.buf);
+    }
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_dma_slot(void) {
     const u32 dicr = 0x1f8010f4, ram = 0x80061000, initial_control = 0x00410012;
     const struct {
@@ -4320,6 +4407,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_data_sync();
     pass = pass && check_cd_dma_wait();
     pass = pass && check_dma_slot();
+    pass = pass && check_dma_interrupt_dispatch();
     pass = pass && check_vblank_dispatch();
     pass = pass && check_vsync_slot();
     pass = pass && check_clear_irq_words(0x8001ad7c);
