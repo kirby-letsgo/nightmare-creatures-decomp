@@ -1807,6 +1807,54 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
+static bool check_spu_common_attributes(void) {
+    const u32 attr = 0x80061000, regs = 0x80063000;
+    u32 old_base = MEM_R32(0x80024678);
+    MEM_W32(0x80024678, regs); /* inspect every SPU register write in RAM */
+    const s16 levels[] = {-1, 0, 1, 126, 127, 128, 32767, -32768};
+    const u32 masks[] = {
+        0, 1, 2, 4, 8, 5, 10, 0x40, 0x80, 0x400, 0x800,
+        0x100, 0x200, 0x1000, 0x2000, 0x30, 0x3fcf,
+    };
+    bool ok = true;
+    for (unsigned i = 0; ok && i < sizeof masks / sizeof masks[0]; i++) {
+        /* Sweep all modes, plus negative and too-large modes, for the full mask. */
+        unsigned count = masks[i] ? 1 : 10;
+        for (unsigned j = 0; ok && j < count; j++) {
+            u32 mask = masks[i];
+            MEM_W32(attr, mask);
+            memset(nc_fast_ptr(regs), 0x5a, 0x200);
+            u16 master[2];
+            for (unsigned ch = 0; ch < 2; ch++) {
+                s16 mode = (s16)((j + 3 * ch) % 10) - 1;
+                s16 level = levels[(i + j + ch) % 8];
+                MEM_W16(attr + 4 + 2 * ch, (u16)level);
+                MEM_W16(attr + 8 + 2 * ch, (u16)mode);
+                master[ch] = 0x5a5a;
+                if (!mask || (mask & (1u << ch))) {
+                    master[ch] = (u16)level & 0x7fff;
+                    if ((!mask || (mask & (4u << ch))) && mode >= 1 && mode <= 7) {
+                        unsigned rate = level < 0 ? 0 : level > 127 ? 127 : level;
+                        master[ch] = (u16)(((7 + mode) << 12) | rate);
+                    }
+                }
+            }
+            for (unsigned input = 0; input < 2; input++) {
+                u32 port = attr + 16 + 12 * input;
+                MEM_W16(port, 0x1234 + input);
+                MEM_W16(port + 2, 0xfedc - input);
+                MEM_W32(port + 4, (i + j + input) & 1);
+                MEM_W32(port + 8, (i + j + input + 1) & 1);
+            }
+            CPUState state = arguments(attr, 2, 3, (i + j) & 1 ? 3 : 4096);
+            ok = compare(state, 0x8001ed98, nc_credits_set_spu_common_attributes, 2) &&
+                 MEM_R16(regs + 0x180) == master[0] && MEM_R16(regs + 0x182) == master[1];
+        }
+    }
+    MEM_W32(0x80024678, old_base);
+    return ok;
+}
+
 static bool check_spu_fifo_write(void) {
     const u32 buffer = 0x80061000, ports = buffer + 256, trace = ports + 512;
     const unsigned sizes[] = {0, 1, 63, 64, 65, 130, 2, 0};
@@ -5493,6 +5541,7 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
+    pass = pass && check_spu_common_attributes();
     pass = pass && check_spu_fifo_write();
     pass = pass && check_spu_dma_complete();
     pass = pass && check_spu_read_blocks();
