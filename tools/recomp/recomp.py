@@ -1069,6 +1069,17 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044F90, 0x80044F94):
+                test_up = "true" if i.addr == 0x80044F90 else "false"
+                out.extend(
+                    [
+                        f"    switch (nc_player_up_action(c, {test_up})) {{",
+                        "    case 0x80044FC8: goto L_80044FC8;",
+                        "    case 0x80044FC4: goto L_80044FC4;",
+                        "    case 0x800451D0: goto L_800451D0;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80044FC4, 0x80044FC8):
                 test_down = "true" if i.addr == 0x80044FC4 else "false"
                 out.extend(

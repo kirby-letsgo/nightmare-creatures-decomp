@@ -24,6 +24,35 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Up selects action 6 when the sample is below the configured threshold.
+ * The alternate entry already has the Up result in v0. Both entries set
+ * v0 to the Down bit in the first branch's delay slot. */
+u32 nc_player_up_action(CPUState *c, bool test_up) {
+    if (c->budget <= (test_up ? 19 : 18))
+        return test_up ? 0x80044f90 : 0x80044f94;
+
+    if (test_up) {
+        R(2) = R(17) & 0x10;
+        c->budget -= 1;
+    }
+    const bool up = R(2) != 0;
+    R(2) = R(17) & 0x40;
+    c->budget -= 2;
+    if (!up)
+        return 0x80044fc8;
+
+    const u32 config = MEM_R32(R(28) + 0x244);
+    const u8 sample = MEM_R8(0x8008f1b4);
+    R(3) = sample < MEM_R8(config + 0x1f);
+    R(2) = 6;
+    c->budget -= 14;
+    if (!R(3))
+        return 0x80044fc4;
+    MEM_W8(R(16) + 0x39b, (u8)R(2));
+    c->budget -= 2;
+    return 0x800451d0;
+}
+
 /* Down, R1 and L1 select action bytes in priority order. The alternate
  * entry receives the Down result in v0 from an earlier delay slot. */
 u32 nc_player_down_shoulder_action(CPUState *c, bool test_down) {
