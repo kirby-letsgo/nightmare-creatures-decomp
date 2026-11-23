@@ -1,3 +1,4 @@
+#include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
 #include "decomp/vsync.h"
 #include "decomp/vblank_wait.h"
@@ -9483,102 +9484,14 @@ bool nc_credits_handle_cd_read(CPUState *c) {
     return true;
 }
 
-/* Start a sector read, saving the current callbacks for the retry handler. */
 bool nc_credits_cd_read(CPUState *c) {
-    const u32 mode = 0x80024a80, sector_words = 0x80024a84;
-    if (c->budget <= 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
-        return false;
-    R(29) -= 24;
-    R(2) = mode;
-    c->budget -= 3;
-    MEM_W32(R(29) + 16, R(31));
-    c->budget--;
-    MEM_W32(R(2), R(6));
-    c->budget--;
-    R(2) = MEM_R32(R(2));
-    R(3) = R(2) & 0x30;
-    R(7) = R(4); /* sector count */
-    c->budget -= NC_LOAD_CYCLES + 4;
-
-    const bool normal_size = R(3) == 0;
-    bool full_sector = false;
-    if (!normal_size) {
-        set_reg(c, 2, 0x20);
-        full_sector = R(3) == R(2);
-        R(2) = 585;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    }
-    if (normal_size || full_sector) {
-        if (normal_size)
-            set_reg(c, 2, 512);
-        set_reg(c, 1, 0x80020000);
-        MEM_W32(sector_words, R(2));
-        NC_POLL(c, NC_INSN_CYCLES);
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    } else {
-        R(2) = 582;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        set_reg(c, 3, 0x80020000);
-        set_reg(c, 3, sector_words);
-        MEM_W32(R(3), R(2));
-        NC_POLL(c, NC_INSN_CYCLES);
-    }
-    set_reg(c, 3, 0x80020000);
-    set_reg(c, 3, mode);
-    load_word(c, 2, R(3));
-    set_reg(c, 4, 0);
-    set_reg(c, 2, R(2) | 0x20);
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 1, 0x80020000);
-    MEM_W32(0x80024a78, R(5)); /* destination */
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 1, 0x80020000);
-    MEM_W32(0x80024a74, R(7));
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(31) = 0x80022b7c;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ff7c); /* CdSyncCallback(NULL) */
-    set_reg(c, 4, 0);
-    set_reg(c, 1, 0x80020000);
-    MEM_W32(0x80024a98, R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(31) = 0x80022b90;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ff94); /* CdReadyCallback(NULL) */
-    set_reg(c, 4, UINT32_MAX);
-    set_reg(c, 1, 0x80020000);
-    MEM_W32(0x80024a9c, R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(31) = 0x80022ba4;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001a454); /* VSync(-1) */
-    set_reg(c, 1, 0x80020000);
-    MEM_W32(0x80024a90, R(2)); /* starting frame for CdReadSync */
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(31) = 0x80022bb4;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001fdf0); /* CdStatus */
-    set_reg(c, 2, R(2) & 0xe0);
-    const bool pause_drive = R(2) != 0;
-    R(4) = 9;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    if (pause_drive) {
-        set_reg(c, 5, 0);
-        R(31) = 0x80022bcc;
-        R(6) = 0;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, 0x80020210); /* CdControlB(CdlPause, NULL, NULL) */
-    }
-    R(31) = 0x80022bd4;
-    R(4) = 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x80022908); /* cd_read_retry */
-    set_reg(c, 2, (s32)R(2) > 0);
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
+    static const CdReadLayout layout = {
+        .entry = 0x80022ae0, .state = 0x80024a74,
+        .set_sync = 0x8001ff7c, .set_ready = 0x8001ff94,
+        .vsync = 0x8001a454, .status = 0x8001fdf0,
+        .control = 0x80020210, .retry = 0x80022908,
+    };
+    return cd_read(c, &layout);
 }
 
 bool nc_credits_cd_read_sync(CPUState *c) {

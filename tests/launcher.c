@@ -1,3 +1,4 @@
+#include "cd_read.h"
 #include "cd_read_sync.h"
 #include "vsync.h"
 #include "vblank_wait.h"
@@ -80,6 +81,14 @@ static bool run_destructors(CPUState *c) {
 static bool check_wait_vblank(void) {
     const u32 drivers[] = {0x80013dd8, 0x80011a8c, 0x80011a9c};
     return compare_vblank_wait(0x80013f70, nc_launcher_wait_vblank, 0x80015760, 0x800105c4, drivers);
+}
+
+static bool check_cd_read(void) {
+    static const CdReadTestLayout layout = {
+        .entry = 0x80014408, .state = 0x80015b48, .pause = 0x800123b4, .retry = 0x80014230,
+        .timer_slots = 0x80015b34, .frame = 0x80015760, .callbacks = 0x80015818,
+    };
+    return compare_cd_read(&layout, nc_launcher_cd_read);
 }
 
 static bool check_cd_read_sync(void) {
@@ -1052,6 +1061,10 @@ int main(int argc, char **argv) {
     }
     if (!check_wait_vblank()) {
         fprintf(stderr, "launcher VBlank wait failed\n");
+        return 1;
+    }
+    if (!check_cd_read()) {
+        fprintf(stderr, "launcher CdRead failed\n");
         return 1;
     }
     if (!check_cd_read_sync()) {

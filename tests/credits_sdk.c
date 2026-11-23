@@ -1,3 +1,4 @@
+#include "cd_read.h"
 #include "cd_read_sync.h"
 #include "vsync.h"
 #include "vblank_wait.h"
@@ -5263,55 +5264,11 @@ static bool check_cd_interrupt_callback(void) {
 }
 
 static bool check_cd_read(void) {
-    const u32 trace = 0x80062000, buffer = 0x80064000;
-    const u32 pause = 0x80020210, retry = 0x80022908;
-    const int threshold = 9 * NC_INSN_CYCLES + NC_LOAD_CYCLES;
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    /* Capture the pause and retry calls while running the original callback
-     * setters, status query and VSync frame query. */
-    MEM_W32(pause, 0xaf040000);       /* sw a0, 0(t8) */
-    MEM_W32(pause + 4, 0xaf050004);   /* sw a1, 4(t8) */
-    MEM_W32(pause + 8, 0x03e00008);
-    MEM_W32(pause + 12, 0xaf060008);  /* sw a2, 8(t8) */
-    MEM_W32(retry, 0xaf04000c);       /* sw a0, 12(t8) */
-    MEM_W32(retry + 4, 0x03e00008);
-    MEM_W32(retry + 8, 0x03201021);   /* move v0, t9 */
-    MEM_W32(0x80023400, trace + 16);
-    MEM_W32(0x80023404, trace + 20);
-    MEM_W32(0x800244d4, 1234);
-    const struct { u32 mode, words, status, result; } cases[] = {
-        {0x80, 512, 1, 0}, {0xa0, 585, 0x20, 1},
-        {0x90, 582, 0x40, UINT32_MAX}, {0xb0, 582, 0x80, 7},
+    static const CdReadTestLayout layout = {
+        .entry = 0x80022ae0, .state = 0x80024a74, .pause = 0x80020210, .retry = 0x80022908,
+        .timer_slots = 0x80023400, .frame = 0x800244d4, .callbacks = 0x8002475c,
     };
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        memset(nc_fast_ptr(trace), 0xff, 16);
-        MEM_W8(0x8002476c, cases[i].status);
-        MEM_W32(0x8002475c, 0x8001fd78);
-        MEM_W32(0x80024760, 0x8001fda0);
-        CPUState state = arguments(i + 1, buffer, cases[i].mode, i ? threshold + 1 : 4096);
-        state.r[24] = trace;
-        state.r[25] = cases[i].result;
-        ok = compare(state, 0x80022ae0, nc_credits_cd_read, threshold) &&
-             nc_cpu.r[2] == ((s32)cases[i].result > 0) &&
-             MEM_R32(0x80024a84) == cases[i].words && MEM_R32(0x80024a80) == (cases[i].mode | 0x20) &&
-             MEM_R32(0x80024a78) == buffer && MEM_R32(0x80024a74) == i + 1 &&
-             MEM_R32(0x80024a90) == 1234 && MEM_R32(0x8002475c) == 0 && MEM_R32(0x80024760) == 0 &&
-             MEM_R32(0x80024a98) == 0x8001fd78 && MEM_R32(0x80024a9c) == 0x8001fda0 &&
-             MEM_R32(trace + 12) == 0;
-        if (cases[i].status & 0xe0)
-            ok = ok && MEM_R32(trace) == 9 && MEM_R32(trace + 4) == 0 && MEM_R32(trace + 8) == 0;
-        else
-            ok = ok && MEM_R32(trace) == UINT32_MAX;
-    }
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
+    return compare_cd_read(&layout, nc_credits_cd_read);
 }
 
 static bool check_cd_read_sync(void) {
