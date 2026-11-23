@@ -753,6 +753,104 @@ static bool check_image_queue(u32 entry, bool (*routine)(CPUState *), u32 method
     return ok && !saved.error;
 }
 
+static bool check_put_display_env(void) {
+    const u32 env = 0x80061000, cache = 0x800245c4, driver = env + 64;
+    const u32 write = driver + 64, debug = write + 16, trace = debug + 32;
+    const struct {
+        s16 x, y, w, h, pixels, lines;
+        unsigned standard, graph;
+        int screen_diff, mode_diff; /* byte offsets in the cached DISPENV */
+    } cases[] = {
+        {0, 0, 0, 0, 280, 256, 0, 0, -1, -1},
+        {0, 0, 0, 0, 281, 257, 0, 1, 8, 0},
+        {-100, -50, -1, -1, 352, 288, 1, 2, 10, 2},
+        {400, 400, 200, 200, 353, 289, 1, 1, 12, 4},
+        {200, 300, 200, 200, 400, 256, 0, 0, 14, 6},
+        {10, 10, 100, 100, 401, 240, 0, 2, 8, 16},
+        {20, 10, 100, 100, 560, 288, 1, 1, 10, 16},
+        {20, 10, 0, 0, 561, 289, 2, 3, -1, 16},
+        {0, 0, 320, 240, -1, -1, 1, 0, 8, -1},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    MEM_W32(0x80024550, driver);
+    MEM_W32(driver + 16, write);
+    MEM_W32(0x80024554, debug);
+    MEM_W32(write, 0xaf040000);     /* sw a0,0(t8) */
+    MEM_W32(write + 4, 0x03e00008);
+    MEM_W32(write + 8, 0x27180004);
+    MEM_W32(debug, 0x03e00008);
+    MEM_W32(debug + 4, 0x27390001); /* count debug calls in t9 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(env), 0, 20);
+        MEM_W16(env, (u16)-17);
+        MEM_W16(env + 2, 512);
+        MEM_W16(env + 4, (u16)cases[i].pixels);
+        MEM_W16(env + 6, (u16)cases[i].lines);
+        MEM_W16(env + 8, (u16)cases[i].x);
+        MEM_W16(env + 10, (u16)cases[i].y);
+        MEM_W16(env + 12, (u16)cases[i].w);
+        MEM_W16(env + 14, (u16)cases[i].h);
+        MEM_W8(env + 16, i & 1);
+        MEM_W8(env + 17, (i >> 1) & 1);
+        bool refresh_standard = i == 8;
+        MEM_W8(env + 18, refresh_standard ? 0 : cases[i].standard);
+        memcpy(nc_fast_ptr(cache), nc_fast_ptr(env), 20);
+        if (cases[i].screen_diff >= 0)
+            MEM_W8(cache + cases[i].screen_diff, MEM_R8(env + cases[i].screen_diff) ^ 1);
+        if (cases[i].mode_diff >= 0)
+            MEM_W8(cache + cases[i].mode_diff, MEM_R8(env + cases[i].mode_diff) ^ 1);
+        MEM_W32(0x80024504, cases[i].standard);
+        MEM_W8(0x80024558, cases[i].graph);
+        MEM_W8(0x8002455a, i & 3);
+        MEM_W8(0x8002455b, i & 1);
+        memset(nc_fast_ptr(trace), 0xcc, 20);
+        CPUState state = arguments(env, 2, 3, i & 1 ? 10 : 8192);
+        state.r[24] = trace;
+        state.r[25] = 0;
+        unsigned words = 1;
+        ok = compare(state, 0x8001cb2c, nc_credits_put_display_env, 9) &&
+             nc_cpu.r[2] == env && !memcmp(nc_fast_ptr(env), nc_fast_ptr(cache), 20) &&
+             (MEM_R32(trace) >> 24) == 5 && nc_cpu.r[25] == ((i & 3) >= 2);
+        if (cases[i].screen_diff >= 0) {
+            int left = 608 + 10 * cases[i].x;
+            int right = left + (cases[i].w ? 10 * cases[i].w : 2560);
+            int top = cases[i].y + (cases[i].standard ? 19 : 16);
+            int bottom = top + (cases[i].h ? cases[i].h : 240);
+            int last = cases[i].standard ? 310 : 256;
+            left = left < 500 ? 500 : left > 3290 ? 3290 : left;
+            right = right < left + 80 ? left + 80 : right > 3290 ? 3290 : right;
+            top = top < 16 ? 16 : top > last ? last : top;
+            bottom = bottom < top + 2 ? top + 2 : bottom > last + 2 ? last + 2 : bottom;
+            ok = ok && MEM_R32(trace + 4) == (0x06000000u | (u32)right << 12 | (u32)left) &&
+                 MEM_R32(trace + 8) == (0x07000000u | (u32)bottom << 10 | (u32)top);
+            words += 2;
+        }
+        if (cases[i].mode_diff >= 0 || refresh_standard) {
+            int pixels = cases[i].pixels;
+            u32 mode = pixels <= 280 ? 0 : pixels <= 352 ? 1 : pixels <= 400 ? 64 : pixels <= 560 ? 2 : 3;
+            mode |= cases[i].standard == 1 ? 8 : 0;
+            mode |= (i & 1) ? 0xa0 : 0; /* interlace and reverse */
+            mode |= (i & 2) ? 0x10 : 0;
+            mode |= cases[i].lines > (cases[i].standard ? 288 : 256) ? 0x24 : 0;
+            ok = ok && MEM_R32(trace + words * 4) == (0x08000000 | mode) &&
+                 MEM_R8(env + 18) == cases[i].standard;
+            words++;
+        }
+        ok = ok && nc_cpu.r[24] == trace + words * 4 && MEM_R32(trace + words * 4) == 0xcccccccc;
+        if (!ok)
+            fprintf(stderr, "PutDispEnv case %u failed\n", i);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_draw_env_submission(bool linked) {
     const u32 env = 0x80062000, cached = 0x80024568, record = 0x80027488;
     const u32 ot = 0xa0068000;
@@ -5924,6 +6022,7 @@ int main(int argc, char **argv) {
     pass = pass && check_image_queue(0x8001c508, nc_credits_clear_image2, 0x0c);
     pass = pass && check_image_queue(0x8001c5a4, nc_credits_load_image, 0x20);
     pass = pass && check_image_queue(0x8001c608, nc_credits_store_image, 0x1c);
+    pass = pass && check_put_display_env();
     pass = pass && check_draw_env_submission(false);
     pass = pass && check_draw_env_submission(true);
     pass = pass && check_draw_otag();
