@@ -53,6 +53,38 @@ u32 nc_player_circle_triangle_check(CPUState *c) {
     return pressed ? 0x80044e74 : 0x80044f04;
 }
 
+/* A fresh Triangle press skips actions already in progress. Otherwise the
+ * actor flag and current action select the next part of the Triangle path. */
+u32 nc_player_triangle_action_check(CPUState *c) {
+    if (c->budget <= 20)
+        return 0x80044e74;
+
+    const u32 expected = R(2);
+    R(3) = MEM_R8(R(16) + 0x39b);
+    R(4) = R(3);
+    R(2) = R(3) - 0x11u;
+    c->budget -= 7;
+    if (R(4) == expected)
+        return 0x800451d0;
+
+    R(2) = R(2) < 2;
+    c->budget -= 3;
+    if (R(2))
+        return 0x800451d0;
+
+    const u32 flags = MEM_R32(R(16) + 0x2c8);
+    R(2) = 4;
+    c->budget -= 7;
+    if (flags & 0x8000)
+        return 0x80044ee8;
+
+    const bool action_one = R(4) == 1;
+    R(2) = 1;
+    R(4) = R(16);
+    c->budget -= 3;
+    return action_one ? 0x80044eb4 : 0x80044ef4;
+}
+
 /* The preceding Triangle check supplies 0x13 in v0. That action and
  * actions 0x11 and 0x12 go directly to the trigger handlers. */
 u32 nc_player_direction_action_check(CPUState *c) {

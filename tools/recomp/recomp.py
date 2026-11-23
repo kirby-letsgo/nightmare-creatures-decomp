@@ -995,6 +995,7 @@ class Emitter:
                     0x80044780,
                     0x800447B8,
                     0x80044E74,
+                    0x80044EB4,
                     0x80044F2C,
                     0x8004503C,
                     0x800450D0,
@@ -1111,6 +1112,17 @@ class Emitter:
                         "    case 0x8004500C: goto L_8004500C;",
                         "    case 0x80044E74: goto L_80044E74;",
                         "    case 0x80044F04: goto L_80044F04;",
+                        "    }",
+                    ]
+                )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044E74:
+                out.extend(
+                    [
+                        "    switch (nc_player_triangle_action_check(c)) {",
+                        "    case 0x800451D0: goto L_800451D0;",
+                        "    case 0x80044EE8: goto L_80044EE8;",
+                        "    case 0x80044EB4: goto L_80044EB4;",
+                        "    case 0x80044EF4: goto L_80044EF4;",
                         "    }",
                     ]
                 )
