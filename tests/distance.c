@@ -4395,23 +4395,36 @@ static bool alternate_placement_updates(bool disc) {
     return true;
 }
 
-static bool alternate_placement_update_calls(bool disc) {
-    CPUState input = initial(), native;
-    input.r[2] = SCRATCH_BASE + 0x380;
-    input.r[16] = 0x801c0000;
-    input.r[31] = 0x8002d580;
-    if (!compare(input, 0x80029080, nc_call_alternate_placement_update, disc, &native) ||
-        native.r[17] != input.r[2] || native.r[4] != input.r[16] ||
-        native.r[5] != 1 || native.r[6] || native.r[31] != 0x80029094 ||
-        native.budget != input.budget - 5)
-        return false;
-
-    input.r[2] = 0;
-    input.r[17] = native.r[17];
-    input.r[31] = 0x80073dac;
-    return compare(input, 0x80029094, nc_call_placement_stack_restore, disc, &native) &&
-           native.r[4] == input.r[17] && native.r[31] == 0x8002909c &&
-           native.budget == input.budget - 2;
+static bool placement_scan_update_calls(bool disc) {
+    const u32 entries[] = {0x80029010, 0x80029080};
+    for (unsigned i = 0; i < sizeof entries / sizeof entries[0]; ++i) {
+        for (unsigned restore = 0; restore <= 1; ++restore) {
+            const u32 pc = entries[i] + (restore ? 0x14 : 0);
+            const u32 resume = pc + (restore ? 8 : 0x14);
+            CPUState input = initial();
+            input.r[2] = restore ? 0 : SCRATCH_BASE + 0x380;
+            input.r[16] = 0x801c0000;
+            input.r[17] = SCRATCH_BASE + 0x340;
+            input.r[31] = restore ? 0x80073dac : 0x8002d580;
+            input.budget = restore ? 2 : 5;
+            bool (*call)(CPUState *, u32) =
+                restore ? nc_call_placement_stack_restore : nc_call_placement_scan_update;
+            CPUState native = input;
+            if (call(&native, resume) || memcmp(&native, &input, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (!call(&native, resume) || native.r[31] != resume || native.budget != 1 ||
+                native.r[4] != (restore ? input.r[17] : input.r[16]) ||
+                (!restore && (native.r[17] != input.r[2] || native.r[5] != 1 || native.r[6])))
+                return false;
+            if (disc) {
+                interp_call(&input, pc);
+                if (memcmp(&input, &native, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
 }
 
 static bool alternate_placement_counter_exits(bool disc) {
@@ -8486,7 +8499,7 @@ int main(int argc, char **argv) {
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
-        alternate_placement_update_calls(disc) && alternate_placement_counter_exits(disc) &&
+        placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&

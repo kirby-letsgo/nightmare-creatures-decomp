@@ -997,6 +997,7 @@ class Emitter:
             targets.update((0x80028E14, 0x80028E2C, 0x80028E44))
             targets.update((0x80028C8C, 0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
+            targets.add(0x80029024)
             targets.update((0x80029060, 0x80029080, 0x80029094, 0x8002909C))
             targets.update((0x80028F30, 0x800290F4, 0x800291B0, 0x800291D8, 0x80029470))
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
@@ -2433,14 +2434,16 @@ class Emitter:
                 out.append("    if (nc_begin_alternate_placement_update(c)) {")
                 out.append(f"        {self.call(0x80073DAC)}")
                 out.append("        goto L_80029080; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029080:
-                out.append("    if (nc_call_alternate_placement_update(c)) {")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80029010, 0x80029080):
+                resume = i.addr + 0x14
+                out.append(f"    if (nc_call_placement_scan_update(c, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(0x8002D580)}")
-                out.append("        goto L_80029094; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029094:
-                out.append("    if (nc_call_placement_stack_restore(c)) {")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80029024, 0x80029094):
+                resume = i.addr + 0x8
+                out.append(f"    if (nc_call_placement_stack_restore(c, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(0x80073DAC)}")
-                out.append("        goto L_8002909C; }")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002909C, 0x800290A4):
                 store_counter = "true" if i.addr == 0x800290A4 else "false"
                 out.append(
