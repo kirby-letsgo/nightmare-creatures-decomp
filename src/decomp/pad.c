@@ -424,6 +424,33 @@ bool nc_menu_horizontal_feedback(CPUState *c, bool right) {
     return true;
 }
 
+/* Both record 12 directions format the chosen text before reloading the
+ * selected record. Leave a1 as its byte offset for the action call delay slot. */
+bool nc_menu_format_horizontal_feedback(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x8006876c;
+    c->budget -= 2;
+    nc_call(c, 0x80073454);
+    R(4) = R(22);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = MEM_R32(R(28) + 0x190);
+    NC_POLL(c, NC_LOAD_CYCLES);
+    R(6) = 1;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(5) = R(2) << 1;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(5) += R(2);
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(5) <<= 2;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = 0x80090000;
+    NC_POLL(c, NC_INSN_CYCLES);
+    R(2) = 0x800883c0;
+    NC_POLL(c, NC_INSN_CYCLES);
+    return true;
+}
+
 /* Left supplies the record offset in a2. Right has already prepared
  * the offset in a1, the base in v0, and the action in a2. */
 bool nc_menu_horizontal_action(CPUState *c, bool left) {
