@@ -4275,6 +4275,32 @@ static bool projection_pose_flags(bool disc) {
     return true;
 }
 
+static bool projection_packet_modes(bool disc) {
+    const u32 actor = SCRATCH_BASE;
+    for (unsigned bits = 0; bits < 32; ++bits) {
+        const u32 base_mode = bits & 1;
+        const bool pose_override = (bits & 2) != 0;
+        const bool inhibit = (bits & 4) != 0;
+        const bool actor_override = (bits & 8) != 0;
+        const u32 group = (bits & 16) ? 0x1100 : 0;
+        MEM_W32(actor + 0x2cc, (base_mode << 29) | (actor_override ? 0x10000 : 0));
+        MEM_W32(actor + 0x2c8, inhibit ? 0x40000000 : 0);
+        CPUState input = initial(), native;
+        input.r[21] = actor;
+        input.r[17] = group | (pose_override ? 0xffff8081 : 0x81);
+        input.r[31] = 0x8002826c;
+        const u32 expected = group                       ? 0
+                             : actor_override            ? 4
+                             : pose_override && !inhibit ? 2
+                                                         : base_mode;
+        if (!compare(input, 0x80028214, nc_select_projection_packet_mode, disc, &native) ||
+            native.r[16] != expected || native.r[2] != group || native.r[3] != 0x10000 ||
+            native.r[4] != input.r[19])
+            return false;
+    }
+    return true;
+}
+
 static bool projection_traversal_return(bool disc) {
     CPUState input = initial();
     const u32 frame = SCRATCH_BASE;
@@ -7577,6 +7603,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        projection_packet_modes(disc) &&
         projection_traversal_return(disc) &&
         placement_depths(disc, 0x80027f0c, 8, 5, 5) &&
         placement_depth_cues(disc, 0x80027f0c, 8, 15) &&

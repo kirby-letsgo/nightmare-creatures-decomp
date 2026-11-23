@@ -4190,6 +4190,41 @@ bool nc_advance_projection_pose(CPUState *c) {
     return advance_pose_link(c, 22);
 }
 
+/* Grouped poses always use mode zero. For ungrouped poses the actor's
+ * mode-four flag takes precedence over the pose and actor defaults. */
+bool nc_select_projection_packet_mode(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    const u32 actor = R(21);
+    const u32 flags = MEM_R32(actor + 0x2cc);
+    const u32 group = R(17) & 0x1f00;
+    u32 mode = (flags >> 29) & 1;
+    int cycles = 18;
+    if (R(17) & 0x8000) {
+        cycles += 7;
+        if (!(MEM_R32(actor + 0x2c8) & 0x40000000)) {
+            mode = 2;
+            ++cycles;
+        }
+    }
+    if (flags & 0x10000) {
+        mode = 4;
+        ++cycles;
+    }
+    if (group) {
+        mode = 0;
+        ++cycles;
+    }
+    if (c->budget <= cycles)
+        return false;
+    R(2) = group;
+    R(3) = 0x10000;
+    R(4) = R(19);
+    R(16) = mode;
+    c->budget -= cycles;
+    return true;
+}
+
 bool nc_return_projection_traversal(CPUState *c) {
     if (c->budget <= 33)
         return false;
