@@ -6123,6 +6123,219 @@ bool nc_credits_cd_play_track(CPUState *c) {
     return true;
 }
 
+static void load_toc_byte(CPUState *c, unsigned reg, u32 address) {
+    R(reg) = MEM_R8(address);
+    NC_POLL(c, NC_LOAD_CYCLES);
+}
+
+/* Track numbers in both the GetTN reply and GetTD command are packed BCD. */
+static void decode_toc_track_range(CPUState *c) {
+    load_toc_byte(c, 4, R(29) + 25);
+    load_toc_byte(c, 5, R(29) + 26);
+    set_reg(c, 3, R(4) >> 4);
+    set_reg(c, 2, R(3) << 2);
+    set_reg(c, 2, R(2) + R(3));
+    set_reg(c, 2, R(2) << 1);
+    set_reg(c, 4, R(4) & 15);
+    set_reg(c, 16, R(2) + R(4)); /* first track */
+    set_reg(c, 2, R(5) >> 4);
+    set_reg(c, 3, R(2) << 2);
+    set_reg(c, 3, R(3) + R(2));
+    set_reg(c, 3, R(3) << 1);
+    set_reg(c, 5, R(5) & 15);
+    load_cd_port(c, 2, 0x80024768); /* debug level */
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(2) < 2);
+    bool verbose = !R(2);
+    R(19) = R(3) + R(5); /* last track */
+    NC_POLL(c, 2);
+    if (verbose) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018c4c);
+        set_reg(c, 5, R(16));
+        R(31) = 0x80023184;
+        R(6) = R(19);
+        NC_POLL(c, 2);
+        nc_call(c, 0x80019a60);
+    }
+}
+
+static void request_numbered_track(CPUState *c) {
+    /* The divide-by-ten multiply also leaves a guest-visible HI/LO pair. */
+    set_reg(c, 2, 0x66660000);
+    set_reg(c, 2, 0x66666667);
+    nc_mult(c, R(16), R(2));
+    NC_POLL(c, 1);
+    set_reg(c, 4, 0x14); /* CdlGetTD */
+    set_reg(c, 5, R(29) + 16);
+    set_reg(c, 6, R(29) + 24);
+    set_reg(c, 2, (u32)((s32)R(16) >> 31));
+    set_reg(c, 3, c->hi);
+    set_reg(c, 3, (u32)((s32)R(3) >> 2));
+    set_reg(c, 3, R(3) - R(2)); /* tens */
+    set_reg(c, 7, R(3) << 4);
+    set_reg(c, 2, R(3) << 2);
+    set_reg(c, 2, R(2) + R(3));
+    set_reg(c, 2, R(2) << 1);
+    set_reg(c, 2, R(16) - R(2)); /* units */
+    set_reg(c, 7, R(7) + R(2));
+    R(31) = 0x80023210;
+    MEM_W8(R(29) + 16, (u8)R(7));
+    NC_POLL(c, 2);
+    nc_call(c, 0x80020210);
+}
+
+static bool read_toc_positions(CPUState *c) {
+    decode_toc_track_range(c);
+    MEM_W8(R(29) + 16, 0); /* GetTD(0) returns the lead-out position */
+    NC_POLL(c, 1);
+    set_reg(c, 4, 0x14);
+    set_reg(c, 5, R(29) + 16);
+    R(31) = 0x80023198;
+    R(6) = R(17);
+    NC_POLL(c, 2);
+    nc_call(c, 0x80020210);
+    bool received = R(2) != 0;
+    NC_POLL(c, 2);
+    if (!received)
+        return false;
+
+    load_toc_byte(c, 2, R(29) + 25);
+    NC_POLL(c, 1);
+    MEM_W8(R(20), (u8)R(2));
+    NC_POLL(c, 1);
+    load_toc_byte(c, 2, R(29) + 26);
+    MEM_W8(R(20) + 2, 0);
+    NC_POLL(c, 1);
+    MEM_W8(R(20) + 1, (u8)R(2));
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(19) < (s32)R(16));
+    bool more = !R(2);
+    R(18) = 1; /* number of positions, including lead-out */
+    NC_POLL(c, 2);
+    if (more)
+        set_reg(c, 17, R(20) + 4);
+    while (more) {
+        request_numbered_track(c);
+        received = R(2) != 0;
+        R(18)++;
+        NC_POLL(c, 2);
+        if (!received)
+            return false;
+        load_toc_byte(c, 2, R(29) + 25);
+        NC_POLL(c, 1);
+        MEM_W8(R(17), (u8)R(2));
+        NC_POLL(c, 1);
+        load_toc_byte(c, 2, R(29) + 26);
+        set_reg(c, 16, R(16) + 1);
+        MEM_W8(R(17) + 2, 0);
+        NC_POLL(c, 1);
+        MEM_W8(R(17) + 1, (u8)R(2));
+        NC_POLL(c, 1);
+        set_reg(c, 2, (s32)R(19) < (s32)R(16));
+        more = !R(2);
+        R(17) += 4;
+        NC_POLL(c, 2);
+    }
+    return true;
+}
+
+static void finish_toc_positions(CPUState *c) {
+    load_cd_port(c, 2, 0x80024768);
+    NC_POLL(c, 1);
+    set_reg(c, 2, (s32)R(2) < 2);
+    bool verbose = !R(2);
+    R(17) = R(18) - 1;
+    NC_POLL(c, 2);
+    if (verbose) {
+        bool print_position = (s32)R(17) >= 0;
+        R(18) = 0;
+        NC_POLL(c, 2);
+        if (print_position)
+            set_reg(c, 16, R(20));
+        while (print_position) {
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x80018c5c);
+            load_toc_byte(c, 5, R(16));
+            load_toc_byte(c, 6, R(16) + 1);
+            set_reg(c, 16, R(16) + 4);
+            R(31) = 0x80023280;
+            R(18)++;
+            NC_POLL(c, 2);
+            nc_call(c, 0x80019a60);
+            set_reg(c, 2, (s32)R(17) < (s32)R(18));
+            print_position = !R(2);
+            NC_POLL(c, 2);
+        }
+    }
+    R(31) = 0x80023294;
+    R(4) = R(21);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ff7c); /* restore sync callback */
+    R(2) = R(17);
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_read_track_positions(CPUState *c) {
+    if (c->budget <= 11)
+        return false;
+    R(29) -= 64;
+    c->budget--;
+    MEM_W32(R(29) + 48, R(20));
+    R(20) = R(5); /* caller's position table */
+    R(2) = 1;
+    R(4) = 0;
+    c->budget -= 4;
+    MEM_W32(R(29) + 56, R(31));
+    c->budget--;
+    MEM_W32(R(29) + 52, R(21));
+    c->budget--;
+    for (unsigned reg = 19; reg >= 16; reg--) {
+        MEM_W32(R(29) + 32 + 4 * (reg - 16), R(reg));
+        c->budget--;
+    }
+    R(31) = 0x80023104;
+    MEM_W8(R(29) + 16, (u8)R(2));
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ff7c); /* disable sync callback during blocking commands */
+    set_reg(c, 4, 0x13); /* CdlGetTN */
+    set_reg(c, 5, 0);
+    set_reg(c, 17, R(29) + 24);
+    set_reg(c, 6, R(17));
+    R(31) = 0x8002311c;
+    R(21) = R(2);
+    NC_POLL(c, 2);
+    nc_call(c, 0x80020210);
+    bool received = R(2) != 0;
+    NC_POLL(c, 2);
+    if (received && read_toc_positions(c)) {
+        finish_toc_positions(c);
+    } else {
+        load_cd_port(c, 2, 0x80024768);
+        NC_POLL(c, 1);
+        bool report = R(2) != 0;
+        NC_POLL(c, 2);
+        if (report) {
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x80018c78);
+            R(31) = 0x800232c0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x80019a60);
+        }
+        R(31) = 0x800232c8;
+        R(4) = R(21);
+        NC_POLL(c, 2);
+        nc_call(c, 0x8001ff7c);
+        set_reg(c, 2, 0);
+    }
+    load_word(c, 31, R(29) + 56);
+    for (unsigned reg = 21; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 32 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 64);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* CdGetToc forwards the caller's track-position buffer to CdGetToc2(1, buffer). */
 bool nc_credits_cd_get_toc(CPUState *c) {
     if (c->budget <= 5)

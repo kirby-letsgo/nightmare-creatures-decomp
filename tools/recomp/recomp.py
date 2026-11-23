@@ -275,6 +275,7 @@ CREDITS_ROUTINES = {
     0x80022EBC: "nc_credits_cd_audio_ready(c)",
     0x80022F84: "nc_credits_cd_play_track(c)",
     0x800230AC: "nc_credits_cd_get_toc(c)",
+    0x800230D0: "nc_credits_read_track_positions(c)",
     0x800232F4: "nc_credits_entry(c)",
     0x8002335C: "nc_credits_empty_hook(c)",
     0x80023364: "nc_credits_bios_init_heap(c)",
@@ -793,9 +794,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
-            targets.update((0x80028B0C, 0x80028B7C, 0x80028C30))
+            targets.update((0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
-            targets.update((0x80028D8C, 0x80028DFC, 0x80028E94))
+            targets.update((0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -1668,6 +1669,12 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028AAC, 0x80028D2C):
+                resume = i.addr + 0x24
+                out.append(
+                    f"    if (nc_install_placement_matrices(c, 0x{resume:08X}))"
+                    f" goto L_{resume:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80028AD0, 0x80028D50):
                 depth_offset = 0x2D8 if i.addr == 0x80028AD0 else 0x160
                 out.append(f"    if (nc_project_placement_depth(c, 0x{depth_offset:x})) {{")

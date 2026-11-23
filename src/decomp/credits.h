@@ -232,6 +232,7 @@ bool nc_credits_cd_flush_controller(CPUState *c);
 bool nc_credits_control_cd_playback(CPUState *c);
 bool nc_credits_cd_audio_ready(CPUState *c);
 bool nc_credits_cd_play_track(CPUState *c);
+bool nc_credits_read_track_positions(CPUState *c);
 bool nc_credits_cd_get_toc(CPUState *c);
 bool nc_credits_cd_init(CPUState *c);
 bool nc_credits_cd_reset(CPUState *c);
