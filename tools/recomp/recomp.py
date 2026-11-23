@@ -793,7 +793,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
             targets.update((0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
-            targets.update((0x80028DFC, 0x80028E94))
+            targets.update((0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -1661,12 +1661,17 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028AD0:
-                out.append("    if (nc_project_placement_depth(c)) {")
-                out.append("        if ((s32)R(4) > (s32)R(3)) goto L_80028B0C;")
-                out.append("        goto L_80028B38; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028B0C:
-                out.append("    if (nc_apply_placement_depth_cue(c)) goto L_80028B38;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028AD0, 0x80028D50):
+                depth_offset = 0x2D8 if i.addr == 0x80028AD0 else 0x160
+                out.append(f"    if (nc_project_placement_depth(c, 0x{depth_offset:x})) {{")
+                out.append(f"        if ((s32)R(4) > (s32)R(3)) goto L_{i.addr + 0x3C:08X};")
+                out.append(f"        goto L_{i.addr + 0x68:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028B0C, 0x80028D8C):
+                depth_offset = 0x2D8 if i.addr == 0x80028B0C else 0x160
+                out.append(
+                    f"    if (nc_apply_placement_depth_cue(c, 0x{depth_offset:x}))"
+                    f" goto L_{i.addr + 0x2C:08X};"
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x80028B38, 0x80028B44):
                 index_ready = "true" if i.addr == 0x80028B44 else "false"
                 out.append(f"    if (nc_select_placement_pose(c, {index_ready})) goto L_80028B54;")

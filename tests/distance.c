@@ -3152,7 +3152,9 @@ static bool placement_angle_calls(bool disc) {
     return true;
 }
 
-static bool placement_depths(bool disc) {
+static bool placement_depths(bool disc, bool small_frame) {
+    const u32 depth_offset = small_frame ? 0x160 : 0x2d8;
+    const u32 cue_pc = small_frame ? 0x80028d8c : 0x80028b0c;
     const u32 frame = SCRATCH_BASE, pose = frame + 0x40;
     const u32 saved_limit = MEM_R32(0x8008f108);
     static const struct {
@@ -3167,31 +3169,31 @@ static bool placement_depths(bool disc) {
         CPUState input = initial();
         input.r[18] = pose;
         input.r[29] = frame;
-        input.r[31] = (s32)cases[i].depth > cases[i].limit ? 0x80028b0c : 0x80028b38;
+        input.r[31] = (s32)cases[i].depth > cases[i].limit ? cue_pc : cue_pc + 0x2c;
         for (unsigned reg = 0; reg < 5; ++reg)
             gte_write_ctrl(&input, reg, reg % 2 == 0 ? 4096 : 0);
         MEM_W16(pose + 0x10, cases[i].x);
         MEM_W16(pose + 0x12, cases[i].y);
         MEM_W16(pose + 0x14, cases[i].z);
         MEM_W32(0x8008f108, (u32)cases[i].limit);
-        MEM_W32(frame + 0x2d8, 0xdeadbeef);
+        MEM_W32(frame + depth_offset, 0xdeadbeef);
         u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
         memcpy(before, nc_scratch, sizeof before);
         input.budget = 23;
         CPUState native = input;
-        if (nc_project_placement_depth(&native) || memcmp(&native, &input, sizeof input) ||
-            memcmp(before, nc_scratch, sizeof before))
+        if (nc_project_placement_depth(&native, depth_offset) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_project_placement_depth(&native) || native.budget != 1 ||
+        if (!nc_project_placement_depth(&native, depth_offset) || native.budget != 1 ||
             native.r[4] != cases[i].depth || native.r[3] != (u32)cases[i].limit ||
             native.r[2] != cases[i].depth - (u32)cases[i].limit ||
-            MEM_R32(frame + 0x2d8) != cases[i].depth)
+            MEM_R32(frame + depth_offset) != cases[i].depth)
             return false;
         if (disc) {
             memcpy(after, nc_scratch, sizeof after);
             memcpy(nc_scratch, before, sizeof before);
-            interp_call(&input, 0x80028ad0);
+            interp_call(&input, cue_pc - 0x3c);
             if (memcmp(&input, &native, sizeof input) || memcmp(after, nc_scratch, sizeof after))
                 return false;
         }
@@ -3200,7 +3202,9 @@ static bool placement_depths(bool disc) {
     return true;
 }
 
-static bool placement_depth_cues(bool disc) {
+static bool placement_depth_cues(bool disc, bool small_frame) {
+    const u32 depth_offset = small_frame ? 0x160 : 0x2d8;
+    const u32 cue_pc = small_frame ? 0x80028d8c : 0x80028b0c;
     const u32 frame = SCRATCH_BASE;
     static const struct {
         u32 excess_depth, color;
@@ -3210,25 +3214,26 @@ static bool placement_depth_cues(bool disc) {
         CPUState input = initial();
         input.r[2] = cases[i].excess_depth;
         input.r[29] = frame;
-        input.r[31] = 0x80028b38;
-        MEM_W32(frame + 0x2d8, 0x12345678);
-        MEM_W32(frame + 0x2dc, 0x7e4080c0);
+        input.r[31] = cue_pc + 0x2c;
+        MEM_W32(frame + depth_offset, 0x12345678);
+        MEM_W32(frame + depth_offset + 4, 0x7e4080c0);
         u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
         memcpy(before, nc_scratch, sizeof before);
         input.budget = 15;
         CPUState native = input;
-        if (nc_apply_placement_depth_cue(&native) || memcmp(&native, &input, sizeof input) ||
-            memcmp(before, nc_scratch, sizeof before))
+        if (nc_apply_placement_depth_cue(&native, depth_offset) ||
+            memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
             return false;
         native.budget = ++input.budget;
-        if (!nc_apply_placement_depth_cue(&native) || native.budget != 1 ||
-            native.r[2] != frame + 0x2dc || native.r[8] != cases[i].excess_depth << 2 ||
-            MEM_R32(frame + 0x2d8) != native.r[8] || MEM_R32(frame + 0x2dc) != cases[i].color)
+        if (!nc_apply_placement_depth_cue(&native, depth_offset) || native.budget != 1 ||
+            native.r[2] != frame + depth_offset + 4 || native.r[8] != cases[i].excess_depth << 2 ||
+            MEM_R32(frame + depth_offset) != native.r[8] ||
+            MEM_R32(frame + depth_offset + 4) != cases[i].color)
             return false;
         if (disc) {
             memcpy(after, nc_scratch, sizeof after);
             memcpy(nc_scratch, before, sizeof before);
-            interp_call(&input, 0x80028b0c);
+            interp_call(&input, cue_pc);
             if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after))
                 return false;
         }
@@ -5957,17 +5962,18 @@ int main(int argc, char **argv) {
         unlinked_pose_headings(disc) && record_heading_frames(disc) &&
         projection_bypass_flags(disc) && record_point_projections(disc) &&
         placement_point_scans(disc) && placement_point_flags(disc) && placement_angle_steps(disc) &&
-        placement_depths(disc) && placement_depth_cues(disc) && placement_pose_stack(disc) &&
-        placement_pose_exits(disc, false) && placement_pose_exits(disc, true) &&
-        placement_vertex_dispatch(disc) && placement_vertex_triples(disc, false) &&
-        placement_vertex_triples(disc, true) && remaining_placement_vertices(disc, false) &&
-        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
-        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        placement_depths(disc, false) && placement_depths(disc, true) &&
+        placement_depth_cues(disc, false) && placement_depth_cues(disc, true) &&
+        placement_pose_stack(disc) && placement_pose_exits(disc, false) &&
+        placement_pose_exits(disc, true) && placement_vertex_dispatch(disc) &&
+        placement_vertex_triples(disc, false) && placement_vertex_triples(disc, true) &&
+        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
+        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

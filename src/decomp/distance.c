@@ -3368,14 +3368,14 @@ bool nc_place_record_pose(CPUState *c) {
 
 /* Project the signed pose coordinates and keep the latest GTE depth (SZ3).
  * The branch compares depth and threshold before the delay-slot subtraction. */
-bool nc_project_placement_depth(CPUState *c) {
+bool nc_project_placement_depth(CPUState *c, u32 depth_offset) {
     if (c->budget <= 23)
         return false;
     const u32 point = R(18) + 0x10;
     gte_write_data(c, 0, MEM_R32(point));
     gte_write_data(c, 1, MEM_R32(point + 4));
     gte_command(c, 0x0180001); /* RTPS */
-    const u32 depth_slot = R(29) + 0x2d8;
+    const u32 depth_slot = R(29) + depth_offset;
     MEM_W32(depth_slot, gte_read_data(c, 19));
     R(4) = MEM_R32(depth_slot);
     R(3) = MEM_R32(0x8008f108);
@@ -3386,11 +3386,11 @@ bool nc_project_placement_depth(CPUState *c) {
 
 /* Beyond the depth threshold, four times the excess depth supplies IR0
  * for the GTE interpolation of the placement color toward the far color. */
-bool nc_apply_placement_depth_cue(CPUState *c) {
+bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset) {
     if (c->budget <= 15)
         return false;
-    const u32 factor_slot = R(29) + 0x2d8;
-    const u32 color_slot = R(29) + 0x2dc;
+    const u32 factor_slot = R(29) + depth_offset;
+    const u32 color_slot = factor_slot + 4;
     MEM_W32(factor_slot, R(2) << 2);
     R(2) = color_slot;
     gte_write_data(c, 6, MEM_R32(color_slot));
