@@ -4936,6 +4936,79 @@ static bool check_cd_sector_to_position(void) {
     return true;
 }
 
+static bool check_cd_search_file(void) {
+    const u32 path = 0x80062000, dest = 0x80062100;
+    const u32 cache = 0x80024e54, table = 0x80025454;
+    const struct {
+        const char *path;
+        int media, cache_result; /* media < 0 means already current */
+        unsigned entries, debug;
+        int match; /* index containing target, or -1 for no target */
+        bool success;
+    } cases[] = {
+        {"\\CREDITS.TIM;1", -1, 1, 1, 0, 0, true},
+        {"\\DIR\\CREDITS.TIM;1suffix", 1, -1, 64, 2, 63, true},
+        {"\\CREDITS.TIM;1", 0, 1, 1, 1, 0, false},
+        {"CREDITS.TIM;1", -1, 1, 1, 1, 0, false},
+        {"\\ABSENT\\CREDITS.TIM;1", -1, 1, 1, 1, 0, false},
+        {"\\", -1, 1, 1, 1, 0, false},
+        {"\\\\\\\\\\\\\\\\CREDITS.TIM;1", -1, 1, 1, 1, 0, false},
+        {"\\CREDITS.TIM;1", -1, 0, 1, 1, 0, false},
+        {"\\CREDITS.TIM;1", -1, 1, 1, 2, -1, false},
+        {"\\CREDITS.TIM;1", -1, 1, 64, 0, -1, false},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    MEM_W32(0x80019a60, 0x03e00008); /* printf returns immediately */
+    MEM_W32(0x80019a64, 0);
+    MEM_W32(0x80021f38, 0x03e00008); /* CD_newmedia returns t8 */
+    MEM_W32(0x80021f3c, 0x03001021);
+    MEM_W32(0x800222bc, 0x03e00008); /* CD_cachefile returns t9 */
+    MEM_W32(0x800222c0, 0x03201021);
+    memset(nc_fast_ptr(table), 0, 3 * 44);
+    MEM_W32(table + 4, 1);
+    MEM_W32(table + 44 + 4, 1);
+    memcpy(nc_fast_ptr(table + 44 + 12), "DIR", 4);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(cache), 0, 64 * 24);
+        for (unsigned j = 0; j < cases[i].entries; j++) {
+            u32 row = cache + j * 24;
+            MEM_W32(row, 123 + j);
+            MEM_W32(row + 4, 456 + j);
+            strcpy((char *)nc_fast_ptr(row + 8),
+                   (int)j == cases[i].match ? "CREDITS.TIM;1" : "OTHER");
+        }
+        strcpy((char *)nc_fast_ptr(path), cases[i].path);
+        u8 expected[24];
+        memset(expected, 0xcc, sizeof expected);
+        memcpy(nc_fast_ptr(dest), expected, sizeof expected);
+        u32 result = 0;
+        if (cases[i].success) {
+            result = cache + 24 * cases[i].match;
+            memcpy(expected, nc_fast_ptr(result), sizeof expected);
+        }
+        MEM_W32(0x80024768, cases[i].debug);
+        MEM_W32(0x80024774, 12);
+        MEM_W32(0x80024a6c, cases[i].media < 0 ? 12 : 11);
+        CPUState state = arguments(dest, path, 0, i & 1 ? 2 : 8192);
+        state.r[24] = (u32)cases[i].media;
+        state.r[25] = (u32)cases[i].cache_result;
+        ok = compare(state, 0x80021c34, nc_credits_search_cd_file, 1) &&
+             nc_cpu.r[2] == result && !memcmp(expected, nc_fast_ptr(dest), sizeof expected) &&
+             MEM_R32(0x80024a6c) == (cases[i].media == 0 ? 11u : 12u);
+        if (!ok)
+            fprintf(stderr, "CdSearchFile case %u failed\n", i);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_path_table(void) {
     const u32 sectors = 0x80060000, trace = sectors + 2 * DISC_DATA_SECTOR;
     const u32 table = 0x80025454;
@@ -5488,6 +5561,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_read_sectors();
     pass = pass && check_cd_sector_to_position();
     pass = pass && check_cd_path_table();
+    pass = pass && check_cd_search_file();
     pass = pass && check_directory_cache();
     pass = pass && check_cd_search_directory();
     pass = pass && check_cd_copy_identifier();
