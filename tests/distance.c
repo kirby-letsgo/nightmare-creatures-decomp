@@ -4322,6 +4322,54 @@ static bool placement_scan_exits(bool disc) {
     return true;
 }
 
+static bool placement_coordinate_copies(bool disc) {
+    const u32 record = SCRATCH_BASE + 0x100;
+    const s16 points[][3] = {{-32768, 32767, -1}, {0, -1, 1}, {0x180, -2, 32767}};
+    for (unsigned i = 0; i < 3; ++i) {
+        const bool overlap = i == 2;
+        const u32 transform = overlap ? record + 4 - 0x40 : SCRATCH_BASE + 0x200;
+        /* A low RAM address fits in the first signed coordinate, allowing
+         * the X store to redirect the remaining two stores. */
+        MEM_W32(record + 4, transform);
+        for (unsigned axis = 0; axis < 3; ++axis)
+            MEM_W16(record + 0x20 + axis * 2, points[i][axis]);
+        CPUState input = initial();
+        input.r[16] = record;
+        input.r[31] = 0x800290f4;
+        input.budget = 24;
+        const u32 tail = overlap ? (u32)points[i][0] : transform;
+        MEM_W32(tail + 0x44, 0x1234);
+        MEM_W32(tail + 0x48, 0x5678);
+        u8 before[SCRATCH_SIZE], after[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        CPUState native = input;
+        if (nc_copy_placement_coordinates(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(before, nc_scratch, sizeof before) || MEM_R32(tail + 0x44) != 0x1234 ||
+            MEM_R32(tail + 0x48) != 0x5678)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_copy_placement_coordinates(&native) || native.budget != 1 || native.r[3] != tail ||
+            native.r[2] != (u32)(s32)points[i][2] ||
+            MEM_R32(transform + 0x40) != (u32)(s32)points[i][0] ||
+            MEM_R32(tail + 0x44) != (u32)(s32)points[i][1] || MEM_R32(tail + 0x48) != native.r[2])
+            return false;
+        if (disc) {
+            memcpy(after, nc_scratch, sizeof after);
+            memcpy(nc_scratch, before, sizeof before);
+            if (overlap) {
+                MEM_W32(tail + 0x44, 0x1234);
+                MEM_W32(tail + 0x48, 0x5678);
+            }
+            interp_call(&input, 0x800290c4);
+            if (memcmp(&native, &input, sizeof input) || memcmp(after, nc_scratch, sizeof after) ||
+                MEM_R32(tail + 0x44) != (u32)(s32)points[i][1] ||
+                MEM_R32(tail + 0x48) != input.r[2])
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_scan_slots(bool disc) {
     const u32 record = SCRATCH_BASE, slot = 0x800cf184 + 319 * 4;
     const u32 original = MEM_R32(slot);
@@ -8125,6 +8173,7 @@ int main(int argc, char **argv) {
         pose_traversal_entries(disc) && placement_projection_matrices(disc) &&
         placement_depths(disc, 0x80028b0c, 0x2d8, 18, 4) &&
         placement_depths(disc, 0x80028d8c, 0x160, 18, 4) &&
+        placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
         placement_face_dispatch(disc) &&
         placement_lighting_returns(disc) &&
