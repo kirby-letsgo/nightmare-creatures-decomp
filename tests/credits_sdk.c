@@ -2645,6 +2645,65 @@ static bool check_clear_otag(void) {
     return ok && !saved.error;
 }
 
+static bool check_gpu_queue_sync(void) {
+    const u32 dma = 0x80061000, gpu = dma + 4, tail = 0x80024660;
+    const u32 start = 0x8001e9fc, execute = 0x8001e45c, poll = 0x8001ea30;
+    const struct {
+        u32 mode, head, tail, dma_busy, gpu_ready, timeout;
+        u32 result, polls, executions;
+    } cases[] = {
+        {0, 3, 3, 0, 1, 0, 0, 0, 0},           /* idle */
+        {0, 4, 3, 0, 1, 0, 0, 1, 1},           /* drain pending entry */
+        {0, 4, 3, 0, 1, 1, UINT32_MAX, 1, 1},  /* queue alarm */
+        {0, 3, 3, 1, 1, 0, 0, 1, 0},           /* DMA completes */
+        {0, 3, 3, 0, 0, 0, 0, 1, 0},           /* GPU becomes ready */
+        {0, 3, 3, 1, 0, 1, UINT32_MAX, 1, 0},  /* hardware alarm */
+        {1, 2, 63, 0, 1, 0, 3, 0, 1},          /* wrapped queue */
+        {1, 2, 63, 1, 0, 0, 3, 0, 1},
+        {1, 3, 3, 0, 0, 0, 1, 0, 0},
+        {2, 3, 3, 1, 1, 0, 1, 0, 0},
+        {1, 3, 3, 0, 1, 0, 0, 0, 0},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    MEM_W32(0x80024638, dma);
+    MEM_W32(0x8002462c, gpu);
+    MEM_W32(start, 0x03e00008);       /* jr ra */
+    MEM_W32(start + 4, 0x258c0001);   /* addiu t4,t4,1 */
+    MEM_W32(execute, 0xad090000);     /* sw t1,0(t0): advance tail */
+    MEM_W32(execute + 4, 0x03e00008);
+    MEM_W32(execute + 8, 0x25ad0001); /* addiu t5,t5,1 */
+    MEM_W32(poll, 0xad400000);         /* sw zero,0(t2): DMA complete */
+    MEM_W32(poll + 4, 0xad4b0004);    /* sw t3,4(t2): GPU ready */
+    MEM_W32(poll + 8, 0x25ce0001);    /* addiu t6,t6,1 */
+    MEM_W32(poll + 12, 0x03e00008);
+    MEM_W32(poll + 16, 0x01e01021);   /* move v0,t7 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W32(dma, cases[i].dma_busy << 24);
+        MEM_W32(gpu, cases[i].gpu_ready << 26);
+        MEM_W32(0x8002465c, cases[i].head);
+        MEM_W32(tail, cases[i].tail);
+        CPUState state = arguments(cases[i].mode, 2, 3, i & 1 ? 5 : 4096);
+        state.r[8] = tail;
+        state.r[9] = cases[i].head;
+        state.r[10] = dma;
+        state.r[11] = 1u << 26;
+        state.r[12] = state.r[13] = state.r[14] = 0;
+        state.r[15] = cases[i].timeout;
+        ok = compare(state, 0x8001e8b4, nc_credits_sync_gpu_queue, 4) &&
+             nc_cpu.r[2] == cases[i].result && nc_cpu.r[12] == (cases[i].mode == 0) &&
+             nc_cpu.r[13] == cases[i].executions && nc_cpu.r[14] == cases[i].polls;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_clear_ot_dma(void) {
     const u32 regs = 0x80061000, table = 0xa0062000, control = regs + 8;
     const u32 start = 0x8001e9fc, poll = 0x8001ea30;
@@ -4055,6 +4114,7 @@ int main(int argc, char **argv) {
     pass = pass && check_graph_status();
     pass = pass && check_texture_page();
     pass = pass && check_gpu_fill_bytes();
+    pass = pass && check_gpu_queue_sync();
     pass = pass && check_set_queue_alarm();
     pass = pass && check_queue_command();
     disc_close();

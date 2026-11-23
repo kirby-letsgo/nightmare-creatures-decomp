@@ -103,6 +103,7 @@ bool nc_credits_read_environment(CPUState *c, bool display);
 bool nc_credits_gpu_version(CPUState *c);
 bool nc_credits_gpu_parameter(CPUState *c);
 bool nc_credits_gpu_fill_bytes(CPUState *c);
+bool nc_credits_sync_gpu_queue(CPUState *c);
 bool nc_credits_set_queue_alarm(CPUState *c);
 bool nc_credits_queue_command(CPUState *c);
 bool nc_credits_gpu_command_chain(CPUState *c);
