@@ -108,6 +108,8 @@ bool nc_call_indexed_pose_projection(CPUState *c);
 bool nc_advance_placement_scan(CPUState *c, bool increment);
 bool nc_restore_placement_scan_frame(CPUState *c);
 bool nc_copy_placement_coordinates(CPUState *c);
+bool nc_recheck_placement_active(CPUState *c);
+bool nc_prepare_placement_selector(CPUState *c);
 bool nc_check_placement_axis(CPUState *c, bool second, bool *inside);
 bool nc_begin_placement_scan(CPUState *c);
 bool nc_check_placement_slot(CPUState *c);

@@ -4802,6 +4802,39 @@ bool nc_copy_placement_coordinates(CPUState *c) {
     return true;
 }
 
+/* The selector can change the placement flags. Recheck the active bit
+ * before testing coordinates, advancing the slot only on the skip path. */
+bool nc_recheck_placement_active(CPUState *c) {
+    if (c->budget <= 7)
+        return false;
+    const u32 active = MEM_R32(R(16) + 0x2c) & 4;
+    const int cycles = active ? 7 : 9;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = active;
+    if (!active)
+        ++R(20);
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_prepare_placement_selector(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 descriptor = MEM_R32(R(16));
+    const int cycles = descriptor ? 11 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = descriptor;
+    if (descriptor) {
+        R(5) = MEM_R8(descriptor + 0x34);
+        R(31) = 0x80029188;
+        R(4) = R(16);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Each axis uses an unsigned record coordinate and signed comparisons
  * against the wrapping 32-bit bounds. The lower branch leaves center+5 in v0. */
 bool nc_check_placement_axis(CPUState *c, bool second, bool *inside) {
