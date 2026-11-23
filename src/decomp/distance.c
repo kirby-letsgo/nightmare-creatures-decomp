@@ -3403,8 +3403,8 @@ bool nc_apply_placement_depth_cue(CPUState *c, u32 depth_offset) {
 }
 
 /* The loop back-edge decrements the stack count in its delay slot and
- * enters at 0x80028B44 with the index of the pose to reload. */
-bool nc_select_placement_pose(CPUState *c, bool index_ready) {
+ * enters at 0x80028B44 or 0x80028DC4 with the index of the pose to reload. */
+bool nc_select_placement_pose(CPUState *c, bool index_ready, u32 output_offset) {
     const bool reload = index_ready || R(19) != 0;
     const int cycles = index_ready ? 6 : reload ? 9 : 2;
     if (c->budget <= cycles)
@@ -3415,7 +3415,7 @@ bool nc_select_placement_pose(CPUState *c, bool index_ready) {
         R(2) = R(29) + (R(19) << 2);
         R(18) = MEM_R32(R(2) + 0x18);
     }
-    R(17) = R(29) + 0x38;
+    R(17) = R(29) + output_offset;
     c->budget -= cycles;
     return true;
 }
