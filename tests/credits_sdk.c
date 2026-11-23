@@ -3810,6 +3810,90 @@ static bool check_cd_mix(void) {
     return true;
 }
 
+static bool check_cd_playback_control(void) {
+    const u32 list = 0x80061000, trace = list + 512, playlist = 0x80024aa4;
+    const u32 index = 0x80024c34, flag = 0x80024c38;
+    const struct {
+        u32 mode, entries, argument, toc, current, resume, sync, status;
+        u32 expected_index;
+        const char *calls;
+    } cases[] = {
+        {0, 0, 0, 0, 2, 1, 0, 0, UINT32_MAX, "RC"},
+        {3, 0, 0, 0, UINT32_MAX, 0, 0, 0, UINT32_MAX, ""},
+        {3, 0, 0, 0, 2, 0, 0, 0, 2, "S"},
+        {3, 0, 0, 0, 2, 0, 1, 0x80, 2, "SF"},
+        {3, 0, 0, 0, 2, 1, 1, 0x50, 2, "SF"},
+        {3, 0, 0, 0, 2, 0, 1, 0, 2, "SP"},
+        {3, 0, 0, 0, 2, 1, 1, 0x40, 2, "SP"},
+        {1, 0, 0, 0, 2, 0, 0, 0, UINT32_MAX, "TD"},
+        {2, 0, UINT32_MAX, 9, 2, 0, 0, 0, 0, "TCRP"},
+        {1, 3, 1, 9, 2, 0, 0, 0, 1, "TCRP"},
+        {2, 101, 111, 9, 2, 0, 0, 0, 99, "TCRP"},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    /* Log the call identity and first argument. Supply a TOC count and a
+     * sync status byte without running the drive command machinery. */
+    const struct { char id; u32 address; } stubs[] = {
+        {'C', 0x8001ffac}, {'R', 0x8001ff94}, {'T', 0x800230ac}, {'D', 0x80019a60},
+        {'P', 0x80022f84}, {'F', 0x800200e4}, {'S', 0x8001ff3c},
+    };
+    for (unsigned i = 0; i < sizeof stubs / sizeof stubs[0]; i++) {
+        u32 addr = stubs[i].address;
+        MEM_W32(addr, 0x34020000u | (u32)stubs[i].id);
+        MEM_W32(addr + 4, 0xad020000); /* sw v0,0(t0) */
+        MEM_W32(addr + 8, 0xad040004);
+        MEM_W32(addr + 12, 0x25080008);
+        if (stubs[i].id == 'S') {
+            MEM_W32(addr + 16, 0xa0aa0000); /* sb t2,0(a1) */
+            addr += 4;
+        }
+        MEM_W32(addr + 16, 0x03e00008);
+        MEM_W32(addr + 20, stubs[i].id == 'T' ? 0x01601021 : 0x01201021);
+    }
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        MEM_W32(index, cases[i].current);
+        MEM_W32(flag, cases[i].resume);
+        memset(nc_fast_ptr(playlist), 0x55, 100 * 4);
+        for (unsigned j = 0; j < cases[i].entries; j++)
+            MEM_W32(list + j * 4, j + 5);
+        MEM_W32(list + cases[i].entries * 4, 0);
+        CPUState state = arguments(cases[i].mode, list, cases[i].argument, i & 1 ? 11 : 4096);
+        state.r[8] = trace;
+        state.r[9] = cases[i].sync;
+        state.r[10] = cases[i].status;
+        state.r[11] = cases[i].toc;
+        ok = compare(state, 0x80022ccc, nc_credits_control_cd_playback, 10) &&
+             nc_cpu.r[2] == cases[i].expected_index && MEM_R32(index) == cases[i].expected_index &&
+             nc_cpu.r[8] == trace + 8 * strlen(cases[i].calls);
+        for (unsigned j = 0; ok && cases[i].calls[j]; j++) {
+            char call = cases[i].calls[j];
+            u32 arg = MEM_R32(trace + j * 8 + 4);
+            ok = MEM_R32(trace + j * 8) == (u32)call;
+            if (call == 'R')
+                ok = ok && arg == (cases[i].mode ? 0x80022ebcu : 0u);
+            if (call == 'C')
+                ok = ok && arg == (cases[i].mode ? 14u : 9u);
+        }
+        if (cases[i].toc) {
+            unsigned n = cases[i].entries > 99 ? 99 : cases[i].entries;
+            for (unsigned j = 0; ok && j < n; j++)
+                ok = MEM_R32(playlist + j * 4) == j + 5;
+            ok = ok && MEM_R32(playlist + n * 4) == 0 &&
+                 MEM_R32(0x80024c3c) == (cases[i].mode != 1) &&
+                 MEM_R8(state.r[29] - 32) == 3;
+        }
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_audio_ready(void) {
     const u32 trace = 0x80062000, response = trace + 32;
     const u32 diagnostic = 0x80019a60, play = 0x80022f84;
@@ -4792,6 +4876,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_driver_initialization();
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
+    pass = pass && check_cd_playback_control();
     pass = pass && check_cd_audio_ready();
     pass = pass && check_cd_play_track();
     pass = pass && check_cd_get_toc();

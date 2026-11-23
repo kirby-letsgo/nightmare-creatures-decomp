@@ -5751,6 +5751,201 @@ bool nc_credits_cd_flush_controller(CPUState *c) {
     return true;
 }
 
+static void store_playback_word(CPUState *c, u32 address, u32 value) {
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(address, value);
+    NC_POLL(c, 1);
+}
+
+static void play_and_read_index(CPUState *c) {
+    R(31) = 0x80022e98;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80022f84); /* play */
+    load_cd_port(c, 2, 0x80024c34);
+}
+
+static void poll_cd_playback(CPUState *c) {
+    load_cd_port(c, 3, 0x80024c34);
+    set_reg(c, 2, UINT32_MAX);
+    bool stopped = R(3) == R(2);
+    R(4) = 1;
+    NC_POLL(c, 2);
+    if (stopped)
+        return;
+    R(31) = 0x80022d10;
+    R(5) = R(29) + 24;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ff3c); /* CdSync */
+    bool ready = R(2) != 0;
+    NC_POLL(c, 2);
+    if (ready) {
+        R(3) = MEM_R8(R(29) + 24);
+        NC_POLL(c, NC_LOAD_CYCLES);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(3) & 0xc0);
+        bool idle = R(2) == 0;
+        R(2) = 1;
+        NC_POLL(c, 2);
+        if (idle)
+            store_playback_word(c, 0x80024c38, R(2));
+        load_cd_port(c, 2, 0x80024c38);
+        NC_POLL(c, 1);
+        bool resume = R(2) != 0;
+        R(4) = 1;
+        NC_POLL(c, 2);
+        if (resume) {
+            set_reg(c, 2, R(3) & 0x10);
+            bool lid_closed = R(2) == 0;
+            NC_POLL(c, 2);
+            if (lid_closed) {
+                play_and_read_index(c);
+                return;
+            }
+        }
+        R(31) = 0x80022d5c;
+        R(5) = 0;
+        NC_POLL(c, 2);
+        nc_call(c, 0x800200e4); /* CdControlF(CdlNop) */
+        NC_POLL(c, 2);
+    }
+    load_cd_port(c, 2, 0x80024c34);
+}
+
+static void start_cd_playlist(CPUState *c) {
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80027254);
+    R(31) = 0x80022db0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x800230ac); /* CdGetToc */
+    store_playback_word(c, 0x800273e4, R(2));
+    bool have_toc = R(2) != 0;
+    R(2) = R(16) ^ 1;
+    NC_POLL(c, 2);
+    if (!have_toc) {
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018bd4);
+        R(31) = 0x80022dd0;
+        NC_POLL(c, 2);
+        nc_call(c, 0x80019a60);
+        set_reg(c, 2, UINT32_MAX);
+        store_playback_word(c, 0x80024c34, R(2));
+        NC_POLL(c, 2);
+        return;
+    }
+
+    set_reg(c, 2, R(2) != 0);
+    store_playback_word(c, 0x80024c3c, R(2));
+    set_reg(c, 3, 0); /* number of playlist entries */
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80024aa4);
+    set_reg(c, 5, R(18));
+    for (;;) {
+        load_word(c, 2, R(5));
+        NC_POLL(c, 1);
+        bool terminator = R(2) == 0;
+        NC_POLL(c, 2);
+        if (terminator)
+            break;
+        MEM_W32(R(4), R(2));
+        NC_POLL(c, 1);
+        set_reg(c, 4, R(4) + 4);
+        set_reg(c, 3, R(3) + 1);
+        set_reg(c, 2, (s32)R(3) < 99);
+        bool room = R(2) != 0;
+        R(5) += 4;
+        NC_POLL(c, 2);
+        if (!room)
+            break;
+    }
+    set_reg(c, 2, R(3) << 2);
+    set_reg(c, 1, 0x80020000);
+    set_reg(c, 1, R(1) + R(2));
+    MEM_W32(R(1) + 0x4aa4, 0);
+    NC_POLL(c, 1);
+    store_playback_word(c, 0x80024c34, R(17));
+    bool negative = (s32)R(17) < 0;
+    R(7) = R(17);
+    NC_POLL(c, 2);
+    if (negative) {
+        set_reg(c, 7, 0);
+        set_reg(c, 4, 14);
+    } else {
+        set_reg(c, 2, (s32)R(3) < (s32)R(7));
+        bool past_end = R(2) != 0;
+        R(4) = 14;
+        NC_POLL(c, 2);
+        if (past_end) {
+            R(7) = R(3);
+            NC_POLL(c, 2);
+        }
+    }
+    set_reg(c, 5, R(29) + 16);
+    set_reg(c, 6, 0);
+    set_reg(c, 2, 3);
+    store_playback_word(c, 0x80024c34, R(7));
+    R(31) = 0x80022e80;
+    MEM_W8(R(29) + 16, (u8)R(2));
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ffac); /* CdControl(CdlSetmode) */
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80022ebc);
+    R(31) = 0x80022e90;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001ff94); /* install cbdataready */
+    play_and_read_index(c);
+}
+
+bool nc_credits_control_cd_playback(CPUState *c) {
+    if (c->budget <= 10)
+        return false;
+    R(29) -= 48;
+    c->budget--;
+    MEM_W32(R(29) + 32, R(16));
+    R(16) = R(4); /* mode */
+    c->budget -= 2;
+    MEM_W32(R(29) + 40, R(18));
+    R(18) = R(5); /* playlist */
+    c->budget -= 2;
+    MEM_W32(R(29) + 36, R(17));
+    R(17) = R(6); /* starting index */
+    R(2) = 3;
+    c->budget -= 3;
+    bool poll = R(16) == R(2);
+    MEM_W32(R(29) + 44, R(31));
+    c->budget -= 2;
+    if (poll) {
+        poll_cd_playback(c);
+    } else {
+        bool start = R(16) != 0;
+        NC_POLL(c, 2);
+        if (start) {
+            start_cd_playlist(c);
+        } else {
+            store_playback_word(c, 0x80024c38, 0);
+            R(31) = 0x80022d7c;
+            R(4) = 0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x8001ff94); /* clear ready callback */
+            set_reg(c, 4, 9); /* CdlPause */
+            set_reg(c, 5, 0);
+            R(31) = 0x80022d8c;
+            R(6) = 0;
+            NC_POLL(c, 2);
+            nc_call(c, 0x8001ffac);
+            set_reg(c, 3, UINT32_MAX);
+            store_playback_word(c, 0x80024c34, R(3));
+            R(2) = UINT32_MAX;
+            NC_POLL(c, 2);
+        }
+    }
+    load_word(c, 31, R(29) + 44);
+    for (unsigned reg = 18; reg >= 16; reg--)
+        load_word(c, reg, R(29) + 32 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 48);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Handle a CD audio interrupt and resume playback when the status allows it. */
 bool nc_credits_cd_audio_ready(CPUState *c) {
     if (c->budget <= 7)
