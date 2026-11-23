@@ -3366,6 +3366,35 @@ bool nc_place_record_pose(CPUState *c) {
     return true;
 }
 
+/* Both traversals start with the root pose and an empty pending-pose stack.
+ * Their delay slots copy the placement color even when projection is skipped. */
+bool nc_begin_pose_traversal(CPUState *c, bool small_frame) {
+    const int cycles = small_frame ? 15 : 17;
+    if (c->budget <= cycles)
+        return false;
+    const u32 frame = R(29) - (small_frame ? 0x180 : 0x300);
+    const u32 saved = frame + (small_frame ? 0x168 : 0x2e0);
+    R(29) = frame;
+    if (!small_frame) {
+        MEM_W32(saved + 20, R(21));
+        R(21) = R(4);
+    }
+    MEM_W32(saved + 8, R(18));
+    R(18) = R(5);
+    MEM_W32(saved + 16, R(20));
+    R(20) = R(6);
+    MEM_W32(saved + (small_frame ? 20 : 24), R(31));
+    MEM_W32(saved + 12, R(19));
+    MEM_W32(saved + 4, R(17));
+    MEM_W32(saved, R(16));
+    const u32 color = MEM_R32(R(4) + 0x28);
+    R(small_frame ? 4 : 2) = color;
+    R(19) = 0;
+    MEM_W32(frame + (small_frame ? 0x164 : 0x2dc), color);
+    c->budget -= cycles;
+    return true;
+}
+
 /* The traversals install the global light matrix, then the rotation and
  * translation stored 0x40 bytes before it. The three SDK calls take
  * 22, 22, and 14 cycles in addition to the nine caller instructions. */

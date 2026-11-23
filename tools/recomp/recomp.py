@@ -794,9 +794,9 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028A70:
-            targets.update((0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
+            targets.update((0x80028AAC, 0x80028AD0, 0x80028B0C, 0x80028B7C, 0x80028C30))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028C58:
-            targets.update((0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
+            targets.update((0x80028C8C, 0x80028D50, 0x80028D8C, 0x80028DFC, 0x80028E94))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028ECC:
             targets.update((0x8002922C, 0x80029270, 0x800292B8, 0x800292D4, 0x80029380, 0x800293B0))
         if self.mod.name == "psx2_exe" and f.addr == 0x80029498:
@@ -1669,6 +1669,14 @@ class Emitter:
                 out.append("        goto L_800293B0; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
                 out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028A70, 0x80028C58):
+                small_frame = i.addr == 0x80028C58
+                project = 0x80028C8C if small_frame else 0x80028AAC
+                select_pose = 0x80028DB8 if small_frame else 0x80028B38
+                frame_arg = "true" if small_frame else "false"
+                out.append(f"    if (nc_begin_pose_traversal(c, {frame_arg})) {{")
+                out.append(f"        if (R(7)) goto L_{project:08X};")
+                out.append(f"        goto L_{select_pose:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028AAC, 0x80028D2C):
                 resume = i.addr + 0x24
                 out.append(
