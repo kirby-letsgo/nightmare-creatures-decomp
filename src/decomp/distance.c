@@ -3648,6 +3648,32 @@ bool nc_advance_placement_face(CPUState *c, bool textured, bool quad) {
     return true;
 }
 
+bool nc_set_untextured_packet_color(CPUState *c, bool quad, bool indexed) {
+    const int cycles = indexed ? 11 : 5;
+    if (c->budget <= cycles)
+        return false;
+    const u32 color = indexed ? R(quad ? 10 : 9) + 4u * MEM_R16(R(20)) : R(quad ? 30 : 23);
+    R(2) = MEM_R32(color);
+    MEM_W32(R(19) - 3, R(2));
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_finish_untextured_packet(CPUState *c, bool quad) {
+    if (c->budget <= 11)
+        return false;
+    ++R(quad ? 23 : 22);
+    R(2) = MEM_R8(R(19));
+    const unsigned flag_reg = quad ? 12 : 11;
+    R(flag_reg) = MEM_R8(R(29) + 0x20);
+    R(4) <<= 2;
+    R(2) |= R(flag_reg);
+    MEM_W8(R(19), R(2));
+    R(19) += quad ? 24 : 20;
+    c->budget -= 11;
+    return true;
+}
+
 bool nc_finish_textured_packet(CPUState *c, bool quad) {
     if (c->budget <= 11)
         return false;

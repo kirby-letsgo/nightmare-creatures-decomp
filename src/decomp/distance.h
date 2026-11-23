@@ -32,6 +32,8 @@ bool nc_place_record_pose(CPUState *c);
 bool nc_write_textured_triangle(CPUState *c);
 bool nc_return_placement_faces(CPUState *c, u32 packet_offset, u32 count_offset, u32 face_count);
 bool nc_advance_placement_face(CPUState *c, bool textured, bool quad);
+bool nc_set_untextured_packet_color(CPUState *c, bool quad, bool indexed);
+bool nc_finish_untextured_packet(CPUState *c, bool quad);
 bool nc_finish_textured_packet(CPUState *c, bool quad);
 bool nc_link_placement_packet(CPUState *c, unsigned table_reg, u32 tag_mask, u32 address_mask,
                               u32 packet_size);
