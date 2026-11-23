@@ -161,6 +161,7 @@ bool nc_credits_set_graph_reverse(CPUState *c);
 bool nc_credits_set_graph_queue(CPUState *c);
 bool nc_credits_set_graph_debug(CPUState *c);
 bool nc_credits_tim_info(CPUState *c);
+bool nc_credits_set_spu_common_attributes(CPUState *c);
 bool nc_credits_spu_dma_complete(CPUState *c);
 bool nc_credits_spu_read_blocks(CPUState *c);
 bool nc_credits_spu_write_by_io(CPUState *c);

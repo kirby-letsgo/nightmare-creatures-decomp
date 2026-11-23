@@ -3785,6 +3785,154 @@ bool nc_credits_tim_info(CPUState *c) {
     return true;
 }
 
+/* A zero attribute mask selects every field. The delay slot still writes v0. */
+static bool common_attr_selected(CPUState *c, u32 bit) {
+    bool all = R(10) != 0;
+    R(2) = R(9) & bit;
+    NC_POLL(c, 2);
+    if (all)
+        return true;
+    bool selected = R(2) != 0;
+    NC_POLL(c, 2);
+    return selected;
+}
+
+static void load_spu_register_base(CPUState *c, unsigned reg) {
+    set_reg(c, reg, 0x80020000);
+    load_word(c, reg, 0x80024678);
+}
+
+static void set_common_master_volume(CPUState *c, unsigned channel) {
+    unsigned volume = channel ? 8 : 6, sample = channel ? 6 : 7;
+    unsigned offset = 4 + 2 * channel;
+    bool all = R(10) != 0;
+    /* The left channel initializes t0 in the first branch's delay slot. */
+    if (channel)
+        R(2) = R(9) & 2;
+    else
+        R(8) = 0;
+    NC_POLL(c, 2);
+    bool use_mode = all;
+    if (!all) {
+        if (!channel)
+            set_reg(c, 2, R(9) & 1);
+        bool selected = R(2) != 0;
+        R(2) = R(9) & (4u << channel);
+        NC_POLL(c, 2);
+        if (!selected)
+            return;
+        use_mode = R(2) != 0;
+        NC_POLL(c, 2);
+    }
+
+    bool sweep = false;
+    if (use_mode) {
+        load_image_halfword(c, 3, R(4) + offset + 4, true);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(3) < 8);
+        bool valid = R(2) != 0;
+        R(2) = R(3) << 2;
+        NC_POLL(c, 2);
+        if (valid) {
+            set_reg(c, 1, 0x80020000);
+            set_reg(c, 1, R(1) + R(2));
+            load_word(c, 2, R(1) - 0x7954 + 32 * channel);
+            NC_POLL(c, 1);
+            NC_POLL(c, 2);
+            /* Mode zero uses direct volume. Modes 1..7 select sweep bits. */
+            u32 first_sweep = channel ? 0x8001eebc : 0x8001edf4;
+            if (R(2) >= first_sweep && R(2) < first_sweep + 56) {
+                R(5) = 0x8000 + ((R(2) - first_sweep) / 8) * 0x1000;
+                NC_POLL(c, 2);
+                sweep = true;
+            }
+        }
+    }
+    if (!sweep) {
+        load_image_halfword(c, volume, R(4) + offset, false);
+        set_reg(c, 5, 0);
+    }
+    R(2) = R(volume) & 0x7fff;
+    NC_POLL(c, 2);
+    if (sweep) {
+        load_image_halfword(c, sample, R(4) + offset, true);
+        NC_POLL(c, 1);
+        set_reg(c, 2, (s32)R(sample) < 128);
+        bool in_range = R(2) != 0;
+        R(3) = R(sample);
+        NC_POLL(c, 2);
+        if (in_range) {
+            bool negative = (s32)R(sample) < 0;
+            R(volume) = R(3);
+            NC_POLL(c, 2);
+            if (negative)
+                set_reg(c, volume, 0);
+        } else {
+            R(volume) = 127;
+            NC_POLL(c, 2);
+        }
+        set_reg(c, 2, R(volume) & 0x7fff);
+    }
+    load_spu_register_base(c, 3);
+    set_reg(c, 2, R(2) | R(5));
+    MEM_W16(R(3) + 0x180 + 2 * channel, (u16)R(2));
+    NC_POLL(c, 1);
+}
+
+/* SpuSetCommonAttr configures master volume and the CD/external audio inputs. */
+bool nc_credits_set_spu_common_attributes(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(29) -= 16;
+    R(6) = 0;
+    c->budget -= 2;
+    load_word(c, 9, R(4));
+    NC_POLL(c, 1);
+    set_reg(c, 10, R(9) == 0);
+    set_common_master_volume(c, 0);
+    set_common_master_volume(c, 1);
+
+    const unsigned volume_bits[] = {0x40, 0x80, 0x400, 0x800};
+    const unsigned volume_offsets[] = {16, 18, 28, 30};
+    for (unsigned i = 0; i < 4; i++) {
+        if (common_attr_selected(c, volume_bits[i])) {
+            load_spu_register_base(c, 3);
+            load_image_halfword(c, 2, R(4) + volume_offsets[i], false);
+            NC_POLL(c, 1);
+            MEM_W16(R(3) + 0x1b0 + 2 * i, (u16)R(2));
+            NC_POLL(c, 1);
+        }
+    }
+
+    /* CD reverb, CD mix, external reverb, external mix, in hardware order. */
+    const unsigned attr_bits[] = {0x100, 0x200, 0x1000, 0x2000};
+    const unsigned flag_offsets[] = {20, 24, 32, 36};
+    const unsigned control_bits[] = {4, 1, 8, 2};
+    for (unsigned i = 0; i < 4; i++) {
+        if (common_attr_selected(c, attr_bits[i])) {
+            load_word(c, 2, R(4) + flag_offsets[i]);
+            NC_POLL(c, 1);
+            bool enable = R(2) != 0;
+            NC_POLL(c, 2);
+            load_spu_register_base(c, 2);
+            NC_POLL(c, 1);
+            load_image_halfword(c, 3, R(2) + 0x1aa, false);
+            if (enable) {
+                NC_POLL(c, 1);
+                set_reg(c, 3, R(3) | control_bits[i]);
+            } else {
+                R(3) &= ~control_bits[i];
+                NC_POLL(c, 2);
+            }
+            MEM_W16(R(2) + 0x1aa, (u16)R(3));
+            NC_POLL(c, 1);
+        }
+    }
+    set_reg(c, 29, R(29) + 16);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Read the two DMA mode bits from SPUCNT. */
 static void read_spu_dma_mode(CPUState *c) {
     R(2) = MEM_R16(R(4) + 0x1aa);
