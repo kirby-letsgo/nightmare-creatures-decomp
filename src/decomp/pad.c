@@ -66,6 +66,34 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Actions 13, 14 and 24, and states 13 and 14, skip the next input
+ * call. Otherwise flag 0x8000 selects the direct state check. */
+u32 nc_player_input_action_gate(CPUState *c) {
+    if (c->budget <= 16)
+        return 0x800449a0;
+
+    R(3) = MEM_R8(R(16) + 0x39b);
+    R(2) = (R(3) - 13u) < 2;
+    c->budget -= 8;
+    if (R(2))
+        return 0x800451d0;
+
+    R(2) = R(4) - 13u;
+    c->budget -= 3;
+    if (R(3) == 24)
+        return 0x800451d0;
+
+    const bool skip = R(2) < 2;
+    R(2) = R(5) & 0x8000;
+    c->budget -= 3;
+    if (skip)
+        return 0x800451d0;
+
+    R(4) = R(16);
+    c->budget -= 2;
+    return R(2) ? 0x800449ec : 0x800449d8;
+}
+
 /* The entry after the input call tests its low halfword. The direct entry
  * starts at the actor state check and preserves the incoming a0. */
 u32 nc_player_state_three_circle(CPUState *c, bool after_call) {
