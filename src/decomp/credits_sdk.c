@@ -6368,101 +6368,6 @@ bool nc_credits_exit_critical_section(CPUState *c) {
     return critical_section_syscall(c, 2);
 }
 
-static bool leave_interrupt_start(CPUState *c) {
-    load_word(c, 31, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
-}
-
-/* The BIOS interrupt hook re-enters startIntr at the return address of setjmp. */
-bool nc_credits_resume_interrupt_start(CPUState *c) {
-    const bool from_exception = R(2) != 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    if (from_exception) {
-        R(31) = 0x8001a8a8;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, 0x8001a90c); /* trapIntr */
-    }
-    set_reg(c, 16, 0x80020000);
-    set_reg(c, 16, 0x80023454);
-    set_reg(c, 4, R(16) - 4); /* saved jump buffer */
-    set_reg(c, 2, R(16) + 0xfdc);
-    R(31) = 0x8001a8c0;
-    MEM_W32(R(16), R(2)); /* interrupt stack pointer */
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ae68); /* HookEntryInt */
-    set_reg(c, 2, 1);
-    R(31) = 0x8001a8cc;
-    MEM_W16(R(16) - 0x3c, (u16)R(2));
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ae88); /* startIntrVSync */
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x800244a0);
-    R(31) = 0x8001a8dc;
-    MEM_W32(R(3) + 20, R(2));
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001afb0); /* startIntrDMA */
-    set_reg(c, 4, 0x80020000);
-    load_word(c, 4, 0x800244a0);
-    R(31) = 0x8001a8ec;
-    MEM_W32(R(4) + 4, R(2));
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ae30); /* _96_remove */
-    R(31) = 0x8001a8f4;
-    R(16) -= 0x3c;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ae78);
-    set_reg(c, 2, R(16));
-    return leave_interrupt_start(c);
-}
-
-bool nc_credits_start_interrupts(CPUState *c) {
-    if (c->budget <= 8 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = 0x80023418;
-    c->budget -= 3;
-    MEM_W32(R(29) + 20, R(31));
-    c->budget--;
-    R(2) = MEM_R16(R(16));
-    const bool active = R(2) != 0;
-    R(2) = 0;
-    c->budget -= NC_LOAD_CYCLES + 3;
-    if (active)
-        return leave_interrupt_start(c);
-
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x800244a4);
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x800244a8);
-    set_reg(c, 5, 0x33330000);
-    MEM_W16(R(2), 0); /* mask IRQs before clearing pending requests */
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(2) = MEM_R16(R(2));
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 5, R(5) | 0x3333);
-    MEM_W16(R(3), (u16)R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x800244ac);
-    set_reg(c, 4, R(16));
-    MEM_W32(R(2), R(5)); /* reset DMA priorities */
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(31) = 0x8001a890;
-    R(5) = 0x41a;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ad7c); /* memclr */
-    R(31) = 0x8001a898;
-    R(4) = R(16) + 0x38;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    nc_call(c, 0x8001ada8); /* setjmp */
-    return nc_credits_resume_interrupt_start(c);
-}
-
 /* VBlank and the three root counters have BIOS auto-acknowledge settings. */
 static void update_interrupt_clear_mode(CPUState *c) {
     bool vblank = R(17) == 0;
@@ -6767,6 +6672,13 @@ bool nc_credits_set_interrupt_handler(CPUState *c) {
 }
 
 static const InterruptControlLayout interrupt_control = {
+    .start = 0x8001a830,
+    .clear = 0x8001ad7c,
+    .save_context = 0x8001ada8,
+    .trap = 0x8001a90c,
+    .start_vsync = 0x8001ae88,
+    .start_dma = 0x8001afb0,
+    .remove = 0x8001ae30,
     .state = 0x80023418,
     .ports = 0x800244a4,
     .stop = 0x8001ac48,
@@ -6776,6 +6688,14 @@ static const InterruptControlLayout interrupt_control = {
     .reset_hook = 0x8001ae58,
     .install_hook = 0x8001ae68,
 };
+
+bool nc_credits_start_interrupts(CPUState *c) {
+    return start_driver_interrupts(c, &interrupt_control);
+}
+
+bool nc_credits_resume_interrupt_start(CPUState *c) {
+    return resume_interrupt_start(c, &interrupt_control);
+}
 
 bool nc_credits_stop_interrupts(CPUState *c) {
     return stop_driver_interrupts(c, &interrupt_control);

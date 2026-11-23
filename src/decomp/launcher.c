@@ -262,6 +262,13 @@ bool nc_launcher_global_callbacks(CPUState *c, bool constructors) {
 }
 
 static const InterruptControlLayout interrupt_control = {
+    .start = 0x80010be8,
+    .clear = 0x80011134,
+    .save_context = 0x800119bc,
+    .trap = 0x80010cc4,
+    .start_vsync = 0x80011aac,
+    .start_dma = 0x80011bd4,
+    .remove = 0x80010a18,
     .state = 0x80014620,
     .ports = 0x800156ac,
     .stop = 0x80011000,
@@ -271,6 +278,14 @@ static const InterruptControlLayout interrupt_control = {
     .reset_hook = 0x80011a4c,
     .install_hook = 0x80011a5c,
 };
+
+bool nc_launcher_start_interrupts(CPUState *c) {
+    return start_driver_interrupts(c, &interrupt_control);
+}
+
+bool nc_launcher_resume_interrupt_start(CPUState *c) {
+    return resume_interrupt_start(c, &interrupt_control);
+}
 
 bool nc_launcher_stop_interrupts(CPUState *c) {
     return stop_driver_interrupts(c, &interrupt_control);
