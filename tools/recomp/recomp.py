@@ -1273,6 +1273,10 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044C60:
+                out.append("    if (nc_call_player_face_button(c, false)) goto L_80044C6C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044C6C:
+                out.append("    if (nc_call_player_face_button(c, true)) goto L_80044C84;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80044C84, 0x80044C88):
                 read_circle = "true" if i.addr == 0x80044C84 else "false"
                 out.extend(

@@ -409,6 +409,28 @@ u32 nc_player_face_button_gate(CPUState *c, bool clear_direction) {
     return R(2) ? 0x80044c60 : 0x80044c6c;
 }
 
+/* Square arrives with the actor in a0. The Cross entry reloads a0 in
+ * the branch delay slot, including when it skips the call. */
+bool nc_call_player_face_button(CPUState *c, bool check_cross) {
+    if (c->budget <= (check_cross ? 6 : 3))
+        return false;
+
+    if (check_cross) {
+        R(2) = R(17) & 0x4000;
+        R(4) = R(16);
+        c->budget -= 3;
+        if (!R(2))
+            return true;
+    }
+
+    R(5) = check_cross ? 0x27 : 0x26;
+    R(31) = check_cross ? 0x80044c84 : 0x80044c6c;
+    R(6) = 1;
+    c->budget -= 3;
+    nc_call(c, 0x80043cbc);
+    return true;
+}
+
 /* Circle routes to the stick check. Otherwise the shoulder buttons select
  * an action path, or pass the Up bit to the direct action-6 check. */
 u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle) {
