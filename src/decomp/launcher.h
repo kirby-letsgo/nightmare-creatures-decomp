@@ -19,4 +19,6 @@ bool nc_launcher_clear_irq_words(CPUState *c);
 bool nc_launcher_cd_init(CPUState *c);
 bool nc_launcher_cd_init_interrupt(CPUState *c);
 
+bool nc_launcher_wait_vblank(CPUState *c);
+
 #endif

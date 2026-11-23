@@ -1,3 +1,4 @@
+#include "decomp/vblank_wait.h"
 #include "decomp/cd_init.h"
 #include "decomp/cd_state.h"
 #include "decomp/interrupt_control.h"
@@ -311,4 +312,12 @@ bool nc_launcher_cd_init(CPUState *c) {
         .message = 0x8001034c, .print = 0x80011160,
     };
     return cd_init(c, &layout);
+}
+
+bool nc_launcher_wait_vblank(CPUState *c) {
+    static const VBlankWaitLayout layout = {
+        .entry = 0x80013f70, .frame = 0x80015760, .message = 0x800105c4,
+        .puts_entry = 0x80013dd8, .clear_pad = 0x80011a8c, .clear_rcnt = 0x80011a9c,
+    };
+    return wait_vblank(c, &layout);
 }
