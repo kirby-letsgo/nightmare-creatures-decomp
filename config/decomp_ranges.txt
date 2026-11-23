@@ -337,6 +337,7 @@ slus_005_82  80011B04    80011B7C         interrupt_control.h
 slus_005_82  80011B7C    80011BA8         interrupt_driver.h
 slus_005_82  80011BA8    80011BD4         interrupt_control.h
 slus_005_82  80011BD4    80011C24         interrupt_control.h
+slus_005_82  80011DA8    80011E50         interrupt_driver.h
 slus_005_82  80011E50    80011E7C         interrupt_control.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
