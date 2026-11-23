@@ -1206,7 +1206,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr == 0x8003433C:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
-            targets.add(0x80029E60)
+            targets.update((0x80029E60, 0x80029F24, 0x80029FA8))
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
             targets.update((0x80029788, 0x8002979C, 0x800297A4))
@@ -3103,6 +3103,14 @@ class Emitter:
                 out.append("    if (nc_call_shared_placement_y_step(c)) {")
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append("        goto L_80029E60; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80029EF4, 0x80029F6C):
+                record22 = i.addr == 0x80029F6C
+                resume = 0x80029FA8 if record22 else 0x80029F24
+                out.append(
+                    f"    if (nc_call_flagged_placement_y_step(c, {str(record22).lower()})) {{"
+                )
+                out.append(f"        {self.call(0x800296E8)}")
+                out.append(f"        goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_COORDINATE_STEPS:
                 offset, step, target = PLACEMENT_COORDINATE_STEPS[i.addr]
                 resume = i.addr + 0x14

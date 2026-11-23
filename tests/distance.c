@@ -4690,6 +4690,45 @@ static bool shared_placement_y_steps(bool disc) {
            native.budget == input.budget - 2;
 }
 
+static bool flagged_placement_y_steps(bool disc) {
+    const struct {
+        bool record22;
+        u32 flags;
+        s32 step, target;
+        int cycles;
+    } cases[] = {
+        {false, 0, -2, -704, 8}, {false, 0x400, 2, -448, 9},
+        {false, 0x800, -2, -704, 8}, {false, 0xc00, 2, -448, 9},
+        {true, 0, 2, -448, 11}, {true, 0x400, -2, -704, 11},
+        {true, 0x800, 2, -448, 9}, {true, 0xc00, 2, -448, 9},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        const bool record22 = cases[i].record22;
+        CPUState input = initial();
+        input.r[record22 ? 3 : 2] = cases[i].flags | 0x100;
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = 0x800296e8;
+        input.budget = cases[i].cycles;
+        CPUState native = input;
+        if (nc_call_flagged_placement_y_step(&native, record22) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_call_flagged_placement_y_step(&native, record22) || native.budget != 1 ||
+            native.r[2] != (cases[i].flags & 0x400) || native.r[4] != input.r[16] ||
+            native.r[5] != input.r[16] + 0x1a || native.r[6] != (u32)cases[i].step ||
+            native.r[7] != (u32)cases[i].target ||
+            native.r[31] != (record22 ? 0x80029fa8u : 0x80029f24u))
+            return false;
+        if (disc) {
+            interp_call(&input, record22 ? 0x80029f6c : 0x80029ef4);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_halfword_entries(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const struct {
@@ -8862,7 +8901,8 @@ int main(int argc, char **argv) {
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
-        placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
+        flagged_placement_y_steps(disc) && placement_halfword_entries(disc) &&
+        placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
         placement_scan_exits(disc) && placement_scan_slots(disc) &&
