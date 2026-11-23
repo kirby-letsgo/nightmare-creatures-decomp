@@ -4327,12 +4327,17 @@ static bool alternate_placement_counters(bool disc) {
     const struct {
         u32 selector, flags, counter, limit, next, result;
         int cycles;
+        bool reload;
     } cases[] = {
-        {0, 0xffffffff, 0, 0, 0x800290a8, 0x10000000, 2},
-        {0x800, 0xefffffff, 0, 0, 0x800290a8, 0, 5},
-        {0x800, 0x10000000, 0, 0, 0x80029060, 1, 18},
-        {1, 0xffffffff, 255, 255, 0x80029060, 256, 18},
-        {1, 0xffffffff, 255, 0, 0x800290a4, 256, 18},
+        {0, 0xffffffff, 0, 0, 0x800290a8, 0x10000000, 2, false},
+        {0x800, 0xefffffff, 0, 0, 0x800290a8, 0, 5, false},
+        {0x800, 0x10000000, 0, 0, 0x80029060, 1, 18, false},
+        {1, 0xffffffff, 255, 255, 0x80029060, 256, 18, false},
+        {1, 0xffffffff, 255, 0, 0x800290a4, 256, 18, false},
+        {1, 0x10000000, 0, 0, 0x800290a8, 0x10000000, 3, true},
+        {0, 0x800, 0, 0, 0x800290a8, 0, 6, true},
+        {0, 0x10000800, 255, 255, 0x80029060, 256, 19, true},
+        {0, 0x10000800, 255, 0, 0x800290a4, 256, 19, true},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
@@ -4345,16 +4350,17 @@ static bool alternate_placement_counters(bool disc) {
         MEM_W8(descriptor + 0x37, cases[i].counter);
         MEM_W8(descriptor + 0x3c, cases[i].limit);
         CPUState native = input;
-        if (nc_check_alternate_placement_counter(&native) || memcmp(&native, &input, sizeof input))
+        if (nc_check_alternate_placement_counter(&native, cases[i].reload) ||
+            memcmp(&native, &input, sizeof input))
             return false;
         native.budget = ++input.budget;
-        if (nc_check_alternate_placement_counter(&native) != cases[i].next ||
+        if (nc_check_alternate_placement_counter(&native, cases[i].reload) != cases[i].next ||
             native.r[2] != cases[i].result || native.budget != 1 ||
-            native.r[3] != (cases[i].cycles == 18 ? descriptor : input.r[3]) ||
-            native.r[4] != (cases[i].cycles == 18 ? cases[i].counter : input.r[4]))
+            native.r[3] != (cases[i].next != 0x800290a8 ? descriptor : input.r[3]) ||
+            native.r[4] != (cases[i].next != 0x800290a8 ? cases[i].counter : input.r[4]))
             return false;
         if (disc) {
-            interp_call(&input, 0x80029030);
+            interp_call(&input, cases[i].reload ? 0x8002902c : 0x80029030);
             if (memcmp(&native, &input, sizeof input))
                 return false;
         }
