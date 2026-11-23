@@ -66,6 +66,46 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Circle routes to the stick check. Otherwise the shoulder buttons select
+ * an action path, or pass the Up bit to the direct action-6 check. */
+u32 nc_player_circle_shoulder_path(CPUState *c, bool read_circle) {
+    if (c->budget <= (read_circle ? 16 : 15))
+        return read_circle ? 0x80044c84 : 0x80044c88;
+
+    const u32 buttons = R(17);
+    if (read_circle) {
+        R(2) = buttons & 0x2000;
+        c->budget--;
+    }
+    const bool circle = R(2) != 0;
+    R(2) = buttons & 0xc00;
+    c->budget -= 2;
+    if (circle)
+        return 0x80044d18;
+
+    const bool shoulder = R(2) != 0;
+    R(2) = buttons & 0x10;
+    c->budget -= 2;
+    if (!shoulder)
+        return 0x80044d38;
+
+    const u32 flags = MEM_R32(R(16) + 0x2c8);
+    R(2) = buttons & 0x400;
+    c->budget -= 7;
+    if (flags & 0x8000)
+        return 0x80044cf0;
+
+    const bool left = R(2) != 0;
+    R(2) = buttons & 0x800;
+    c->budget -= 2;
+    if (!left)
+        return 0x80044cdc;
+
+    R(4) = R(16);
+    c->budget -= 2;
+    return R(2) ? 0x80044cbc : 0x80044ccc;
+}
+
 /* The stick entry requires a Y sample strictly above the threshold. The
  * direct entry already has the Up bit in v0. */
 u32 nc_player_up_action_six(CPUState *c, bool check_stick) {
