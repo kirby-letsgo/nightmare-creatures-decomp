@@ -26,12 +26,14 @@ from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 
 FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
-LAUNCHER_BIOS_A0 = {
-    0x800109D0: 0x39,  # InitHeap
-    0x800109E0: 0x42,  # Load
-    0x800109F0: 0x43,  # Exec
-    0x80010A00: 0x71,  # _96_init
-    0x80010A18: 0x72,  # _96_remove
+LAUNCHER_BIOS_SERVICES = {
+    0x800109D0: (0xA0, 0x39),  # InitHeap
+    0x800109E0: (0xA0, 0x42),  # Load
+    0x800109F0: (0xA0, 0x43),  # Exec
+    0x80010A00: (0xA0, 0x71),  # _96_init
+    0x80010A18: (0xA0, 0x72),  # _96_remove
+    0x80011A4C: (0xB0, 0x18),  # ResetEntryInt
+    0x80011A5C: (0xB0, 0x19),  # HookEntryInt
 }
 LAUNCHER_IRQ_WRAPPERS = {
     0x80010A50: 12,  # ResetCallback
@@ -1189,9 +1191,9 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in (0x80010A30, 0x80011A6C):
                 selector = 1 if i.addr == 0x80010A30 else 2
                 out.append(f"    if (critical_section_syscall(c, {selector})) return;")
-            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_A0:
-                service = LAUNCHER_BIOS_A0[i.addr]
-                out.append(f"    if (bios_service(c, 0xa0, 0x{service:x})) return;")
+            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_SERVICES:
+                table, service = LAUNCHER_BIOS_SERVICES[i.addr]
+                out.append(f"    if (bios_service(c, 0x{table:x}, 0x{service:x})) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x800108F8, 0x80010968):
                 constructors = "true" if i.addr == 0x800108F8 else "false"
                 out.append(f"    if (nc_launcher_global_callbacks(c, {constructors})) return;")

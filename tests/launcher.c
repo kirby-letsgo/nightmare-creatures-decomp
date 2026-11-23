@@ -82,21 +82,23 @@ static bool check_global_callbacks(void) {
     return true;
 }
 
-static u32 a0_service;
+static u32 bios_table, bios_function;
 
-static bool call_a0_wrapper(CPUState *c) {
-    return bios_service(c, 0xa0, a0_service);
+static bool call_bios_wrapper(CPUState *c) {
+    return bios_service(c, bios_table, bios_function);
 }
 
-static bool check_a0_wrappers(void) {
+static bool check_bios_wrappers(void) {
     const u32 header = 0x80016200, probe = 0x80016300, trace = probe + 64;
-    const struct { u32 entry, service, first_arg, result; } cases[] = {
-        {0x800109d0, 0x39, header, 0},
-        {0x800109e0, 0x42, 0x80010000, 1}, /* original PSX.EXE path */
-        {0x800109e0, 0x42, trace, 0},      /* empty path */
-        {0x800109f0, 0x43, header, 1},
-        {0x80010a00, 0x71, 0, 0},
-        {0x80010a18, 0x72, 0, 0},
+    const struct { u32 entry, table, service, first_arg, result; } cases[] = {
+        {0x800109d0, 0xa0, 0x39, header, 0},
+        {0x800109e0, 0xa0, 0x42, 0x80010000, 1}, /* original PSX.EXE path */
+        {0x800109e0, 0xa0, 0x42, trace, 0},      /* empty path */
+        {0x800109f0, 0xa0, 0x43, header, 1},
+        {0x80010a00, 0xa0, 0x71, 0, 0},
+        {0x80010a18, 0xa0, 0x72, 0, 0},
+        {0x80011a5c, 0xb0, 0x19, probe, 0}, /* HookEntryInt */
+        {0x80011a4c, 0xb0, 0x18, 0, 0},     /* ResetEntryInt */
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         CPUState start = {0};
@@ -107,22 +109,23 @@ static bool check_a0_wrappers(void) {
         start.r[29] = 0x801fff00;
         start.r[31] = 0x80010000;
         start.budget = i & 1 ? 4 : 1024;
-        a0_service = cases[i].service;
+        bios_table = cases[i].table;
+        bios_function = cases[i].service;
         MEM_W32(trace, 0);
-        if (a0_service == 0x43) {
+        if (bios_function == 0x43) {
             ExecInfo info = {.pc0 = probe};
             exe_write_info(&info, header);
             MEM_W32(probe, 0xae040000); /* sw a0, 0(s0) */
             MEM_W32(probe + 4, 0x03e00008);
             MEM_W32(probe + 8, 0xae050004); /* sw a1, 4(s0) */
         }
-        if (!compare(start, cases[i].entry, call_a0_wrapper, 3) ||
-            nc_cpu.r[2] != cases[i].result || nc_cpu.r[9] != a0_service ||
-            nc_cpu.r[10] != 0xa0)
+        if (!compare(start, cases[i].entry, call_bios_wrapper, 3) ||
+            nc_cpu.r[2] != cases[i].result || nc_cpu.r[9] != bios_function ||
+            nc_cpu.r[10] != bios_table)
             return false;
-        if (a0_service == 0x42 && cases[i].result && MEM_R32(header) != 0x80025c70)
+        if (bios_function == 0x42 && cases[i].result && MEM_R32(header) != 0x80025c70)
             return false;
-        if (a0_service == 0x43 && (MEM_R32(trace) != header || MEM_R32(trace + 4) != 17))
+        if (bios_function == 0x43 && (MEM_R32(trace) != header || MEM_R32(trace + 4) != 17))
             return false;
     }
     return true;
@@ -462,8 +465,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher global callbacks failed\n");
         return 1;
     }
-    if (!check_a0_wrappers()) {
-        fprintf(stderr, "launcher A0 wrappers failed\n");
+    if (!check_bios_wrappers()) {
+        fprintf(stderr, "launcher BIOS wrappers failed\n");
         return 1;
     }
     if (!check_irq_wrappers()) {
