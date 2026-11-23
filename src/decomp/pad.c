@@ -66,6 +66,34 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* The stick entry requires a Y sample strictly above the threshold. The
+ * direct entry already has the Up bit in v0. */
+u32 nc_player_up_action_six(CPUState *c, bool check_stick) {
+    if (c->budget <= (check_stick ? 18 : 4))
+        return check_stick ? 0x80044d18 : 0x80044d38;
+
+    if (check_stick) {
+        const u32 config = MEM_R32(R(28) + 0x244);
+        const u32 threshold = MEM_R8(0x8008f1b4);
+        R(3) = threshold < MEM_R8(config + 0x1f);
+        R(2) = R(17) & 0x10;
+        c->budget -= 14;
+        if (!R(3))
+            return 0x80044e40;
+    }
+
+    const bool up = R(2) != 0;
+    R(2) = 6;
+    c->budget -= 2;
+    if (!up)
+        return 0x80044e40;
+
+    MEM_W8(R(16) + 0x39b, (u8)R(2));
+    R(4) = R(16);
+    c->budget -= 2;
+    return 0x80044d48;
+}
+
 /* This Triangle path records the edge on the incoming actor argument, then
  * uses the saved player actor to select and store the action. */
 u32 nc_player_triangle_direct_action(CPUState *c) {
