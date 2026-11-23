@@ -219,6 +219,38 @@ static bool check_vblank_dispatch(void) {
     return true;
 }
 
+static bool launcher_set_dma_slot(CPUState *c) {
+    return set_dma_slot(c, 0x8001576c);
+}
+
+static bool check_dma_slots(void) {
+    const u32 table = 0x8001576c, port = 0x80016200, handler = 0x80016300;
+    const u32 initial = 0xa541002a;
+    const struct { u32 channel, previous, next, control; } cases[] = {
+        {2, 0, handler, 0x00c5002a},
+        {4, handler, handler, initial},
+        {0, handler, handler + 16, 0x00c1002a},
+        {6, handler, 0, 0x0081002a},
+    };
+    MEM_W32(table - 4, port);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        u32 slot = table + 4 * cases[i].channel;
+        MEM_W32(slot, cases[i].previous);
+        MEM_W32(port, initial);
+        CPUState start = {0};
+        start.r[4] = cases[i].channel;
+        start.r[5] = cases[i].next;
+        start.r[29] = 0x801fff00;
+        start.r[31] = 0x80010000;
+        start.budget = 35;
+        if (!compare(start, 0x80011da8, launcher_set_dma_slot, 34) ||
+            nc_cpu.r[2] != cases[i].previous || MEM_R32(slot) != cases[i].next ||
+            MEM_R32(port) != cases[i].control)
+            return false;
+    }
+    return true;
+}
+
 static bool check_vsync_slots(void) {
     const u32 table = 0x80015740, handler = 0x80016200;
     const struct { u32 slot, previous, next; } cases[] = {
@@ -568,6 +600,10 @@ int main(int argc, char **argv) {
     }
     if (!check_vblank_dispatch()) {
         fprintf(stderr, "launcher VBlank dispatch failed\n");
+        return 1;
+    }
+    if (!check_dma_slots()) {
+        fprintf(stderr, "launcher DMA callback slots failed\n");
         return 1;
     }
     if (!check_vsync_slots()) {
