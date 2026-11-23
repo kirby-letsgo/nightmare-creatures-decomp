@@ -431,6 +431,14 @@ bool nc_call_player_face_button(CPUState *c, bool check_cross) {
     return true;
 }
 
+u32 nc_player_flagged_shoulder_path(CPUState *c) {
+    if (c->budget <= 2)
+        return 0x80044cf0;
+    R(4) = R(16);
+    c->budget -= 2;
+    return R(2) ? 0x80044cf8 : 0x80044d08;
+}
+
 /* Only the action-22 entry reloads the actor before the call. */
 bool nc_call_player_shoulder_action(CPUState *c, u32 action, u32 return_pc) {
     const int cycles = action == 0x16 ? 3 : 2;

@@ -1024,6 +1024,22 @@ static bool player_face_button_calls(void) {
     return true;
 }
 
+static bool flagged_shoulder_destination(CPUState *cpu) {
+    return nc_player_flagged_shoulder_path(cpu) == cpu->r[31];
+}
+
+static bool flagged_shoulder_paths(void) {
+    for (unsigned left = 0; left < 2; ++left) {
+        CPUState cpu = initial();
+        cpu.r[2] = left ? 0x400 : 0;
+        cpu.r[31] = left ? 0x80044cf8 : 0x80044d08;
+        cpu.budget = 3;
+        if (!compare(cpu, 0x80044cf0, flagged_shoulder_destination, 2))
+            return false;
+    }
+    return true;
+}
+
 static bool shoulder_action_call(CPUState *cpu) {
     return nc_call_player_shoulder_action(cpu, cpu->r[20], cpu->r[31]);
 }
@@ -1032,10 +1048,9 @@ static bool player_shoulder_action_calls(void) {
     const struct {
         u32 entry, dest, action, previous, flags;
     } cases[] = {
-        {0x80044cbc, 0x80044cc4, 9, 9, 0},
-        {0x80044cbc, 0x80044cc4, 9, 0x15, 0x8018},
-        {0x80044ccc, 0x80044cd4, 0x15, 0, 8},
-        {0x80044cdc, 0x80044ce8, 0x16, 0, 8},
+        {0x80044cbc, 0x80044cc4, 9, 9, 0},      {0x80044cbc, 0x80044cc4, 9, 0x15, 0x8018},
+        {0x80044ccc, 0x80044cd4, 0x15, 0, 8},   {0x80044cdc, 0x80044ce8, 0x16, 0, 8},
+        {0x80044cf8, 0x80044d00, 3, 9, 0x8018}, {0x80044d08, 0x80044d10, 4, 9, 0x8018},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState cpu = initial();
@@ -4153,7 +4168,7 @@ int main(int argc, char **argv) {
         player_circle_held_triangle_checks() && player_vertical_action_checks() &&
         player_shoulder_action_checks() && player_queued_action_calls() &&
         player_queued_face_actions() && player_horizontal_directions() &&
-        player_face_button_gates() && player_face_button_calls() &&
+        player_face_button_gates() && player_face_button_calls() && flagged_shoulder_paths() &&
         player_shoulder_action_calls() && player_circle_shoulder_paths() &&
         player_up_action_six_checks() && player_action_thirteen_checks() && player_face_presses() &&
         player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
