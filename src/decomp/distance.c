@@ -3473,6 +3473,21 @@ bool nc_write_textured_triangle(CPUState *c) {
     return true;
 }
 
+bool nc_return_placement_faces(CPUState *c, u32 packet_offset, u32 count_offset, u32 face_count) {
+    if (c->budget <= 35)
+        return false;
+    const u32 frame = R(29);
+    MEM_W32(R(28) + packet_offset, R(21));
+    MEM_W32(R(28) + count_offset, face_count);
+    R(31) = MEM_R32(frame + 0x64);
+    R(30) = MEM_R32(frame + 0x60);
+    for (int reg = 23; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x40 + 4 * (reg - 16));
+    R(29) = frame + 0x68;
+    c->budget -= 35;
+    return true;
+}
+
 bool nc_advance_placement_face(CPUState *c, bool textured, bool quad) {
     const int cycles = textured ? 8 : 9;
     if (c->budget <= cycles)
