@@ -99,6 +99,8 @@ static bool check_bios_wrappers(void) {
         {0x80010a18, 0xa0, 0x72, 0, 0},
         {0x80011a5c, 0xb0, 0x19, probe, 0}, /* HookEntryInt */
         {0x80011a4c, 0xb0, 0x18, 0, 0},     /* ResetEntryInt */
+        {0x80011a8c, 0xb0, 0x5b, 1, 0},     /* ChangeClearPad */
+        {0x80011a9c, 0xc0, 0x0a, 2, 1},     /* ChangeClearRCnt */
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         CPUState start = {0};
