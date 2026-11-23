@@ -5372,6 +5372,28 @@ bool nc_call_placement_y_step(CPUState *c, s32 step, s32 target, u32 return_pc) 
     return true;
 }
 
+/* Both selectors converge on the -800 target. The -2 path sets the
+ * step in a jump delay slot, costing one more cycle than the -5 path. */
+bool nc_prepare_shared_placement_y_step(CPUState *c, bool jump) {
+    const int cycles = jump ? 4 : 3;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = R(16);
+    R(5) = R(16) + 0x1a;
+    R(6) = jump ? (u32)-2 : (u32)-5;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_call_shared_placement_y_step(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(31) = 0x80029e60;
+    R(7) = (u32)-800;
+    c->budget -= 2;
+    return true;
+}
+
 /* The field may point into the new frame. Save all three registers before
  * reading it, and reserve enough budget for the longer, already-equal exit. */
 u32 nc_begin_placement_halfword_step(CPUState *c) {
