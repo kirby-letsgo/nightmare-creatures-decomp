@@ -1109,6 +1109,16 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044DE4:
+                out.extend(
+                    [
+                        "    switch (nc_player_triangle_direct_action(c)) {",
+                        "    case 0x800451D4: goto L_800451D4;",
+                        "    case 0x80045194: goto L_80045194;",
+                        "    case 0x800451E8: goto L_800451E8;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80044E40:
                 out.extend(
                     [

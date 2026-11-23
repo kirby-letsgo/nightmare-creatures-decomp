@@ -66,6 +66,42 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* This Triangle path records the edge on the incoming actor argument, then
+ * uses the saved player actor to select and store the action. */
+u32 nc_player_triangle_direct_action(CPUState *c) {
+    if (c->budget <= 51)
+        return 0x80044de4;
+
+    R(5) = R(17);
+    R(6) = 0x1000;
+    R(31) = 0x80044df0;
+    c->budget -= 3;
+    nc_record_player_button_press(c);
+    R(4) = R(16);
+    c->budget -= 2;
+    if (!R(2))
+        return 0x800451d4;
+
+    const u32 flags = MEM_R32(R(16) + 0x2c8);
+    c->budget -= 7;
+    if (flags & 0x8000) {
+        R(1) = 0x800d0000;
+        MEM_W32(0x800ce9c8, 4);
+        R(2) = 0x13;
+        c->budget -= 4;
+        return 0x80045194;
+    }
+
+    R(31) = 0x80044e14;
+    c->budget -= 2;
+    nc_check_player_action_words(c);
+    const bool different = R(2) != 0;
+    R(2) = different ? 0x11 : 0x12;
+    MEM_W8(R(16) + 0x39b, (u8)R(2));
+    c->budget -= different ? 4 : 5;
+    return 0x800451e8;
+}
+
 /* With Circle held and the actor flag clear, test Triangle against the
  * previous button word. The final branch loads 0x13 on either outcome. */
 u32 nc_player_circle_triangle_check(CPUState *c) {
