@@ -703,24 +703,36 @@ static bool player_down_resume(CPUState *cpu) {
     return nc_player_down_path(cpu, false) == cpu->r[31];
 }
 
-static bool player_down_setup_call(void) {
+static bool action_setup_call(CPUState *cpu) {
+    return nc_call_player_action_setup(cpu, cpu->r[31]);
+}
+
+static bool player_action_setup_calls(void) {
     const u32 actor = 0x80160000;
-    for (unsigned active = 0; active < 2; ++active) {
-        CPUState cpu = initial();
-        cpu.r[4] = 0x80161000;
-        cpu.r[16] = actor;
-        cpu.r[31] = 0x80045014;
-        MEM_W8(actor + 0x388, 0);
-        MEM_W8(actor + 0x38a, active ? 3 : 0);
-        MEM_W8(actor + 0x38e, 2);
-        MEM_W8(actor + 0x39b, 0);
-        MEM_W8(actor + 0x39c, 4);
-        MEM_W32(actor + 0x2c8, 1);
-        MEM_W32(actor + 0x330, 0x8018);
-        if (!compare(cpu, 0x8004500c, nc_call_player_down_setup, 2))
-            return false;
+    const u32 entries[] = {0x80044914, 0x8004500c};
+    for (unsigned i = 0; i < sizeof entries / sizeof entries[0]; ++i) {
+        for (unsigned active = 0; active < 2; ++active) {
+            CPUState cpu = initial();
+            cpu.r[4] = 0x80161000;
+            cpu.r[16] = actor;
+            cpu.r[31] = entries[i] + 8;
+            MEM_W8(actor + 0x388, 0);
+            MEM_W8(actor + 0x38a, active ? 3 : 0);
+            MEM_W8(actor + 0x38e, 2);
+            MEM_W8(actor + 0x39b, 0);
+            MEM_W8(actor + 0x39c, 4);
+            MEM_W32(actor + 0x2c8, 1);
+            MEM_W32(actor + 0x330, 0x8018);
+            if (!compare(cpu, entries[i], action_setup_call, 2))
+                return false;
+        }
     }
-    return true;
+    CPUState cpu = initial();
+    cpu.r[4] = 0x80161000;
+    cpu.r[16] = 0x80160000;
+    cpu.r[31] = 0x800451d4;
+    cpu.budget = 3;
+    return compare(cpu, 0x8004491c, nc_prepare_player_trigger_exit, 2);
 }
 
 static bool player_down_paths(void) {
@@ -4400,7 +4412,7 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_setup_call() && player_down_paths() && player_square_actor_scans() &&
+        player_action_setup_calls() && player_down_paths() && player_square_actor_scans() &&
         player_square_scans() && player_square_headings() && player_r2_action_call() &&
         player_down_action_calls() && player_down_face_buttons() && player_level_flag_checks() &&
         player_input_state_gates() && player_secondary_flag_routes() &&
