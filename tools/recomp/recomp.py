@@ -1266,6 +1266,8 @@ class Emitter:
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800135E4:
                 out.append("    if (cd_volume(c, 0x80015adc)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x8001366C:
+                out.append("    if (cd_flush_controller(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x8001374C:
                 out.append("    if (cd_init_volume(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013840:
@@ -3887,6 +3889,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     if mod.name == LAUNCHER:
         header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/byte_scan.h"')
+        header.append('#include "decomp/cd_flush.h"')
         header.append('#include "decomp/cd_state.h"')
         header.append('#include "decomp/cd_volume.h"')
         header.append('#include "decomp/cd_position.h"')

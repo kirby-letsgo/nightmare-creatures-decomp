@@ -1,3 +1,4 @@
+#include "decomp/cd_flush.h"
 #include "decomp/cd_position.h"
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
@@ -7521,13 +7522,6 @@ bool nc_credits_cd_data_sync(CPUState *c) {
     return call_cd_status_driver(c, 0x800218d8, 0x800203d0, CD_RETURN_STATUS);
 }
 
-/* Load a CD port pointer from the guest table, including the load delay nop. */
-static void cd_flush_port(CPUState *c, u32 slot) {
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, slot);
-    NC_POLL(c, 1);
-}
-
 /* The SDK wait loops share the timeout instructions, with different
  * call return addresses and saved registers for the diagnostic tables. */
 typedef struct {
@@ -8501,70 +8495,8 @@ bool nc_credits_sync_cd_dma(CPUState *c) {
     return true;
 }
 
-static bool cd_flush_pending(CPUState *c, bool first) {
-    cd_flush_port(c, 0x80024a2c);
-    R(2) = MEM_R8(R(2));
-    NC_POLL(c, NC_LOAD_CYCLES);
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(2) & 7);
-    bool pending = R(2) != 0;
-    if (first)
-        R(3) = 7;
-    NC_POLL(c, 2);
-    return pending;
-}
-
 bool nc_credits_cd_flush_controller(CPUState *c) {
-    if (c->budget <= 6)
-        return false;
-    c->budget--;
-    R(3) = MEM_R32(0x80024a20);
-    R(2) = 1;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W8(R(3), 1); /* select the interrupt bank */
-    c->budget--;
-    if (cd_flush_pending(c, true)) {
-        set_reg(c, 4, 1);
-        do {
-            cd_flush_port(c, 0x80024a20);
-            MEM_W8(R(2), (u8)R(4));
-            NC_POLL(c, 1);
-            cd_flush_port(c, 0x80024a2c);
-            MEM_W8(R(2), (u8)R(3)); /* acknowledge pending interrupts */
-            NC_POLL(c, 1);
-            cd_flush_port(c, 0x80024a28);
-            MEM_W8(R(2), (u8)R(3)); /* enable the next interrupt */
-            NC_POLL(c, 1);
-        } while (cd_flush_pending(c, false));
-    }
-    set_reg(c, 1, 0x80020000);
-    MEM_W8(0x80024a3a, 0);
-    NC_POLL(c, 1);
-    set_reg(c, 3, 0x80020000);
-    R(3) = MEM_R8(0x80024a3a);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 2, 0x80020000);
-    set_reg(c, 2, 0x80024a39);
-    MEM_W8(R(2), (u8)R(3));
-    NC_POLL(c, 1);
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x80024a20);
-    set_reg(c, 2, 2);
-    set_reg(c, 1, 0x80020000);
-    MEM_W8(0x80024a38, (u8)R(2));
-    NC_POLL(c, 1);
-    MEM_W8(R(3), 0);
-    NC_POLL(c, 1);
-    cd_flush_port(c, 0x80024a2c);
-    MEM_W8(R(2), 0); /* clear the data request */
-    NC_POLL(c, 1);
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x80024a30);
-    set_reg(c, 2, 0x1325);
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, 1);
-    NC_POLL(c, 2);
-    return true;
+    return cd_flush_controller(c, 0x80024a20);
 }
 
 static void store_playback_word(CPUState *c, u32 address, u32 value) {

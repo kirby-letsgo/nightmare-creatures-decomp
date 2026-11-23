@@ -2,6 +2,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
+#include "decomp/cd_flush.h"
 #include "decomp/cd_volume.h"
 #include "decomp/cd_position.h"
 #include "decomp/bios_service.h"
@@ -326,6 +327,34 @@ static bool check_cd_volume(void) {
     }
     memcpy(nc_fast_ptr(slots), saved, sizeof saved);
     return true;
+}
+
+static bool flush_cd_controller(CPUState *c) {
+    return cd_flush_controller(c, 0x80015adc);
+}
+
+static bool check_cd_flush_controller(void) {
+    const u32 slots = 0x80015adc, ram = 0x80061000, dma = SCRATCH_BASE + 4;
+    u8 saved[28];
+    memcpy(saved, nc_fast_ptr(slots), sizeof saved);
+    bool ok = true;
+    for (unsigned pending = 0; ok && pending < 2; pending++) {
+        MEM_W32(slots, ram);
+        /* Writing the interrupt enable redirects the next status read to ram + 7. */
+        MEM_W32(slots + 8, pending ? slots + 12 : ram + 2);
+        MEM_W32(slots + 12, ram + 3);
+        MEM_W32(slots + 16, dma);
+        MEM_W32(slots + 24, UINT32_MAX);
+        MEM_W32(dma, 0);
+        MEM_W32(ram, 0);
+        MEM_W8(ram + 3, pending);
+        MEM_W8(ram + 7, 0);
+        ok = compare(arguments(9, 2, 3, pending ? 7 : 4096), 0x8001366c, flush_cd_controller, 6) &&
+             MEM_R32(slots + 24) == 0xff000002 && MEM_R32(dma) == 0x1325 &&
+             MEM_R8(ram + 3) == (pending ? 7 : 0);
+    }
+    memcpy(nc_fast_ptr(slots), saved, sizeof saved);
+    return ok;
 }
 
 static bool init_cd_volume(CPUState *c) {
@@ -976,6 +1005,10 @@ int main(int argc, char **argv) {
     }
     if (!check_cd_volume()) {
         fprintf(stderr, "launcher CD volume failed\n");
+        return 1;
+    }
+    if (!check_cd_flush_controller()) {
+        fprintf(stderr, "launcher CD controller flush failed\n");
         return 1;
     }
     if (!check_cd_init_volume()) {
