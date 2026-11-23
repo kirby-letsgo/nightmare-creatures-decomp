@@ -24,6 +24,22 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Both face-button checks use the actor already in a0 for the press test.
+ * The branch delay slot reloads a0 from s0 for the next action. */
+bool nc_check_player_face_press(CPUState *c, bool square) {
+    if (c->budget <= 19)
+        return false;
+
+    R(5) = R(17);
+    R(31) = square ? 0x800450c8 : 0x80045168;
+    R(6) = square ? 0x8000 : 0x4000;
+    c->budget -= 3;
+    nc_record_player_button_press(c);
+    R(4) = R(16);
+    c->budget -= 2;
+    return true;
+}
+
 /* A fresh L2 press resets the direction-repeat counter. */
 bool nc_reset_repeat_on_l2_press(CPUState *c) {
     if (c->budget <= 28)
