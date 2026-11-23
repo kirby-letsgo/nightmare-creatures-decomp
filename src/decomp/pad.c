@@ -24,6 +24,32 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* The preceding Triangle check supplies 0x13 in v0. That action and
+ * actions 0x11 and 0x12 go directly to the trigger handlers. */
+u32 nc_player_direction_action_check(CPUState *c) {
+    if (c->budget <= 12)
+        return 0x80044f04;
+
+    const u32 expected = R(2);
+    R(4) = MEM_R8(R(16) + 0x39b);
+    R(3) = R(4);
+    R(2) = R(4) - 0x11u;
+    c->budget -= 7;
+    if (R(3) == expected)
+        return 0x800451d0;
+
+    const bool skip_direction = R(2) < 2;
+    R(2) = R(17) & 0x10;
+    c->budget -= 3;
+    if (skip_direction)
+        return 0x800451d0;
+
+    const bool up = R(2) != 0;
+    R(2) = R(17) & 0x40;
+    c->budget -= 2;
+    return up ? 0x80044f2c : 0x80044fc8;
+}
+
 /* On the Up path, a Y sample above the threshold selects action 1.
  * Below the threshold, X must lie strictly between the horizontal bounds. */
 u32 nc_player_up_stick_bounds(CPUState *c) {
