@@ -284,6 +284,125 @@ bool nc_credits_put_char(CPUState *c) {
     return true;
 }
 
+/* In interlaced mode the GPU must also advance to the opposite field. */
+static void wait_for_vsync_field(CPUState *c) {
+    set_reg(c, 2, 0x80000);
+    set_reg(c, 2, R(16) & R(2));
+    bool interlaced = R(2) != 0;
+    NC_POLL(c, 2);
+    if (!interlaced)
+        return;
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80023400);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(16) ^ R(2));
+    bool same_field = (s32)R(2) >= 0;
+    NC_POLL(c, 2);
+    if (same_field)
+        set_reg(c, 4, 0x80000000);
+    while (same_field) {
+        load_word(c, 2, R(3));
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(16) ^ R(2));
+        set_reg(c, 2, R(2) & R(4));
+        same_field = R(2) == 0;
+        NC_POLL(c, 2);
+    }
+}
+
+static void wait_for_vsync_frames(CPUState *c) {
+    bool positive = (s32)R(4) > 0;
+    NC_POLL(c, 2);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x8002340c); /* last synchronized frame */
+    if (positive) {
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) - 1);
+        R(2) += R(4);
+        NC_POLL(c, 2);
+    }
+    positive = (s32)R(4) > 0;
+    R(5) = 0;
+    NC_POLL(c, 2);
+    if (positive)
+        set_reg(c, 5, R(4) - 1);
+    R(31) = 0x8001a4ec;
+    R(4) = R(2);
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a59c); /* v_wait(target, timeout) */
+
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80023400);
+    NC_POLL(c, 1);
+    load_word(c, 16, R(2)); /* sample GPU status before the next VBlank */
+    set_reg(c, 4, 0x80020000);
+    load_word(c, 4, 0x800244d4);
+    set_reg(c, 5, 1);
+    R(31) = 0x8001a510;
+    R(4)++;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a59c);
+    wait_for_vsync_field(c);
+
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800244d4);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80023404);
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x8002340c, R(2));
+    NC_POLL(c, 1);
+    load_word(c, 3, R(3));
+    set_reg(c, 2, R(17));
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(0x80023408, R(3));
+    NC_POLL(c, 1);
+}
+
+bool nc_credits_vsync(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80023400);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80023404);
+    set_reg(c, 29, R(29) - 32);
+    MEM_W32(R(29) + 24, R(31));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 20, R(17));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 16, R(16));
+    NC_POLL(c, 1);
+    load_word(c, 16, R(2));
+    load_word(c, 2, R(3));
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80023408);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) - R(3));
+    bool query_frame = (s32)R(4) < 0;
+    R(17) = R(2) & 0xffff;
+    NC_POLL(c, 2);
+    if (query_frame) {
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x800244d4);
+        NC_POLL(c, 2);
+    } else {
+        set_reg(c, 2, 1);
+        bool query_elapsed = R(4) == R(2);
+        R(2) = R(17);
+        NC_POLL(c, 2);
+        if (!query_elapsed)
+            wait_for_vsync_frames(c);
+    }
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Test the signed VBlank count against the requested frame. */
 static void compare_vblank_target(CPUState *c) {
     set_reg(c, 2, 0x80020000);
