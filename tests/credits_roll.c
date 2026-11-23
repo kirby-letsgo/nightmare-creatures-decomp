@@ -33,10 +33,9 @@ static void frame(void) {
 
 /* Enter the disc stub with a live BIOS exception frame. Each binary dispatches
  * through its own function table, so the original executes all three instructions. */
-static bool check_exception_return(void) {
+static bool check_exception_return(u32 entry) {
     const u32 hook = 0x80061000;
-    nc_set_module(NC_MOD_CREDITS);
-    MEM_W32(hook, 0x8001ae48);
+    MEM_W32(hook, entry);
     MEM_W32(hook + 4, 0x801fe000);
     nc_cpu.r[4] = hook;
     nc_cpu.r[9] = 0x19;
@@ -76,7 +75,8 @@ int main(int argc, char **argv) {
     if (!exe_load("cdrom:\\SLUS_005.82;1", &exe) || !exe_load("cdrom:\\CREDITS.EXE;1", &exe))
         return 1;
     if (!strcmp(argv[2], "exception_return")) {
-        bool ok = check_exception_return();
+        nc_set_module(NC_MOD_CREDITS);
+        bool ok = check_exception_return(0x80011a3c) && check_exception_return(0x8001ae48);
         disc_close();
         return fclose(trace) || !ok;
     }

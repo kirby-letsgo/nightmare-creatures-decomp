@@ -330,6 +330,7 @@ slus_005_82  800110AC    80011134         interrupt_control.h
 slus_005_82  80011134    80011160         interrupt_control.h
 slus_005_82  800119BC    800119F8         jump_context.h
 slus_005_82  800119F8    80011A34         jump_context.h
+slus_005_82  80011A3C    80011A48         bios_service.h
 slus_005_82  80011A4C    80011A58         bios_service.h
 slus_005_82  80011A5C    80011A68         bios_service.h
 slus_005_82  80011A6C    80011A7C         bios_service.h

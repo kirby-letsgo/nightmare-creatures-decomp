@@ -98,6 +98,7 @@ static bool check_bios_wrappers(void) {
         {0x800109f0, 0xa0, 0x43, header, 1},
         {0x80010a00, 0xa0, 0x71, 0, 0},
         {0x80010a18, 0xa0, 0x72, 0, 0},
+        {0x80011a3c, 0xb0, 0x17, 0, 0},     /* outside an exception */
         {0x80011a5c, 0xb0, 0x19, probe, 0}, /* HookEntryInt */
         {0x80011a4c, 0xb0, 0x18, 0, 0},     /* ResetEntryInt */
         {0x80011a7c, 0xb0, 0x35, 1, 2},      /* write to the TTY */
