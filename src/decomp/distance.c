@@ -4842,6 +4842,36 @@ u32 nc_reset_placement_transforms(CPUState *c) {
     return 0;
 }
 
+static bool placement_counter_at_limit(CPUState *c) {
+    R(3) = MEM_R32(R(16));
+    R(4) = MEM_R8(R(3) + 0x37);
+    const u32 limit = MEM_R8(R(3) + 0x3c);
+    R(2) = R(4) + 1;
+    return R(4) == limit;
+}
+
+/* The first gate uses the original flags in v1. Its delay slot saves a0
+ * in s2 for the remaining gates, even when the first branch is taken. */
+u32 nc_check_primary_placement_counter(CPUState *c) {
+    const bool primary = (R(3) & 0x400) != 0;
+    const u32 flags = R(4);
+    const bool check_counter = primary && (flags & 0x08000000);
+    const int cycles = check_counter ? 20 : primary ? 7 : 3;
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    R(18) = flags;
+    if (!primary) {
+        R(2) = 0;
+        return 0x80028f8c;
+    }
+    if (!check_counter) {
+        R(2) = flags & 0x800;
+        return 0x80029030;
+    }
+    return placement_counter_at_limit(c) ? 0x80028f68 : 0x80028f84;
+}
+
 /* The first branch tests the incoming selector bit before its delay slot
  * replaces v0. Only an enabled alternate placement reads the descriptor. */
 u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector) {
@@ -4856,11 +4886,7 @@ u32 nc_check_alternate_placement_counter(CPUState *c, bool reload_selector) {
         R(2) = alternate ? 0 : enable;
         return 0x800290a8;
     }
-    R(3) = MEM_R32(R(16));
-    R(4) = MEM_R8(R(3) + 0x37);
-    const u32 limit = MEM_R8(R(3) + 0x3c);
-    R(2) = R(4) + 1;
-    return R(4) == limit ? 0x80029060 : 0x800290a4;
+    return placement_counter_at_limit(c) ? 0x80029060 : 0x800290a4;
 }
 
 /* On reaching the alternate counter limit, read the replacement stack
