@@ -3933,6 +3933,178 @@ bool nc_credits_set_spu_common_attributes(CPUState *c) {
     return true;
 }
 
+static void write_spu_halfword(CPUState *c, u32 address, u32 value) {
+    MEM_W16(address, (u16)value);
+    NC_POLL(c, 1);
+}
+
+static void wait_for_spu_reset(CPUState *c) {
+    load_image_halfword(c, 2, R(2) + 0x1ae, false);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) & 0x7ff);
+    bool busy = R(2) != 0;
+    R(3) = 0;
+    NC_POLL(c, 2);
+    if (busy)
+        set_reg(c, 3, R(3) + 1);
+    while (busy) {
+        set_reg(c, 2, R(3) < 0xf01);
+        bool retry = R(2) != 0;
+        NC_POLL(c, 2);
+        if (!retry) {
+            set_reg(c, 4, 0x80020000);
+            set_reg(c, 4, 0x800186ec);
+            set_reg(c, 5, 0x80020000);
+            set_reg(c, 5, 0x800186fc);
+            gpu_sync_call(c, 0x80019a60, 0x8001f1dc); /* printf */
+            R(4) = 0;
+            NC_POLL(c, 2);
+            return;
+        }
+        load_spu_register_base(c, 2);
+        NC_POLL(c, 1);
+        load_image_halfword(c, 2, R(2) + 0x1ae, false);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) & 0x7ff);
+        busy = R(2) != 0;
+        R(3)++;
+        NC_POLL(c, 2);
+    }
+    set_reg(c, 4, 0);
+}
+
+static void initialize_spu_voices(CPUState *c) {
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x800246b8); /* initial 16-byte sample */
+    load_spu_register_base(c, 2);
+    set_reg(c, 3, 0x200);
+    set_reg(c, 1, 0x80020000);
+    write_spu_halfword(c, 0x80024690, R(3));
+    /* Disable pitch modulation and noise, and mute both external inputs. */
+    const unsigned offsets[] = {0x190, 0x192, 0x194, 0x196, 0x1b0, 0x1b2, 0x1b4, 0x1b6};
+    for (unsigned i = 0; i < sizeof offsets / sizeof offsets[0]; i++)
+        write_spu_halfword(c, R(2) + offsets[i], 0);
+    R(31) = 0x8001f2cc;
+    R(5) = 16;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001f3c0); /* _spu_writeByIO */
+
+    set_reg(c, 4, 0);
+    set_reg(c, 6, 0x3fff);
+    set_reg(c, 5, 0x200);
+    load_spu_register_base(c, 3);
+    bool more;
+    do {
+        NC_POLL(c, 1);
+        write_spu_halfword(c, R(3), 0);
+        write_spu_halfword(c, R(3) + 2, 0);
+        write_spu_halfword(c, R(3) + 4, R(6)); /* pitch */
+        write_spu_halfword(c, R(3) + 6, R(5)); /* sample address */
+        write_spu_halfword(c, R(3) + 8, 0);
+        write_spu_halfword(c, R(3) + 10, 0);
+        set_reg(c, 4, R(4) + 1);
+        set_reg(c, 2, (s32)R(4) < 24);
+        more = R(2) != 0;
+        R(3) += 16;
+        NC_POLL(c, 2);
+    } while (more);
+
+    /* Key on every voice, wait four times, then key them off and wait again. */
+    set_reg(c, 17, 0xffff);
+    load_spu_register_base(c, 2);
+    set_reg(c, 16, 0xff);
+    write_spu_halfword(c, R(2) + 0x188, R(17));
+    write_spu_halfword(c, R(2) + 0x18a, R(16));
+    for (unsigned i = 0; i < 4; i++)
+        gpu_sync_call(c, 0x8001fc78, 0x8001f32c + 8 * i);
+    load_spu_register_base(c, 2);
+    NC_POLL(c, 1);
+    write_spu_halfword(c, R(2) + 0x18c, R(17));
+    write_spu_halfword(c, R(2) + 0x18e, R(16));
+    for (unsigned i = 0; i < 4; i++)
+        gpu_sync_call(c, 0x8001fc78, 0x8001f360 + 8 * i);
+    set_reg(c, 2, 0);
+}
+
+bool nc_credits_initialize_spu(CPUState *c) {
+    if (c->budget <= 3)
+        return false;
+    R(29) -= 32;
+    MEM_W32(R(29) + 16, R(16));
+    R(16) = R(4);
+    c->budget -= 3;
+    load_gpu_global(c, 4, 0x80024688);
+    MEM_W32(R(29) + 24, R(31));
+    NC_POLL(c, 1);
+    MEM_W32(R(29) + 20, R(17));
+    NC_POLL(c, 1);
+    load_word(c, 2, R(4));
+    set_reg(c, 3, 0xb0000);
+    set_reg(c, 2, R(2) | R(3));
+    MEM_W32(R(4), R(2)); /* enable SPU DMA */
+    NC_POLL(c, 1);
+    load_spu_register_base(c, 2);
+    store_gpu_global(c, 0x80024694, 0);
+    store_gpu_global(c, 0x80024698, 0);
+    set_reg(c, 1, 0x80020000);
+    write_spu_halfword(c, 0x80024690, 0);
+    write_spu_halfword(c, R(2) + 0x180, 0);
+    write_spu_halfword(c, R(2) + 0x182, 0);
+    write_spu_halfword(c, R(2) + 0x1aa, 0);
+    gpu_sync_call(c, 0x8001fc78, 0x8001f18c);
+    load_spu_register_base(c, 2);
+    NC_POLL(c, 1);
+    write_spu_halfword(c, R(2) + 0x180, 0);
+    write_spu_halfword(c, R(2) + 0x182, 0);
+    wait_for_spu_reset(c);
+
+    set_reg(c, 5, 0x80020000);
+    set_reg(c, 5, 0x800273e8);
+    const unsigned settings[] = {2, 3, 8, 7};
+    for (unsigned i = 0; i < 4; i++) {
+        set_reg(c, 2, settings[i]);
+        store_gpu_global(c, 0x8002469c + 4 * i, 2);
+    }
+    load_spu_register_base(c, 2);
+    set_reg(c, 3, 4);
+    write_spu_halfword(c, R(2) + 0x1ac, R(3));
+    set_reg(c, 3, 0xffff);
+    write_spu_halfword(c, R(2) + 0x184, 0);
+    write_spu_halfword(c, R(2) + 0x186, 0);
+    write_spu_halfword(c, R(2) + 0x18c, R(3));
+    write_spu_halfword(c, R(2) + 0x18e, R(3));
+    write_spu_halfword(c, R(2) + 0x198, 0);
+    write_spu_halfword(c, R(2) + 0x19a, 0);
+    bool more;
+    do {
+        write_spu_halfword(c, R(5), 0);
+        set_reg(c, 4, R(4) + 1);
+        set_reg(c, 2, (s32)R(4) < 10);
+        more = R(2) != 0;
+        R(5) += 2;
+        NC_POLL(c, 2);
+    } while (more);
+    bool full_reset = R(16) == 0;
+    R(2) = 0;
+    NC_POLL(c, 2);
+    if (full_reset)
+        initialize_spu_voices(c);
+
+    load_spu_register_base(c, 4);
+    set_reg(c, 3, 1);
+    store_gpu_global(c, 0x800246ac, 3);
+    set_reg(c, 3, 0xc000);
+    write_spu_halfword(c, R(4) + 0x1aa, R(3));
+    store_gpu_global(c, 0x800246b0, 0);
+    store_gpu_global(c, 0x800246b4, 0);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 /* Read the two DMA mode bits from SPUCNT. */
 static void read_spu_dma_mode(CPUState *c) {
     R(2) = MEM_R16(R(4) + 0x1aa);
