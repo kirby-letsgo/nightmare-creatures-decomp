@@ -4950,6 +4950,53 @@ static bool placement_halfword_entries(bool disc) {
     return true;
 }
 
+static bool placement_dispatch_frames(bool disc) {
+    const u32 frame = SCRATCH_BASE + 0x100;
+    const u32 selectors[] = {0, 1, 100, 101, UINT32_MAX};
+    for (unsigned i = 0; i < sizeof selectors / sizeof selectors[0]; ++i) {
+        CPUState input = initial();
+        input.r[29] = frame + 0x48;
+        input.r[5] = selectors[i];
+        input.budget = 15;
+        CPUState native = input;
+        u8 saved[0x48];
+        memset(nc_scratch + 0x100, 0xa5, sizeof saved);
+        memcpy(saved, nc_scratch + 0x100, sizeof saved);
+        if (nc_begin_placement_dispatch(&native) || memcmp(&native, &input, sizeof input) ||
+            memcmp(saved, nc_scratch + 0x100, sizeof saved))
+            return false;
+        native.budget = ++input.budget;
+        const bool valid = selectors[i] >= 1 && selectors[i] <= 100;
+        if (!nc_begin_placement_dispatch(&native) || native.budget != 1 || native.r[2] != valid ||
+            native.r[3] != selectors[i] - 1 || native.r[16] != input.r[4] ||
+            native.r[19] != selectors[i] || native.r[29] != frame)
+            return false;
+        if (disc) {
+            CPUState guest = input;
+            memcpy(saved, nc_scratch + 0x100, sizeof saved);
+            memset(nc_scratch + 0x100, 0xa5, sizeof saved);
+            interp_continue_call(&guest, 0x800297c8, valid ? 0x800297fc : 0x8002a560, frame);
+            if (memcmp(&native, &guest, sizeof guest) || memcmp(saved, nc_scratch + 0x100, sizeof saved))
+                return false;
+        }
+        native.budget = 18;
+        CPUState guest = native;
+        if (nc_return_placement_dispatch(&native) || memcmp(&native, &guest, sizeof guest))
+            return false;
+        native.budget = ++guest.budget;
+        if (!nc_return_placement_dispatch(&native) || native.budget != 1 ||
+            native.r[29] != input.r[29] || native.r[31] != input.r[31] ||
+            memcmp(native.r + 16, input.r + 16, 4 * sizeof(u32)))
+            return false;
+        if (disc) {
+            interp_continue_call(&guest, 0x8002a5d4, input.r[31], input.r[29]);
+            if (memcmp(&native, &guest, sizeof guest))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_step_returns(bool disc) {
     CPUState input = initial(), native;
     input.r[31] = 0x8002d580;
@@ -9094,7 +9141,7 @@ int main(int argc, char **argv) {
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
-        placement_step_returns(disc) &&
+        placement_dispatch_frames(disc) && placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&

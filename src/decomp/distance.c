@@ -5360,6 +5360,35 @@ bool nc_set_other_placement_angles(CPUState *c) {
     return true;
 }
 
+bool nc_begin_placement_dispatch(CPUState *c) {
+    if (c->budget <= 15)
+        return false;
+    R(29) -= 0x48;
+    MEM_W32(R(29) + 0x30, R(16));
+    R(16) = R(4);
+    MEM_W32(R(29) + 0x3c, R(19));
+    R(19) = R(5);
+    R(3) = R(19) - 1;
+    MEM_W32(R(29) + 0x34, R(17));
+    R(17) = MEM_R32(0x800ce9c4);
+    R(2) = R(3) < 100;
+    MEM_W32(R(29) + 0x40, R(31));
+    MEM_W32(R(29) + 0x38, R(18));
+    c->budget -= 15;
+    return true;
+}
+
+bool nc_return_placement_dispatch(CPUState *c) {
+    if (c->budget <= 18)
+        return false;
+    R(31) = MEM_R32(R(29) + 0x40);
+    for (int reg = 19; reg >= 16; --reg)
+        R(reg) = MEM_R32(R(29) + 0x30 + 4 * (reg - 16));
+    R(29) += 0x48;
+    c->budget -= 18;
+    return true;
+}
+
 bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc) {
     if (c->budget <= 5)
         return false;
