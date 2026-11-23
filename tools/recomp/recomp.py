@@ -26,6 +26,13 @@ from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 
 FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
+LAUNCHER_BIOS_A0 = {
+    0x800109D0: 0x39,  # InitHeap
+    0x800109E0: 0x42,  # Load
+    0x800109F0: 0x43,  # Exec
+    0x80010A00: 0x71,  # _96_init
+    0x80010A18: 0x72,  # _96_remove
+}
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
 # Entry -> (action, return address at the button-history store).
@@ -1133,6 +1140,9 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
+            if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_A0:
+                service = LAUNCHER_BIOS_A0[i.addr]
+                out.append(f"    if (bios_service(c, 0xa0, 0x{service:x})) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x800108F8, 0x80010968):
                 constructors = "true" if i.addr == 0x800108F8 else "false"
                 out.append(f"    if (nc_launcher_global_callbacks(c, {constructors})) return;")
@@ -3505,6 +3515,7 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
     em = Emitter(mod, launcher)
     header = ['#include "port/recomp.h"', f'#include "{mod.name}.h"', ""]
     if mod.name == LAUNCHER:
+        header.append('#include "decomp/bios_service.h"')
         header.append('#include "decomp/launcher.h"')
     if mod.name == "credits_exe":
         header.append('#include "decomp/credits.h"')

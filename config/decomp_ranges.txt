@@ -300,6 +300,11 @@ slus_005_82  80010618    8001078C         launcher.c
 slus_005_82  8001078C    80010850         launcher.c
 slus_005_82  800108F8    80010968         launcher.c
 slus_005_82  80010968    800109D0         launcher.c
+slus_005_82  800109D0    800109DC         bios_service.h
+slus_005_82  800109E0    800109EC         bios_service.h
+slus_005_82  800109F0    800109FC         bios_service.h
+slus_005_82  80010A00    80010A0C         bios_service.h
+slus_005_82  80010A18    80010A24         bios_service.h
 credits_exe  80018C8C    80018CFC         credits.c
 credits_exe  800192E4    8001932C         credits.c
 credits_exe  80019454    8001949C         credits.c
