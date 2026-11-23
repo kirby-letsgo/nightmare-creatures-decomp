@@ -24,6 +24,27 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* Circle skips the Down path. The other entry already has the Down test
+ * in v0 from the earlier branch's delay slot. */
+u32 nc_player_down_path(CPUState *c, bool check_circle) {
+    if (c->budget <= (check_circle ? 12 : 9))
+        return check_circle ? 0x80045014 : 0x80045020;
+
+    if (check_circle) {
+        const u32 buttons = R(17);
+        R(2) = buttons & 0x40;
+        c->budget -= 3;
+        if (buttons & 0x2000)
+            return 0x800450a8;
+    }
+    c->budget -= 2;
+    if (!R(2))
+        return 0x800450a8;
+    R(2) = MEM_R32(R(16) + 0x2c8) & 0x8000;
+    c->budget -= 7;
+    return R(2) ? 0x80045094 : 0x8004503c;
+}
+
 /* Both face-button checks use the actor already in a0 for the press test.
  * The branch delay slot reloads a0 from s0 for the next action. */
 bool nc_check_player_face_press(CPUState *c, bool square) {

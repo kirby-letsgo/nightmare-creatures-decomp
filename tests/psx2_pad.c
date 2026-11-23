@@ -255,6 +255,41 @@ static bool cross_press(CPUState *cpu) {
     return nc_check_player_face_press(cpu, false);
 }
 
+static bool player_down_entry(CPUState *cpu) {
+    return nc_player_down_path(cpu, true) == cpu->r[31];
+}
+
+static bool player_down_resume(CPUState *cpu) {
+    return nc_player_down_path(cpu, false) == cpu->r[31];
+}
+
+static bool player_down_paths(void) {
+    const struct {
+        bool full_entry;
+        u32 buttons, v0, flags, destination;
+    } cases[] = {
+        {true, 0xffff0000, 0x40, 0x8000, 0x800450a8}, {true, 0x2000, 0x40, 0, 0x800450a8},
+        {true, 0x2040, 0, 0x8000, 0x800450a8},        {true, 0x40, 0, 0xffff7fff, 0x8004503c},
+        {true, 0x40, 0, 0xffffffff, 0x80045094},      {false, 0x40, 0, 0x8000, 0x800450a8},
+        {false, 0x2000, 0x40, 0, 0x8004503c},         {false, 0, 1, 0x8000, 0x80045094},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[2] = cases[i].v0;
+        cpu.r[16] = 0x80160000;
+        cpu.r[17] = cases[i].buttons;
+        cpu.r[31] = cases[i].destination;
+        const bool full = cases[i].full_entry;
+        const int cutoff = full ? 12 : 9;
+        cpu.budget = cutoff + 1;
+        MEM_W32(cpu.r[16] + 0x2c8, cases[i].flags);
+        if (!compare(cpu, full ? 0x80045014 : 0x80045020,
+                     full ? player_down_entry : player_down_resume, cutoff))
+            return false;
+    }
+    return true;
+}
+
 static bool player_face_presses(void) {
     const u32 actor = 0x80160000, next_actor = 0x80170000;
     const struct {
@@ -3214,7 +3249,7 @@ int main(int argc, char **argv) {
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
         l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
-        player_r2_press() && player_r2_returns() && player_face_presses() &&
+        player_r2_press() && player_r2_returns() && player_down_paths() && player_face_presses() &&
         player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
         player_button_presses() && player_button_clear() && button_dispatch() && sdk_pad_patch() &&
         pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() &&
