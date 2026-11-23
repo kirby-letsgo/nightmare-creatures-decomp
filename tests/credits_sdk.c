@@ -1,3 +1,4 @@
+#include "sdk_puts.h"
 #include "cd_reset.h"
 #include "jump_context.h"
 #include "decomp/credits.h"
@@ -72,32 +73,6 @@ static bool check_put_char(void) {
                  MEM_R8(state.r[29] - 16) == (u8)cases[i].argument;
         }
     MEM_W32(column, saved);
-    return ok;
-}
-
-static bool check_put_string(void) {
-    const u32 ram = 0x80061001, column = 0x80024ce8;
-    const struct {
-        u32 address;
-        const char *string;
-        u32 final_column;
-    } cases[] = {
-        {0, NULL, 9}, {ram, "", 3}, {ram, "AB", 5},
-        {SCRATCH_BASE + 1, "A\tB", 9}, {0xa0061001, "A\nB", 1},
-    };
-    u32 saved_column = MEM_R32(column);
-    bool ok = true;
-    for (unsigned i = 0; i < sizeof cases / sizeof cases[0] && ok; i++) {
-        if (cases[i].address)
-            memcpy(nc_fast_ptr(cases[i].address), cases[i].string, strlen(cases[i].string) + 1);
-        for (unsigned tight = 0; tight < 2 && ok; tight++) {
-            MEM_W32(column, 3);
-            CPUState state = arguments(cases[i].address, 2, 3, tight ? 10 : 4096);
-            ok = compare(state, 0x8001a638, nc_credits_put_string, 9) &&
-                 MEM_R32(column) == cases[i].final_column;
-        }
-    }
-    MEM_W32(column, saved_column);
     return ok;
 }
 
@@ -6091,7 +6066,7 @@ int main(int argc, char **argv) {
     pass = pass && check_bios_a0_stub(0x8001ae30, 0x72, nc_credits_bios_96_remove);
     pass = pass && check_bios_write();
     pass = pass && check_put_char();
-    pass = pass && check_put_string();
+    pass = pass && check_sdk_puts(0x8001a638, nc_credits_put_string, 0x80024ce8);
     pass = pass && check_find_byte();
     pass = pass && check_fill();
     pass = pass && check_length();

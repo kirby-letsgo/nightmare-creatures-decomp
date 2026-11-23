@@ -1,3 +1,4 @@
+#include "decomp/sdk_puts.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/cd_flush.h"
 #include "decomp/cd_position.h"
@@ -1122,39 +1123,8 @@ bool nc_credits_wait_vblank(CPUState *c) {
     return true;
 }
 
-/* The SDK puts emits through putchar and uses "<NULL>" for a null pointer. */
 bool nc_credits_put_string(CPUState *c) {
-    if (c->budget <= 9)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = R(4);
-    c->budget -= 2;
-    MEM_W32(R(29) + 20, R(31));
-    c->budget -= 2;
-    if (!R(16)) {
-        R(16) = 0x80018308;
-        c->budget -= 4;
-    }
-    for (;;) {
-        R(4) = MEM_R8(R(16));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        NC_POLL(c, 1);
-        bool at_end = R(4) == 0;
-        R(16)++;
-        NC_POLL(c, 2);
-        if (at_end)
-            break;
-        R(31) = 0x8001a664;
-        NC_POLL(c, 2);
-        nc_call(c, 0x8001a1d8); /* putchar */
-    }
-    load_word(c, 31, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return sdk_puts(c, 0x80018308, 0x8001a1d8, 0x8001a664);
 }
 
 bool nc_credits_find_byte(CPUState *c) {
