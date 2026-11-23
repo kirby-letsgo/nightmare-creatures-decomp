@@ -4626,6 +4626,9 @@ static bool placement_y_step_calls(bool disc) {
     } cases[] = {
         {0x800299c8, -2, -440}, {0x800299e4, -2, -1000},
         {0x80029a20, 1, -370}, {0x80029a3c, 1, -200},
+        {0x80029ddc, -2, -730}, {0x80029df8, 4, -64},
+        {0x80029e14, -2, -850}, {0x80029e30, -2, -890},
+        {0x80029e68, -5, -610}, {0x8002a1d4, -6, -496},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
         CPUState input = initial();
