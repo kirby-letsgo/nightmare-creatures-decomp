@@ -272,6 +272,15 @@ bool nc_leave_player_input(CPUState *c, bool store_buttons) {
     return true;
 }
 
+/* These exits save both ports in the delay slot of a jump to the epilogue. */
+bool nc_save_player_buttons_on_exit(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    MEM_W32(R(16) + 0x2f8, R(17));
+    c->budget -= 2;
+    return true;
+}
+
 /* The shorter L2 entry already has its actor in a0. Both calls pass the
  * full button word from s1, including when L2 has modified the previous word. */
 bool nc_call_player_trigger(CPUState *c, u32 entry) {

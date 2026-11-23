@@ -430,6 +430,26 @@ static bool player_trigger_calls(void) {
     return true;
 }
 
+static bool player_exit_button_stores(void) {
+    const u32 entries[] = {0x80044cc4, 0x80044cd4, 0x80044ce8, 0x80044d00, 0x80044d10,
+                           0x80044db8, 0x80044ddc, 0x80045078, 0x8004508c, 0x800450a0,
+                           0x80045144, 0x80045154, 0x80045178};
+    const u32 words[] = {0, 0x81234080};
+    for (unsigned i = 0; i < sizeof entries / sizeof entries[0]; ++i) {
+        for (unsigned j = 0; j < sizeof words / sizeof words[0]; ++j) {
+            CPUState cpu = initial();
+            cpu.r[16] = 0x80160000;
+            cpu.r[17] = words[j];
+            cpu.r[31] = 0x800451ec;
+            cpu.budget = 3;
+            MEM_W32(cpu.r[16] + 0x2f8, ~words[j]);
+            if (!compare(cpu, entries[i], nc_save_player_buttons_on_exit, 2))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool player_button_clear(void) {
     const u32 buttons[] = {0, 1, 0xffff0000, 0xffffffff};
     for (unsigned i = 0; i < sizeof buttons / sizeof buttons[0]; ++i) {
@@ -3278,9 +3298,9 @@ int main(int argc, char **argv) {
         player_r2_press() && player_r2_returns() && player_down_paths() &&
         player_down_face_buttons() && player_face_presses() && player_triangle_actions() &&
         player_triangle_fallback() && player_trigger_calls() && player_button_presses() &&
-        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
-        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
-        sequences() && ports();
+        player_exit_button_stores() && player_button_clear() && button_dispatch() &&
+        sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) && sdk_pad(3, 34) &&
+        sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

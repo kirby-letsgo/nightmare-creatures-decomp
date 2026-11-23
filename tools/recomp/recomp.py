@@ -28,6 +28,22 @@ FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
 LAUNCHER_RANGE = (0x80010000, 0x80018000)
 
+PSX2_PLAYER_BUTTON_STORE_JUMPS = {
+    0x80044CC4,
+    0x80044CD4,
+    0x80044CE8,
+    0x80044D00,
+    0x80044D10,
+    0x80044DB8,
+    0x80044DDC,
+    0x80045078,
+    0x8004508C,
+    0x800450A0,
+    0x80045144,
+    0x80045154,
+    0x80045178,
+}
+
 PSX2_PAD_BIOS_SERVICES = {
     0x80073D7C: "NC_BIOS_STOP_PAD",
     0x80073E3C: "NC_BIOS_CHANGE_CLEAR_PAD",
@@ -1098,6 +1114,8 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800451D0, 0x800451D4, 0x800451DC):
                 resume = 0x800451E8 if i.addr == 0x800451DC else 0x800451DC
                 out.append(f"    if (nc_call_player_trigger(c, 0x{i.addr:X})) goto L_{resume:X};")
+            if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_BUTTON_STORE_JUMPS:
+                out.append("    if (nc_save_player_buttons_on_exit(c)) goto L_800451EC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800451E8, 0x800451EC):
                 store_buttons = "true" if i.addr == 0x800451E8 else "false"
                 out.append(f"    if (nc_leave_player_input(c, {store_buttons})) return;")
