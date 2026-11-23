@@ -67,6 +67,7 @@ bool nc_save_linked_placement_pose(CPUState *c);
 bool nc_push_projection_pose(CPUState *c);
 bool nc_advance_projection_pose(CPUState *c);
 bool nc_advance_placement_pose(CPUState *c);
+bool nc_return_projection_traversal(CPUState *c);
 bool nc_return_linked_pose_traversal(CPUState *c);
 bool nc_return_placement_projection(CPUState *c);
 bool nc_begin_placement_vertex_projection(CPUState *c);

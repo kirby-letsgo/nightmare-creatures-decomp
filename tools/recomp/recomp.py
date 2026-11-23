@@ -2195,6 +2195,8 @@ class Emitter:
                 out.append(f"    if (nc_select_projection_pose(c, {ready})) goto L_80028160;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028160:
                 out.append("    if (nc_set_projection_pose_cursor(c)) goto L_8002816C;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x8002830C:
+                out.append("    if (nc_return_projection_traversal(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800281A0:
                 out.append("    { bool project;")
                 out.append("      if (nc_filter_projection_pose(c, &project)) {")
