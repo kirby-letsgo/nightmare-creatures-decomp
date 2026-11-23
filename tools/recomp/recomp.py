@@ -1650,6 +1650,11 @@ class Emitter:
                 out.append("        goto L_80028B38; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028B0C:
                 out.append("    if (nc_apply_placement_depth_cue(c)) goto L_80028B38;")
+            if self.mod.name == "psx2_exe" and i.addr in (0x80028B38, 0x80028B44):
+                index_ready = "true" if i.addr == 0x80028B44 else "false"
+                out.append(f"    if (nc_select_placement_pose(c, {index_ready})) goto L_80028B54;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028BF8:
+                out.append("    if (nc_save_linked_placement_pose(c)) goto L_80028C18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029420:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")

@@ -31,6 +31,8 @@ bool nc_call_placement_part_traversal(CPUState *c);
 bool nc_place_record_pose(CPUState *c);
 bool nc_project_placement_depth(CPUState *c);
 bool nc_apply_placement_depth_cue(CPUState *c);
+bool nc_select_placement_pose(CPUState *c, bool index_ready);
+bool nc_save_linked_placement_pose(CPUState *c);
 bool nc_check_placement_transform(CPUState *c);
 bool nc_select_placement_projection_args(CPUState *c);
 bool nc_begin_placement_angle_update(CPUState *c);

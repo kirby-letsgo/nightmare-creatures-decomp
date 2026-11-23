@@ -3402,6 +3402,43 @@ bool nc_apply_placement_depth_cue(CPUState *c) {
     return true;
 }
 
+/* The loop back-edge decrements the stack count in its delay slot and
+ * enters at 0x80028B44 with the index of the pose to reload. */
+bool nc_select_placement_pose(CPUState *c, bool index_ready) {
+    const bool reload = index_ready || R(19) != 0;
+    const int cycles = index_ready ? 6 : reload ? 9 : 2;
+    if (c->budget <= cycles)
+        return false;
+    if (reload) {
+        if (!index_ready)
+            R(19)--;
+        R(2) = R(29) + (R(19) << 2);
+        R(18) = MEM_R32(R(2) + 0x18);
+    }
+    R(17) = R(29) + 0x38;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_save_linked_placement_pose(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 linked_pose = MEM_R32(R(18) + 0xc);
+    const int cycles = linked_pose ? 10 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(4) = linked_pose;
+    R(2) = R(19) << 2;
+    if (linked_pose) {
+        R(3) = R(29) + 0x18;
+        R(2) += R(3);
+        MEM_W32(R(2), linked_pose);
+        R(19)++;
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
