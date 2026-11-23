@@ -3455,6 +3455,19 @@ bool nc_advance_placement_pose(CPUState *c) {
     return true;
 }
 
+/* The traversal at 0x80028C58 saves s0 through s4 and ra in a 0x180-byte frame. */
+bool nc_return_linked_pose_traversal(CPUState *c) {
+    if (c->budget <= 21)
+        return false;
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0x17c);
+    for (int reg = 20; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x168 + 4 * (reg - 16));
+    R(29) = frame + 0x180;
+    c->budget -= 21;
+    return true;
+}
+
 bool nc_return_placement_projection(CPUState *c) {
     if (c->budget <= 24)
         return false;
