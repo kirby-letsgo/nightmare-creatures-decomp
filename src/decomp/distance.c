@@ -3439,6 +3439,34 @@ bool nc_save_linked_placement_pose(CPUState *c) {
     return true;
 }
 
+/* Follow the direct link first. When it is null, the second branch uses
+ * the old pending count and decrements it in the delay slot on both exits. */
+bool nc_advance_placement_pose(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 next_pose = MEM_R32(R(18) + 4);
+    const int cycles = next_pose ? 6 : 8;
+    if (c->budget <= cycles)
+        return false;
+    R(18) = next_pose;
+    if (!next_pose)
+        R(19)--;
+    c->budget -= cycles;
+    return true;
+}
+
+bool nc_return_placement_projection(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    const u32 frame = R(29);
+    R(31) = MEM_R32(frame + 0x2f8);
+    for (int reg = 21; reg >= 16; --reg)
+        R(reg) = MEM_R32(frame + 0x2e0 + 4 * (reg - 16));
+    R(29) = frame + 0x300;
+    c->budget -= 24;
+    return true;
+}
+
 /* After projecting a placement, the loop tests two flags before passing
  * the record to the additional transform at 0x8002A674. */
 bool nc_check_placement_transform(CPUState *c) {
