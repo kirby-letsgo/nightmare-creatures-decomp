@@ -4787,6 +4787,21 @@ bool nc_advance_placement_scan(CPUState *c, bool increment) {
     return true;
 }
 
+/* Reload the transform pointer for each coordinate, as the stores can
+ * overlap the record containing that pointer. */
+bool nc_copy_placement_coordinates(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    const u32 record = R(16);
+    for (unsigned axis = 0; axis < 3; ++axis) {
+        R(3) = MEM_R32(record + 4);
+        R(2) = (u32)(s32)(s16)MEM_R16(record + 0x20 + axis * 2);
+        MEM_W32(R(3) + 0x40 + axis * 4, R(2));
+    }
+    c->budget -= 24;
+    return true;
+}
+
 bool nc_begin_placement_scan(CPUState *c) {
     if (c->budget <= 15)
         return false;
