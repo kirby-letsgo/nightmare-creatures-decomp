@@ -4655,6 +4655,34 @@ static bool placement_y_step_calls(bool disc) {
     return true;
 }
 
+static bool shared_placement_y_steps(bool disc) {
+    for (unsigned jump = 0; jump <= 1; ++jump) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = 0x80029e58;
+        input.budget = jump ? 4 : 3;
+        CPUState native = input;
+        if (nc_prepare_shared_placement_y_step(&native, jump) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_prepare_shared_placement_y_step(&native, jump) || native.budget != 1 ||
+            native.r[4] != input.r[16] || native.r[5] != input.r[16] + 0x1a ||
+            native.r[6] != (jump ? (u32)-2 : (u32)-5))
+            return false;
+        if (disc) {
+            interp_call(&input, jump ? 0x80029d18 : 0x80029e4c);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    CPUState input = initial(), native;
+    input.r[31] = 0x800296e8;
+    return compare(input, 0x80029e58, nc_call_shared_placement_y_step, disc, &native) &&
+           native.r[7] == (u32)-800 && native.r[31] == 0x80029e60 &&
+           native.budget == input.budget - 2;
+}
+
 static bool placement_halfword_entries(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const struct {
@@ -8826,7 +8854,7 @@ int main(int argc, char **argv) {
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_step_returns(disc) &&
-        placement_y_step_calls(disc) &&
+        placement_y_step_calls(disc) && shared_placement_y_steps(disc) &&
         placement_halfword_entries(disc) && placement_halfword_steps(disc) &&
         placement_transform_trees(disc) && placement_transform_reset_calls(disc) &&
         placement_coordinate_copies(disc) &&
