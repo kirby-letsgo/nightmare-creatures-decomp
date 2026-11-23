@@ -4393,6 +4393,44 @@ static bool placement_vertex_triples(bool disc, bool sixteenth) {
     return true;
 }
 
+static bool indexed_face_selectors(bool disc, bool textured) {
+    const u32 entry = textured ? 0x80028400 : 0x8002874c;
+    const u32 actor = SCRATCH_BASE, face = actor + 0x83;
+    const u32 slots[] = {0, 2, 1};
+    MEM_W16(face + (textured ? 13 : 1), 0x00ff);
+    MEM_W16(face + (textured ? 15 : 3), 0x0280);
+    MEM_W16(face + (textured ? 11 : 5), 0x0100);
+    for (unsigned missing = 0; missing < 4; ++missing) {
+        CPUState input = initial();
+        input.r[17] = face;
+        input.r[19] = actor;
+        input.r[31] = missing == 3 ? entry + 0x64 : textured ? 0x800286d8 : 0x80028a1c;
+        for (unsigned i = 0; i < 3; ++i)
+            MEM_W32(actor + 0x4c + 4 * slots[i], i == missing ? 0 : actor + 0x100 + 0x40 * i);
+        u8 before[SCRATCH_SIZE];
+        memcpy(before, nc_scratch, sizeof before);
+        input.budget = 37;
+        CPUState native = input;
+        if (nc_select_indexed_face_poses(&native, textured) ||
+            memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_select_indexed_face_poses(&native, textured) || native.r[6] != 255 ||
+            native.r[7] != 128 || native.r[8] != 0 ||
+            native.budget != (missing == 0   ? 16
+                              : missing == 1 ? 8
+                                             : 1) ||
+            memcmp(before, nc_scratch, sizeof before))
+            return false;
+        if (disc) {
+            interp_call(&input, entry);
+            if (memcmp(&native, &input, sizeof input) || memcmp(before, nc_scratch, sizeof before))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool indexed_vertex_inputs(bool disc) {
     const struct {
         u32 pc;
@@ -7282,15 +7320,16 @@ int main(int argc, char **argv) {
         indexed_face_advances(disc, true) && indexed_face_advances(disc, false) &&
         indexed_packet_links(disc, true) && indexed_packet_links(disc, false) &&
         indexed_face_packets(disc, true) && indexed_face_packets(disc, false) &&
-        indexed_face_windings(disc) && indexed_depth_stores(disc) && indexed_vertex_inputs(disc) &&
-        indexed_vertex_projections(disc) && remaining_placement_vertices(disc, false) &&
-        remaining_placement_vertices(disc, true) && placement_vertex_matrices(disc) &&
-        pose_vertex_projection_calls(disc) && placement_transform_flags(disc) &&
-        placement_projection_args(disc) && placement_angle_entries(disc) &&
-        type7_pose_angles(disc) && placement_angle_calls(disc) && placement_traversal_calls(disc) &&
-        record_pose_coordinates(disc) && point_strides(disc) && point_heading_turns(disc) &&
-        point_distance_bearings(disc) && displacements(disc) && headings(disc) &&
-        heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
+        indexed_face_windings(disc) && indexed_depth_stores(disc) &&
+        indexed_face_selectors(disc, true) && indexed_face_selectors(disc, false) &&
+        indexed_vertex_inputs(disc) && indexed_vertex_projections(disc) &&
+        remaining_placement_vertices(disc, false) && remaining_placement_vertices(disc, true) &&
+        placement_vertex_matrices(disc) && pose_vertex_projection_calls(disc) &&
+        placement_transform_flags(disc) && placement_projection_args(disc) &&
+        placement_angle_entries(disc) && type7_pose_angles(disc) && placement_angle_calls(disc) &&
+        placement_traversal_calls(disc) && record_pose_coordinates(disc) && point_strides(disc) &&
+        point_heading_turns(disc) && point_distance_bearings(disc) && displacements(disc) &&
+        headings(disc) && heading_samples(disc) && projected_points(disc) && part_positions(disc) &&
         actor_coordinates(disc) && point_headings(disc, false) && point_headings(disc, true) &&
         actor_headings(disc) && heading_projections(disc) && reference_distances(disc) &&
         relative_headings(disc) && record_projections(disc) && projected_heading_gaps(disc) &&

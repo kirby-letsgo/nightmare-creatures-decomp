@@ -66,6 +66,7 @@ bool nc_prepare_placement_vertex_groups(CPUState *c);
 bool nc_check_placement_vertex_remainder(CPUState *c);
 bool nc_return_placement_vertices(CPUState *c);
 bool nc_project_placement_vertex_triple(CPUState *c, unsigned depth_shift);
+bool nc_select_indexed_face_poses(CPUState *c, bool textured);
 bool nc_prepare_indexed_vertex(CPUState *c, u32 pose, u32 vertex_index);
 bool nc_store_indexed_vertex_depth(CPUState *c, u32 depth_offset, u32 next_pose);
 bool nc_measure_indexed_face(CPUState *c, u32 return_pc);
