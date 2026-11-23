@@ -1259,6 +1259,8 @@ class Emitter:
                 out.append("    if (cd_volume(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x8001374C:
                 out.append("    if (cd_init_volume(c, 0x80015adc)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013840:
+                out.append("    if (nc_launcher_cd_init_interrupt(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013CE8:
                 out.append("    if (cd_set_test_parameter_count(c, 0x80015ac0)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80012584:

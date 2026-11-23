@@ -7247,36 +7247,8 @@ bool nc_credits_interrupt_mask(CPUState *c, bool write) {
     return interrupt_mask(c, 0x800244a8, write);
 }
 
-/* Clear the CD callbacks and cached status, then install the IRQ 2 handler. */
 bool nc_credits_cd_init_interrupt(CPUState *c) {
-    if (c->budget <= 12)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(31));
-    R(1) = 0x80020000;
-    c->budget -= 2;
-    MEM_W32(0x80024760, 0); /* ready callback */
-    c->budget -= 2;
-    MEM_W32(0x8002475c, 0); /* sync callback */
-    c->budget -= 2;
-    MEM_W32(0x80024770, 0);
-    c->budget -= 2;
-    MEM_W32(0x8002476c, 0);
-    R(31) = 0x800216cc;
-    c->budget -= 3;
-    nc_call(c, 0x8001a698); /* ResetCallback */
-
-    set_reg(c, 5, 0x80020000);
-    set_reg(c, 5, 0x80021b54);
-    R(31) = 0x800216dc;
-    R(4) = 2;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001a6c8); /* InterruptCallback */
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return cd_init_interrupt(c, 0x8002475c, 0x8002169c, 0x8001a698, 0x8001a6c8, 0x80021b54);
 }
 
 bool nc_credits_cd_init_volume(CPUState *c) {

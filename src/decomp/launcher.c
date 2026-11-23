@@ -1,3 +1,4 @@
+#include "decomp/cd_state.h"
 #include "decomp/interrupt_control.h"
 #include "decomp/launcher.h"
 
@@ -294,4 +295,8 @@ bool nc_launcher_dispatch_vblank(CPUState *c) {
 
 bool nc_launcher_clear_irq_words(CPUState *c) {
     return clear_interrupt_words(c);
+}
+
+bool nc_launcher_cd_init_interrupt(CPUState *c) {
+    return cd_init_interrupt(c, 0x80015818, 0x80013840, 0x80010a50, 0x80010a80, 0x80013cf8);
 }

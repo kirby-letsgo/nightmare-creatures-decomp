@@ -134,6 +134,32 @@ static bool register_cd_data(CPUState *c) {
     return cd_data_callback(c, 0x80010ab0, 0x80012554);
 }
 
+static bool check_cd_init_interrupt(void) {
+    const u32 mask_slot = 0x800156b0, mask = 0x80061000, handler = 0x8001462c;
+    const u32 cleared[] = {0x8001581c, 0x80015818, 0x8001582c, 0x80015828};
+    const u32 previous[] = {0, 0x80016200, 0x80013cf8};
+    u32 saved_mask = MEM_R32(mask_slot);
+    MEM_W32(mask_slot, mask);
+    MEM_W16(0x80014620, 1); /* callback subsystem already started */
+    for (unsigned i = 0; i < sizeof previous / sizeof previous[0]; i++) {
+        MEM_W32(handler, previous[i]);
+        MEM_W16(mask, 0x41);
+        MEM_W16(0x80014650, 0x20);
+        for (unsigned j = 0; j < 4; j++)
+            MEM_W32(cleared[j], UINT32_MAX);
+        if (!compare(arguments(7, 2, 3, i ? 13 : 4096), 0x80013840,
+                     nc_launcher_cd_init_interrupt, 12) ||
+            nc_cpu.r[2] != previous[i] || MEM_R32(handler) != 0x80013cf8 ||
+            MEM_R16(mask) != (previous[i] == 0x80013cf8 ? 0x41 : 0x45))
+            return false;
+        for (unsigned j = 0; j < 4; j++)
+            if (MEM_R32(cleared[j]) != 0)
+                return false;
+    }
+    MEM_W32(mask_slot, saved_mask);
+    return true;
+}
+
 static bool check_cd_data_callback(void) {
     const u32 driver = 0x80016700, port = driver + 32;
     const u32 slot = 0x8001576c + 3 * 4;
@@ -918,6 +944,10 @@ int main(int argc, char **argv) {
     }
     if (!check_case_conversion()) {
         fprintf(stderr, "launcher character case conversion failed\n");
+        return 1;
+    }
+    if (!check_cd_init_interrupt()) {
+        fprintf(stderr, "launcher CD interrupt initialization failed\n");
         return 1;
     }
     if (!check_cd_data_callback()) {
