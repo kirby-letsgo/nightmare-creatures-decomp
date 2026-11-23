@@ -1,5 +1,6 @@
 #include "decomp/bios_service.h"
 #include "decomp/credits.h"
+#include "decomp/interrupt_driver.h"
 #include "port/interp.h"
 
 /* The credits copy routine advances one byte at a time, even when the two
@@ -6718,70 +6719,33 @@ bool nc_credits_cd_volume(CPUState *c) {
     return true;
 }
 
-/* ResetCallback and InterruptCallback dispatch through the active IRQ driver. */
-static bool interrupt_driver_call(CPUState *c, u32 offset, u32 resume) {
-    if (c->budget <= 12)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x800244a0);
-    R(29) -= 24;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(29) + 16, R(31));
-    c->budget--;
-    R(2) = MEM_R32(R(2) + offset);
-    R(31) = resume;
-    c->budget -= NC_LOAD_CYCLES + 3;
-    nc_call(c, R(2));
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
-}
-
 bool nc_credits_reset_callback(CPUState *c) {
-    return interrupt_driver_call(c, 12, 0x8001a6b8);
+    return interrupt_driver_call(c, 0x800244a0, 12, 0x8001a6b8, false);
 }
 
 bool nc_credits_interrupt_callback(CPUState *c) {
-    return interrupt_driver_call(c, 8, 0x8001a6e8);
+    return interrupt_driver_call(c, 0x800244a0, 8, 0x8001a6e8, false);
 }
 
 bool nc_credits_dma_callback(CPUState *c) {
-    return interrupt_driver_call(c, 4, 0x8001a718);
+    return interrupt_driver_call(c, 0x800244a0, 4, 0x8001a718, false);
 }
 
 /* VSyncCallback(handler) installs it in slot zero. VSyncCallbacks takes a slot. */
 bool nc_credits_vsync_callback(CPUState *c) {
-    if (c->budget <= 13)
-        return false;
-    R(29) -= 24;
-    c->budget -= 2;
-    R(2) = MEM_R32(0x800244a0);
-    R(5) = R(4);
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(29) + 16, R(31));
-    c->budget--;
-    R(2) = MEM_R32(R(2) + 20);
-    R(31) = 0x8001a74c;
-    R(4) = 0;
-    c->budget -= NC_LOAD_CYCLES + 3;
-    nc_call(c, R(2));
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return interrupt_driver_call(c, 0x800244a0, 20, 0x8001a74c, true);
 }
 
 bool nc_credits_vsync_callbacks(CPUState *c) {
-    return interrupt_driver_call(c, 20, 0x8001a77c);
+    return interrupt_driver_call(c, 0x800244a0, 20, 0x8001a77c, false);
 }
 
 bool nc_credits_stop_callback(CPUState *c) {
-    return interrupt_driver_call(c, 16, 0x8001a7ac);
+    return interrupt_driver_call(c, 0x800244a0, 16, 0x8001a7ac, false);
 }
 
 bool nc_credits_restart_callback(CPUState *c) {
-    return interrupt_driver_call(c, 24, 0x8001a7dc);
+    return interrupt_driver_call(c, 0x800244a0, 24, 0x8001a7dc, false);
 }
 
 /* The credits interrupt driver selects the BIOS critical-section syscall in a0. */

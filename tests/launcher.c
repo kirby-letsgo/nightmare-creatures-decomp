@@ -1,6 +1,7 @@
 #include "credits_compare.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
+#include "decomp/interrupt_driver.h"
 #include "port/disc.h"
 #include "port/exe.h"
 
@@ -125,6 +126,55 @@ static bool check_a0_wrappers(void) {
     return true;
 }
 
+static const struct {
+    u32 entry, offset, resume;
+    bool single;
+} irq_wrappers[] = {
+    {0x80010a50, 12, 0x80010a70, false}, {0x80010a80, 8, 0x80010aa0, false},
+    {0x80010ab0, 4, 0x80010ad0, false}, {0x80010ae0, 20, 0x80010b04, true},
+    {0x80010b14, 20, 0x80010b34, false}, {0x80010b44, 16, 0x80010b64, false},
+    {0x80010b74, 24, 0x80010b94, false},
+};
+static unsigned irq_wrapper;
+
+static bool call_irq_wrapper(CPUState *c) {
+    return interrupt_driver_call(c, 0x800156a8, irq_wrappers[irq_wrapper].offset,
+                                 irq_wrappers[irq_wrapper].resume, irq_wrappers[irq_wrapper].single);
+}
+
+static bool check_irq_wrappers(void) {
+    const u32 trace = 0x80016800;
+    for (unsigned driver = 0; driver < 2; driver++) {
+        u32 table = trace + 64 + driver * 128, body = table + 32;
+        MEM_W32(0x800156a8, table);
+        MEM_W32(body, 0xae040000);      /* sw a0, 0(s0) */
+        MEM_W32(body + 4, 0xae050004);  /* sw a1, 4(s0) */
+        MEM_W32(body + 8, 0xae1f0008);  /* sw ra, 8(s0) */
+        MEM_W32(body + 12, 0x03e00008);
+        MEM_W32(body + 16, 0x34020001 + driver); /* return driver identifier */
+        for (irq_wrapper = 0; irq_wrapper < sizeof irq_wrappers / sizeof irq_wrappers[0]; irq_wrapper++) {
+            memset(nc_fast_ptr(table), 0, 28);
+            MEM_W32(table + irq_wrappers[irq_wrapper].offset, body);
+            bool single = irq_wrappers[irq_wrapper].single;
+            int threshold = single ? 13 : 12;
+            CPUState start = {0};
+            start.r[4] = 7;
+            start.r[5] = 0x80016700;
+            start.r[16] = trace;
+            start.r[29] = 0x801ffe00;
+            start.r[31] = 0x80010000;
+            start.budget = driver ? 4096 : threshold + 1;
+            if (!compare(start, irq_wrappers[irq_wrapper].entry, call_irq_wrapper, threshold) ||
+                MEM_R32(trace) != (single ? 0 : start.r[4]) ||
+                MEM_R32(trace + 4) != (single ? start.r[4] : start.r[5]) ||
+                MEM_R32(trace + 8) != irq_wrappers[irq_wrapper].resume ||
+                nc_cpu.r[2] != driver + 1)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -205,6 +255,10 @@ int main(int argc, char **argv) {
     }
     if (!check_a0_wrappers()) {
         fprintf(stderr, "launcher A0 wrappers failed\n");
+        return 1;
+    }
+    if (!check_irq_wrappers()) {
+        fprintf(stderr, "launcher callback wrappers failed\n");
         return 1;
     }
     for (unsigned selection = 0; selection < 6; selection++)
