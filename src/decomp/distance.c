@@ -4793,14 +4793,14 @@ bool nc_check_placement_pose_callback(CPUState *c) {
     return true;
 }
 
-bool nc_call_placement_faces(CPUState *c, bool textured, u32 return_pc) {
-    const int cycles = textured ? 8 : 6;
+bool nc_call_placement_faces(CPUState *c, u32 light_offset, u32 return_pc) {
+    const int cycles = light_offset ? 8 : 6;
     if (c->budget <= cycles)
         return false;
     R(4) = R(16);
     R(5) = R(17);
     MEM_W32(R(29) + 0x10, 0);
-    R(7) = textured ? MEM_R32(R(29) + 0x2dc) : 0;
+    R(7) = light_offset ? MEM_R32(R(29) + light_offset) : 0;
     R(6) = R(20);
     R(31) = return_pc;
     c->budget -= cycles;
