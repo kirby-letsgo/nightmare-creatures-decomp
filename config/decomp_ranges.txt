@@ -348,6 +348,7 @@ slus_005_82  80010BCC    80010BE8         interrupt_driver.h
 slus_005_82  80011000    800110AC         interrupt_control.h
 slus_005_82  800110AC    80011134         interrupt_control.h
 slus_005_82  80011134    80011160         interrupt_control.h
+slus_005_82  80011160    8001119C         sdk_printf.h
 slus_005_82  80011828    80011858         launcher.c
 slus_005_82  80011858    80011888         launcher.c
 slus_005_82  80011888    800118D8         byte_scan.h
