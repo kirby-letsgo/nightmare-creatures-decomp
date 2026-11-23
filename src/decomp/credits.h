@@ -109,6 +109,7 @@ bool nc_credits_sync_gpu_queue(CPUState *c);
 bool nc_credits_check_queue_alarm(CPUState *c);
 bool nc_credits_set_queue_alarm(CPUState *c);
 bool nc_credits_execute_gpu_queue(CPUState *c);
+bool nc_credits_submit_gpu_command(CPUState *c);
 bool nc_credits_queue_command(CPUState *c);
 bool nc_credits_gpu_command_chain(CPUState *c);
 bool nc_credits_gpu_command_block(CPUState *c);
