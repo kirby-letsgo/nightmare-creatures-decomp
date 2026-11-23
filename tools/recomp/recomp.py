@@ -254,6 +254,7 @@ CREDITS_ROUTINES = {
     0x800203C0: "nc_credits_cd_data_sync(c)",
     0x800203E0: "nc_credits_cd_sector_to_position(c)",
     0x800204E4: "nc_credits_cd_position_to_sector(c)",
+    0x80020ADC: "nc_credits_sync_cd_command(c)",
     0x80021440: "nc_credits_cd_volume(c)",
     0x800214C8: "nc_credits_cd_flush_controller(c)",
     0x800215A8: "nc_credits_cd_init_volume(c)",
