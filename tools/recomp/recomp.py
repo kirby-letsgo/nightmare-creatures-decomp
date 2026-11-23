@@ -2462,6 +2462,12 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028F68:
+                out.append("    if (nc_finish_primary_placement_counter(c, true)) goto L_80029008;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028F84:
+                out.append(
+                    "    if (nc_finish_primary_placement_counter(c, false)) goto L_8002902C;"
+                )
             if self.mod.name == "psx2_exe" and i.addr in (0x8002902C, 0x80029030):
                 reload = "true" if i.addr == 0x8002902C else "false"
                 out.extend(

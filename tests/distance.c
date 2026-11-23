@@ -4363,6 +4363,50 @@ static bool primary_placement_counters(bool disc) {
     return true;
 }
 
+static bool primary_placement_counter_exits(bool disc) {
+    const u32 stack_slot = 0x8008f050;
+    const u32 saved_stack = MEM_R32(stack_slot);
+    const u32 descriptor = SCRATCH_BASE + 0x80;
+    for (unsigned path = 0; path < 4; ++path) {
+        const bool at_limit = path >= 2;
+        const u32 record = path == 3 ? stack_slot - 0x2c : SCRATCH_BASE;
+        CPUState input = initial();
+        input.r[2] = path == 1 ? 256 : 18;
+        input.r[3] = descriptor;
+        input.r[16] = record;
+        input.r[18] = 0xfedcba98;
+        input.r[31] = at_limit ? 0x80029008 : 0x8002902c;
+        input.budget = at_limit ? 9 : 2;
+        MEM_W32(stack_slot, 0x801fc000);
+        MEM_W32(record + 0x2c, 0x801e0000);
+        MEM_W32(descriptor + 0x34, 0xab123456);
+        const u32 stack = MEM_R32(stack_slot);
+        CPUState native = input;
+        if (nc_finish_primary_placement_counter(&native, at_limit) ||
+            memcmp(&native, &input, sizeof input) || MEM_R32(record + 0x2c) != 0x801e0000 ||
+            MEM_R32(descriptor + 0x34) != 0xab123456)
+            return false;
+        native.budget = ++input.budget;
+        const u32 word = at_limit ? 0xab123456 : (input.r[2] << 24) | 0x123456;
+        const u32 flags = at_limit ? 0xf6dcba98 : 0x801e0000;
+        if (!nc_finish_primary_placement_counter(&native, at_limit) || native.budget != 1 ||
+            native.r[4] != (at_limit ? stack : input.r[4]) ||
+            native.r[2] != (at_limit ? flags : input.r[2]) ||
+            MEM_R32(descriptor + 0x34) != word || MEM_R32(record + 0x2c) != flags)
+            return false;
+        if (disc) {
+            MEM_W32(record + 0x2c, 0x801e0000);
+            MEM_W32(descriptor + 0x34, 0xab123456);
+            interp_call(&input, at_limit ? 0x80028f68 : 0x80028f84);
+            if (memcmp(&input, &native, sizeof input) || MEM_R32(descriptor + 0x34) != word ||
+                MEM_R32(record + 0x2c) != flags)
+                return false;
+        }
+    }
+    MEM_W32(stack_slot, saved_stack);
+    return true;
+}
+
 static bool alternate_placement_counters(bool disc) {
     const u32 record = SCRATCH_BASE, descriptor = record + 0x80;
     const struct {
@@ -8571,7 +8615,7 @@ int main(int argc, char **argv) {
         placement_selector_routes(disc) &&
         placement_scan_before_bounds(disc) &&
         placement_scan_bounds(disc) &&
-        primary_placement_counters(disc) &&
+        primary_placement_counters(disc) && primary_placement_counter_exits(disc) &&
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
