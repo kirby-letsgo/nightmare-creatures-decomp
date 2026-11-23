@@ -18,6 +18,8 @@ u32 nc_player_secondary_flag_route(CPUState *c, bool check_incoming);
 u32 nc_player_input_action_gate(CPUState *c);
 u32 nc_player_state_three_circle(CPUState *c, bool after_call);
 u32 nc_player_circle_held_triangle(CPUState *c);
+u32 nc_player_down_action_two(CPUState *c);
+u32 nc_player_up_action_one(CPUState *c);
 u32 nc_player_shoulder_action_check(CPUState *c, bool left);
 u32 nc_player_queue_face_action(CPUState *c);
 u32 nc_player_horizontal_direction(CPUState *c);

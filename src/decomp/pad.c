@@ -224,6 +224,33 @@ u32 nc_player_circle_held_triangle(CPUState *c) {
     return 0x80044ed4;
 }
 
+/* The preceding Triangle check leaves the Down bit in v0. */
+u32 nc_player_down_action_two(CPUState *c) {
+    if (c->budget <= 8)
+        return 0x80044a7c;
+
+    const bool down = R(2) != 0;
+    R(2) = 2;
+    c->budget -= 2;
+    if (!down)
+        return 0x80044aa4;
+
+    R(3) = MEM_R8(R(16) + 0x39b);
+    R(4) = R(16);
+    c->budget -= 6;
+    return R(3) == 2 ? 0x80044aa4 : 0x80044a94;
+}
+
+u32 nc_player_up_action_one(CPUState *c) {
+    if (c->budget <= 3)
+        return 0x80044afc;
+
+    R(2) = R(17) & 0x10;
+    R(4) = R(16);
+    c->budget -= 3;
+    return R(2) ? 0x80044b08 : 0x800451d0;
+}
+
 /* L1 requests action 3 and R1 requests action 4. Each check skips the
  * action call when the button is released or the action is already active. */
 u32 nc_player_shoulder_action_check(CPUState *c, bool left) {
