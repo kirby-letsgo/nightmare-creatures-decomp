@@ -4712,9 +4712,15 @@ static void set_cd_control_callback(CPUState *c, u32 callback) {
     NC_POLL(c, 1);
 }
 
-/* Both CdControl variants retry the command up to four times. Keep the sync callback
+enum CdControlMode { CD_CONTROL, CD_CONTROL_FAST, CD_CONTROL_BLOCKING };
+
+/* The CdControl variants retry the command up to four times. Keep the sync callback
  * disabled for the status and Setloc commands preceding the requested one. */
-static bool cd_control(CPUState *c, bool fast) {
+static bool cd_control(CPUState *c, enum CdControlMode mode) {
+    const bool fast = mode == CD_CONTROL_FAST;
+    const bool blocking = mode == CD_CONTROL_BLOCKING;
+    /* Guest loop PCs share the same command-call offsets. */
+    const u32 loop = fast ? 0x80020134 : (blocking ? 0x80020260 : 0x80020004);
     /* CdControl keeps its result pointer in s2. The other saved registers
      * move up one slot compared with CdControlF. */
     const unsigned result_reg = fast ? 0 : 18;
@@ -4723,9 +4729,11 @@ static bool cd_control(CPUState *c, bool fast) {
     const unsigned callback = command + 1;
     const unsigned location_entry = callback + 1;
     const unsigned status = location_entry + 1;
-    const unsigned frame = fast ? 48 : 56;
+    const unsigned last_saved = blocking ? location_entry : status;
+    const unsigned frame = mode == CD_CONTROL ? 56 : 48;
+    const unsigned ra_offset = mode == CD_CONTROL ? 48 : 44;
     const unsigned saved_base = fast ? 24 : 28; /* stack slot for command_byte */
-    if (c->budget <= (fast ? 19 : 21) * NC_INSN_CYCLES + NC_LOAD_CYCLES)
+    if (c->budget <= (mode == CD_CONTROL ? 21 : 19) * NC_INSN_CYCLES + NC_LOAD_CYCLES)
         return false;
     R(29) -= frame;
     c->budget--;
@@ -4755,10 +4763,12 @@ static bool cd_control(CPUState *c, bool fast) {
     MEM_W32(R(29) + saved_base + 12, R(location_entry));
     R(location_entry) = R(2) + R(3);
     c->budget -= 2;
-    MEM_W32(R(29) + saved_base + 16, R(status));
-    R(status) = 0;
-    c->budget -= 2;
-    MEM_W32(R(29) + saved_base + 20, R(31));
+    if (!blocking) {
+        MEM_W32(R(29) + saved_base + 16, R(status));
+        R(status) = 0;
+        c->budget -= 2;
+    }
+    MEM_W32(R(29) + ra_offset, R(31));
     c->budget--;
 
     for (;;) {
@@ -4776,7 +4786,7 @@ static bool cd_control(CPUState *c, bool fast) {
             R(4) = 1;
             NC_POLL(c, 2);
             if (shell_open)
-                issue_cd_control(c, 0, 0, false, fast ? 0x80020170 : 0x80020040);
+                issue_cd_control(c, 0, 0, false, loop + 0x3c);
         }
 
         bool has_parameters = R(17) != 0;
@@ -4789,7 +4799,7 @@ static bool cd_control(CPUState *c, bool fast) {
             R(4) = 2;
             NC_POLL(c, 2);
             if (needs_location) {
-                issue_cd_control(c, R(17), result_reg, false, fast ? 0x80020198 : 0x80020068);
+                issue_cd_control(c, R(17), result_reg, false, loop + 0x64);
                 location_failed = R(2) != 0;
                 NC_POLL(c, 2);
             }
@@ -4797,9 +4807,9 @@ static bool cd_control(CPUState *c, bool fast) {
         if (!location_failed) {
             set_cd_control_callback(c, R(callback));
             set_reg(c, 4, R(command) & 0xff);
-            issue_cd_control(c, R(17), result_reg, fast, fast ? 0x800201bc : 0x8002008c);
+            issue_cd_control(c, R(17), result_reg, fast, loop + 0x88);
             bool success = R(2) == 0;
-            R(2) = R(status) + 1;
+            R(2) = blocking ? 0 : R(status) + 1;
             NC_POLL(c, 2);
             if (success)
                 break;
@@ -4811,14 +4821,32 @@ static bool cd_control(CPUState *c, bool fast) {
         NC_POLL(c, 2);
         if (!retry) {
             set_cd_control_callback(c, R(callback));
-            set_reg(c, status, UINT32_MAX);
-            set_reg(c, 2, R(status) + 1);
+            if (!blocking) {
+                set_reg(c, status, UINT32_MAX);
+                set_reg(c, 2, R(status) + 1);
+            }
             break;
         }
     }
 
-    load_word(c, 31, R(29) + saved_base + 20);
-    for (unsigned reg = status; reg >= 16; reg--)
+    if (blocking) {
+        bool issued = R(2) == 0;
+        R(4) = 0;
+        NC_POLL(c, 2);
+        if (issued) {
+            R(31) = 0x80020318;
+            R(5) = R(result_reg);
+            NC_POLL(c, 2);
+            nc_call(c, 0x80020adc); /* CD_sync(0, result) */
+            set_reg(c, 2, R(2) ^ 2);
+            R(2) = R(2) == 0; /* CdlComplete */
+            NC_POLL(c, 2);
+        } else {
+            set_reg(c, 2, 0);
+        }
+    }
+    load_word(c, 31, R(29) + ra_offset);
+    for (unsigned reg = last_saved; reg >= 16; reg--)
         load_word(c, reg, R(29) + 16 + 4 * (reg - 16));
     set_reg(c, 29, R(29) + frame);
     NC_POLL(c, 2);
@@ -4826,11 +4854,15 @@ static bool cd_control(CPUState *c, bool fast) {
 }
 
 bool nc_credits_cd_control(CPUState *c) {
-    return cd_control(c, false);
+    return cd_control(c, CD_CONTROL);
 }
 
 bool nc_credits_cd_control_f(CPUState *c) {
-    return cd_control(c, true);
+    return cd_control(c, CD_CONTROL_FAST);
+}
+
+bool nc_credits_cd_control_b(CPUState *c) {
+    return cd_control(c, CD_CONTROL_BLOCKING);
 }
 
 bool nc_credits_cd_command_name(CPUState *c) {
