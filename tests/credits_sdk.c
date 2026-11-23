@@ -1,3 +1,4 @@
+#include "cd_sector_dma.h"
 #include "cd_read.h"
 #include "cd_read_sync.h"
 #include "vsync.h"
@@ -2761,13 +2762,6 @@ static bool check_critical_sections(void) {
     return true;
 }
 
-static void interrupt_start_state(StateIO *io) {
-    cpu_serialize(io);
-    timers_serialize(io);
-    dma_serialize(io);
-    irq_serialize(io);
-}
-
 static bool check_gpu_clear_rectangle(void) {
     const u32 rect = 0x80061000, packet = 0x80024cec, gp0 = 0x1f801810;
     const struct {
@@ -3162,60 +3156,6 @@ static bool check_interrupt_start(bool dma) {
         free(guest.buf);
     }
     free(initial.buf);
-    return ok;
-}
-
-static void cd_transfer_state(StateIO *io) {
-    interrupt_start_state(io);
-    cdrom_serialize(io);
-}
-
-static bool check_cd_get_sector(bool driver) {
-    const u32 entry = driver ? 0x80021a44 : 0x80020378;
-    bool (*routine)(CPUState *) = driver ? nc_credits_cd_sector_dma : nc_credits_cd_get_sector;
-    const int threshold = driver ? 3 * NC_INSN_CYCLES + NC_LOAD_CYCLES : 4;
-    const u32 dest = 0x80062000;
-    u8 sector[DISC_DATA_SECTOR];
-    if (!disc_read_data(16, sector))
-        return false;
-    StateIO saved = {0};
-    cd_transfer_state(&saved);
-    bool ok = !saved.error;
-    const unsigned counts[] = {1, DISC_DATA_SECTOR / 4};
-    for (unsigned i = 0; i < sizeof counts / sizeof counts[0] && ok; i++) {
-        StateIO native = {0}, guest = {0};
-        for (unsigned run = 0; run < 2 && ok; run++) {
-            /* Read the ISO volume descriptor at 00:02:16 (BCD), then let the SDK request its FIFO. */
-            cdrom_tick(0);
-            cdrom_write(0, 0);
-            cdrom_write(2, 0);
-            cdrom_write(2, 2);
-            cdrom_write(2, 0x16);
-            cdrom_write(1, 2); /* Setloc */
-            cdrom_write(1, 6); /* ReadN */
-            cdrom_tick(150000 + PSX_CPU_HZ / 75);
-            memset(nc_fast_ptr(dest - 1), 0xa5, sizeof sector + 2);
-            nc_cpu = arguments(dest, counts[i], 3, threshold);
-            if (!run && routine(&nc_cpu))
-                ok = false;
-            nc_cpu.budget = i ? threshold + 1 : 4096;
-            if (run)
-                interp_call(&nc_cpu, entry);
-            else
-                ok = routine(&nc_cpu) && ok;
-            ok = ok && nc_cpu.r[2] == (driver ? 0u : 1u) && !memcmp(nc_fast_ptr(dest), sector, 4 * counts[i]) &&
-                 MEM_R8(dest - 1) == 0xa5 && MEM_R8(dest + 4 * counts[i]) == 0xa5;
-            cd_transfer_state(run ? &guest : &native);
-            saved.loading = true;
-            saved.pos = 0;
-            cd_transfer_state(&saved);
-        }
-        ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
-             !memcmp(native.buf, guest.buf, guest.len);
-        free(native.buf);
-        free(guest.buf);
-    }
-    free(saved.buf);
     return ok;
 }
 
@@ -5822,8 +5762,8 @@ int main(int argc, char **argv) {
     pass = pass && check_clear_otag();
     pass = pass && check_clear_ot_dma();
     pass = pass && check_clear_otag_reverse();
-    pass = pass && check_cd_get_sector(false);
-    pass = pass && check_cd_get_sector(true);
+    pass = pass && compare_cd_sector_transfer(0x80020378, nc_credits_cd_get_sector, false);
+    pass = pass && compare_cd_sector_transfer(0x80021a44, nc_credits_cd_sector_dma, true);
     pass = pass && check_bios_a0_stub(0x80023364, 0x39, nc_credits_bios_init_heap);
     pass = pass && check_bios_a0_stub(0x8001ae30, 0x72, nc_credits_bios_96_remove);
     pass = pass && check_bios_write();

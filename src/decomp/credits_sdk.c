@@ -1,3 +1,4 @@
+#include "decomp/cd_sector_dma.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
 #include "decomp/vsync.h"
@@ -6978,12 +6979,6 @@ bool nc_credits_cd_mix(CPUState *c) {
     return call_cd_status_driver(c, 0x80021440, 0x80020364, CD_RETURN_ONE);
 }
 
-/* The SDK loads each CD or DMA register address through its pointer table. */
-static void load_cd_port(CPUState *c, unsigned reg, u32 slot) {
-    set_reg(c, reg, 0x80020000);
-    load_word(c, reg, slot);
-}
-
 static bool cd_irq_pending(CPUState *c, bool first_read) {
     load_cd_port(c, 2, 0x80024a2c);
     NC_POLL(c, 1);
@@ -7137,86 +7132,8 @@ bool nc_credits_initialize_cd_driver(CPUState *c) {
     return true;
 }
 
-/* Request the CD data FIFO, then transfer the requested words through DMA 3. */
 bool nc_credits_cd_sector_dma(CPUState *c) {
-    if (c->budget <= 3 * NC_INSN_CYCLES + NC_LOAD_CYCLES)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x80024a20);
-    R(6) = 0x20000;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W8(R(2), 0); /* CD register bank zero */
-    c->budget--;
-    load_cd_port(c, 3, 0x80024a2c);
-    set_reg(c, 2, 0x80);
-    MEM_W8(R(3), (u8)R(2)); /* request sector data */
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_cd_port(c, 2, 0x80024a54);
-    set_reg(c, 6, R(6) | 0x943);
-    MEM_W32(R(2), R(6));
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_cd_port(c, 3, 0x80024a30);
-    set_reg(c, 2, 0x1323);
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-
-    load_cd_port(c, 3, 0x80024a58);
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_word(c, 2, R(3));
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 2, R(2) | 0x8000); /* enable DMA channel 3 */
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_cd_port(c, 2, 0x80024a5c);
-    NC_POLL(c, NC_INSN_CYCLES);
-    MEM_W32(R(2), R(4)); /* destination */
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 2, 0x10000);
-    load_cd_port(c, 3, 0x80024a60);
-    set_reg(c, 5, R(5) | R(2)); /* one block */
-    MEM_W32(R(3), R(5));
-    NC_POLL(c, NC_INSN_CYCLES);
-
-    load_cd_port(c, 3, 0x80024a20);
-    bool ready;
-    do {
-        NC_POLL(c, NC_INSN_CYCLES);
-        R(2) = MEM_R8(R(3));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        NC_POLL(c, NC_INSN_CYCLES);
-        set_reg(c, 2, R(2) & 0x40);
-        ready = R(2) != 0;
-        R(2) = 0x11000000;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    } while (!ready);
-    load_cd_port(c, 3, 0x80024a64);
-    NC_POLL(c, NC_INSN_CYCLES);
-    MEM_W32(R(3), R(2)); /* trigger transfer */
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_cd_port(c, 4, 0x80024a64);
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_word(c, 2, R(4));
-    set_reg(c, 3, 1u << 24);
-    set_reg(c, 2, R(2) & R(3));
-    bool busy = R(2) != 0;
-    R(3) = R(4);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    if (busy)
-        set_reg(c, 4, 1u << 24);
-    while (busy) {
-        load_word(c, 2, R(3));
-        NC_POLL(c, NC_INSN_CYCLES);
-        set_reg(c, 2, R(2) & R(4));
-        busy = R(2) != 0;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    }
-    load_cd_port(c, 3, 0x80024a30);
-    set_reg(c, 2, 0x1325);
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, NC_INSN_CYCLES);
-    R(2) = 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
+    return cd_sector_dma(c, 0x80024a20);
 }
 
 /* Read the requested number of words and convert the driver's zero result to success. */
