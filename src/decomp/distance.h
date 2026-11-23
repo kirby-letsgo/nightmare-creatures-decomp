@@ -69,6 +69,8 @@ bool nc_advance_projection_pose(CPUState *c);
 bool nc_advance_placement_pose(CPUState *c);
 bool nc_select_projection_packet_mode(CPUState *c);
 bool nc_call_projection_textured_faces(CPUState *c, bool quad);
+bool nc_check_untextured_projection_mode(CPUState *c);
+bool nc_call_projection_untextured_faces(CPUState *c, bool quad);
 bool nc_return_projection_traversal(CPUState *c);
 bool nc_return_linked_pose_traversal(CPUState *c);
 bool nc_return_placement_projection(CPUState *c);

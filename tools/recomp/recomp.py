@@ -894,6 +894,7 @@ class Emitter:
         if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
             targets.add(f.addr + 0x50)
         if self.mod.name == "psx2_exe" and f.addr == 0x80028004:
+            targets.add(0x800282C0)
             targets.update((0x8002817C, 0x800281E0, 0x80028214, 0x80028280, 0x80028298, 0x8002830C))
         if self.mod.name == "psx2_exe" and f.addr == 0x80028340:
             targets.update((0x80028388, 0x80028630, 0x80028688, 0x8002897C, 0x800289CC))
@@ -2236,6 +2237,17 @@ class Emitter:
                 out.append(f"    if (nc_call_projection_textured_faces(c, {str(quad).lower()})) {{")
                 out.append(f"        {self.call(0x80027954 if quad else 0x8002755C)}")
                 out.append(f"        goto L_{0x80028298 if quad else 0x80028280:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80028298:
+                out.append("    if (nc_check_untextured_projection_mode(c)) {")
+                out.append("        if (!R(16) || R(16) == R(2)) goto L_800282A8;")
+                out.append("        goto L_800282D8; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800282A8, 0x800282C0):
+                quad = i.addr == 0x800282C0
+                out.append(
+                    f"    if (nc_call_projection_untextured_faces(c, {str(quad).lower()})) {{"
+                )
+                out.append(f"        {self.call(0x80027B90 if quad else 0x80027764)}")
+                out.append(f"        goto L_{0x800282D8 if quad else 0x800282C0:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028214:
                 out.append("    if (nc_select_projection_packet_mode(c)) goto L_8002826C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002830C:
