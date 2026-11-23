@@ -1079,6 +1079,120 @@ bool nc_credits_set_queue_alarm(CPUState *c) {
     return true;
 }
 
+/* The alarm code addresses its globals through the same upper halfword. */
+static void load_alarm_word(CPUState *c, unsigned reg, u32 address) {
+    set_reg(c, reg, 0x80020000);
+    load_word(c, reg, address);
+}
+
+static void store_alarm_word(CPUState *c, u32 address, unsigned reg) {
+    set_reg(c, 1, 0x80020000);
+    MEM_W32(address, R(reg));
+    NC_POLL(c, 1);
+}
+
+static void report_gpu_timeout(CPUState *c) {
+    load_alarm_word(c, 3, 0x8002462c);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80018660);
+    load_word(c, 2, R(3)); /* GPUSTAT is read twice by the original. */
+    load_alarm_word(c, 5, 0x8002465c);
+    load_alarm_word(c, 2, 0x80024630);
+    load_alarm_word(c, 8, 0x80024660);
+    load_word(c, 2, R(2)); /* DMA2 address is the fifth printf argument */
+    set_reg(c, 5, R(5) - R(8));
+    MEM_W32(R(29) + 16, R(2));
+    NC_POLL(c, 1);
+    load_alarm_word(c, 2, 0x80024638);
+    load_word(c, 6, R(3));
+    load_word(c, 7, R(2));
+    R(31) = 0x8001ead0;
+    R(5) &= 63;
+    NC_POLL(c, 2);
+    nc_call(c, 0x80019a60);
+
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x8002464c);
+    load_word(c, 5, R(2));
+    load_alarm_word(c, 6, 0x80024650);
+    load_alarm_word(c, 7, 0x80024654);
+    set_reg(c, 4, 0x80020000);
+    set_reg(c, 4, 0x80018694);
+    gpu_sync_call(c, 0x80019a60, 0x8001eafc);
+}
+
+static void recover_gpu_queue(CPUState *c) {
+    R(31) = 0x8001eb04;
+    R(4) = 0;
+    NC_POLL(c, 2);
+    nc_call(c, 0x8001a814); /* SetIntrMask(0) */
+    store_alarm_word(c, 0x80024660, 0);
+    load_alarm_word(c, 3, 0x80024660);
+    store_alarm_word(c, 0x8002466c, 2);
+    store_alarm_word(c, 0x8002465c, 3);
+
+    load_alarm_word(c, 3, 0x80024638);
+    set_reg(c, 2, 0x401);
+    MEM_W32(R(3), R(2)); /* stop DMA2 */
+    NC_POLL(c, 1);
+    load_alarm_word(c, 3, 0x80024648);
+    NC_POLL(c, 1);
+    load_word(c, 2, R(3));
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) | 0x800);
+    MEM_W32(R(3), R(2)); /* enable DMA2 in DPCR */
+    NC_POLL(c, 1);
+    /* Acknowledge the GPU interrupt, then reset its command buffer. */
+    for (unsigned command = 2; command > 0; command--) {
+        load_alarm_word(c, 3, 0x8002462c);
+        set_reg(c, 2, command << 24);
+        MEM_W32(R(3), R(2));
+        NC_POLL(c, 1);
+    }
+    load_alarm_word(c, 4, 0x8002466c);
+    gpu_sync_call(c, 0x8001a814, 0x8001eb80);
+    R(2) = UINT32_MAX;
+    NC_POLL(c, 2);
+}
+
+bool nc_credits_check_queue_alarm(CPUState *c) {
+    if (c->budget <= 4)
+        return false;
+    R(29) -= 32;
+    c->budget--;
+    MEM_W32(R(29) + 24, R(31));
+    R(31) = 0x8001ea40;
+    R(4) = UINT32_MAX;
+    c->budget -= 3;
+    nc_call(c, 0x8001a454); /* VSync(-1) */
+
+    load_alarm_word(c, 3, 0x80024670);
+    NC_POLL(c, 1);
+    set_reg(c, 3, (s32)R(3) < (s32)R(2));
+    bool expired = R(3) != 0;
+    NC_POLL(c, 2);
+    if (!expired) {
+        load_alarm_word(c, 3, 0x80024674);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(3) + 1);
+        store_alarm_word(c, 0x80024674, 2);
+        set_reg(c, 2, 0xf0000);
+        set_reg(c, 2, (s32)R(2) < (s32)R(3));
+        expired = R(2) != 0;
+        NC_POLL(c, 2);
+    }
+    if (expired) {
+        report_gpu_timeout(c);
+        recover_gpu_queue(c);
+    } else {
+        set_reg(c, 2, 0);
+    }
+    load_word(c, 31, R(29) + 24);
+    set_reg(c, 29, R(29) + 32);
+    NC_POLL(c, 2);
+    return true;
+}
+
 bool nc_credits_queue_command(CPUState *c) {
     if (c->budget <= 5)
         return false;
