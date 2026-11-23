@@ -29,6 +29,7 @@ bool nc_call_placement_angle_update(CPUState *c);
 bool nc_store_placement_angle_result(CPUState *c);
 bool nc_call_placement_part_traversal(CPUState *c);
 bool nc_place_record_pose(CPUState *c);
+bool nc_select_placement_projection_args(CPUState *c);
 bool nc_begin_placement_angle_update(CPUState *c);
 bool nc_set_type7_pose_angles(CPUState *c);
 bool nc_set_type7_linked_heading(CPUState *c);
