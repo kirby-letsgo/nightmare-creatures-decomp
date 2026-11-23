@@ -3131,6 +3131,11 @@ class Emitter:
                 out.append("        goto L_8002A560; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x800297FC:
                 out.append("    if (nc_load_placement_selector_target(c)) goto L_80029810;")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029818:
+                out.append("    switch (nc_begin_placement_link_scan(c)) {")
+                out.append("    case 0x8002a564: goto L_8002A564;")
+                out.append("    case 0x80029918: goto L_80029918;")
+                out.append("    case 0x80029854: goto L_80029854; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002A5D4:
                 out.append("    if (nc_return_placement_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029D18, 0x80029E4C):

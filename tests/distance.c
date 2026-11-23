@@ -4972,6 +4972,41 @@ static bool placement_selector_targets(bool disc) {
     return true;
 }
 
+static bool placement_link_scan_entries(bool disc) {
+    const struct {
+        u32 flags, count, next;
+        int cycles;
+    } cases[] = {{0xffffffbf, 3, 0x8002a564, 7}, {0x40, 0, 0x80029918, 13},
+                 {0x40, 1, 0x80029854, 21}, {0xffffffff, 0xffff, 0x80029854, 21}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[19] = 33;
+        input.r[31] = cases[i].next;
+        MEM_W32(SCRATCH_BASE + 0x2c, cases[i].flags);
+        MEM_W16(SCRATCH_BASE + 0x38, cases[i].count);
+        input.budget = 21;
+        CPUState native = input;
+        if (nc_begin_placement_link_scan(&native) || memcmp(&input, &native, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_begin_placement_link_scan(&native) != cases[i].next ||
+            native.budget != input.budget - cases[i].cycles ||
+            native.r[2] != ((cases[i].flags & 0x40) ? cases[i].count : input.r[19] - 40))
+            return false;
+        if (cases[i].next == 0x80029854 &&
+            (native.r[4] != SCRATCH_BASE || native.r[5] || native.r[6] != cases[i].count ||
+             native.r[7] != MEM_R32(0x8008f0c8)))
+            return false;
+        if (disc) {
+            interp_call(&input, 0x80029818);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_dispatch_frames(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const u32 selectors[] = {0, 1, 100, 101, UINT32_MAX};
@@ -9163,7 +9198,8 @@ int main(int argc, char **argv) {
         alternate_placement_counters(disc) && alternate_placement_updates(disc) &&
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
-        placement_dispatch_frames(disc) && placement_selector_targets(disc) && placement_step_returns(disc) &&
+        placement_dispatch_frames(disc) && placement_selector_targets(disc) &&
+        placement_link_scan_entries(disc) && placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&

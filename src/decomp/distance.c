@@ -5389,6 +5389,28 @@ bool nc_load_placement_selector_target(CPUState *c) {
     return true;
 }
 
+u32 nc_begin_placement_link_scan(CPUState *c) {
+    /* Reserve the longest path before reading the record. */
+    if (c->budget <= 21)
+        return 0;
+    if (!(MEM_R32(R(16) + 0x2c) & 0x40)) {
+        R(2) = R(19) - 40;
+        c->budget -= 7;
+        return 0x8002a564;
+    }
+    R(2) = MEM_R16(R(16) + 0x38);
+    if (!R(2)) {
+        c->budget -= 13;
+        return 0x80029918;
+    }
+    R(5) = 0;
+    R(7) = MEM_R32(0x8008f0c8);
+    R(6) = R(2);
+    R(4) = R(16);
+    c->budget -= 21;
+    return 0x80029854;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
