@@ -4056,9 +4056,27 @@ bool nc_save_linked_placement_pose(CPUState *c) {
     return true;
 }
 
+/* The projection traversal keeps a cursor into its stack of deferred poses. */
+bool nc_push_projection_pose(CPUState *c) {
+    if (c->budget <= 6)
+        return false;
+    const u32 linked = MEM_R32(R(18) + 0xc);
+    const int cycles = linked ? 9 : 6;
+    if (c->budget <= cycles)
+        return false;
+    R(2) = linked;
+    if (linked) {
+        MEM_W32(R(20), linked);
+        R(20) += 4;
+        ++R(22);
+    }
+    c->budget -= cycles;
+    return true;
+}
+
 /* Follow the direct link first. When it is null, the second branch uses
  * the old pending count and decrements it in the delay slot on both exits. */
-bool nc_advance_placement_pose(CPUState *c) {
+static bool advance_pose_link(CPUState *c, unsigned pending_reg) {
     if (c->budget <= 6)
         return false;
     const u32 next_pose = MEM_R32(R(18) + 4);
@@ -4067,9 +4085,17 @@ bool nc_advance_placement_pose(CPUState *c) {
         return false;
     R(18) = next_pose;
     if (!next_pose)
-        R(19)--;
+        R(pending_reg)--;
     c->budget -= cycles;
     return true;
+}
+
+bool nc_advance_placement_pose(CPUState *c) {
+    return advance_pose_link(c, 19);
+}
+
+bool nc_advance_projection_pose(CPUState *c) {
+    return advance_pose_link(c, 22);
 }
 
 /* The traversal at 0x80028C58 saves s0 through s4 and ra in a 0x180-byte frame. */
