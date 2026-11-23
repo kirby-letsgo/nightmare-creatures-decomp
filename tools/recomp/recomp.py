@@ -998,6 +998,9 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr in (0x80044674, 0x800446C4, 0x800446D4):
+                record_buttons = "true" if i.addr == 0x800446C4 else "false"
+                out.append(f"    if (nc_leave_player_r2(c, {record_buttons})) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044724:
                 out.extend(
                     [

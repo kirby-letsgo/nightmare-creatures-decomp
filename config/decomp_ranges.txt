@@ -447,6 +447,9 @@ psx2_exe     800445AC    800445DC         pad.c
 psx2_exe     800445DC    8004460C         pad.c
 # R2 press check and direction-repeat reset before the action check.
 psx2_exe     8004460C    8004463C         pad.c
+# R2 handler returns, including the accepted action's masked button store.
+psx2_exe     80044674    8004468C         pad.c
+psx2_exe     800446C4    800446EC         pad.c
 # Player-control input gate, source selection, button store and shared return.
 psx2_exe     80044724    80044754         pad.c
 psx2_exe     80044754    800447B8         pad.c
