@@ -1,3 +1,4 @@
+#include "decomp/cd_init.h"
 #include "decomp/cd_state.h"
 #include "decomp/interrupt_control.h"
 #include "decomp/launcher.h"
@@ -299,4 +300,15 @@ bool nc_launcher_clear_irq_words(CPUState *c) {
 
 bool nc_launcher_cd_init_interrupt(CPUState *c) {
     return cd_init_interrupt(c, 0x80015818, 0x80013840, 0x80010a50, 0x80010a80, 0x80013cf8);
+}
+
+bool nc_launcher_cd_init(CPUState *c) {
+    static const CdInitLayout layout = {
+        .entry = 0x80011e7c, .reset = 0x80011fd4,
+        .sync_handler = 0x80011f0c, .set_sync = 0x80012120,
+        .ready_handler = 0x80011f34, .set_ready = 0x80012138,
+        .read_handler = 0x80011f5c, .set_read = 0x800145dc,
+        .message = 0x8001034c, .print = 0x80011160,
+    };
+    return cd_init(c, &layout);
 }

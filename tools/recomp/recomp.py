@@ -1309,6 +1309,8 @@ class Emitter:
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
                 address = LAUNCHER_CD_STATE_BYTES[i.addr]
                 out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80011E7C:
+                out.append("    if (nc_launcher_cd_init(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011FD4:
                 out.append("    if (cd_reset(c, 0x80011fd4, 0x80013840, 0x80013890, 0x8001374c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011FC4:
