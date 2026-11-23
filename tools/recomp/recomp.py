@@ -27,10 +27,12 @@ from gen_splat import DISC, HEADER_SIZE  # noqa: E402
 FUNCS_PER_FILE = 120
 LAUNCHER = "slus_005_82"
 LAUNCHER_CD_DRIVERS = {
-    0x80012040: 0x8001366C,  # CdFlush
-    0x800120E0: 0x80012C80,  # CdSync
-    0x80012100: 0x80012F00,  # CdReady
-    0x80012564: 0x80013A7C,  # CdDataSync
+    0x80012040: (0x8001366C, "CD_RETURN_STATUS"),  # CdFlush
+    0x800120E0: (0x80012C80, "CD_RETURN_STATUS"),  # CdSync
+    0x80012100: (0x80012F00, "CD_RETURN_STATUS"),  # CdReady
+    0x800124F8: (0x800135E4, "CD_RETURN_ONE"),  # CdMix
+    0x8001251C: (0x80013BE8, "CD_ZERO_IS_SUCCESS"),  # CdGetSector
+    0x80012564: (0x80013A7C, "CD_RETURN_STATUS"),  # CdDataSync
 }
 LAUNCHER_CD_STATE_BYTES = {
     0x80011F94: 0x80015828,  # CdStatus
@@ -1252,8 +1254,8 @@ class Emitter:
                 spec = 0x20 if i.addr == 0x80011F0C else 0x40
                 out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_DRIVERS:
-                driver = LAUNCHER_CD_DRIVERS[i.addr]
-                out.append(f"    if (call_cd_status_driver(c, 0x{driver:x}, 0x{i.addr + 16:x})) return;")
+                driver, result = LAUNCHER_CD_DRIVERS[i.addr]
+                out.append(f"    if (call_cd_status_driver(c, 0x{driver:x}, 0x{i.addr + 16:x}, {result})) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
                 address = LAUNCHER_CD_STATE_BYTES[i.addr]
                 out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")

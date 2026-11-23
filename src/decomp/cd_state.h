@@ -74,8 +74,11 @@ static inline bool cd_default_event(CPUState *c, u32 spec, u32 resume, u32 deliv
     return true;
 }
 
-/* Forward the caller's arguments and return the CD driver status. */
-static inline bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc) {
+enum CdDriverResult { CD_RETURN_STATUS, CD_RETURN_ONE, CD_ZERO_IS_SUCCESS };
+
+/* Forward the arguments, then apply the SDK wrapper's return convention. */
+static inline bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc,
+                                         enum CdDriverResult result) {
     if (c->budget <= 4)
         return false;
     R(29) -= 24;
@@ -84,6 +87,10 @@ static inline bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc)
     R(31) = return_pc;
     c->budget -= 3;
     nc_call(c, driver);
+    if (result != CD_RETURN_STATUS) {
+        R(2) = result == CD_RETURN_ONE || R(2) == 0;
+        NC_POLL(c, 1);
+    }
     R(31) = MEM_R32(R(29) + 16);
     NC_POLL(c, NC_LOAD_CYCLES);
     R(29) += 24;

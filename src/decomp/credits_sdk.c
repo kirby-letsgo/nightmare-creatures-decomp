@@ -7365,19 +7365,7 @@ bool nc_credits_cd_init_volume(CPUState *c) {
 }
 
 bool nc_credits_cd_mix(CPUState *c) {
-    if (c->budget <= 4)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(31));
-    R(31) = 0x80020364;
-    c->budget -= 3;
-    nc_call(c, 0x80021440);
-    set_reg(c, 2, 1);
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return call_cd_status_driver(c, 0x80021440, 0x80020364, CD_RETURN_ONE);
 }
 
 /* The SDK loads each CD or DMA register address through its pointer table. */
@@ -7623,19 +7611,7 @@ bool nc_credits_cd_sector_dma(CPUState *c) {
 
 /* Read the requested number of words and convert the driver's zero result to success. */
 bool nc_credits_cd_get_sector(CPUState *c) {
-    if (c->budget <= 4)
-        return false;
-    R(29) -= 24;
-    c->budget--;
-    MEM_W32(R(29) + 16, R(31));
-    R(31) = 0x80020388;
-    c->budget -= 3;
-    nc_call(c, 0x80021a44); /* CD_getsector */
-    set_reg(c, 2, R(2) == 0);
-    load_word(c, 31, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return call_cd_status_driver(c, 0x80021a44, 0x80020388, CD_ZERO_IS_SUCCESS);
 }
 
 /* Register the CD data handler on DMA channel 3 and return its predecessor. */
@@ -7657,15 +7633,15 @@ bool nc_credits_cd_data_callback(CPUState *c) {
 }
 
 bool nc_credits_cd_sync(CPUState *c) {
-    return call_cd_status_driver(c, 0x80020adc, 0x8001ff4c);
+    return call_cd_status_driver(c, 0x80020adc, 0x8001ff4c, CD_RETURN_STATUS);
 }
 
 bool nc_credits_cd_ready(CPUState *c) {
-    return call_cd_status_driver(c, 0x80020d5c, 0x8001ff6c);
+    return call_cd_status_driver(c, 0x80020d5c, 0x8001ff6c, CD_RETURN_STATUS);
 }
 
 bool nc_credits_cd_data_sync(CPUState *c) {
-    return call_cd_status_driver(c, 0x800218d8, 0x800203d0);
+    return call_cd_status_driver(c, 0x800218d8, 0x800203d0, CD_RETURN_STATUS);
 }
 
 /* Load a CD port pointer from the guest table, including the load delay nop. */
@@ -9414,7 +9390,7 @@ bool nc_credits_cd_reset(CPUState *c) {
 }
 
 bool nc_credits_cd_flush(CPUState *c) {
-    return call_cd_status_driver(c, 0x800214c8, 0x8001feac);
+    return call_cd_status_driver(c, 0x800214c8, 0x8001feac, CD_RETURN_STATUS);
 }
 
 bool nc_credits_cd_status(CPUState *c) {
