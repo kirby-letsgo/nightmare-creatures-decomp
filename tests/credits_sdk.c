@@ -2897,6 +2897,93 @@ static bool check_cd_dma_wait(void) {
     return ok && !saved.error;
 }
 
+static bool check_sector_ready_callback(void) {
+    const u32 buffer = 0x80061000, trace = 0x80062000, notify = trace + 64;
+    const struct {
+        u32 event, count, words, expected_sector, first_frame, retry_count;
+        bool notify;
+    } cases[] = {
+        {0x101, 2, 512, 75, 10, 0, true}, /* matching header, more data */
+        {1, 1, 512, 75, 10, 0, true},      /* last sector */
+        {1, 3, 512, 76, 10, 4, true},      /* mismatch, retry succeeds */
+        {5, 2, 512, 75, 1201, 2, true},    /* disk error, deadline exceeded */
+        {1, 0, 512, 75, 10, 0, false},     /* already complete */
+        {1, 2, 585, 75, 1199, 0, true},    /* deadline crosses on second check */
+        {1, UINT32_MAX, 585, 75, 12, 0, true},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    MEM_W32(0x80020378, 0xad050000); /* CdGetSector records size and writes BCD position */
+    MEM_W32(0x8002037c, 0x25080004);
+    MEM_W32(0x80020380, 0x03e00008);
+    MEM_W32(0x80020384, 0xac890000);
+    MEM_W32(0x8001a454, 0x01401021); /* VSync returns successive frames from t2 */
+    MEM_W32(0x8001a458, 0x03e00008);
+    MEM_W32(0x8001a45c, 0x254a0001);
+    MEM_W32(0x80022908, 0x8d620000); /* retry records old count and installs t4 */
+    MEM_W32(0x8002290c, 0);
+    MEM_W32(0x80022910, 0xada20000);
+    MEM_W32(0x80022914, 0x03e00008);
+    MEM_W32(0x80022918, 0xad6c0000);
+    MEM_W32(0x8001a638, 0x03e00008); /* puts */
+    MEM_W32(0x8001a63c, 0xada40004);
+    MEM_W32(0x8001ffac, 0x03e00008); /* CdControl */
+    MEM_W32(0x8001ffb0, 0xada40008);
+    MEM_W32(notify, 0xada4000c);
+    MEM_W32(notify + 4, 0x03e00008);
+    MEM_W32(notify + 8, 0xada50010);
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(trace), 0, 48);
+        MEM_W32(0x80024a70, cases[i].notify ? notify : 0);
+        MEM_W32(0x80024a7c, buffer);
+        MEM_W32(0x80024a84, cases[i].words);
+        MEM_W32(0x80024a88, cases[i].count);
+        MEM_W32(0x80024a90, 0);
+        MEM_W32(0x80024a94, cases[i].expected_sector);
+        MEM_W32(0x80024a98, 0x8001935c);
+        MEM_W32(0x80024a9c, 0x800198ec);
+        MEM_W32(0x8002475c, 0);
+        MEM_W32(0x80024760, 0x800226e4);
+        CPUState state = arguments(cases[i].event, buffer + 0x100, 3, i & 1 ? 9 : 4096);
+        state.r[8] = trace;
+        state.r[9] = 0x300;
+        state.r[10] = cases[i].first_frame;
+        state.r[11] = 0x80024a88;
+        state.r[12] = cases[i].retry_count;
+        state.r[13] = trace + 16;
+        bool collect = (cases[i].event & 255) == 1 && (s32)cases[i].count > 0;
+        bool header = collect && cases[i].words == 512;
+        bool mismatch = header && cases[i].expected_sector != 75;
+        ok = compare(state, 0x800226e4, nc_credits_handle_cd_read, 8) &&
+             MEM_R32(0x80024a8c) == cases[i].first_frame &&
+             MEM_R32(0x80024a94) == cases[i].expected_sector + collect &&
+             MEM_R32(0x80024a7c) == buffer + (collect ? 4 * cases[i].words : 0) &&
+             nc_cpu.r[8] == trace + 4 * (collect + header) &&
+             MEM_R32(trace + 20) == (mismatch ? 0x80018b90u : 0);
+        if (collect)
+            ok = ok && MEM_R32(trace + 4 * header) == cases[i].words &&
+                 (!header || MEM_R32(trace) == 3) && MEM_R32(buffer) == 0x300;
+        if (mismatch)
+            ok = ok && MEM_R32(trace + 16) == UINT32_MAX - 1;
+        const u32 remaining[] = {1, 0, 4, UINT32_MAX, 0, 1, 0};
+        bool finished = i != 0 && i != 2;
+        ok = ok && MEM_R32(0x80024a88) == remaining[i] &&
+             MEM_R32(trace + 24) == (finished ? 9 : 0) &&
+             MEM_R32(0x80024760) == (finished ? 0x800198ecu : 0x800226e4u);
+        if (finished && cases[i].notify)
+            ok = ok && MEM_R32(trace + 28) == (remaining[i] ? 5 : 2) &&
+                 MEM_R32(trace + 32) == state.r[5];
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool check_cd_read_retry(void) {
     const u32 trace = 0x80061000, control = 0x8001ffac, fast = 0x800200e4;
     const struct {
@@ -4543,6 +4630,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_ready();
     pass = pass && check_cd_data_sync();
     pass = pass && check_cd_read_retry();
+    pass = pass && check_sector_ready_callback();
     pass = pass && check_cd_dma_wait();
     pass = pass && check_dma_slot();
     pass = pass && check_dma_interrupt_dispatch();
