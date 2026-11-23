@@ -992,6 +992,8 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x800448F4:
+                out.append("    if (nc_clear_player_buttons(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042D9C:
                 out.extend(
                     [

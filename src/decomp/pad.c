@@ -114,6 +114,16 @@ bool nc_check_player_button_suppression(CPUState *c) {
     return true;
 }
 
+/* Shared by the suppression check and the later player-control branches.
+ * The jump clears the complete button word in its delay slot. */
+bool nc_clear_player_buttons(CPUState *c) {
+    if (c->budget <= 2)
+        return false;
+    R(17) = 0;
+    c->budget -= 2;
+    return true;
+}
+
 /* The L2 branch records left/right press edges. Holding both gives left
  * priority, even when left was already down. Bit 1 marks an active sequence.
  * Bit 2 and the adjacent halfword track direction and repeat count. */
