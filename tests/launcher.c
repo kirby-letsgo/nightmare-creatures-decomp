@@ -8,6 +8,7 @@
 #include "decomp/cd_position.h"
 #include "decomp/bios_service.h"
 #include "decomp/launcher.h"
+#include "decomp/sdk_printf.h"
 #include "decomp/interrupt_driver.h"
 #include "port/bios.h"
 #include "port/disc.h"
@@ -66,6 +67,26 @@ static bool run_constructors(CPUState *c) {
 
 static bool run_destructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, false);
+}
+
+static bool launcher_printf(CPUState *c) {
+    return sdk_printf(c, 0x8001119c, 0x8001118c);
+}
+
+static bool check_printf(void) {
+    const u32 format = 0x80060000, count = format + 32;
+    strcpy((char *)nc_fast_ptr(format), "%d%x%c%n");
+    const int budgets[] = {12, 4096};
+    for (unsigned i = 0; i < sizeof budgets / sizeof budgets[0]; i++) {
+        CPUState state = arguments(format, (u32)-12, 0xcafe, budgets[i]);
+        state.r[7] = 'A';
+        MEM_W32(state.r[29] + 16, count); /* fourth variadic argument */
+        MEM_W32(count, UINT32_MAX);
+        if (!compare(state, 0x80011160, launcher_printf, 11) ||
+            MEM_R32(count) != 8 || nc_cpu.r[2] != 8)
+            return false;
+    }
+    return true;
 }
 
 static bool launcher_toupper(CPUState *c) {
@@ -974,6 +995,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_printf()) {
+        fprintf(stderr, "launcher printf failed\n");
         return 1;
     }
     if (!check_case_conversion()) {
