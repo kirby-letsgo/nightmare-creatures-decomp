@@ -332,6 +332,37 @@ static bool check_irq_word_clear(void) {
     return true;
 }
 
+static bool enter_critical(CPUState *c) {
+    return critical_section_syscall(c, 1);
+}
+
+static bool exit_critical(CPUState *c) {
+    return critical_section_syscall(c, 2);
+}
+
+static bool check_critical_sections(void) {
+    const u32 enable = 0x401;
+    const u32 flags[] = {0, 1, 0x400, enable};
+    for (unsigned enter = 0; enter < 2; enter++) {
+        for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; i++) {
+            CPUState start = {0};
+            start.r[2] = 0x12345678;
+            start.r[4] = 0x76543210;
+            start.r[29] = 0x801ffe00;
+            start.r[31] = 0x80010000;
+            start.cop0[12] = 0x00408000 | flags[i];
+            start.budget = i & 1 ? 5 : 4096;
+            u32 status = enter ? start.cop0[12] & ~enable : start.cop0[12] | enable;
+            if (!compare(start, enter ? 0x80010a30 : 0x80011a6c,
+                         enter ? enter_critical : exit_critical, 4) ||
+                nc_cpu.cop0[12] != status || nc_cpu.r[4] != (enter ? 1u : 2u) ||
+                nc_cpu.r[2] != (enter ? (u32)(flags[i] == enable) : start.r[2]))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool check_handoff(unsigned selection, bool missing) {
     const u32 trace = 0x80016200, shared = trace + 128, args = shared + 64;
     const u32 path_offsets[] = {0, 0x14, 0x2c, 0x40, 0x58, 0x70};
@@ -431,6 +462,10 @@ int main(int argc, char **argv) {
             }
     if (!check_irq_word_clear()) {
         fprintf(stderr, "launcher interrupt table clear failed\n");
+        return 1;
+    }
+    if (!check_critical_sections()) {
+        fprintf(stderr, "launcher critical sections failed\n");
         return 1;
     }
     for (unsigned selection = 0; selection < 6; selection++)

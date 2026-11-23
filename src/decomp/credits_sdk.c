@@ -6740,17 +6740,6 @@ bool nc_credits_restart_callback(CPUState *c) {
     return interrupt_driver_call(c, 0x800244a0, 24, 0x8001a7dc, false);
 }
 
-/* The credits interrupt driver selects the BIOS critical-section syscall in a0. */
-static bool critical_section_syscall(CPUState *c, u32 selector) {
-    if (c->budget <= 4)
-        return false;
-    R(4) = selector;
-    c->budget--;
-    nc_syscall(c);
-    c->budget -= 3;
-    return true;
-}
-
 bool nc_credits_enter_critical_section(CPUState *c) {
     return critical_section_syscall(c, 1);
 }
