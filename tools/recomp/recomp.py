@@ -1128,6 +1128,17 @@ class Emitter:
                         "    }",
                     ]
                 )
+            if self.mod.name == "psx2_exe" and i.addr == 0x80044924:
+                out.extend(
+                    [
+                        "    switch (nc_player_input_state_gate(c)) {",
+                        "    case 0x80044954: goto L_80044954;",
+                        "    case 0x800451D0: goto L_800451D0;",
+                        "    case 0x80044964: goto L_80044964;",
+                        "    case 0x800451D4: goto L_800451D4;",
+                        "    }",
+                    ]
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x800449A0:
                 out.extend(
                     [

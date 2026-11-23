@@ -66,6 +66,36 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* A nonzero incoming flag takes the action call. State 15 and the pair
+ * 32/33 take distinct exits, preserving the original delay-slot results. */
+u32 nc_player_input_state_gate(CPUState *c) {
+    if (c->budget <= 14)
+        return 0x80044924;
+
+    const bool flagged = R(2) != 0;
+    R(2) = 15;
+    c->budget -= 2;
+    if (flagged)
+        return 0x80044954;
+
+    R(4) = MEM_R8(R(16) + 0x38a);
+    R(3) = R(4);
+    R(2) = R(4) - 32u;
+    c->budget -= 7;
+    if (R(3) == 15)
+        return 0x800451d0;
+
+    const bool exit_with_actor = R(2) < 2;
+    R(2) = R(5) & 0x80;
+    c->budget -= 3;
+    if (!exit_with_actor)
+        return 0x80044964;
+
+    R(4) = R(16);
+    c->budget -= 2;
+    return 0x800451d4;
+}
+
 /* Actions 13, 14 and 24, and states 13 and 14, skip the next input
  * call. Otherwise flag 0x8000 selects the direct state check. */
 u32 nc_player_input_action_gate(CPUState *c) {
