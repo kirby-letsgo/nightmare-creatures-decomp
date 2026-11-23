@@ -5592,10 +5592,24 @@ bool nc_call_placement_step_update(CPUState *c) {
     return true;
 }
 
-bool nc_restore_placement_step_stack(CPUState *c) {
+/* The selector passes its record in a0 before reusing s0 to save the
+ * previous stack pointer returned by the first switch. */
+bool nc_call_flagged_placement_update(CPUState *c) {
+    if (c->budget <= 5)
+        return false;
+    R(4) = R(16);
+    R(5) = 1;
+    R(6) = 0;
+    R(31) = 0x8002a5cc;
+    R(16) = R(2);
+    c->budget -= 5;
+    return true;
+}
+
+bool nc_restore_placement_step_stack(CPUState *c, u32 return_pc) {
     if (c->budget <= 2)
         return false;
-    R(31) = 0x800297a4;
+    R(31) = return_pc;
     R(4) = R(16);
     c->budget -= 2;
     return true;
