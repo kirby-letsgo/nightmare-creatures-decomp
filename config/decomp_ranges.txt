@@ -292,6 +292,7 @@ credits_exe  8001FF3C    8001FF5C         credits_sdk.c
 credits_exe  8001FF5C    8001FF7C         credits_sdk.c
 credits_exe  8001FF7C    8001FF94         credits_sdk.c
 credits_exe  8001FF94    8001FFAC         credits_sdk.c
+credits_exe  800200E4    80020210         credits_sdk.c
 credits_exe  80020354    80020378         credits_sdk.c
 credits_exe  80020378    8002039C         credits_sdk.c
 credits_exe  8002039C    800203C0         credits_sdk.c
