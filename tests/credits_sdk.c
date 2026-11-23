@@ -883,6 +883,40 @@ static bool check_draw_sync_callback(void) {
     return true;
 }
 
+static bool check_set_graph_reverse(void) {
+    const u32 query = 0x80060c00, control = query + 16, output = control + 32;
+    const u32 driver = MEM_R32(0x80024550);
+    const int threshold = 11 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    MEM_W32(0x80024554, 0x8001935c);
+    MEM_W32(driver + 0x28, query);
+    MEM_W32(driver + 0x10, control);
+    MEM_W32(query, 0x03e00008);       /* jr ra */
+    MEM_W32(query + 4, 0x24820003);   /* addiu v0,a0,3 */
+    MEM_W32(control, 0xad040000);     /* sw a0,0(t0) */
+    MEM_W32(control + 4, 0x03e00008); /* jr ra */
+    MEM_W32(control + 8, 0x25080004); /* addiu t0,t0,4 */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < 8; i++) {
+        bool reverse = (i & 1) != 0, extra = (i & 2) != 0;
+        MEM_W8(0x8002455b, 0x7f);
+        MEM_W8(0x80024558, extra ? 2 : 1);
+        MEM_W8(0x8002455a, i & 4 ? 2 : 1);
+        MEM_W32(output + 4, 0);
+        CPUState state = arguments(reverse ? 0x180 : 0x100, 0, 0, i & 4 ? threshold + 1 : 4096);
+        state.r[8] = output;
+        ok = compare(state, 0x8001bf9c, nc_credits_set_graph_reverse, threshold) &&
+             nc_cpu.r[2] == 0x7f && MEM_R8(0x8002455b) == (u8)state.r[4] &&
+             MEM_R32(output) == (reverse ? 0x0800008b : 0x0800000b) &&
+             MEM_R32(output + 4) == (extra ? (reverse ? 0x20000501 : 0x20000504) : 0);
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    return ok && !saved.error;
+}
+
 static bool check_set_graph_queue(void) {
     const u32 mode = 0x80024559, diagnostic = 0x80060c00;
     const u32 requested[] = {1, 0, 0x101, 7};
@@ -3684,6 +3718,7 @@ int main(int argc, char **argv) {
     pass = pass && check_gpu_command_chain();
     pass = pass && check_gpu_parameter();
     pass = pass && check_display_x();
+    pass = pass && check_set_graph_reverse();
     pass = pass && check_set_graph_queue();
     pass = pass && check_set_graph_debug();
     pass = pass && check_display_mask();
