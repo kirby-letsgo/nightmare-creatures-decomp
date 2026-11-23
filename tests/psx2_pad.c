@@ -255,6 +255,33 @@ static bool cross_press(CPUState *cpu) {
     return nc_check_player_face_press(cpu, false);
 }
 
+static bool circle_triangle_destination(CPUState *cpu) {
+    const u32 destination = cpu->r[31];
+    return nc_player_circle_triangle_check(cpu) == destination;
+}
+
+static bool player_circle_triangle_checks(void) {
+    const struct {
+        u32 buttons, flags, previous, destination;
+    } cases[] = {
+        {0x30000000, 0x8000, 0x1000, 0x80045020}, {0x1040, 0, 0, 0x80045020},
+        {0x3040, 0x8000, 0, 0x8004500c},          {0x2000, 0, 0x18, 0x80044f04},
+        {0x3040, 0, 0x1001, 0x80044f04},          {0xffff3040, 0xffff7fff, 0x2000, 0x80044e74},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[16] = 0x80160000;
+        cpu.r[17] = cases[i].buttons;
+        cpu.r[31] = cases[i].destination;
+        cpu.budget = 30;
+        MEM_W32(cpu.r[16] + 0x2c8, cases[i].flags);
+        MEM_W32(cpu.r[16] + 0x2f8, cases[i].previous);
+        if (!compare(cpu, 0x80044e40, circle_triangle_destination, 29))
+            return false;
+    }
+    return true;
+}
+
 static bool direction_action_destination(CPUState *cpu) {
     return nc_player_direction_action_check(cpu) == cpu->r[31];
 }
@@ -3431,14 +3458,14 @@ int main(int argc, char **argv) {
         menu_face_inputs() && menu_start_down_inputs() && menu_up_inputs() && menu_right_inputs() &&
         menu_left_inputs() && menu_pad_type_flags() && menu_confirm_edges() && pad_inactivity() &&
         l2_direction_edges() && player_button_suppression() && l2_repeat_reset() &&
-        player_r2_press() && player_r2_returns() && player_direction_action_checks() &&
-        player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
-        player_down_paths() && player_down_face_buttons() && player_face_presses() &&
-        player_triangle_actions() && player_triangle_fallback() && player_trigger_calls() &&
-        player_button_presses() && player_exit_button_stores() && player_button_clear() &&
-        button_dispatch() && sdk_pad_patch() && pad_bios_services() && sdk_pad(34, 4) &&
-        sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() && sequences() &&
-        ports();
+        player_r2_press() && player_r2_returns() && player_circle_triangle_checks() &&
+        player_direction_action_checks() && player_up_stick_bounds() && player_up_actions() &&
+        player_down_shoulder_actions() && player_down_paths() && player_down_face_buttons() &&
+        player_face_presses() && player_triangle_actions() && player_triangle_fallback() &&
+        player_trigger_calls() && player_button_presses() && player_exit_button_stores() &&
+        player_button_clear() && button_dispatch() && sdk_pad_patch() && pad_bios_services() &&
+        sdk_pad(34, 4) && sdk_pad(3, 34) && sdk_pad(4, 0) && pad_driver() && packet_readers() &&
+        sequences() && ports();
     for (unsigned i = 0; ok && i < 16; ++i)
         ok = sequence_init(0x80 | (i & 3) << 4, (i & 4) != 0, (i & 8) != 0);
     for (unsigned i = 0; ok && i < 18; ++i) {

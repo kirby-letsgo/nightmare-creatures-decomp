@@ -24,6 +24,35 @@ bool nc_record_player_button_press(CPUState *c) {
     return true;
 }
 
+/* With Circle held and the actor flag clear, test Triangle against the
+ * previous button word. The final branch loads 0x13 on either outcome. */
+u32 nc_player_circle_triangle_check(CPUState *c) {
+    if (c->budget <= 29)
+        return 0x80044e40;
+
+    const u32 buttons = R(17);
+    R(2) = buttons & 0x40;
+    c->budget -= 3;
+    if (!(buttons & 0x2000))
+        return 0x80045020;
+
+    R(2) = MEM_R32(R(16) + 0x2c8) & 0x8000;
+    R(4) = R(16);
+    c->budget -= 7;
+    if (R(2))
+        return 0x8004500c;
+
+    R(5) = buttons;
+    R(31) = 0x80044e6c;
+    R(6) = 0x1000;
+    c->budget -= 3;
+    nc_record_player_button_press(c);
+    const bool pressed = R(2) != 0;
+    R(2) = 0x13;
+    c->budget -= 2;
+    return pressed ? 0x80044e74 : 0x80044f04;
+}
+
 /* The preceding Triangle check supplies 0x13 in v0. That action and
  * actions 0x11 and 0x12 go directly to the trigger handlers. */
 u32 nc_player_direction_action_check(CPUState *c) {
