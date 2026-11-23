@@ -217,6 +217,7 @@ bool nc_credits_clear_irq_words(CPUState *c);
 bool nc_credits_check_callback(CPUState *c);
 bool nc_credits_interrupt_mask(CPUState *c, bool write);
 bool nc_credits_cd_init_interrupt(CPUState *c);
+bool nc_credits_initialize_cd_driver(CPUState *c);
 bool nc_credits_cd_init_volume(CPUState *c);
 bool nc_credits_cd_volume(CPUState *c);
 bool nc_credits_cd_sector_dma(CPUState *c);
