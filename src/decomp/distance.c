@@ -5476,6 +5476,16 @@ u32 nc_route_placement_followup(CPUState *c) {
     return 0x80038a0c;
 }
 
+bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume) {
+    if (c->budget <= 3)
+        return false;
+    R(4) = R(16);
+    R(5) = mode;
+    R(31) = resume;
+    c->budget -= 3;
+    return true;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
@@ -5590,7 +5600,7 @@ u32 nc_route_placement_tick(CPUState *c, bool from_step) {
     return 0x800473e8;
 }
 
-bool nc_finish_placement_tick_call(CPUState *c) {
+bool nc_finish_placement_selector_call(CPUState *c) {
     if (c->budget <= 2)
         return false;
     R(2) = R(19) - 0x28;
