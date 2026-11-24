@@ -5494,6 +5494,24 @@ bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume) {
     return true;
 }
 
+u32 nc_clear_placement_step_flags(CPUState *c) {
+    const int cycles = R(2) ? 26 : 2;
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    R(5) = ~0x800u;
+    if (!R(2))
+        return 0x8002a560;
+    R(4) = MEM_R32(0x8008f0c8);
+    R(1) = R(4) + 0x10000;
+    const u32 first = MEM_R32(R(4) + 0xbb2c) & R(5);
+    R(3) = MEM_R32(R(4) + 0xbb08) & R(5);
+    MEM_W32(R(4) + 0xbb2c, first);
+    MEM_W32(R(4) + 0xbb08, R(3));
+    R(2) = R(19) - 40;
+    return 0x8002a564;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
