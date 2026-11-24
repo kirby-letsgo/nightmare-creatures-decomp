@@ -1,3 +1,4 @@
+#include "decomp/sdk_formatter.h"
 #include "decomp/cd_irq.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_interrupt_callback.h"
@@ -175,6 +176,15 @@ static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
         call_launcher_service(c, 0x80010b44, 0x80010760); /* StopCallback */
     }
     NC_POLL(c, 2);
+}
+
+bool nc_launcher_format_output(CPUState *c) {
+    static const PrintLayout layout = {
+        .entry = 0x8001119c, .lower_digits = 0x8001010c, .null_string = 0x80010120,
+        .upper_digits = 0x80010128, .conversions = 0x8001013c, .char_class = 0x800156bd,
+        .put_char = 0x800118d8, .find_byte = 0x80011888, .string_length = 0x8001198c,
+    };
+    return sdk_format_output(c, &layout);
 }
 
 /* The SDK indexes its character-class table with the low byte of the argument. */

@@ -354,6 +354,9 @@ psx2_exe     800478BC    800478C8         distance.c
 psx2_exe     800478D4    80047904         distance.c
 psx2_exe     80047908    80047914         distance.c
 psx2_exe     80047920    80047948         distance.c
+# The US launcher has 17 zero-word NOPs after Splat endlabels, beyond the
+# terminating jumps and their delay slots. Its 4,068 in-function instructions
+# are covered below. The inventory also counts those padding words.
 slus_005_82  80010618    8001078C         launcher.c
 slus_005_82  8001078C    80010850         launcher.c
 slus_005_82  80010850    800108F8         launcher.c
@@ -383,6 +386,7 @@ slus_005_82  80011000    800110AC         interrupt_control.h
 slus_005_82  800110AC    80011134         interrupt_control.h
 slus_005_82  80011134    80011160         interrupt_control.h
 slus_005_82  80011160    8001119C         sdk_printf.h
+slus_005_82  8001119C    80011828         sdk_formatter.h
 slus_005_82  80011828    80011858         launcher.c
 slus_005_82  80011858    80011888         launcher.c
 slus_005_82  80011888    800118D8         byte_scan.h
@@ -479,7 +483,7 @@ credits_exe  8001995C    80019988         credits_sdk.c
 credits_exe  80019A30    80019A60         credits_sdk.c
 credits_exe  80019988    80019A30         credits_sdk.c
 credits_exe  80019A60    80019A9C         credits_sdk.c
-credits_exe  80019A9C    8001A128         credits_sdk.c
+credits_exe  80019A9C    8001A128         sdk_formatter.h
 credits_exe  8001A128    8001A188         credits_sdk.c
 credits_exe  8001A188    8001A1D8         credits_sdk.c
 credits_exe  8001A1D8    8001A28C         credits_sdk.c
