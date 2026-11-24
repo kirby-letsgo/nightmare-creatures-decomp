@@ -1103,6 +1103,14 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher shared record failed\n");
         return 1;
     }
+    const CdDriverInitFixture driver_init = {
+        0x80013890, 0x80015adc, 0x80015818, 0x80013dd8, 0x80011160,
+        0x80010a50, 0x80010a80, 0x80013cf8, 0x800131cc, 0x80012c80,
+    };
+    if (!compare_cd_driver_init(&driver_init, nc_launcher_initialize_cd_driver)) {
+        fprintf(stderr, "launcher CD driver initialization failed\n");
+        return 1;
+    }
     const CdDmaWaitFixture dma_wait = {
         0x80013a7c, 0x80013e28, 0x80013dd8, 0x80011160, 0x8001366c,
         0x80015b20, 0x8001583c, 0x80015af4, 0x80015b98, 0x800105b0,
