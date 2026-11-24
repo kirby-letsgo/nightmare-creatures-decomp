@@ -28,6 +28,8 @@ bool nc_launcher_cd_control(CPUState *c);
 bool nc_launcher_cd_control_f(CPUState *c);
 bool nc_launcher_cd_control_b(CPUState *c);
 bool nc_launcher_cd_init(CPUState *c);
+bool nc_launcher_handle_cd_read(CPUState *c);
+bool nc_launcher_cd_read_retry(CPUState *c);
 bool nc_launcher_cd_read(CPUState *c);
 bool nc_launcher_cd_read_sync(CPUState *c);
 bool nc_launcher_cd_interrupt_callback(CPUState *c);

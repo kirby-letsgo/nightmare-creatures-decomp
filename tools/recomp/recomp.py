@@ -1318,6 +1318,10 @@ class Emitter:
                 out.append("    if (nc_launcher_cd_control_f(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800123B4:
                 out.append("    if (nc_launcher_cd_control_b(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x8001400C:
+                out.append("    if (nc_launcher_handle_cd_read(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80014230:
+                out.append("    if (nc_launcher_cd_read_retry(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80014408:
                 out.append("    if (nc_launcher_cd_read(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80014510:
