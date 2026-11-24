@@ -5545,6 +5545,26 @@ static void clear_placement_flag_words(CPUState *c, u32 first_offset, u32 second
     MEM_W32(base + fourth_offset, R(4));
 }
 
+bool nc_set_six_placement_flags(CPUState *c) {
+    if (c->budget <= 36)
+        return false;
+    R(3) = MEM_R32(0x8008f0c8);
+    u32 address = R(3) + 0x1c20;
+    u32 flags = MEM_R32(address);
+    /* Each subsequent record is read before the previous one is written. */
+    for (unsigned i = 1; i < 6; ++i) {
+        const u32 next = MEM_R32(address + 0x24);
+        R(2) = flags | 0x800u;
+        MEM_W32(address, R(2));
+        flags = next;
+        address += 0x24;
+    }
+    R(4) = flags | 0x800u;
+    MEM_W32(address, R(4));
+    c->budget -= 36;
+    return true;
+}
+
 bool nc_clear_placement_y_step_flags(CPUState *c) {
     if (c->budget <= 26)
         return false;

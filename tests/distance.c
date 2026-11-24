@@ -4769,6 +4769,42 @@ static bool placement_word_decreases(bool disc) {
     return true;
 }
 
+static bool six_placement_flags(bool disc) {
+    const u32 flags[] = {0, 0x800, 0x80000000, 0x40000801, 0x1234, UINT32_MAX};
+    const u32 saved_base = MEM_R32(0x8008f0c8);
+    MEM_W32(0x8008f0c8, SCRATCH_BASE - 0x1c20);
+    for (unsigned i = 0; i < 6; ++i)
+        MEM_W32(SCRATCH_BASE + 0x24 * i, flags[i]);
+    CPUState input = initial();
+    input.r[31] = 0x8002a560;
+    input.budget = 36;
+    CPUState native = input;
+    if (nc_set_six_placement_flags(&native) || memcmp(&native, &input, sizeof input))
+        return false;
+    for (unsigned i = 0; i < 6; ++i)
+        if (MEM_R32(SCRATCH_BASE + 0x24 * i) != flags[i])
+            return false;
+    native.budget = ++input.budget;
+    if (!nc_set_six_placement_flags(&native) || native.budget != 1 ||
+        native.r[2] != (flags[4] | 0x800u) || native.r[4] != (flags[5] | 0x800u))
+        return false;
+    for (unsigned i = 0; i < 6; ++i) {
+        if (MEM_R32(SCRATCH_BASE + 0x24 * i) != (flags[i] | 0x800u))
+            return false;
+        MEM_W32(SCRATCH_BASE + 0x24 * i, flags[i]);
+    }
+    if (disc) {
+        interp_call(&input, 0x8002a42c);
+        if (memcmp(&native, &input, sizeof input))
+            return false;
+        for (unsigned i = 0; i < 6; ++i)
+            if (MEM_R32(SCRATCH_BASE + 0x24 * i) != (flags[i] | 0x800u))
+                return false;
+    }
+    MEM_W32(0x8008f0c8, saved_base);
+    return true;
+}
+
 static bool four_placement_flags(bool disc, bool unconditional) {
     const u32 base = 0x80120000;
     const u32 conditional_offsets[] = {0xe70c, 0x10620, 0xe754, 0xe778};
@@ -9589,7 +9625,7 @@ int main(int argc, char **argv) {
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
         placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
-        four_placement_flags(disc, true) && placement_step_flag_pairs(disc) &&
+        four_placement_flags(disc, true) && six_placement_flags(disc) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&
