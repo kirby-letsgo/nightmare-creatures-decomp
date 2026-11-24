@@ -1278,6 +1278,8 @@ class Emitter:
                 out.append("    if (nc_launcher_start_vsync(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B04:
                 out.append("    if (nc_launcher_dispatch_vblank(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80011C24:
+                out.append("    if (nc_launcher_dispatch_dma_interrupt(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011DA8:
                 out.append("    if (set_dma_slot(c, 0x8001576c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
