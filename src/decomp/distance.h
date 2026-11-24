@@ -146,6 +146,7 @@ u32 nc_route_placement_followup(CPUState *c);
 bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume);
 bool nc_update_placement_height_flags(CPUState *c);
 bool nc_decrease_placement_word(CPUState *c);
+bool nc_update_placement_step_flag_group(CPUState *c, bool set);
 bool nc_set_six_placement_flags(CPUState *c);
 bool nc_clear_placement_y_step_flags(CPUState *c);
 u32 nc_clear_four_placement_flags(CPUState *c);
