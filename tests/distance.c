@@ -4690,6 +4690,49 @@ static bool placement_coordinate_step_calls(bool disc) {
     return true;
 }
 
+static bool placement_x_step_distances(bool disc) {
+    const u32 actor = SCRATCH_BASE + 0x80;
+    const struct {
+        u32 actor, flags, x, z;
+        s16 record_x, record_z;
+        int cycles;
+    } cases[] = {{0, 0, 0, 0, 0, 0, 2}, {actor, 0x100001, 0, 0, 0, 0, 9},
+                 {actor, 1, 0x1ff, 0xffffff01, -2, 3, 31},
+                 {actor, 0, 0x80000000, 0x7fffffff, INT16_MAX, INT16_MIN, 31}};
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[17] = cases[i].actor;
+        const bool call = cases[i].cycles == 31;
+        input.r[31] = call ? 0x800475e4 : 0x80029be4;
+        MEM_W32(actor + 0x2c8, cases[i].flags);
+        MEM_W32(actor + 0x27c, cases[i].x);
+        MEM_W32(actor + 0x284, cases[i].z);
+        MEM_W16(SCRATCH_BASE + 0x18, (u16)cases[i].record_x);
+        MEM_W16(SCRATCH_BASE + 0x1c, (u16)cases[i].record_z);
+        input.budget = 31;
+        CPUState native = input;
+        if (nc_prepare_placement_x_step_distance(&native) || memcmp(&native, &input, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_prepare_placement_x_step_distance(&native) != input.r[31] ||
+            native.budget != input.budget - cases[i].cycles)
+            return false;
+        if (call) {
+            const u32 dx = cases[i].record_x - ((s32)cases[i].x >> 8);
+            const u32 dz = cases[i].record_z - ((s32)cases[i].z >> 8);
+            if (native.r[4] != dx * dx + dz * dz || native.r[31] != 0x80029bc0)
+                return false;
+        }
+        if (disc) {
+            interp_call(&input, 0x80029b6c);
+            if (memcmp(&native, &input, sizeof input))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_height_flags(bool disc) {
     const s16 heights[] = {INT16_MIN, -517, -516, -515, INT16_MAX};
     const u32 base = 0x80120000;
@@ -9670,7 +9713,7 @@ int main(int argc, char **argv) {
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
-        placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
+        placement_x_step_distances(disc) && placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
         four_placement_flags(disc, true) && placement_step_flag_groups(disc) && six_placement_flags(disc) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&

@@ -5494,6 +5494,32 @@ bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume) {
     return true;
 }
 
+u32 nc_prepare_placement_x_step_distance(CPUState *c) {
+    if (c->budget <= 31)
+        return 0;
+    R(3) = 0x100000;
+    if (!R(17)) {
+        c->budget -= 2;
+        return 0x80029be4;
+    }
+    R(2) = MEM_R32(R(17) + 0x2c8) & R(3);
+    if (R(2)) {
+        c->budget -= 9;
+        return 0x80029be4;
+    }
+    const s32 actor_x = (s32)MEM_R32(R(17) + 0x27c) >> 8;
+    const u32 dx = (s16)MEM_R16(R(16) + 0x18) - actor_x;
+    const s32 actor_z = (s32)MEM_R32(R(17) + 0x284) >> 8;
+    const u32 dz = (s16)MEM_R16(R(16) + 0x1c) - actor_z;
+    nc_mult(c, dz, dz);
+    R(2) = (u32)actor_z;
+    R(3) = c->lo;
+    R(4) = dx * dx + c->lo;
+    R(31) = 0x80029bc0;
+    c->budget -= 31;
+    return 0x800475e4;
+}
+
 bool nc_update_placement_height_flags(CPUState *c) {
     if (c->budget <= 28)
         return false;
