@@ -4769,9 +4769,11 @@ static bool placement_word_decreases(bool disc) {
     return true;
 }
 
-static bool four_placement_flags(bool disc) {
+static bool four_placement_flags(bool disc, bool unconditional) {
     const u32 base = 0x80120000;
-    const u32 offsets[] = {0xe70c, 0x10620, 0xe754, 0xe778};
+    const u32 conditional_offsets[] = {0xe70c, 0x10620, 0xe754, 0xe778};
+    const u32 y_offsets[] = {0x2910, 0x27cc, 0x1680, 0x16c8};
+    const u32 *offsets = unconditional ? y_offsets : conditional_offsets;
     const u32 flags[] = {0x80000803, 0x40000801, 0x20, 0xffffffff};
     const u32 saved_base = MEM_R32(0x8008f0c8);
     u32 saved[4];
@@ -4781,31 +4783,34 @@ static bool four_placement_flags(bool disc) {
     for (unsigned update = 0; update <= 1; ++update) {
         CPUState input = initial();
         input.r[2] = update;
-        input.r[31] = update ? 0x8002a564 : 0x8002a560;
-        input.budget = update ? 44 : 2;
+        input.r[31] = update && !unconditional ? 0x8002a564 : 0x8002a560;
+        input.budget = unconditional ? 26 : (update ? 44 : 2);
         for (unsigned i = 0; i < 4; ++i)
             MEM_W32(base + offsets[i], flags[i]);
         CPUState native = input;
-        if (nc_clear_four_placement_flags(&native) || memcmp(&native, &input, sizeof input))
+        const bool handled = unconditional ? nc_clear_placement_y_step_flags(&native) : nc_clear_four_placement_flags(&native) != 0;
+        if (handled || memcmp(&native, &input, sizeof input))
             return false;
         for (unsigned i = 0; i < 4; ++i)
             if (MEM_R32(base + offsets[i]) != flags[i])
                 return false;
         native.budget = ++input.budget;
-        if (nc_clear_four_placement_flags(&native) != input.r[31] || native.budget != 1 ||
+        const bool matched = unconditional ? nc_clear_placement_y_step_flags(&native)
+                                           : nc_clear_four_placement_flags(&native) == input.r[31];
+        if (!matched || native.budget != 1 ||
             native.r[5] != ~0x800u)
             return false;
         for (unsigned i = 0; i < 4; ++i) {
-            if (MEM_R32(base + offsets[i]) != (update ? flags[i] & ~0x800u : flags[i]))
+            if (MEM_R32(base + offsets[i]) != (unconditional || update ? flags[i] & ~0x800u : flags[i]))
                 return false;
             MEM_W32(base + offsets[i], flags[i]);
         }
         if (disc) {
-            interp_call(&input, 0x80029a6c);
+            interp_call(&input, unconditional ? 0x80029e98 : 0x80029a6c);
             if (memcmp(&native, &input, sizeof input))
                 return false;
             for (unsigned i = 0; i < 4; ++i)
-                if (MEM_R32(base + offsets[i]) != (update ? flags[i] & ~0x800u : flags[i]))
+                if (MEM_R32(base + offsets[i]) != (unconditional || update ? flags[i] & ~0x800u : flags[i]))
                     return false;
         }
     }
@@ -9583,7 +9588,8 @@ int main(int argc, char **argv) {
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
-        placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc) && placement_step_flag_pairs(disc) &&
+        placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
+        four_placement_flags(disc, true) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&
