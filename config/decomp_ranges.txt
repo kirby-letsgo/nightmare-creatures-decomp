@@ -257,7 +257,9 @@ psx2_exe     80029818    80029854         distance.c
 psx2_exe     80029854    80029890         distance.c
 psx2_exe     80029890    800298A8         distance.c
 psx2_exe     800298A8    800298F8         distance.c
+psx2_exe     800298F8    80029920         distance.c
 psx2_exe     80029920    80029948         distance.c
+psx2_exe     80029948    80029950         distance.c
 psx2_exe     80029950    800299C8         distance.c
 psx2_exe     800299C8    800299DC         distance.c
 psx2_exe     800299E4    800299F8         distance.c

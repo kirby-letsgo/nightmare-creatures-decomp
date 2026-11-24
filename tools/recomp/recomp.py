@@ -1213,7 +1213,7 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x800297FC, 0x80029810, 0x800298A8, 0x800298D0, 0x800298F8, 0x80029948,
+                (0x800297FC, 0x80029810, 0x800298A8, 0x800298D0, 0x800298F8, 0x80029910, 0x80029920, 0x80029948,
                  0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
                  0x8002A250, 0x8002A5B8, 0x8002A5CC)
             )
@@ -3171,6 +3171,16 @@ class Emitter:
                 out.append(f"    switch (nc_check_linked_placement_axis(c, {str(second).lower()})) {{")
                 out.append("    case 0x80029900: goto L_80029900;")
                 out.append(f"    case 0x{resume:08x}: goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800298F8, 0x80029918):
+                target = 0x800388C0 if i.addr == 0x800298F8 else 0x80039AF0
+                resume = i.addr + 8
+                out.append(f"    if (nc_prepare_placement_call(c, R(16), 0x{resume:08X})) {{")
+                out.append(f"        {self.call(target)}")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029900:
+                out.append("    if (nc_prepare_placement_timestamp_call(c, 0x80029910)) {")
+                out.append(f"        {self.call(0x80039AB0)}")
+                out.append("        goto L_80029910; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029920:
                 out.append("    switch (nc_route_placement_followup(c)) {")
                 out.append("    case 0x8002a564: goto L_8002A564;")
@@ -3213,7 +3223,9 @@ class Emitter:
                 out.append(f"    if (nc_call_placement_mode(c, {mode}, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(0x800386C0)}")
                 out.append(f"        goto L_{resume:08X}; }}")
-            if self.mod.name == "psx2_exe" and (i.addr == 0x8002A250 or i.addr in PLACEMENT_MODE_RETURNS):
+            if self.mod.name == "psx2_exe" and (
+                i.addr in (0x80029910, 0x80029948, 0x8002A250) or i.addr in PLACEMENT_MODE_RETURNS
+            ):
                 out.append("    if (nc_finish_placement_selector_call(c)) goto L_8002A564;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002A560, 0x8002A564):
                 subtract = "true" if i.addr == 0x8002A560 else "false"

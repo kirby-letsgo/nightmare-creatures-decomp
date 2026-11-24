@@ -141,6 +141,7 @@ u32 nc_begin_placement_link_scan(CPUState *c);
 u32 nc_scan_placement_link(CPUState *c);
 u32 nc_finish_placement_link_scan(CPUState *c, bool reload_count);
 u32 nc_check_linked_placement_axis(CPUState *c, bool second);
+bool nc_prepare_placement_timestamp_call(CPUState *c, u32 resume);
 u32 nc_route_placement_followup(CPUState *c);
 bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume);
 bool nc_return_placement_dispatch(CPUState *c);
