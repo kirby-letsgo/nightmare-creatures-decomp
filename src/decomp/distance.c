@@ -5459,6 +5459,23 @@ u32 nc_check_linked_placement_axis(CPUState *c, bool second) {
     return second ? 0x800298f8 : 0x800298d0;
 }
 
+u32 nc_route_placement_followup(CPUState *c) {
+    if (c->budget <= 16)
+        return 0;
+    const u32 record = MEM_R32(R(16));
+    const u32 followup = MEM_R32(record + 0x14);
+    R(2) = R(19) - 40;
+    if (!followup) {
+        c->budget -= 10;
+        return 0x8002a564;
+    }
+    R(5) = MEM_R32(0x8008ef10);
+    R(4) = R(16);
+    R(31) = 0x80029948;
+    c->budget -= 16;
+    return 0x80038a0c;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;
