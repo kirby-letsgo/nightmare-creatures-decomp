@@ -11,6 +11,7 @@ typedef struct {
     u32 dma_control, dma_name;
     u32 ports, callbacks, results, getintr, check_callback;
     u32 sync_name, ready_name;
+    u32 writer, sync, verbose_format, missing_format, command_name;
 } CdWaitLayout;
 
 static inline u32 cd_wait_hi(u32 address) {
