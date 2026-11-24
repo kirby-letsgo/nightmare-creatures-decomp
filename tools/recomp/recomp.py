@@ -725,6 +725,12 @@ PLACEMENT_FACE_RETURNS = {
     0x80027D68: (0x358, 0x3D8, 23),
 }
 
+PLACEMENT_MODE_CALLS = {
+    0x80029950: 0, 0x80029964: 1, 0x80029978: 2,
+    0x8002998C: 3, 0x800299A0: 6, 0x800299B4: 7,
+}
+PLACEMENT_MODE_RETURNS = {pc + 0xC for pc in PLACEMENT_MODE_CALLS}
+
 PLACEMENT_COORDINATE_STEPS = {
     0x800299C8: (0x1A, -2, -440),
     0x800299E4: (0x1A, -2, -1000),
@@ -1211,6 +1217,7 @@ class Emitter:
                  0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
                  0x8002A250, 0x8002A5B8, 0x8002A5CC)
             )
+            targets.update(PLACEMENT_MODE_RETURNS)
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
         if self.mod.name == "psx2_exe" and f.addr == 0x800296E8:
             targets.update((0x80029788, 0x8002979C, 0x800297A4))
@@ -3196,8 +3203,14 @@ class Emitter:
                 out.append("    case 0x800473e8:")
                 out.append(f"        {self.call(0x800473E8)}")
                 out.append("        goto L_8002A250; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002A250:
-                out.append("    if (nc_finish_placement_tick_call(c)) goto L_8002A564;")
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_MODE_CALLS:
+                mode = PLACEMENT_MODE_CALLS[i.addr]
+                resume = i.addr + 0xC
+                out.append(f"    if (nc_call_placement_mode(c, {mode}, 0x{resume:08X})) {{")
+                out.append(f"        {self.call(0x800386C0)}")
+                out.append(f"        goto L_{resume:08X}; }}")
+            if self.mod.name == "psx2_exe" and (i.addr == 0x8002A250 or i.addr in PLACEMENT_MODE_RETURNS):
+                out.append("    if (nc_finish_placement_selector_call(c)) goto L_8002A564;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002A560, 0x8002A564):
                 subtract = "true" if i.addr == 0x8002A560 else "false"
                 out.append(f"    switch (nc_route_placement_selector_exit(c, {subtract})) {{")
