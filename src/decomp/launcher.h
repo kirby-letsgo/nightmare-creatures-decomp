@@ -5,6 +5,7 @@
 
 bool nc_launcher_convert_case(CPUState *c, bool upper);
 bool nc_launcher_switch_stack(CPUState *c);
+bool nc_launcher_startup(CPUState *c);
 bool nc_launcher_run_modules(CPUState *c);
 bool nc_launcher_init_shared_record(CPUState *c);
 bool nc_launcher_global_callbacks(CPUState *c, bool constructors);

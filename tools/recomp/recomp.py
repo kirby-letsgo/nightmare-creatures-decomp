@@ -1354,6 +1354,9 @@ class Emitter:
                 out.append(f"    if (nc_launcher_global_callbacks(c, {constructors})) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x8001078C:
                 out.append("    if (nc_launcher_init_shared_record(c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80010850:
+                # The runtime treats the final break as nonfatal and falls into __main.
+                out.append("    if (nc_launcher_startup(c)) { slus_005_82_800108F8(c); return; }")
             if self.mod.name == LAUNCHER and i.addr == 0x80010618:
                 out.append("    if (nc_launcher_run_modules(c)) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x80011828, 0x80011858):
