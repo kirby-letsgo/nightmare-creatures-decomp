@@ -76,6 +76,41 @@ static bool check_shared_record(void) {
     return compare(start, 0x8001078c, nc_launcher_init_shared_record, 1);
 }
 
+static bool check_startup(void) {
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    bool ok = !saved.error;
+    const u32 stack_top = 0x1ff000, reservation = 0x2000;
+    MEM_W32(0x8001461c, stack_top);
+    MEM_W32(0x80014618, reservation);
+    /* Capture InitHeap's base argument, then let launcher main return. */
+    MEM_W32(0x800109d0, 0x03e00008);
+    MEM_W32(0x800109d4, 0x00806021); /* addu t4,a0,zero */
+    MEM_W32(0x80010618, 0x03e00008);
+    MEM_W32(0x8001061c, 0);
+    for (unsigned i = 0; ok && i < 2; i++) {
+        memset(nc_fast_ptr(0x80015b74), 0xa5, 0x70);
+        CPUState start = arguments(1, 2, 3, i ? 4096 : 2);
+        start.r[29] = 0x80000000 + stack_top - 8;
+        start.r[31] = 0x800108f8; /* stop at the fallthrough into __main */
+        ok = compare(start, 0x80010850, nc_launcher_startup, 1) &&
+             MEM_R32(0x800145f8) == 0x80015be0 &&
+             MEM_R32(0x800145fc) == stack_top - 8 - reservation - 0x15be0 &&
+             nc_cpu.r[12] == 0x80015be4 && nc_cpu.r[28] == 0x80015b74 &&
+             nc_cpu.r[30] == start.r[29] && MEM_R32(0x80015b78) == start.r[31] &&
+             MEM_R32(0x80015b74) == 0xa5a5a5a5 && MEM_R32(0x80015be0) == 0xa5a5a5a5;
+        for (u32 address = 0x80015b7c; ok && address < 0x80015be0; address += 4)
+            ok = MEM_R32(address) == 0;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 static bool run_constructors(CPUState *c) {
     return nc_launcher_global_callbacks(c, true);
 }
@@ -1065,6 +1100,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_startup()) {
+        fprintf(stderr, "launcher startup failed\n");
         return 1;
     }
     if (!compare_dma_interrupt_dispatch(0x80011c24, nc_launcher_dispatch_dma_interrupt, 0x8001576c,

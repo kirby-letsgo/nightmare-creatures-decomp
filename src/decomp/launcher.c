@@ -15,6 +15,66 @@ static void call_launcher_service(CPUState *c, u32 address, u32 resume) {
     nc_call(c, address);
 }
 
+/* Psy-Q startup clears BSS before it has a stack, then uses the area
+ * between BSS and the reserved stack for the BIOS heap. */
+bool nc_launcher_startup(CPUState *c) {
+    if (c->budget <= 1)
+        return false;
+    set_reg(c, 2, 0x80010000);
+    set_reg(c, 2, R(2) + 0x5b78);
+    set_reg(c, 3, 0x80010000);
+    set_reg(c, 3, R(3) + 0x5be0);
+    bool more;
+    do {
+        MEM_W32(R(2), 0);
+        NC_POLL(c, 1);
+        set_reg(c, 2, R(2) + 4);
+        set_reg(c, 1, R(2) < R(3));
+        more = R(1) != 0;
+        NC_POLL(c, 2);
+    } while (more);
+
+    set_reg(c, 2, 0x80010000);
+    load_word(c, 2, R(2) + 0x461c);
+    NC_POLL(c, 1);
+    set_reg(c, 2, R(2) - 8);
+    set_reg(c, 8, 0x80000000);
+    set_reg(c, 29, R(2) | R(8));
+    set_reg(c, 4, 0x80010000);
+    set_reg(c, 4, R(4) + 0x5be0);
+    set_reg(c, 4, R(4) << 3);
+    set_reg(c, 4, R(4) >> 3);
+    set_reg(c, 3, 0x80010000);
+    load_word(c, 3, R(3) + 0x4618);
+    NC_POLL(c, 1);
+    set_reg(c, 5, R(2) - R(3));
+    set_reg(c, 5, R(5) - R(4));
+    set_reg(c, 1, 0x80010000);
+    MEM_W32(R(1) + 0x45fc, R(5)); /* heap size */
+    NC_POLL(c, 1);
+    set_reg(c, 4, R(4) | R(8));
+    set_reg(c, 1, 0x80010000);
+    MEM_W32(R(1) + 0x45f8, R(4)); /* heap base */
+    NC_POLL(c, 1);
+    set_reg(c, 1, 0x80010000);
+    MEM_W32(R(1) + 0x5b78, R(31));
+    NC_POLL(c, 1);
+    set_reg(c, 28, 0x80010000);
+    set_reg(c, 28, R(28) + 0x5b74);
+    set_reg(c, 30, R(29));
+    R(31) = 0x800108e0;
+    R(4) += 4;
+    NC_POLL(c, 2);
+    nc_call(c, 0x800109d0); /* InitHeap */
+    set_reg(c, 31, 0x80010000);
+    load_word(c, 31, R(31) + 0x5b78);
+    NC_POLL(c, 1);
+    call_launcher_service(c, 0x80010618, 0x800108f4);
+    nc_break(c, 0x800108f4, 1);
+    NC_POLL(c, 1);
+    return true;
+}
+
 /* Each switch arm calls _96_init before selecting its ISO path. The
  * credits arm has its own Load call and falls through on success. */
 static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
