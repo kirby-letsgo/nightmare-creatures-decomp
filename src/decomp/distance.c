@@ -5532,17 +5532,35 @@ bool nc_decrease_placement_word(CPUState *c) {
     return true;
 }
 
-static void clear_placement_flag_words(CPUState *c, u32 first_offset, u32 second_offset, u32 third_offset, u32 fourth_offset) {
+static void update_placement_flag_words(CPUState *c, u32 keep, u32 set, u32 first_offset, u32 second_offset,
+                                        u32 third_offset, u32 fourth_offset) {
     const u32 base = R(3);
     const u32 first = MEM_R32(base + first_offset);
     const u32 second = MEM_R32(base + second_offset);
-    MEM_W32(base + first_offset, first & R(5));
+    MEM_W32(base + first_offset, (first & keep) | set);
     const u32 third = MEM_R32(base + third_offset);
-    MEM_W32(base + second_offset, second & R(5));
-    R(4) = MEM_R32(base + fourth_offset) & R(5);
-    R(2) = third & R(5);
+    MEM_W32(base + second_offset, (second & keep) | set);
+    R(4) = (MEM_R32(base + fourth_offset) & keep) | set;
+    R(2) = (third & keep) | set;
     MEM_W32(base + third_offset, R(2));
     MEM_W32(base + fourth_offset, R(4));
+}
+
+bool nc_update_placement_step_flag_group(CPUState *c, bool set) {
+    const int cycles = set ? 42 : 43;
+    if (c->budget <= cycles)
+        return false;
+    R(3) = MEM_R32(0x8008f0c8);
+    R(1) = R(3) + 0x10000;
+    if (set) {
+        update_placement_flag_words(c, UINT32_MAX, 0x800, 0xc0a8, 0xc114, 0xc234, 0xc354);
+    } else {
+        R(5) = ~0x800u;
+        update_placement_flag_words(c, R(5), 0, 0xccc0, 0xcc78, 0xcd08, 0xcd2c);
+    }
+    R(2) = R(19) - 40;
+    c->budget -= cycles;
+    return true;
 }
 
 bool nc_set_six_placement_flags(CPUState *c) {
@@ -5570,7 +5588,7 @@ bool nc_clear_placement_y_step_flags(CPUState *c) {
         return false;
     R(3) = MEM_R32(0x8008f0c8);
     R(5) = ~0x800u;
-    clear_placement_flag_words(c, 0x2910, 0x27cc, 0x1680, 0x16c8);
+    update_placement_flag_words(c, R(5), 0, 0x2910, 0x27cc, 0x1680, 0x16c8);
     c->budget -= 26;
     return true;
 }
@@ -5586,7 +5604,7 @@ u32 nc_clear_four_placement_flags(CPUState *c) {
 
     R(3) = MEM_R32(0x8008f0c8);
     R(1) = R(3) + 0x10000;
-    clear_placement_flag_words(c, 0xe70c, 0x10620, 0xe754, 0xe778);
+    update_placement_flag_words(c, R(5), 0, 0xe70c, 0x10620, 0xe754, 0xe778);
     R(2) = R(19) - 40;
     return 0x8002a564;
 }
