@@ -4690,6 +4690,20 @@ static bool placement_coordinate_step_calls(bool disc) {
     return true;
 }
 
+static bool placement_coordinate_returns(bool disc) {
+    const u32 sites[] = {0x800299dc, 0x800299f8, 0x80029a34, 0x80029a50, 0x80029d78, 0x80029df0,
+                         0x80029e0c, 0x80029e28, 0x80029e44, 0x80029e7c, 0x8002a1e8};
+    for (unsigned i = 0; i < sizeof sites / sizeof sites[0]; ++i) {
+        CPUState input = initial(), native;
+        input.r[19] = 35 + i;
+        input.r[31] = 0x8002a564;
+        if (!compare(input, sites[i], nc_finish_placement_selector_call, disc, &native) ||
+            native.r[2] != input.r[19] - 40 || native.budget != input.budget - 2)
+            return false;
+    }
+    return true;
+}
+
 static bool shared_placement_y_steps(bool disc) {
     for (unsigned jump = 0; jump <= 1; ++jump) {
         CPUState input = initial();
@@ -9409,7 +9423,8 @@ int main(int argc, char **argv) {
         placement_link_scan_entries(disc) && placement_link_scans(disc) && placement_link_scan_exits(disc) &&
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
-        placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
+        placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
+        shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&
         placement_x_indices(disc) &&

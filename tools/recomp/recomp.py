@@ -731,6 +731,14 @@ PLACEMENT_MODE_CALLS = {
 }
 PLACEMENT_MODE_RETURNS = {pc + 0xC for pc in PLACEMENT_MODE_CALLS}
 
+# Direct jumps to the selector exit after a call. Other coordinate steps
+# inspect the result or update the record before reaching that exit.
+PLACEMENT_SELECTOR_RETURNS = PLACEMENT_MODE_RETURNS | {
+    0x80029910, 0x80029948, 0x800299DC, 0x800299F8, 0x80029A34, 0x80029A50,
+    0x80029D78, 0x80029DF0, 0x80029E0C, 0x80029E28, 0x80029E44, 0x80029E7C,
+    0x8002A1E8, 0x8002A250,
+}
+
 PLACEMENT_COORDINATE_STEPS = {
     0x800299C8: (0x1A, -2, -440),
     0x800299E4: (0x1A, -2, -1000),
@@ -3223,9 +3231,7 @@ class Emitter:
                 out.append(f"    if (nc_call_placement_mode(c, {mode}, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(0x800386C0)}")
                 out.append(f"        goto L_{resume:08X}; }}")
-            if self.mod.name == "psx2_exe" and (
-                i.addr in (0x80029910, 0x80029948, 0x8002A250) or i.addr in PLACEMENT_MODE_RETURNS
-            ):
+            if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_SELECTOR_RETURNS:
                 out.append("    if (nc_finish_placement_selector_call(c)) goto L_8002A564;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002A560, 0x8002A564):
                 subtract = "true" if i.addr == 0x8002A560 else "false"
