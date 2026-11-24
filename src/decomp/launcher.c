@@ -1,6 +1,7 @@
 #include "decomp/cd_wait.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_interrupt_callback.h"
+#include "decomp/cd_read_retry.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_sync.h"
 #include "decomp/vsync.h"
@@ -465,6 +466,23 @@ bool nc_launcher_cd_read_sync(CPUState *c) {
         .vsync = 0x80013e28, .retry = 0x80014230, .ready = 0x80012100,
     };
     return cd_read_sync(c, &layout);
+}
+
+static const CdReadRetryLayout read_retry = {
+    .entry = 0x80014230, .state = 0x80015b48, .set_sync = 0x80012120,
+    .set_ready = 0x80012138, .status = 0x80011f94, .vsync = 0x80013e28,
+    .lid_message = 0x800105ec, .puts = 0x80013dd8, .fast = 0x80012288,
+    .retry_message = 0x80010604, .control = 0x80012150, .last_pos = 0x80011fc4,
+    .flush = 0x80012040, .mode = 0x80011fa4, .pos_to_int = 0x80012688,
+    .callback = 0x8001400c, .get_sector = 0x8001251c, .mismatch_message = 0x800105d4,
+};
+
+bool nc_launcher_cd_read_retry(CPUState *c) {
+    return cd_read_retry(c, &read_retry);
+}
+
+bool nc_launcher_handle_cd_read(CPUState *c) {
+    return handle_cd_read(c, &read_retry);
 }
 
 bool nc_launcher_cd_read(CPUState *c) {

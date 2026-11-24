@@ -1103,6 +1103,20 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher shared record failed\n");
         return 1;
     }
+    const CdRetryFixture retry = {
+        0x80014230, 0x80015b48, 0x8001400c, 0x80012150,
+        0x80012288, 0x80013dd8, 0x80012040, 0x800105ec,
+        0x80010604, 0x80015b34, 0x80015760, 0x80015818,
+        0x8001251c, 0x800105d4, 0x80013e28,
+    };
+    if (!compare_sector_ready(&retry, nc_launcher_handle_cd_read)) {
+        fprintf(stderr, "launcher CD sector callback failed\n");
+        return 1;
+    }
+    if (!compare_cd_read_retry(&retry, nc_launcher_cd_read_retry)) {
+        fprintf(stderr, "launcher CD read retry failed\n");
+        return 1;
+    }
     const CdDriverInitFixture driver_init = {
         0x80013890, 0x80015adc, 0x80015818, 0x80013dd8, 0x80011160,
         0x80010a50, 0x80010a80, 0x80013cf8, 0x800131cc, 0x80012c80,
