@@ -1207,7 +1207,7 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x800297FC, 0x80029810, 0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
+                (0x800297FC, 0x80029810, 0x800298D0, 0x800298F8, 0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
                  0x8002A250, 0x8002A5B8, 0x8002A5CC)
             )
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
@@ -3142,6 +3142,12 @@ class Emitter:
                 out.append("    switch (nc_scan_placement_link(c)) {")
                 out.append("    case 0x80029854: goto L_80029854;")
                 out.append("    case 0x80029890: goto L_80029890; }")
+            if self.mod.name == "psx2_exe" and i.addr in (0x800298A8, 0x800298D0):
+                second = i.addr == 0x800298D0
+                resume = 0x800298F8 if second else 0x800298D0
+                out.append(f"    switch (nc_check_linked_placement_axis(c, {str(second).lower()})) {{")
+                out.append("    case 0x80029900: goto L_80029900;")
+                out.append(f"    case 0x{resume:08x}: goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002A5D4:
                 out.append("    if (nc_return_placement_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029D18, 0x80029E4C):

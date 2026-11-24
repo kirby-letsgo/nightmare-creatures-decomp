@@ -5428,6 +5428,23 @@ u32 nc_scan_placement_link(CPUState *c) {
     return R(2) ? 0x80029854 : 0x80029890;
 }
 
+u32 nc_check_linked_placement_axis(CPUState *c, bool second) {
+    if (c->budget <= 14)
+        return 0;
+    R(4) = MEM_R32(second ? 0x8008f180 : 0x8008f174);
+    R(3) = MEM_R16(R(16) + (second ? 0x36 : 0x34));
+    R(2) = R(4) + 3; /* Delay slot of the lower-bound branch. */
+    if ((s32)(R(4) - 3) >= (s32)R(3)) {
+        c->budget -= 11;
+        return 0x80029900;
+    }
+    R(2) = (s32)R(3) < (s32)R(2);
+    c->budget -= 14;
+    if (!R(2))
+        return 0x80029900;
+    return second ? 0x800298f8 : 0x800298d0;
+}
+
 bool nc_return_placement_dispatch(CPUState *c) {
     if (c->budget <= 18)
         return false;

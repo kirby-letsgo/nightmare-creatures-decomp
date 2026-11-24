@@ -5048,6 +5048,46 @@ static bool placement_link_scans(bool disc) {
     return true;
 }
 
+static bool linked_placement_axes(bool disc) {
+    const struct {
+        u32 center;
+        u16 coordinate;
+        u32 v0;
+        int cycles;
+        bool inside;
+    } cases[] = {{100, 97, 103, 11, false}, {100, 98, 1, 14, true},
+                 {100, 102, 1, 14, true}, {100, 103, 0, 14, false},
+                 {0, 0, 1, 14, true}, {65535, 65535, 1, 14, true},
+                 {0x80000000, 0, 0x80000003, 11, false}, {0x7fffffff, 0, 0x80000002, 11, false}};
+    for (unsigned axis = 0; axis < 2; ++axis) {
+        const u32 address = axis ? 0x8008f180 : 0x8008f174;
+        const u32 saved = MEM_R32(address);
+        for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            CPUState input = initial();
+            input.r[16] = SCRATCH_BASE;
+            input.r[31] = cases[i].inside ? (axis ? 0x800298f8 : 0x800298d0) : 0x80029900;
+            MEM_W16(SCRATCH_BASE + 0x34 + 2 * axis, cases[i].coordinate);
+            MEM_W32(address, cases[i].center);
+            input.budget = 14;
+            CPUState native = input;
+            if (nc_check_linked_placement_axis(&native, axis) || memcmp(&native, &input, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (nc_check_linked_placement_axis(&native, axis) != input.r[31] ||
+                native.r[2] != cases[i].v0 || native.r[3] != cases[i].coordinate ||
+                native.r[4] != cases[i].center || native.budget != input.budget - cases[i].cycles)
+                return false;
+            if (disc) {
+                interp_call(&input, axis ? 0x800298d0 : 0x800298a8);
+                if (memcmp(&input, &native, sizeof input))
+                    return false;
+            }
+        }
+        MEM_W32(address, saved);
+    }
+    return true;
+}
+
 static bool placement_dispatch_frames(bool disc) {
     const u32 frame = SCRATCH_BASE + 0x100;
     const u32 selectors[] = {0, 1, 100, 101, UINT32_MAX};
@@ -9240,7 +9280,8 @@ int main(int argc, char **argv) {
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_dispatch_frames(disc) && placement_selector_targets(disc) &&
-        placement_link_scan_entries(disc) && placement_link_scans(disc) && placement_step_returns(disc) &&
+        placement_link_scan_entries(disc) && placement_link_scans(disc) && linked_placement_axes(disc) &&
+        placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&
