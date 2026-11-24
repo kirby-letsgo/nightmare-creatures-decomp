@@ -1,6 +1,7 @@
 #include "interrupt_dispatch.h"
 #include "interrupt_start.h"
 #include "cd_control.h"
+#include "cd_dma_wait.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "decomp/cd_sector_dma.h"
@@ -1100,6 +1101,14 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    const CdDmaWaitFixture dma_wait = {
+        0x80013a7c, 0x80013e28, 0x80013dd8, 0x80011160, 0x8001366c,
+        0x80015b20, 0x8001583c, 0x80015af4, 0x80015b98, 0x800105b0,
+    };
+    if (!compare_cd_dma_wait(nc_launcher_sync_cd_dma, &dma_wait)) {
+        fprintf(stderr, "launcher CD DMA wait failed\n");
         return 1;
     }
     if (!check_startup()) {
