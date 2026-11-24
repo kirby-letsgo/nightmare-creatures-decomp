@@ -1067,6 +1067,11 @@ int main(int argc, char **argv) {
         fprintf(stderr, "launcher shared record failed\n");
         return 1;
     }
+    if (!compare_dma_interrupt_dispatch(0x80011c24, nc_launcher_dispatch_dma_interrupt, 0x8001576c,
+                                        0x80010320, 0x8001033c, 0x80011160)) {
+        fprintf(stderr, "launcher DMA interrupt dispatch failed\n");
+        return 1;
+    }
     if (!compare_interrupt_dispatch(0x80010cc4, nc_launcher_dispatch_interrupts, 0x80014620,
                                     0x800156ac, 0x80011160, 0x80011a3c, 0x800100d4, 0x800100f0)) {
         fprintf(stderr, "launcher interrupt dispatch failed\n");

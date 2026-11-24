@@ -310,6 +310,14 @@ bool nc_launcher_restart_interrupts(CPUState *c) {
     return restart_driver_interrupts(c, &interrupt_control);
 }
 
+bool nc_launcher_dispatch_dma_interrupt(CPUState *c) {
+    static const DmaDispatchLayout layout = {
+        .entry = 0x80011c24, .slots = 0x8001576c, .print = 0x80011160,
+        .status_message = 0x80010320, .channel_message = 0x8001033c,
+    };
+    return dispatch_dma_interrupt(c, &layout);
+}
+
 bool nc_launcher_start_dma(CPUState *c) {
     static const InterruptInitLayout layout = {
         .slots = 0x8001576c, .entry = 0x80011bd4, .clear = 0x80011e50,

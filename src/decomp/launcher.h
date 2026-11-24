@@ -15,6 +15,7 @@ bool nc_launcher_start_interrupts(CPUState *c);
 bool nc_launcher_resume_interrupt_start(CPUState *c);
 bool nc_launcher_stop_interrupts(CPUState *c);
 bool nc_launcher_restart_interrupts(CPUState *c);
+bool nc_launcher_dispatch_dma_interrupt(CPUState *c);
 bool nc_launcher_start_dma(CPUState *c);
 bool nc_launcher_start_vsync(CPUState *c);
 bool nc_launcher_dispatch_vblank(CPUState *c);
