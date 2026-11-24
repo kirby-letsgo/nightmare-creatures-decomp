@@ -4690,6 +4690,54 @@ static bool placement_coordinate_step_calls(bool disc) {
     return true;
 }
 
+static bool placement_height_flags(bool disc) {
+    const s16 heights[] = {INT16_MIN, -517, -516, -515, INT16_MAX};
+    const u32 base = 0x80120000;
+    const u32 offsets[] = {0xe58, 0x1f14, 0xe7c};
+    const u32 flags[] = {0xffffffff, 0x80000801, 0x1234};
+    const u32 saved_base = MEM_R32(0x8008f0c8);
+    u32 saved[3];
+    for (unsigned i = 0; i < 3; ++i)
+        saved[i] = MEM_R32(base + offsets[i]);
+    MEM_W32(0x8008f0c8, base);
+    for (unsigned h = 0; h < sizeof heights / sizeof heights[0]; ++h) {
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = 0x8002a560;
+        input.budget = 28;
+        MEM_W16(SCRATCH_BASE + 0x1a, (u16)heights[h]);
+        for (unsigned i = 0; i < 3; ++i)
+            MEM_W32(base + offsets[i], flags[i]);
+        CPUState native = input;
+        if (nc_update_placement_height_flags(&native) || memcmp(&input, &native, sizeof input))
+            return false;
+        for (unsigned i = 0; i < 3; ++i)
+            if (MEM_R32(base + offsets[i]) != flags[i])
+                return false;
+        native.budget = ++input.budget;
+        const bool clear = heights[h] < -516;
+        if (!nc_update_placement_height_flags(&native) || native.budget != (clear ? 1 : 22))
+            return false;
+        for (unsigned i = 0; i < 3; ++i) {
+            if (MEM_R32(base + offsets[i]) != (clear ? flags[i] & ~0x800u : flags[i]))
+                return false;
+            MEM_W32(base + offsets[i], flags[i]);
+        }
+        if (disc) {
+            interp_call(&input, 0x80029cd0);
+            if (memcmp(&input, &native, sizeof input))
+                return false;
+            for (unsigned i = 0; i < 3; ++i)
+                if (MEM_R32(base + offsets[i]) != (clear ? flags[i] & ~0x800u : flags[i]))
+                    return false;
+        }
+    }
+    for (unsigned i = 0; i < 3; ++i)
+        MEM_W32(base + offsets[i], saved[i]);
+    MEM_W32(0x8008f0c8, saved_base);
+    return true;
+}
+
 static bool placement_word_decreases(bool disc) {
     const u32 values[] = {0, 0x20201f, 0x202020, 0x202021, 0x808080, 0x80000000, UINT32_MAX};
     const u32 address = SCRATCH_BASE + 0x28;
@@ -9535,7 +9583,7 @@ int main(int argc, char **argv) {
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
-        placement_word_decreases(disc) && four_placement_flags(disc) && placement_step_flag_pairs(disc) &&
+        placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&

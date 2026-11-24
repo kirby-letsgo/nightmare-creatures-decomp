@@ -5494,6 +5494,28 @@ bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume) {
     return true;
 }
 
+bool nc_update_placement_height_flags(CPUState *c) {
+    if (c->budget <= 28)
+        return false;
+    const s16 height = (s16)MEM_R16(R(16) + 0x1a);
+    R(5) = ~0x800u;
+    if (height >= -516) {
+        R(2) = 0;
+        c->budget -= 7;
+        return true;
+    }
+    R(4) = MEM_R32(0x8008f0c8);
+    const u32 first = MEM_R32(R(4) + 0xe58);
+    const u32 second = MEM_R32(R(4) + 0x1f14);
+    MEM_W32(R(4) + 0xe58, first & R(5));
+    R(2) = MEM_R32(R(4) + 0xe7c) & R(5);
+    R(3) = second & R(5);
+    MEM_W32(R(4) + 0x1f14, R(3));
+    MEM_W32(R(4) + 0xe7c, R(2));
+    c->budget -= 28;
+    return true;
+}
+
 bool nc_decrease_placement_word(CPUState *c) {
     if (c->budget <= 12)
         return false;
