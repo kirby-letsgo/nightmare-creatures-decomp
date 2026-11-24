@@ -3252,6 +3252,10 @@ class Emitter:
                 out.append("    if (nc_call_indexed_placement_x_step(c)) {")
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append("        goto L_8002A23C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029B08:
+                out.append("    switch (nc_clear_placement_step_flags(c)) {")
+                out.append("    case 0x8002a560: goto L_8002A560;")
+                out.append("    case 0x8002a564: goto L_8002A564; }")
             if self.mod.name == "psx2_exe" and i.addr in PLACEMENT_COORDINATE_STEPS:
                 offset, step, target = PLACEMENT_COORDINATE_STEPS[i.addr]
                 resume = i.addr + 0x14
