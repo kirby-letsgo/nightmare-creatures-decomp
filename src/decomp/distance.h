@@ -141,6 +141,7 @@ u32 nc_begin_placement_link_scan(CPUState *c);
 u32 nc_scan_placement_link(CPUState *c);
 u32 nc_finish_placement_link_scan(CPUState *c, bool reload_count);
 u32 nc_check_linked_placement_axis(CPUState *c, bool second);
+u32 nc_route_placement_followup(CPUState *c);
 bool nc_return_placement_dispatch(CPUState *c);
 bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc);
 bool nc_prepare_shared_placement_y_step(CPUState *c, bool jump);
