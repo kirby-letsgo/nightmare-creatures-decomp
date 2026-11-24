@@ -270,7 +270,7 @@ psx2_exe     80029AF4    80029B58         distance.c
 psx2_exe     80029B58    80029B6C         distance.c
 psx2_exe     80029CBC    80029CD0         distance.c
 psx2_exe     80029D18    80029D28         distance.c
-psx2_exe     80029D28    80029D3C         distance.c
+psx2_exe     80029D28    80029D64         distance.c
 psx2_exe     80029D64    80029D80         distance.c
 psx2_exe     80029DDC    80029DF8         distance.c
 psx2_exe     80029DF8    80029E14         distance.c

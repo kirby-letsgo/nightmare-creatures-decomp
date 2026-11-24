@@ -144,6 +144,7 @@ u32 nc_check_linked_placement_axis(CPUState *c, bool second);
 bool nc_prepare_placement_timestamp_call(CPUState *c, u32 resume);
 u32 nc_route_placement_followup(CPUState *c);
 bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume);
+bool nc_decrease_placement_word(CPUState *c);
 u32 nc_clear_four_placement_flags(CPUState *c);
 u32 nc_clear_placement_step_flags(CPUState *c);
 bool nc_return_placement_dispatch(CPUState *c);
