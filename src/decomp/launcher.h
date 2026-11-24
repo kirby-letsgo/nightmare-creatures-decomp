@@ -6,6 +6,7 @@
 bool nc_launcher_convert_case(CPUState *c, bool upper);
 bool nc_launcher_switch_stack(CPUState *c);
 bool nc_launcher_initialize_cd_driver(CPUState *c);
+bool nc_launcher_write_cd_command(CPUState *c);
 bool nc_launcher_sync_cd_command(CPUState *c);
 bool nc_launcher_wait_cd_ready(CPUState *c);
 bool nc_launcher_sync_cd_dma(CPUState *c);

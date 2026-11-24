@@ -1,4 +1,4 @@
-#include "decomp/cd_wait.h"
+#include "decomp/cd_command.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_read_retry.h"
@@ -28,6 +28,11 @@ static const CdWaitLayout launcher_cd_wait = {
     .check_callback = 0x80010ba4,
     .sync_name = 0x80010530,
     .ready_name = 0x80010538,
+    .writer = 0x800131cc,
+    .sync = 0x80012c80,
+    .verbose_format = 0x80010544,
+    .missing_format = 0x8001054c,
+    .command_name = 0x8001055c,
     .dma_control = 0x80015b20,
     .dma_name = 0x800105b0,
 };
@@ -40,6 +45,10 @@ bool nc_launcher_initialize_cd_driver(CPUState *c) {
         .handler = 0x80013cf8, .command = 0x800131cc, .sync = 0x80012c80,
     };
     return initialize_cd_driver(c, &layout);
+}
+
+bool nc_launcher_write_cd_command(CPUState *c) {
+    return write_cd_command(c, &launcher_cd_wait);
 }
 
 bool nc_launcher_sync_cd_command(CPUState *c) {

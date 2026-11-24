@@ -5,7 +5,7 @@
 
 typedef struct {
     u32 vsync, check_callback, getintr, puts, print, flush;
-    u32 ports, callbacks, results, deadline, status, ready, sync;
+    u32 ports, callbacks, results, deadline, status, ready, sync, writer;
 } CdEventFixture;
 
 static void install_cd_wait_stubs(const CdEventFixture *f, u32 handler) {
@@ -164,6 +164,91 @@ static bool check_cd_command_sync(const CdEventFixture *f, bool (*routine)(CPUSt
             ok = ok && nc_cpu.r[24] == trace + 16 && MEM_R32(trace) == 1 &&
                  MEM_R32(trace + 4) == f->results + 8 && MEM_R32(trace + 8) == 5 &&
                  MEM_R32(trace + 12) == f->results;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
+static bool check_write_cd_command(const CdEventFixture *f, bool (*routine)(CPUState *)) {
+    const u32 script = 0x80061000, params = script + 64, dest = params + 16;
+    const u32 port = dest + 16, events = port + 16, trace = events + 32, handler = trace + 64;
+    enum { ASYNC, ALREADY_ACKED, CALLBACK_ACK, DISK_ERROR, FRAME_TIMEOUT, POLL_TIMEOUT };
+    const struct { u32 command, debug; unsigned path; bool params, copy; } cases[] = {
+        {2, 0, ASYNC, false, false}, {14, 2, ASYNC, false, false},
+        {0x102, 2, ASYNC, true, true}, {14, 0, ASYNC, true, false},
+        {3, 0, ALREADY_ACKED, false, true}, {2, 0, CALLBACK_ACK, true, true},
+        {1, 0, DISK_ERROR, false, false}, {1, 0, FRAME_TIMEOUT, false, true},
+        {1, 0, POLL_TIMEOUT, false, true},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    install_cd_wait_stubs(f, handler);
+    MEM_W32(f->sync, 0x03e00008); /* CD_sync counts submissions in t7 */
+    MEM_W32(f->sync + 4, 0x25ef0001);
+    MEM_W32(f->ports, port);
+    MEM_W32(f->ports + 4, port + 1);
+    MEM_W32(f->ports + 8, port + 2);
+    MEM_W32(f->callbacks + 4, handler);
+    MEM_W32(f->callbacks, handler);
+    MEM_W32(events, 6);
+    MEM_W32(events + 4, 0);
+    MEM_W32(params, 0x78563412);
+    for (unsigned j = 0; j < 8; j++)
+        MEM_W8(f->results + j, (u8)(0x41 + j));
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        unsigned path = cases[i].path, cmd = cases[i].command & 0xff;
+        bool invalid = !cases[i].params && (cmd == 2 || cmd == 14);
+        bool timeout = path == FRAME_TIMEOUT || path == POLL_TIMEOUT;
+        bool received = !invalid && !timeout && path != ASYNC;
+        memset(nc_fast_ptr(script), 0, 36);
+        MEM_W32(script, 100);
+        MEM_W32(script + 8, path == ALREADY_ACKED ? 3 : 0);
+        MEM_W32(script + 12, path == FRAME_TIMEOUT ? 1061 : 100);
+        MEM_W32(script + 16, path == POLL_TIMEOUT ? 0x3c0001 : 0);
+        MEM_W32(script + 20, path == DISK_ERROR ? 5 : 3);
+        MEM_W32(f->callbacks + 12, cases[i].debug);
+        MEM_W32(f->callbacks + 28, 0xffffffff);
+        MEM_W8(f->callbacks + 32, 0xee);
+        MEM_W8(f->callbacks + 33, 0xee);
+        MEM_W8(f->status + 1, 1);
+        memset(nc_fast_ptr(port), 0xee, 4);
+        memset(nc_fast_ptr(dest), 0xcc, 12);
+        memset(nc_fast_ptr(trace), 0, 48);
+        CPUState state = arguments(cases[i].command, cases[i].params ? params : 0,
+                                   cases[i].copy ? dest : 0, i & 1 ? 2 : 8192);
+        state.r[7] = path == ASYNC;
+        state.r[8] = script;
+        state.r[9] = f->deadline + 4;
+        state.r[10] = f->status;
+        state.r[13] = trace + 32;
+        state.r[14] = path == CALLBACK_ACK;
+        state.r[15] = 0;
+        state.r[24] = trace;
+        state.r[25] = events;
+        u32 expected = invalid ? (u32)-2 : timeout || path == DISK_ERROR ? UINT32_MAX : 0;
+        ok = compare(state, f->writer, routine, 1) &&
+             nc_cpu.r[2] == expected && nc_cpu.r[15] == (u32)!invalid &&
+             MEM_R8(port + 1) == (invalid ? 0xee : cmd) &&
+             MEM_R8(f->callbacks + 33) == (invalid ? 0xee : cmd) &&
+             MEM_R32(f->callbacks + 28) == (cmd == 2 && !invalid ? 0x78563412u : UINT32_MAX) &&
+             MEM_R8(f->callbacks + 32) == (cmd == 14 && !invalid ? 0x12 : 0xee) &&
+             MEM_R8(port + 2) == (invalid ? 0xee : cmd == 2 ? 0x56 : cmd == 14 ? 0x12 : 0xee) &&
+             MEM_R8(f->status + 1) == (cmd == 3 ? 0 : 1) &&
+             MEM_R32(trace + 40) == (timeout ? f->writer + 0x2c8 : 0);
+        for (unsigned j = 0; ok && j < 9; j++)
+            ok = MEM_R8(dest + j) == (received && cases[i].copy && j < 8 ? 0x41 + j : 0xcc);
+        if (path == CALLBACK_ACK)
+            ok = ok && nc_cpu.r[24] == trace + 16 && MEM_R32(trace) == 1 &&
+                 MEM_R32(trace + 4) == f->results + 8 && MEM_R32(trace + 8) == 3 &&
+                 MEM_R32(trace + 12) == f->results;
+        if (!ok)
+            fprintf(stderr, "CD_cw case %u failed\n", i);
     }
     saved.loading = true;
     cpu_serialize(&saved);

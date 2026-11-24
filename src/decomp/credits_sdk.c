@@ -10,7 +10,7 @@
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
 #include "decomp/sdk_printf.h"
-#include "decomp/cd_wait.h"
+#include "decomp/cd_command.h"
 #include "decomp/cd_position.h"
 #include "decomp/byte_scan.h"
 #include "decomp/cd_state.h"
@@ -6540,18 +6540,16 @@ static const CdWaitLayout credits_cd_wait = {
     .check_callback = 0x8001a7ec,
     .sync_name = 0x80018918,
     .ready_name = 0x80018920,
+    .writer = 0x80021028,
+    .sync = 0x80020adc,
+    .verbose_format = 0x8001892c,
+    .missing_format = 0x80018934,
+    .command_name = 0x80018944,
     .dma_control = 0x80024a64,
     .dma_name = 0x80018998,
 };
 
-static const CdWaitSite cd_command_wait = {0x80021244, 0x80021294, 0x800212e8, 0x800212f0, 18, 19, false};
 static const CdWaitSite cd_dma_wait = {0x80021940, 0x80021990, 0x800219e0, 0x800219e8, 17, 16, true};
-
-static void load_cd_command_table(CPUState *c, unsigned reg, unsigned offset_reg, u32 table) {
-    set_reg(c, 1, 0x80020000);
-    set_reg(c, 1, R(1) + R(offset_reg));
-    load_word(c, reg, R(1) + table);
-}
 
 static void load_cd_byte(CPUState *c, unsigned reg, u32 address) {
     R(reg) = MEM_R8(address);
@@ -6646,7 +6644,7 @@ static void update_cd_irq_status(CPUState *c) {
         load_cd_byte(c, 2, 0x8002477d);
         NC_POLL(c, 1);
         set_reg(c, 2, R(2) << 2);
-        load_cd_command_table(c, 2, 2, 0x4920);
+        load_cd_command_table(c, 2, 2, 0x80024920);
         NC_POLL(c, 1);
         bool has_status = R(2) != 0;
         NC_POLL(c, 2);
@@ -6696,7 +6694,7 @@ static void report_cd_irq_error(CPUState *c) {
         load_cd_port(c, 6, 0x8002476c);
         load_cd_port(c, 7, 0x80024770);
         set_reg(c, 2, R(2) << 2);
-        load_cd_command_table(c, 5, 2, 0x4780);
+        load_cd_command_table(c, 5, 2, 0x80024780);
         cd_irq_address(c, 4, 0x800188c8);
         gpu_sync_call(c, 0x80019a60, 0x8002078c);
     }
@@ -6735,7 +6733,7 @@ static void cd_irq_ack(CPUState *c) {
         load_cd_byte(c, 2, 0x8002477d);
         NC_POLL(c, 1);
         set_reg(c, 2, R(2) << 2);
-        load_cd_command_table(c, 2, 2, 0x4820);
+        load_cd_command_table(c, 2, 2, 0x80024820);
         NC_POLL(c, 1);
         second_ack = R(2) != 0;
         R(2) = 3;
@@ -6846,7 +6844,7 @@ bool nc_credits_get_cd_interrupt(CPUState *c) {
         R(2) = R(3) << 2;
         NC_POLL(c, 2);
         if (known) {
-            load_cd_command_table(c, 2, 2, 0xffff8904);
+            load_cd_command_table(c, 2, 2, 0x80018904);
             NC_POLL(c, 1);
             u32 target = R(2);
             NC_POLL(c, 2);
@@ -6889,222 +6887,8 @@ bool nc_credits_get_cd_interrupt(CPUState *c) {
     return true;
 }
 
-static void print_cd_command(CPUState *c, unsigned index_reg, u32 format, u32 resume) {
-    load_cd_command_table(c, 5, index_reg, 0x4780);
-    set_reg(c, 4, 0x80020000);
-    set_reg(c, 4, format);
-    gpu_sync_call(c, 0x80019a60, resume);
-}
-
-static void write_cd_command_ports(CPUState *c) {
-    R(31) = 0x800210f4;
-    R(5) = 0;
-    NC_POLL(c, 2);
-    nc_call(c, 0x80020adc); /* CD_sync(0, NULL) */
-    set_reg(c, 3, R(16) & 0xff);
-    set_reg(c, 2, 2);
-    bool set_location = R(3) == R(2);
-    R(2) = 14;
-    NC_POLL(c, 2);
-    if (set_location) {
-        set_reg(c, 4, 0);
-        set_reg(c, 3, R(17));
-        bool more;
-        do {
-            R(2) = MEM_R8(R(3));
-            NC_POLL(c, NC_LOAD_CYCLES);
-            set_reg(c, 1, 0x80020000);
-            set_reg(c, 1, R(1) + R(4));
-            MEM_W8(R(1) + 0x4778, (u8)R(2));
-            NC_POLL(c, 1);
-            set_reg(c, 4, R(4) + 1);
-            set_reg(c, 2, (s32)R(4) < 4);
-            more = R(2) != 0;
-            R(3)++;
-            NC_POLL(c, 2);
-        } while (more);
-        set_reg(c, 3, R(16) & 0xff);
-        set_reg(c, 2, 14);
-    }
-    bool set_mode = R(3) == R(2);
-    R(4) = R(3) << 2;
-    NC_POLL(c, 2);
-    if (set_mode) {
-        R(2) = MEM_R8(R(17));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 1, 0x80020000);
-        MEM_W8(0x8002477c, (u8)R(2));
-        NC_POLL(c, 1);
-    }
-    set_reg(c, 2, 0x80020000);
-    set_reg(c, 2, 0x80024a38);
-    MEM_W8(R(2), 0);
-    NC_POLL(c, 1);
-    load_cd_command_table(c, 2, 4, 0x48a0);
-    set_reg(c, 3, 0x80020000);
-    set_reg(c, 3, 0x800248a0);
-    bool clear_ready = R(2) != 0;
-    NC_POLL(c, 2);
-    if (clear_ready) {
-        set_reg(c, 1, 0x80020000);
-        MEM_W8(0x80024a39, 0);
-        NC_POLL(c, 1);
-    }
-    cd_flush_port(c, 0x80024a20);
-    MEM_W8(R(2), 0); /* select bank zero */
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(3) + 0x100);
-    set_reg(c, 3, R(4) + R(2));
-    load_word(c, 2, R(3));
-    NC_POLL(c, 1);
-    bool more = (s32)R(2) > 0;
-    R(4) = 0;
-    NC_POLL(c, 2);
-    if (more) {
-        set_reg(c, 6, R(3));
-        set_reg(c, 5, R(17));
-    }
-    while (more) {
-        load_cd_port(c, 3, 0x80024a28);
-        R(2) = MEM_R8(R(5));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 5, R(5) + 1);
-        MEM_W8(R(3), (u8)R(2)); /* parameter FIFO */
-        NC_POLL(c, 1);
-        load_word(c, 2, R(6));
-        set_reg(c, 4, R(4) + 1);
-        set_reg(c, 2, (s32)R(4) < (s32)R(2));
-        more = R(2) != 0;
-        NC_POLL(c, 2);
-    }
-    load_cd_port(c, 2, 0x80024a24);
-    set_reg(c, 1, 0x80020000);
-    MEM_W8(0x8002477d, (u8)R(16));
-    NC_POLL(c, 1);
-    MEM_W8(R(2), (u8)R(16));
-    NC_POLL(c, 1);
-}
-
-static void wait_cd_command_ack(CPUState *c) {
-    R(31) = 0x800211f4;
-    R(4) = UINT32_MAX;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001a454);
-    set_reg(c, 2, R(2) + 960);
-    set_reg(c, 4, 0x80020000);
-    set_reg(c, 4, 0x80024a38);
-    store_gpu_global(c, 0x80024e48, 2);
-    store_gpu_global(c, 0x80024e4c, 0);
-    R(3) = MEM_R8(R(4));
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 2, 0x80020000);
-    set_reg(c, 2, 0x80018944);
-    store_gpu_global(c, 0x80024e50, 2);
-    bool pending = !R(3);
-    R(6) = R(21);
-    NC_POLL(c, 2);
-    if (pending) {
-        set_reg(c, 19, 0x80020000);
-        set_reg(c, 19, 0x80024800);
-        set_reg(c, 18, R(4));
-        set_reg(c, 20, R(18) + 1);
-    }
-    while (pending) {
-        if (cd_wait_expired(c, &credits_cd_wait, &cd_command_wait))
-            return;
-        gpu_sync_call(c, 0x8001a7ec, 0x8002130c);
-        bool drain = R(2) != 0;
-        NC_POLL(c, 2);
-        if (drain)
-            drain_cd_sync_events(c, &credits_cd_wait, 0x80021334, 20);
-        R(2) = MEM_R8(R(18));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        NC_POLL(c, 1);
-        pending = !R(2);
-        R(6) = R(21);
-        NC_POLL(c, 2);
-    }
-    set_reg(c, 4, 0x80020000);
-    set_reg(c, 4, 0x80024e30);
-    bool copy = R(6) != 0;
-    NC_POLL(c, 2);
-    if (copy) {
-        set_reg(c, 3, 7);
-        copy_cd_response(c, 6, 5);
-    }
-    set_reg(c, 2, 0x80020000);
-    set_reg(c, 2, 0x80024a38);
-    R(2) = MEM_R8(R(2));
-    NC_POLL(c, NC_LOAD_CYCLES);
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(2) ^ 5);
-    set_reg(c, 2, R(2) == 0);
-    set_reg(c, 2, 0u - R(2)); /* disk error */
-}
-
-/* CD_cw writes a command and its parameters, optionally waiting for acknowledgement. */
 bool nc_credits_write_cd_command(CPUState *c) {
-    if (c->budget <= 1)
-        return false;
-    load_cd_port(c, 2, 0x80024768);
-    set_reg(c, 29, R(29) - 72);
-    const unsigned saved[] = {17, 21, 18, 16};
-    const unsigned args[] = {5, 6, 7, 4};
-    for (unsigned i = 0; i < 4; i++) {
-        unsigned reg = saved[i];
-        MEM_W32(R(29) + 40 + 4 * (reg - 16), R(reg));
-        NC_POLL(c, 1);
-        set_reg(c, reg, R(args[i]));
-    }
-    MEM_W32(R(29) + 64, R(31));
-    NC_POLL(c, 1);
-    MEM_W32(R(29) + 56, R(20));
-    NC_POLL(c, 1);
-    set_reg(c, 2, (s32)R(2) < 2);
-    bool verbose = !R(2);
-    MEM_W32(R(29) + 52, R(19));
-    NC_POLL(c, 2);
-    if (verbose) {
-        set_reg(c, 2, R(16) & 0xff);
-        set_reg(c, 2, R(2) << 2);
-        print_cd_command(c, 2, 0x8001892c, 0x8002108c);
-    }
-    set_reg(c, 2, R(16) & 0xff);
-    set_reg(c, 3, R(2) << 2);
-    load_cd_command_table(c, 2, 3, 0x49a0);
-    NC_POLL(c, 1);
-    bool needs_params = R(2) != 0;
-    R(4) = 0;
-    NC_POLL(c, 2);
-    bool missing = false;
-    if (needs_params) {
-        missing = !R(17);
-        NC_POLL(c, 2);
-    }
-    if (missing) {
-        cd_flush_port(c, 0x80024768);
-        bool report = (s32)R(2) > 0;
-        R(2) = (u32)-2;
-        NC_POLL(c, 2);
-        if (report) {
-            print_cd_command(c, 3, 0x80018934, 0x800210e4);
-            R(2) = (u32)-2;
-            NC_POLL(c, 2);
-        }
-    } else {
-        write_cd_command_ports(c);
-        bool wait = !R(18);
-        R(2) = 0;
-        NC_POLL(c, 2);
-        if (wait)
-            wait_cd_command_ack(c);
-    }
-    load_word(c, 31, R(29) + 64);
-    for (unsigned reg = 21; reg >= 16; reg--)
-        load_word(c, reg, R(29) + 40 + 4 * (reg - 16));
-    set_reg(c, 29, R(29) + 72);
-    NC_POLL(c, 2);
-    return true;
+    return write_cd_command(c, &credits_cd_wait);
 }
 
 bool nc_credits_sync_cd_command(CPUState *c) {

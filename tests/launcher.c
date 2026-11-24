@@ -40,6 +40,7 @@ static const CdEventFixture launcher_events = {
     .ports = 0x80015adc, .callbacks = 0x80015818, .results = 0x80015b80,
     .deadline = 0x80015b98, .status = 0x80015af4, .ready = 0x80012f00,
     .sync = 0x80012c80,
+    .writer = 0x800131cc,
 };
 
 static void install_recorder(u32 entry, u32 body, const u32 *actions, unsigned count) {
@@ -1110,6 +1111,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_write_cd_command(&launcher_events, nc_launcher_write_cd_command)) {
+        fprintf(stderr, "launcher CD command writer failed\n");
         return 1;
     }
     if (!check_cd_command_sync(&launcher_events, nc_launcher_sync_cd_command) ||

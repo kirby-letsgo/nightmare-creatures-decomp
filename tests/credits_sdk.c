@@ -27,6 +27,7 @@ static const CdEventFixture credits_events = {
     .ports = 0x80024a20, .callbacks = 0x8002475c, .results = 0x80024e30,
     .deadline = 0x80024e48, .status = 0x80024a38, .ready = 0x80020d5c,
     .sync = 0x80020adc,
+    .writer = 0x80021028,
 };
 
 static bool check_copy(void) {
@@ -3180,91 +3181,6 @@ static bool check_cd_interrupt_fifo(void) {
     return ok;
 }
 
-static bool check_write_cd_command(void) {
-    const u32 script = 0x80061000, params = script + 64, dest = params + 16;
-    const u32 port = dest + 16, events = port + 16, trace = events + 32, handler = trace + 64;
-    enum { ASYNC, ALREADY_ACKED, CALLBACK_ACK, DISK_ERROR, FRAME_TIMEOUT, POLL_TIMEOUT };
-    const struct { u32 command, debug; unsigned path; bool params, copy; } cases[] = {
-        {2, 0, ASYNC, false, false}, {14, 2, ASYNC, false, false},
-        {0x102, 2, ASYNC, true, true}, {14, 0, ASYNC, true, false},
-        {3, 0, ALREADY_ACKED, false, true}, {2, 0, CALLBACK_ACK, true, true},
-        {1, 0, DISK_ERROR, false, false}, {1, 0, FRAME_TIMEOUT, false, true},
-        {1, 0, POLL_TIMEOUT, false, true},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    install_cd_wait_stubs(&credits_events, handler);
-    MEM_W32(0x80020adc, 0x03e00008); /* CD_sync counts submissions in t7 */
-    MEM_W32(0x80020ae0, 0x25ef0001);
-    MEM_W32(0x80024a20, port);
-    MEM_W32(0x80024a24, port + 1);
-    MEM_W32(0x80024a28, port + 2);
-    MEM_W32(0x80024760, handler);
-    MEM_W32(0x8002475c, handler);
-    MEM_W32(events, 6);
-    MEM_W32(events + 4, 0);
-    MEM_W32(params, 0x78563412);
-    for (unsigned j = 0; j < 8; j++)
-        MEM_W8(0x80024e30 + j, (u8)(0x41 + j));
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        unsigned path = cases[i].path, cmd = cases[i].command & 0xff;
-        bool invalid = !cases[i].params && (cmd == 2 || cmd == 14);
-        bool timeout = path == FRAME_TIMEOUT || path == POLL_TIMEOUT;
-        bool received = !invalid && !timeout && path != ASYNC;
-        memset(nc_fast_ptr(script), 0, 36);
-        MEM_W32(script, 100);
-        MEM_W32(script + 8, path == ALREADY_ACKED ? 3 : 0);
-        MEM_W32(script + 12, path == FRAME_TIMEOUT ? 1061 : 100);
-        MEM_W32(script + 16, path == POLL_TIMEOUT ? 0x3c0001 : 0);
-        MEM_W32(script + 20, path == DISK_ERROR ? 5 : 3);
-        MEM_W32(0x80024768, cases[i].debug);
-        MEM_W32(0x80024778, 0xffffffff);
-        MEM_W8(0x8002477c, 0xee);
-        MEM_W8(0x8002477d, 0xee);
-        MEM_W8(0x80024a39, 1);
-        memset(nc_fast_ptr(port), 0xee, 4);
-        memset(nc_fast_ptr(dest), 0xcc, 12);
-        memset(nc_fast_ptr(trace), 0, 48);
-        CPUState state = arguments(cases[i].command, cases[i].params ? params : 0,
-                                   cases[i].copy ? dest : 0, i & 1 ? 2 : 8192);
-        state.r[7] = path == ASYNC;
-        state.r[8] = script;
-        state.r[9] = 0x80024e4c;
-        state.r[10] = 0x80024a38;
-        state.r[13] = trace + 32;
-        state.r[14] = path == CALLBACK_ACK;
-        state.r[15] = 0;
-        state.r[24] = trace;
-        state.r[25] = events;
-        u32 expected = invalid ? (u32)-2 : timeout || path == DISK_ERROR ? UINT32_MAX : 0;
-        ok = compare(state, 0x80021028, nc_credits_write_cd_command, 1) &&
-             nc_cpu.r[2] == expected && nc_cpu.r[15] == (u32)!invalid &&
-             MEM_R8(port + 1) == (invalid ? 0xee : cmd) &&
-             MEM_R8(0x8002477d) == (invalid ? 0xee : cmd) &&
-             MEM_R32(0x80024778) == (cmd == 2 && !invalid ? 0x78563412u : UINT32_MAX) &&
-             MEM_R8(0x8002477c) == (cmd == 14 && !invalid ? 0x12 : 0xee) &&
-             MEM_R8(port + 2) == (invalid ? 0xee : cmd == 2 ? 0x56 : cmd == 14 ? 0x12 : 0xee) &&
-             MEM_R8(0x80024a39) == (cmd == 3 ? 0 : 1) &&
-             MEM_R32(trace + 40) == (timeout ? 0x800212f0u : 0);
-        for (unsigned j = 0; ok && j < 9; j++)
-            ok = MEM_R8(dest + j) == (received && cases[i].copy && j < 8 ? 0x41 + j : 0xcc);
-        if (path == CALLBACK_ACK)
-            ok = ok && nc_cpu.r[24] == trace + 16 && MEM_R32(trace) == 1 &&
-                 MEM_R32(trace + 4) == 0x80024e38 && MEM_R32(trace + 8) == 3 &&
-                 MEM_R32(trace + 12) == 0x80024e30;
-        if (!ok)
-            fprintf(stderr, "CD_cw case %u failed\n", i);
-    }
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
-}
-
 static bool check_cd_data_sync(void) {
     const u32 scratch = 0x80061000;
     StateIO saved = {0};
@@ -5051,7 +4967,7 @@ int main(int argc, char **argv) {
     pass = pass && check_cd_ready_driver(&credits_events, nc_credits_wait_cd_ready);
     pass = pass && check_get_cd_interrupt();
     pass = pass && check_cd_interrupt_fifo();
-    pass = pass && check_write_cd_command();
+    pass = pass && check_write_cd_command(&credits_events, nc_credits_write_cd_command);
     pass = pass && check_cd_command_sync(&credits_events, nc_credits_sync_cd_command);
     const CdDmaWaitFixture dma_wait = {
         0x800218d8, 0x8001a454, 0x8001a638, 0x80019a60, 0x800214c8,
