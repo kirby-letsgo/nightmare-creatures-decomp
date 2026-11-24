@@ -5428,6 +5428,20 @@ u32 nc_scan_placement_link(CPUState *c) {
     return R(2) ? 0x80029854 : 0x80029890;
 }
 
+u32 nc_finish_placement_link_scan(CPUState *c, bool reload_count) {
+    const int load_cycles = reload_count ? 3 : 0;
+    if (c->budget <= load_cycles + 5)
+        return 0;
+    const u32 count = reload_count ? MEM_R16(R(16) + 0x38) : R(2);
+    R(2) = 0x21;
+    if (R(5) != count) {
+        c->budget -= load_cycles + 3;
+        return 0x80029918;
+    }
+    c->budget -= load_cycles + 5;
+    return R(19) == 0x21 ? 0x80029900 : 0x800298a8;
+}
+
 u32 nc_check_linked_placement_axis(CPUState *c, bool second) {
     if (c->budget <= 14)
         return 0;

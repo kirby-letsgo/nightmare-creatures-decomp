@@ -5048,6 +5048,35 @@ static bool placement_link_scans(bool disc) {
     return true;
 }
 
+static bool placement_link_scan_exits(bool disc) {
+    for (unsigned reload = 0; reload <= 1; ++reload) {
+        for (unsigned path = 0; path < 3; ++path) {
+            CPUState input = initial();
+            input.r[16] = SCRATCH_BASE;
+            input.r[19] = path == 2 ? 34 : 33;
+            input.r[5] = path == 0 ? 1 : 2;
+            input.r[2] = reload ? 1 : 2;
+            MEM_W16(SCRATCH_BASE + 0x38, reload ? 2 : 1);
+            const u32 targets[] = {0x80029918, 0x80029900, 0x800298a8};
+            input.r[31] = targets[path];
+            input.budget = reload ? 8 : 5;
+            CPUState native = input;
+            if (nc_finish_placement_link_scan(&native, reload) || memcmp(&native, &input, sizeof input))
+                return false;
+            native.budget = ++input.budget;
+            if (nc_finish_placement_link_scan(&native, reload) != input.r[31] ||
+                native.r[2] != 0x21 || native.budget != (path == 0 ? 3 : 1))
+                return false;
+            if (disc) {
+                interp_call(&input, reload ? 0x80029890 : 0x80029894);
+                if (memcmp(&native, &input, sizeof input))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool linked_placement_axes(bool disc) {
     const struct {
         u32 center;
@@ -9280,7 +9309,8 @@ int main(int argc, char **argv) {
         placement_scan_stack_switches(disc) &&
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_dispatch_frames(disc) && placement_selector_targets(disc) &&
-        placement_link_scan_entries(disc) && placement_link_scans(disc) && linked_placement_axes(disc) &&
+        placement_link_scan_entries(disc) && placement_link_scans(disc) && placement_link_scan_exits(disc) &&
+        linked_placement_axes(disc) &&
         placement_step_returns(disc) &&
         placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
