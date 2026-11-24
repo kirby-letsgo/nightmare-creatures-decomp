@@ -3260,6 +3260,8 @@ class Emitter:
                 out.append("    if (nc_call_indexed_placement_x_step(c)) {")
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append("        goto L_8002A23C; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029E98:
+                out.append("    if (nc_clear_placement_y_step_flags(c)) goto L_8002A560;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029CD0:
                 out.append("    if (nc_update_placement_height_flags(c)) goto L_8002A560;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029D3C:
