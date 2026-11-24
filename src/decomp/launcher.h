@@ -3,6 +3,7 @@
 
 #include "port/recomp.h"
 
+bool nc_launcher_format_output(CPUState *c);
 bool nc_launcher_convert_case(CPUState *c, bool upper);
 bool nc_launcher_switch_stack(CPUState *c);
 bool nc_launcher_initialize_cd_driver(CPUState *c);

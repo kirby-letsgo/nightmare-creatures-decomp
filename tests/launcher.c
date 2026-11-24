@@ -1,3 +1,4 @@
+#include "sdk_formatter.h"
 #include "interrupt_dispatch.h"
 #include "interrupt_start.h"
 #include "cd_control.h"
@@ -1111,6 +1112,10 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_format_output(0x8001119c, 0x800118d8, nc_launcher_format_output)) {
+        fprintf(stderr, "launcher formatter failed\n");
         return 1;
     }
     if (!check_get_cd_interrupt(&launcher_events, nc_launcher_get_cd_interrupt) ||
