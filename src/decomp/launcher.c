@@ -21,6 +21,13 @@ static const CdWaitLayout launcher_cd_wait = {
     .puts = 0x80013dd8,
     .print = 0x80011160,
     .flush = 0x8001366c,
+    .ports = 0x80015adc,
+    .callbacks = 0x80015818,
+    .results = 0x80015b80,
+    .getintr = 0x80012708,
+    .check_callback = 0x80010ba4,
+    .sync_name = 0x80010530,
+    .ready_name = 0x80010538,
     .dma_control = 0x80015b20,
     .dma_name = 0x800105b0,
 };
@@ -33,6 +40,14 @@ bool nc_launcher_initialize_cd_driver(CPUState *c) {
         .handler = 0x80013cf8, .command = 0x800131cc, .sync = 0x80012c80,
     };
     return initialize_cd_driver(c, &layout);
+}
+
+bool nc_launcher_sync_cd_command(CPUState *c) {
+    return sync_cd_command(c, &launcher_cd_wait, 0x80012c80);
+}
+
+bool nc_launcher_wait_cd_ready(CPUState *c) {
+    return wait_cd_ready(c, &launcher_cd_wait, 0x80012f00);
 }
 
 bool nc_launcher_sync_cd_dma(CPUState *c) {

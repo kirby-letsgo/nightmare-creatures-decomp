@@ -2,6 +2,7 @@
 #include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_dma_wait.h"
+#include "cd_events.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "decomp/cd_sector_dma.h"
@@ -32,6 +33,14 @@
 #include "port/exe.h"
 
 #include <stdio.h>
+
+static const CdEventFixture launcher_events = {
+    .vsync = 0x80013e28, .check_callback = 0x80010ba4, .getintr = 0x80012708,
+    .puts = 0x80013dd8, .print = 0x80011160, .flush = 0x8001366c,
+    .ports = 0x80015adc, .callbacks = 0x80015818, .results = 0x80015b80,
+    .deadline = 0x80015b98, .status = 0x80015af4, .ready = 0x80012f00,
+    .sync = 0x80012c80,
+};
 
 static void install_recorder(u32 entry, u32 body, const u32 *actions, unsigned count) {
     /* Jump to a guest stub, log the caller's ra at s1, then perform its actions. */
@@ -1101,6 +1110,11 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_cd_command_sync(&launcher_events, nc_launcher_sync_cd_command) ||
+        !check_cd_ready_driver(&launcher_events, nc_launcher_wait_cd_ready)) {
+        fprintf(stderr, "launcher CD sync/ready failed\n");
         return 1;
     }
     const CdRetryFixture retry = {
