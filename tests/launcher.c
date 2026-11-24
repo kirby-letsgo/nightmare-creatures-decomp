@@ -2,7 +2,7 @@
 #include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_dma_wait.h"
-#include "cd_events.h"
+#include "cd_irq.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "decomp/cd_sector_dma.h"
@@ -1111,6 +1111,11 @@ int main(int argc, char **argv) {
         return 1;
     if (!check_shared_record()) {
         fprintf(stderr, "launcher shared record failed\n");
+        return 1;
+    }
+    if (!check_get_cd_interrupt(&launcher_events, nc_launcher_get_cd_interrupt) ||
+        !check_cd_interrupt_fifo(&launcher_events, nc_launcher_get_cd_interrupt)) {
+        fprintf(stderr, "launcher CD interrupt reader failed\n");
         return 1;
     }
     if (!check_write_cd_command(&launcher_events, nc_launcher_write_cd_command)) {

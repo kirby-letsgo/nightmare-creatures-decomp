@@ -2,7 +2,7 @@
 #include "interrupt_start.h"
 #include "cd_control.h"
 #include "cd_dma_wait.h"
-#include "cd_events.h"
+#include "cd_irq.h"
 #include "cd_interrupt_callback.h"
 #include "cd_sector_dma.h"
 #include "cd_read.h"
@@ -3094,93 +3094,6 @@ static bool check_cd_ready(void) {
     return ok && !saved.error;
 }
 
-static bool check_get_cd_interrupt(void) {
-    const u32 slots = 0x80024a20, ports = 0x80061000;
-    const u32 replies = 0x80024e30, status = 0x80024a38;
-    const struct {
-        u8 reason, response, cmd, mask;
-        bool fifo, verbose;
-    } cases[] = {
-        {0, 0, 0, 0, false, false},
-        {1, 0, 0, 4, false, false}, {1, 0x11, 0, 4, true, false},
-        {2, 0, 0, 2, false, false}, {2, 0x10, 0, 2, true, false},
-        {3, 0, 0, 2, false, false}, {3, 0, 9, 1, false, false},
-        {3, 0x11, 1, 2, true, false}, {3, 0x11, 16, 2, true, false},
-        {4, 0x20, 0, 4, true, false},
-        {5, 0x10, 0, 6, true, true}, {5, 0, 0, 6, false, false},
-        {6, 0, 0, 0, false, false}, {7, 0, 0, 0, false, true},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    MEM_W32(0x8001a638, 0x03e00008);
-    MEM_W32(0x8001a63c, 0);
-    MEM_W32(0x80019a60, 0x03e00008);
-    MEM_W32(0x80019a64, 0);
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        /* Point the bank select at its own pointer so writing bank one
-         * redirects subsequent status reads to a byte with FIFO data ready. */
-        MEM_W32(slots, cases[i].fifo ? slots : ports);
-        MEM_W8(0x80024a01, 0x20);
-        MEM_W32(slots + 4, ports + 1);
-        MEM_W32(slots + 8, ports + 2);
-        MEM_W32(slots + 12, ports + 3);
-        MEM_W8(ports + 1, cases[i].response);
-        MEM_W8(ports + 3, cases[i].reason);
-        MEM_W8(0x8002477d, cases[i].cmd);
-        MEM_W32(0x8002476c, 0);
-        MEM_W32(0x80024774, 4);
-        MEM_W32(0x80024768, cases[i].verbose);
-        MEM_W32(status, 0xcccccccc);
-        memset(nc_fast_ptr(replies), 0xcc, 24);
-        CPUState state = arguments(0, 0, 0, i & 1 ? 2 : 4096);
-        ok = compare(state, 0x80020564, nc_credits_get_cd_interrupt, 1) &&
-             nc_cpu.r[2] == cases[i].mask;
-        if (!ok)
-            fprintf(stderr, "getintr case %u failed (mask %u)\n", i, nc_cpu.r[2]);
-    }
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
-}
-
-static bool check_cd_interrupt_fifo(void) {
-    StateIO saved = {0}, native = {0}, guest = {0};
-    cd_transfer_state(&saved);
-    bool ok = !saved.error;
-    for (unsigned run = 0; run < 2 && ok; run++) {
-        cdrom_tick(0);
-        cdrom_write(0, 0);
-        cdrom_write(1, 1); /* Getstat returns one response byte. */
-        cdrom_tick(25000);
-        MEM_W8(0x8002477d, 1);
-        memset(nc_fast_ptr(0x80024e30), 0xcc, 8);
-        nc_cpu = arguments(0, 0, 0, 4096);
-        if (run)
-            interp_call(&nc_cpu, 0x80020564);
-        else
-            ok = nc_credits_get_cd_interrupt(&nc_cpu);
-        ok = ok && nc_cpu.r[2] == 2 && MEM_R8(0x80024e30) == MEM_R32(0x8002476c) &&
-             !(cdrom_read(0) & 0x20) && !(cdrom_read(3) & 7);
-        for (unsigned i = 1; ok && i < 8; i++)
-            ok = MEM_R8(0x80024e30 + i) == 0;
-        cd_transfer_state(run ? &guest : &native);
-        saved.loading = true;
-        saved.pos = 0;
-        cd_transfer_state(&saved);
-    }
-    ok = ok && !saved.error && !native.error && !guest.error &&
-         native.len == guest.len && !memcmp(native.buf, guest.buf, guest.len);
-    free(saved.buf);
-    free(native.buf);
-    free(guest.buf);
-    return ok;
-}
-
 static bool check_cd_data_sync(void) {
     const u32 scratch = 0x80061000;
     StateIO saved = {0};
@@ -4965,8 +4878,8 @@ int main(int argc, char **argv) {
     pass = pass && compare_sector_ready(&retry, nc_credits_handle_cd_read);
 
     pass = pass && check_cd_ready_driver(&credits_events, nc_credits_wait_cd_ready);
-    pass = pass && check_get_cd_interrupt();
-    pass = pass && check_cd_interrupt_fifo();
+    pass = pass && check_get_cd_interrupt(&credits_events, nc_credits_get_cd_interrupt);
+    pass = pass && check_cd_interrupt_fifo(&credits_events, nc_credits_get_cd_interrupt);
     pass = pass && check_write_cd_command(&credits_events, nc_credits_write_cd_command);
     pass = pass && check_cd_command_sync(&credits_events, nc_credits_sync_cd_command);
     const CdDmaWaitFixture dma_wait = {
