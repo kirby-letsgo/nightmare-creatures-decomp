@@ -43,4 +43,88 @@ static bool check_cd_init_retries(u32 entry, bool (*routine)(CPUState *), u32 re
     return ok && !saved.error;
 }
 
+typedef struct {
+    u32 entry, ports, callbacks, puts, print;
+    u32 reset, install, handler, command, sync;
+} CdDriverInitFixture;
+
+static bool compare_cd_driver_init(const CdDriverInitFixture *f, bool (*routine)(CPUState *)) {
+    const u32 ports = 0x80061000, trace = ports + 0x100, command = f->command;
+    const struct {
+        bool pending, lid_open;
+        u32 fail_command, sync_result;
+    } cases[] = {
+        {false, false, 0, 2}, {true, true, 0, 2}, {false, true, 10, 2},
+        {true, false, 12, 2}, {false, false, 0, 5},
+    };
+    StateIO saved = {0};
+    cpu_serialize(&saved);
+    NcModule module = nc_active_module();
+    nc_set_module(NC_MOD_NONE);
+    const u32 stubs[] = {f->puts, f->print, f->reset, f->install};
+    for (unsigned i = 0; i < 4; i++) {
+        MEM_W32(stubs[i], 0x03e00008);
+        MEM_W32(stubs[i] + 4, 0);
+    }
+    MEM_W32(f->install, 0xad040020);     /* record IRQ index and handler */
+    MEM_W32(f->install + 4, 0x03e00008);
+    MEM_W32(f->install + 8, 0xad050024);
+    MEM_W32(command, 0xad040000);        /* sw a0,0(t0): command log */
+    MEM_W32(command + 4, 0x25080004);
+    MEM_W32(command + 8, 0xad2a0000);    /* sw t2,0(t1): controller status */
+    MEM_W32(command + 12, 0x008b1026);   /* xor v0,a0,t3 */
+    MEM_W32(command + 16, 0x03e00008);
+    MEM_W32(command + 20, 0x2c420001);   /* fail the selected command */
+    MEM_W32(f->sync, 0x03e00008);
+    MEM_W32(f->sync + 4, 0x01801021);     /* return scripted sync result */
+    bool ok = !saved.error;
+    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
+        memset(nc_fast_ptr(ports), 0, 0x140);
+        MEM_W32(f->ports, ports + 16);
+        MEM_W32(f->ports + 12, ports);
+        /* Redirect the next status read to a cleared byte when the loop
+         * writes the interrupt enable port, modelling a completed ACK. */
+        MEM_W32(f->ports + 8, cases[i].pending ? f->ports + 12 : ports + 8);
+        MEM_W32(f->ports + 16, ports + 32);
+        MEM_W8(ports, cases[i].pending ? 3 : 0);
+        MEM_W32(f->ports + 24, UINT32_MAX);
+        MEM_W32(f->callbacks + 0x20, UINT32_MAX);
+        MEM_W32(f->callbacks + 4, UINT32_MAX);
+        MEM_W32(f->callbacks, UINT32_MAX);
+        MEM_W32(f->callbacks + 20, UINT32_MAX);
+        MEM_W32(f->callbacks + 16, UINT32_MAX);
+        CPUState state = arguments(7, 8, 9, i & 1 ? 5 : 4096);
+        state.r[8] = trace;
+        state.r[9] = f->callbacks + 16;
+        state.r[10] = cases[i].lid_open ? 16 : 0;
+        state.r[11] = cases[i].fail_command;
+        state.r[12] = cases[i].sync_result;
+        ok = compare(state, f->entry, routine, 4) &&
+             nc_cpu.r[2] == (cases[i].fail_command || cases[i].sync_result != 2 ? UINT32_MAX : 0) &&
+             MEM_R32(trace + 32) == 2 && MEM_R32(trace + 36) == f->handler &&
+             MEM_R32(ports + 32) == 0x1325 && MEM_R8(ports) == (cases[i].pending ? 7 : 0) &&
+             MEM_R32(f->ports + 24) == 0xff000002 && MEM_R32(f->callbacks + 0x20) == 0xffff0000 &&
+             MEM_R32(f->callbacks + 4) == 0 && MEM_R32(f->callbacks) == 0 && MEM_R32(f->callbacks + 20) == 0;
+        u32 cursor = trace;
+        ok = ok && MEM_R32(cursor) == 1;
+        cursor += 4;
+        if (cases[i].lid_open) {
+            ok = ok && MEM_R32(cursor) == 1;
+            cursor += 4;
+        }
+        ok = ok && MEM_R32(cursor) == 10;
+        cursor += 4;
+        if (cases[i].fail_command != 10) {
+            ok = ok && MEM_R32(cursor) == 12;
+            cursor += 4;
+        }
+        ok = ok && nc_cpu.r[8] == cursor;
+    }
+    saved.loading = true;
+    cpu_serialize(&saved);
+    free(saved.buf);
+    nc_set_module(module);
+    return ok && !saved.error;
+}
+
 #endif

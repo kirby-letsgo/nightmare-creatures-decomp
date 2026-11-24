@@ -4200,85 +4200,6 @@ static bool check_cd_init_interrupt(void) {
     return true;
 }
 
-static bool check_cd_driver_initialization(void) {
-    const u32 ports = 0x80061000, trace = ports + 0x100, command = 0x80021028;
-    const struct {
-        bool pending, lid_open;
-        u32 fail_command, sync_result;
-    } cases[] = {
-        {false, false, 0, 2}, {true, true, 0, 2}, {false, true, 10, 2},
-        {true, false, 12, 2}, {false, false, 0, 5},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    const u32 stubs[] = {0x8001a638, 0x80019a60, 0x8001a698, 0x8001a6c8};
-    for (unsigned i = 0; i < 4; i++) {
-        MEM_W32(stubs[i], 0x03e00008);
-        MEM_W32(stubs[i] + 4, 0);
-    }
-    MEM_W32(0x8001a6c8, 0xad040020);     /* record IRQ index and handler */
-    MEM_W32(0x8001a6cc, 0x03e00008);
-    MEM_W32(0x8001a6d0, 0xad050024);
-    MEM_W32(command, 0xad040000);        /* sw a0,0(t0): command log */
-    MEM_W32(command + 4, 0x25080004);
-    MEM_W32(command + 8, 0xad2a0000);    /* sw t2,0(t1): controller status */
-    MEM_W32(command + 12, 0x008b1026);   /* xor v0,a0,t3 */
-    MEM_W32(command + 16, 0x03e00008);
-    MEM_W32(command + 20, 0x2c420001);   /* fail the selected command */
-    MEM_W32(0x80020adc, 0x03e00008);
-    MEM_W32(0x80020ae0, 0x01801021);     /* return scripted sync result */
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        memset(nc_fast_ptr(ports), 0, 0x140);
-        MEM_W32(0x80024a20, ports + 16);
-        MEM_W32(0x80024a2c, ports);
-        /* Redirect the next status read to a cleared byte when the loop
-         * writes the interrupt enable port, modelling a completed ACK. */
-        MEM_W32(0x80024a28, cases[i].pending ? 0x80024a2c : ports + 8);
-        MEM_W32(0x80024a30, ports + 32);
-        MEM_W8(ports, cases[i].pending ? 3 : 0);
-        MEM_W32(0x80024a38, UINT32_MAX);
-        MEM_W32(0x8002477c, UINT32_MAX);
-        MEM_W32(0x80024760, UINT32_MAX);
-        MEM_W32(0x8002475c, UINT32_MAX);
-        MEM_W32(0x80024770, UINT32_MAX);
-        MEM_W32(0x8002476c, UINT32_MAX);
-        CPUState state = arguments(7, 8, 9, i & 1 ? 5 : 4096);
-        state.r[8] = trace;
-        state.r[9] = 0x8002476c;
-        state.r[10] = cases[i].lid_open ? 16 : 0;
-        state.r[11] = cases[i].fail_command;
-        state.r[12] = cases[i].sync_result;
-        ok = compare(state, 0x800216ec, nc_credits_initialize_cd_driver, 4) &&
-             nc_cpu.r[2] == (cases[i].fail_command || cases[i].sync_result != 2 ? UINT32_MAX : 0) &&
-             MEM_R32(trace + 32) == 2 && MEM_R32(trace + 36) == 0x80021b54 &&
-             MEM_R32(ports + 32) == 0x1325 && MEM_R8(ports) == (cases[i].pending ? 7 : 0) &&
-             MEM_R32(0x80024a38) == 0xff000002 && MEM_R32(0x8002477c) == 0xffff0000 &&
-             MEM_R32(0x80024760) == 0 && MEM_R32(0x8002475c) == 0 && MEM_R32(0x80024770) == 0;
-        u32 cursor = trace;
-        ok = ok && MEM_R32(cursor) == 1;
-        cursor += 4;
-        if (cases[i].lid_open) {
-            ok = ok && MEM_R32(cursor) == 1;
-            cursor += 4;
-        }
-        ok = ok && MEM_R32(cursor) == 10;
-        cursor += 4;
-        if (cases[i].fail_command != 10) {
-            ok = ok && MEM_R32(cursor) == 12;
-            cursor += 4;
-        }
-        ok = ok && nc_cpu.r[8] == cursor;
-    }
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
-}
-
 static bool check_cd_init_volume(void) {
     const u32 slots = 0x80024a20, spu = 0x80061000, ports = SCRATCH_BASE + 0x40;
     u8 saved[24];
@@ -5461,7 +5382,11 @@ int main(int argc, char **argv) {
     pass = pass && check_irq_accessors();
     pass = pass && check_interrupt_driver_calls();
     pass = pass && check_cd_init_interrupt();
-    pass = pass && check_cd_driver_initialization();
+    const CdDriverInitFixture driver_init = {
+        0x800216ec, 0x80024a20, 0x8002475c, 0x8001a638, 0x80019a60,
+        0x8001a698, 0x8001a6c8, 0x80021b54, 0x80021028, 0x80020adc,
+    };
+    pass = pass && compare_cd_driver_init(&driver_init, nc_credits_initialize_cd_driver);
     pass = pass && check_cd_init_volume();
     pass = pass && check_cd_mix();
     pass = pass && check_cd_playback_control();

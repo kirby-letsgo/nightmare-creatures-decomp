@@ -434,6 +434,7 @@ slus_005_82  800135E4    8001366C         cd_volume.h
 slus_005_82  8001366C    8001374C         cd_flush.h
 slus_005_82  8001374C    80013840         cd_volume.h
 slus_005_82  80013840    80013890         cd_state.h
+slus_005_82  80013890    80013A7C         cd_init.h
 slus_005_82  80013A7C    80013BE8         cd_wait.h
 slus_005_82  80013BE8    80013CE8         cd_sector_dma.h
 slus_005_82  80013CE8    80013CF8         cd_state.h
@@ -615,7 +616,7 @@ credits_exe  80021440    800214C8         credits_sdk.c
 credits_exe  800214C8    800215A8         credits_sdk.c
 credits_exe  800215A8    8002169C         credits_sdk.c
 credits_exe  8002169C    800216EC         credits_sdk.c
-credits_exe  800216EC    800218D8         credits_sdk.c
+credits_exe  800216EC    800218D8         cd_init.h
 credits_exe  800218D8    80021A44         cd_wait.h
 credits_exe  80021A44    80021B44         credits_sdk.c
 credits_exe  80021B44    80021B54         credits_sdk.c
