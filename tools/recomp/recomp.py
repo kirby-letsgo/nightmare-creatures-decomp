@@ -1316,6 +1316,8 @@ class Emitter:
                 out.append("    if (sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80011160:
                 out.append("    if (sdk_printf(c, 0x8001119c, 0x8001118c)) return;")
+            if self.mod.name == LAUNCHER and i.addr == 0x80013A7C:
+                out.append("    if (nc_launcher_sync_cd_dma(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80013BE8:
                 out.append("    if (cd_sector_dma(c, 0x80015adc)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x800135E4:

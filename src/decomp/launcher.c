@@ -1,3 +1,4 @@
+#include "decomp/cd_wait.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_read.h"
@@ -8,6 +9,25 @@
 #include "decomp/cd_state.h"
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/launcher.h"
+
+static const CdWaitLayout launcher_cd_wait = {
+    .deadline = 0x80015b98,
+    .command_names = 0x8001583c,
+    .status = 0x80015af4,
+    .timeout_message = 0x800104a8,
+    .report_format = 0x800104b8,
+    .vsync = 0x80013e28,
+    .puts = 0x80013dd8,
+    .print = 0x80011160,
+    .flush = 0x8001366c,
+    .dma_control = 0x80015b20,
+    .dma_name = 0x800105b0,
+};
+
+bool nc_launcher_sync_cd_dma(CPUState *c) {
+    static const CdWaitSite site = {0x80013ae4, 0x80013b34, 0x80013b84, 0x80013b8c, 17, 16, true};
+    return sync_cd_dma(c, &launcher_cd_wait, &site);
+}
 
 static void call_launcher_service(CPUState *c, u32 address, u32 resume) {
     R(31) = resume;
