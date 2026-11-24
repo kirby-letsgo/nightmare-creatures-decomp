@@ -4690,6 +4690,37 @@ static bool placement_coordinate_step_calls(bool disc) {
     return true;
 }
 
+static bool placement_word_decreases(bool disc) {
+    const u32 values[] = {0, 0x20201f, 0x202020, 0x202021, 0x808080, 0x80000000, UINT32_MAX};
+    const u32 address = SCRATCH_BASE + 0x28;
+    for (unsigned i = 0; i < sizeof values / sizeof values[0]; ++i) {
+        const u32 value = values[i];
+        const bool decrease = value > 0x202020u;
+        const u32 expected = decrease ? value - 0x40404u : value;
+        CPUState input = initial();
+        input.r[16] = SCRATCH_BASE;
+        input.r[31] = 0x8002a560;
+        input.budget = 12;
+        CPUState native = input;
+        MEM_W32(address, value);
+        if (nc_decrease_placement_word(&native) || memcmp(&native, &input, sizeof input) ||
+            MEM_R32(address) != value)
+            return false;
+        native.budget = ++input.budget;
+        if (!nc_decrease_placement_word(&native) || MEM_R32(address) != expected ||
+            native.r[2] != (decrease ? expected : 0xfffb0000u) || native.r[3] != value ||
+            native.budget != (decrease ? 1 : 5))
+            return false;
+        if (disc) {
+            MEM_W32(address, value);
+            interp_call(&input, 0x80029d3c);
+            if (memcmp(&native, &input, sizeof input) || MEM_R32(address) != expected)
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool four_placement_flags(bool disc) {
     const u32 base = 0x80120000;
     const u32 offsets[] = {0xe70c, 0x10620, 0xe754, 0xe778};
@@ -9504,7 +9535,7 @@ int main(int argc, char **argv) {
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
-        four_placement_flags(disc) && placement_step_flag_pairs(disc) &&
+        placement_word_decreases(disc) && four_placement_flags(disc) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
         placement_tick_routes(disc) && placement_selector_exits(disc) && flagged_placement_updates(disc) &&

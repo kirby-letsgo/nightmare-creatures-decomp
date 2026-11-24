@@ -5494,6 +5494,22 @@ bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume) {
     return true;
 }
 
+bool nc_decrease_placement_word(CPUState *c) {
+    if (c->budget <= 12)
+        return false;
+    const u32 address = R(16) + 0x28;
+    R(3) = MEM_R32(address);
+    if (R(3) > 0x202020u) {
+        R(2) = R(3) - 0x40404u;
+        MEM_W32(address, R(2));
+        c->budget -= 12;
+    } else {
+        R(2) = 0xfffb0000u; /* The branch delay slot loads the high half. */
+        c->budget -= 8;
+    }
+    return true;
+}
+
 u32 nc_clear_four_placement_flags(CPUState *c) {
     const int cycles = R(2) ? 44 : 2;
     if (c->budget <= cycles)
