@@ -5459,6 +5459,16 @@ u32 nc_check_linked_placement_axis(CPUState *c, bool second) {
     return second ? 0x800298f8 : 0x800298d0;
 }
 
+bool nc_prepare_placement_timestamp_call(CPUState *c, u32 resume) {
+    if (c->budget <= 6)
+        return false;
+    R(5) = MEM_R32(0x8008ef10);
+    R(4) = R(16);
+    R(31) = resume;
+    c->budget -= 6;
+    return true;
+}
+
 u32 nc_route_placement_followup(CPUState *c) {
     if (c->budget <= 16)
         return 0;
@@ -5469,10 +5479,8 @@ u32 nc_route_placement_followup(CPUState *c) {
         c->budget -= 10;
         return 0x8002a564;
     }
-    R(5) = MEM_R32(0x8008ef10);
-    R(4) = R(16);
-    R(31) = 0x80029948;
-    c->budget -= 16;
+    c->budget -= 10;
+    nc_prepare_placement_timestamp_call(c, 0x80029948);
     return 0x80038a0c;
 }
 

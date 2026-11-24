@@ -5105,6 +5105,43 @@ static bool placement_link_scan_exits(bool disc) {
     return true;
 }
 
+static bool linked_placement_calls(bool disc) {
+    const struct {
+        u32 pc, target, resume;
+        int cycles;
+    } sites[] = {{0x800298f8, 0x800388c0, 0x80029900, 2}, {0x80029900, 0x80039ab0, 0x80029910, 6},
+                 {0x80029918, 0x80039af0, 0x80029920, 2}};
+    for (unsigned i = 0; i < sizeof sites / sizeof sites[0]; ++i) {
+        CPUState input = initial();
+        input.r[31] = sites[i].target;
+        for (int extra = 0; extra <= 1; ++extra) {
+            input.budget = sites[i].cycles + extra;
+            CPUState native = input;
+            const bool timestamp = sites[i].pc == 0x80029900;
+            const bool handled = timestamp ? nc_prepare_placement_timestamp_call(&native, sites[i].resume)
+                                           : nc_prepare_placement_call(&native, native.r[16], sites[i].resume);
+            if (!extra) {
+                if (handled || memcmp(&native, &input, sizeof input))
+                    return false;
+                continue;
+            }
+            if (!handled || native.budget != 1 || native.r[4] != input.r[16] ||
+                native.r[5] != (timestamp ? MEM_R32(0x8008ef10) : input.r[5]) ||
+                native.r[31] != sites[i].resume)
+                return false;
+            if (disc) {
+                interp_call(&input, sites[i].pc);
+                if (memcmp(&native, &input, sizeof input))
+                    return false;
+            }
+        }
+    }
+    CPUState input = initial(), native;
+    input.r[31] = 0x8002a564;
+    return compare(input, 0x80029910, nc_finish_placement_selector_call, disc, &native) &&
+           compare(input, 0x80029948, nc_finish_placement_selector_call, disc, &native);
+}
+
 static bool placement_followup_calls(bool disc) {
     const u32 record = SCRATCH_BASE + 0x80;
     const u32 argument = 0x8008ef10;
@@ -9370,7 +9407,7 @@ int main(int argc, char **argv) {
         placement_scan_update_calls(disc) && alternate_placement_counter_exits(disc) &&
         placement_dispatch_frames(disc) && placement_selector_targets(disc) &&
         placement_link_scan_entries(disc) && placement_link_scans(disc) && placement_link_scan_exits(disc) &&
-        linked_placement_axes(disc) && placement_followup_calls(disc) &&
+        linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&
