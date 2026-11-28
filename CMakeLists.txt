@@ -153,6 +153,7 @@ endif()
 # Recompiled code is machine-written, so warnings are silenced and optimisation is kept on even
 # in Debug builds to keep compile and run times reasonable.
 option(NC_INTERPRETER_ONLY "Do not link recompiled code from gen/ (release builds)" OFF)
+option(NC_NATIVE_DECOMP "Without gen/, call handwritten routines instead of interpreting them" ON)
 set(NC_GEN_DIR ${CMAKE_SOURCE_DIR}/gen)
 file(GLOB NC_GEN_SOURCES CONFIGURE_DEPENDS ${NC_GEN_DIR}/*/*.c)
 
@@ -163,10 +164,14 @@ if(WIN32)
     target_sources(nightmare PRIVATE packaging/windows/icon.rc)    # app icon
 endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
+# Handwritten C for original routines (src/decomp), verified against the interpreter by tests/.
+# It contains no code derived from the game, so every build links it.
+file(GLOB NC_DECOMP_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/decomp/*.c)
+add_library(nc_decomp STATIC ${NC_DECOMP_SOURCES})
+target_link_libraries(nc_decomp PUBLIC nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
-    add_library(nc_gen STATIC ${NC_GEN_SOURCES} src/decomp/adrenaline.c src/decomp/damage.c
-        src/decomp/contact.c src/decomp/distance.c src/decomp/pad.c src/decomp/launcher.c)
-    target_sources(nc_gen PRIVATE src/decomp/credits.c src/decomp/credits_roll.c src/decomp/credits_sdk.c)
+    add_library(nc_gen STATIC ${NC_GEN_SOURCES})
+    target_link_libraries(nc_gen PRIVATE nc_decomp)
     target_include_directories(nc_gen PRIVATE src ${NC_GEN_DIR})
     if(MSVC)
         target_compile_options(nc_gen PRIVATE /w /O2)
@@ -174,6 +179,18 @@ if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
         target_compile_options(nc_gen PRIVATE -w -O2 -fno-strict-aliasing)
     endif()
     target_link_libraries(nightmare PRIVATE nc_gen)
+elseif(NC_NATIVE_DECOMP)
+    # Without recompiled code, handwritten routines replace the original ones they cover
+    # (the `entry` rows in config/splices) and everything else is interpreted.
+    file(GLOB NC_SPLICES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/config/splices/*.txt)
+    set(NC_REGISTRY ${CMAKE_CURRENT_BINARY_DIR}/native_registry.c)
+    add_custom_command(OUTPUT ${NC_REGISTRY}
+        COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tools/gen_registry.py ${NC_REGISTRY}
+        DEPENDS ${CMAKE_SOURCE_DIR}/tools/gen_registry.py ${NC_SPLICES}
+        COMMENT "Generating native function tables from config/splices")
+    target_sources(nightmare PRIVATE ${NC_REGISTRY})
+    target_link_libraries(nightmare PRIVATE nc_decomp)
+    message(STATUS "Building without recompiled code: handwritten routines, the rest interpreted")
 else()
     target_sources(nightmare PRIVATE src/port/no_gen.c)
     message(STATUS "Building without recompiled code: game code is interpreted")
