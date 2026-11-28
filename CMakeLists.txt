@@ -332,6 +332,12 @@ target_link_libraries(test_credits_sdk PRIVATE nc_runtime)
 add_test(NAME credits_sdk_disc COMMAND test_credits_sdk "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(credits_sdk_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
+add_executable(test_psx_cd tests/psx_cd.c src/decomp/psx_cd.c src/port/no_gen.c)
+target_link_libraries(test_psx_cd PRIVATE nc_runtime)
+add_test(NAME psx_cd_rules COMMAND test_psx_cd)
+add_test(NAME psx_cd_disc COMMAND test_psx_cd "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(psx_cd_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
 add_executable(test_psx2_pad tests/psx2_pad.c)
 if(TARGET nc_gen)
     target_link_libraries(test_psx2_pad PRIVATE nc_runtime nc_gen)

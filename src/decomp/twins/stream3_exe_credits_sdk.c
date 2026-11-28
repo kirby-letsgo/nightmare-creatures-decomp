@@ -12,6 +12,8 @@
 
 #include "decomp/cd_control.h"
 
+#include "decomp/cd_file.h"
+
 #include "decomp/cd_init.h"
 
 #include "decomp/cd_interrupt_callback.h"

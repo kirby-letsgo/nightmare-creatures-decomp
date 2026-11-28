@@ -1,0 +1,14 @@
+# Handwritten Psy-Q libcd routines in PSX.EXE (src/decomp/psx_cd.*).
+
+include decomp/psx_cd.h
+
+psx_exe  800236EC  entry  nc_psx_cd_sync(c)
+psx_exe  8002396C  entry  nc_psx_cd_ready(c)
+psx_exe  80023C38  entry  nc_psx_cd_write_command(c)
+psx_exe  800244E8  entry  nc_psx_cd_data_sync(c)
+psx_exe  80024844  entry  nc_psx_cd_search_file(c)
+psx_exe  80024B48  entry  nc_psx_cd_load_paths(c)
+psx_exe  80024E24  entry  nc_psx_cd_search_directory(c)
+psx_exe  80024ECC  entry  nc_psx_cd_cache_directory(c)
+psx_exe  800252F4  entry  nc_psx_cd_read_callback(c)
+psx_exe  80025518  entry  nc_psx_cd_read_retry(c)
