@@ -46,6 +46,8 @@
 
 #include "decomp/sdk_formatter.h"
 
+#include "decomp/sdk_gpu.h"
+
 #include "decomp/sdk_pad_init.h"
 
 #include "decomp/sdk_printf.h"
@@ -60,17 +62,19 @@
 
 #include "decomp/vsync.h"
 
-/* Both GPU layouts encode the draw-mode command, but move the flag bits. */
-u32 draw_mode_word__credits_sdk__stream1_exe(bool alternate, bool display, bool dither, u32 page,
-                                             u32 *opcode) {
-    *opcode = 0xe1000000u;
-    if (dither)
-        *opcode |= alternate ? 0x800 : 0x200;
-    u32 bits = page & (alternate ? 0x27ff : 0x9ff);
-    if (display)
-        bits |= alternate ? 0x1000 : 0x400;
-    return *opcode | bits;
-}
+static const NcGpuLayout credits_gpu__credits_sdk__stream1_exe = {
+    .strings = 0x800183d0,
+    .code = 0x8001c07c,
+    .data = 0x80028368,
+    .bss = 0x8003abe0,
+    .queue = 0x8003D244,
+    .memcpy = 0x8001A54C,
+    .printf = 0x8001a6c8,
+    .vsync = 0x8001b0bc,
+    .reset_callback = 0x8001b300,
+    .dma_callback = 0x8001b360,
+    .set_intr_mask = 0x8001b47c,
+};
 
 /* Upload the palette as a single VRAM row and return its CLUT identifier. */
 bool upload_clut__credits_sdk__stream1_exe(CPUState *c, u32 width, u32 entry) {
@@ -462,6 +466,28 @@ bool nc_credits_check_callback__stream1_exe_8001B454(CPUState *c) {
     return interrupt_callback_status(c, 0x80027232);
 }
 
+bool nc_credits_check_queue_alarm__stream1_exe_8001F698(CPUState *c) {
+    return sdk_gpu_check_queue_alarm__sdk_gpu__stream1_exe(c,
+                                                           &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_check_rect__stream1_exe_8001CFB4(CPUState *c) {
+    return sdk_gpu_check_rect__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_clear_gpu_rectangle__stream1_exe_8001E554(CPUState *c) {
+    return sdk_gpu_clear_gpu_rectangle__sdk_gpu__stream1_exe(
+        c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_clear_image2__stream1_exe_8001D170(CPUState *c) {
+    return sdk_gpu_clear_image2__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_clear_image__stream1_exe_8001D0DC(CPUState *c) {
+    return sdk_gpu_clear_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_clear_irq_words__stream1_exe_8001B9E4(CPUState *c) {
     return clear_interrupt_words__interrupt_control__stream1_exe(c);
 }
@@ -601,7 +627,8 @@ bool nc_credits_default_display__stream1_exe_8001C14C(CPUState *c) {
         MEM_W16(R(2) + i * 2, (u16)R(5 + i));
         c->budget--;
     }
-    /* Clear the screen rectangle and mode flags, in their guest store order. */
+    /* Clear the screen rectangle and mode flags, in their guest store__credits__stream1_exe order.
+     */
     for (unsigned off = 8; off <= 14; off += 2) {
         MEM_W16(R(2) + off, 0);
         c->budget--;
@@ -614,6 +641,10 @@ bool nc_credits_default_display__stream1_exe_8001C14C(CPUState *c) {
     MEM_W16(R(2) + 6, (u16)R(3));
     c->budget -= 2;
     return true;
+}
+
+bool nc_credits_default_draw__stream1_exe_8001C07C(CPUState *c) {
+    return sdk_gpu_default_draw(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_deliver_event__stream1_exe_8002311C(CPUState *c) {
@@ -698,6 +729,10 @@ bool nc_credits_display_x__stream1_exe_8001E398(CPUState *c) {
 
 bool nc_credits_dma_callback__stream1_exe_8001B360(CPUState *c) {
     return interrupt_driver_call(c, 0x800282b8, 4, 0x8001b380, false);
+}
+
+bool nc_credits_draw_area_packet__stream1_exe_8001DCEC(CPUState *c) {
+    return sdk_gpu_draw_area_packet(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_draw_corner__stream1_exe_8001E134(CPUState *c, bool bottom_right) {
@@ -818,6 +853,10 @@ bool nc_credits_draw_load__stream1_exe_8001C7D8(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_mode_packet__stream1_exe_8001DDDC(CPUState *c) {
+    return sdk_gpu_draw_mode_packet(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_draw_mode_word__stream1_exe_8001E0D8(CPUState *c) {
     if (c->budget <= 19)
         return false;
@@ -825,7 +864,7 @@ bool nc_credits_draw_mode_word__stream1_exe_8001E0D8(CPUState *c) {
     u8 graph = MEM_R8(0x80028370);
     bool alternate = graph == 1 || graph == 2;
     bool display = R(4) != 0, dither = R(5) != 0;
-    R(2) = draw_mode_word__credits_sdk__stream1_exe(alternate, display, dither, R(6), &R(3));
+    R(2) = draw_mode_word(alternate, display, dither, R(6), &R(3));
     c->budget -= NC_LOAD_CYCLES + 11 + dither + (display ? (alternate ? 2 : 1) : 0);
     return true;
 }
@@ -868,6 +907,10 @@ bool nc_credits_draw_move__stream1_exe_8001C778(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_offset_packet__stream1_exe_8001DD70(CPUState *c) {
+    return sdk_gpu_draw_offset_packet(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_draw_offset_word__stream1_exe_8001E2CC(CPUState *c) {
     if (c->budget <= 18)
         return false;
@@ -881,6 +924,14 @@ bool nc_credits_draw_offset_word__stream1_exe_8001E2CC(CPUState *c) {
     R(2) = R(4) | R(3) | x;
     c->budget -= wide ? 14 : 16;
     return true;
+}
+
+bool nc_credits_draw_otag__stream1_exe_8001D548(CPUState *c) {
+    return sdk_gpu_draw_otag__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_draw_otag_env__stream1_exe_8001D680(CPUState *c) {
+    return sdk_gpu_draw_otag_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 /* DrawPrim saves the packet length before synchronizing, then submits its payload. */
@@ -926,6 +977,27 @@ bool nc_credits_draw_primitive__stream1_exe_8001D4E8(CPUState *c) {
     return true;
 }
 
+bool nc_credits_draw_sync__stream1_exe_8001CF48(CPUState *c) {
+    return sdk_gpu_draw_sync__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_draw_sync_callback__stream1_exe_8001CE50(CPUState *c) {
+    return sdk_gpu_draw_sync_callback__sdk_gpu__stream1_exe(c,
+                                                            &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_draw_tpage__stream1_exe_8001C6C4(CPUState *c) {
+    return sdk_gpu_draw_tpage(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_dump_display__stream1_exe_8001C9FC(CPUState *c) {
+    return sdk_gpu_dump_display__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_dump_draw__stream1_exe_8001C87C(CPUState *c) {
+    return sdk_gpu_dump_draw__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_dump_palette__stream1_exe_8001C360(CPUState *c) {
     if (c->budget <= 14)
         return false;
@@ -947,6 +1019,11 @@ bool nc_credits_dump_palette__stream1_exe_8001C360(CPUState *c) {
     return true;
 }
 
+bool nc_credits_dump_texture_page__stream1_exe_8001C290(CPUState *c) {
+    return sdk_gpu_dump_texture_page__sdk_gpu__stream1_exe(c,
+                                                           &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_end_packet__stream1_exe_8001C474(CPUState *c) {
     if (c->budget <= 8)
         return false;
@@ -962,6 +1039,11 @@ bool nc_credits_end_packet__stream1_exe_8001C474(CPUState *c) {
 
 bool nc_credits_enter_critical_section__stream1_exe_8001B0AC(CPUState *c) {
     return critical_section_syscall(c, 1);
+}
+
+bool nc_credits_execute_gpu_queue__stream1_exe_8001F0C4(CPUState *c) {
+    return sdk_gpu_execute_gpu_queue__sdk_gpu__stream1_exe(c,
+                                                           &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_exit_critical_section__stream1_exe_8001BAE0(CPUState *c) {
@@ -2177,6 +2259,10 @@ bool nc_credits_load_clut__stream1_exe_8001BFAC(CPUState *c) {
     return upload_clut__credits_sdk__stream1_exe(c, 256, 0x8001bfac);
 }
 
+bool nc_credits_load_image__stream1_exe_8001D20C(CPUState *c) {
+    return sdk_gpu_load_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 /* Build the VRAM rectangle in 16-bit words, upload it, then encode the texture page. */
 bool nc_credits_load_tpage__stream1_exe_8001BEC0(CPUState *c) {
     if (c->budget <= 38)
@@ -2457,6 +2543,14 @@ bool nc_credits_priority_packet__stream1_exe_8001DDB4(CPUState *c) {
     return true;
 }
 
+bool nc_credits_put_display_env__stream1_exe_8001D794(CPUState *c) {
+    return sdk_gpu_put_display_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_put_draw_env__stream1_exe_8001D5BC(CPUState *c) {
+    return sdk_gpu_put_draw_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_put_string__stream1_exe_8001B2A0(CPUState *c) {
     return sdk_puts__sdk_puts__stream1_exe(c, 0x80018330, 0x8001ae40, 0x8001b2cc);
 }
@@ -2538,8 +2632,21 @@ bool nc_credits_read_environment__stream1_exe_8001DC44(CPUState *c, bool display
     return true;
 }
 
+bool nc_credits_read_gpu_image__stream1_exe_8001EA18(CPUState *c) {
+    return sdk_gpu_read_gpu_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_reset_callback__stream1_exe_8001B300(CPUState *c) {
     return interrupt_driver_call(c, 0x800282b8, 12, 0x8001b320, false);
+}
+
+bool nc_credits_reset_gpu_driver__stream1_exe_8001F3C0(CPUState *c) {
+    return sdk_gpu_reset_gpu_driver__sdk_gpu__stream1_exe(c,
+                                                          &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_reset_graph__stream1_exe_8001CAA8(CPUState *c) {
+    return sdk_gpu_reset_graph__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_reset_irq_entry__stream1_exe_8001BAC0(CPUState *c) {
@@ -2560,6 +2667,10 @@ bool nc_credits_save_irq_context__stream1_exe_8001BA10(CPUState *c) {
 
 bool nc_credits_set_dma_slot__stream1_exe_8001BDEC(CPUState *c) {
     return set_dma_slot(c, 0x800282f8);
+}
+
+bool nc_credits_set_draw_env__stream1_exe_8001DE34(CPUState *c) {
+    return sdk_gpu_set_draw_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_set_graph_debug__stream1_exe_8001CD18(CPUState *c) {
@@ -2599,6 +2710,11 @@ bool nc_credits_set_graph_debug__stream1_exe_8001CD18(CPUState *c) {
     set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
+}
+
+bool nc_credits_set_graph_reverse__stream1_exe_8001CC04(CPUState *c) {
+    return sdk_gpu_set_graph_reverse__sdk_gpu__stream1_exe(c,
+                                                           &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_set_queue_alarm__stream1_exe_8001F664(CPUState *c) {
@@ -2844,7 +2960,8 @@ bool nc_credits_spu_read_blocks__stream1_exe_80022AA0(CPUState *c) {
     return true;
 }
 
-/* _spu_FsetRXXa can also return either address representation without a store. */
+/* _spu_FsetRXXa can also return either address representation without a
+ * store__credits__stream1_exe. */
 bool nc_credits_spu_set_address__stream1_exe_80022F24(CPUState *c) {
     if (c->budget <= 47)
         return false;
@@ -2942,7 +3059,7 @@ bool nc_credits_spu_set_dma_priority__stream1_exe_80023004(CPUState *c) {
     MEM_W32(R(5), R(2));
 
     bool priority_three = R(4) != 0;
-    c->budget -= 4; /* store, branch with delay slot, then lui */
+    c->budget -= 4; /* store__credits__stream1_exe, branch with delay slot, then lui */
     R(2) = MEM_R32(0x8003A604);
     c->budget -= NC_LOAD_CYCLES + 1;
     R(3) = MEM_R32(R(2));
@@ -3072,7 +3189,7 @@ bool nc_credits_spu_write_register__stream1_exe_80022EDC(CPUState *c) {
         R(2) += base;
         c->budget -= NC_LOAD_CYCLES + 2;
         MEM_W16(R(2), (u16)R(5));
-        c->budget -= 3; /* store and jump to the return */
+        c->budget -= 3; /* store__credits__stream1_exe and jump to the return */
     } else {
         R(4) = base;
         c->budget -= NC_LOAD_CYCLES + 1;
@@ -3133,6 +3250,10 @@ bool nc_credits_start_vsync__stream1_exe_8001BAF0(CPUState *c) {
 
 bool nc_credits_stop_callback__stream1_exe_8001B3F4(CPUState *c) {
     return interrupt_driver_call(c, 0x800282b8, 16, 0x8001b414, false);
+}
+
+bool nc_credits_store_image__stream1_exe_8001D270(CPUState *c) {
+    return sdk_gpu_store_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_strcmp__stream1_exe_80025A74(CPUState *c) {
@@ -3272,6 +3393,19 @@ done:
     return true;
 }
 
+bool nc_credits_submit_gpu_command__stream1_exe_8001EDE0(CPUState *c) {
+    return sdk_gpu_submit_gpu_command__sdk_gpu__stream1_exe(c,
+                                                            &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_sync_gpu_queue__stream1_exe_8001F51C(CPUState *c) {
+    return sdk_gpu_sync_gpu_queue__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
+bool nc_credits_texture_page__stream1_exe_8001C1B0(CPUState *c) {
+    return sdk_gpu_texture_page(c, &credits_gpu__credits_sdk__stream1_exe);
+}
+
 bool nc_credits_texture_window_packet__stream1_exe_8001DCB0(CPUState *c) {
     if (c->budget <= (R(5) ? 58 : 26))
         return false;
@@ -3303,41 +3437,12 @@ bool nc_credits_texture_window_packet__stream1_exe_8001DCB0(CPUState *c) {
 }
 
 bool nc_credits_texture_window_word__stream1_exe_8001E314(CPUState *c) {
-    const u32 rect = R(4);
-    if (c->budget <= (rect ? 39 : 7))
-        return false;
+    return sdk_gpu_texture_window_word(c);
+}
 
-    R(29) -= 16;
-    c->budget -= 2;
-    if (rect) {
-        /* The four five-bit fields are also spilled into the guest stack.
-         * Read each rectangle member in order in case it overlaps a spill. */
-        u32 x = MEM_R8(rect) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 2;
-        MEM_W32(R(29), x);
-        c->budget--;
-        R(6) = ((0u - MEM_R16(rect + 4)) & 0xff) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 4;
-        MEM_W32(R(29) + 8, R(6));
-        c->budget--;
-        u32 y = MEM_R8(rect + 2) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 2;
-        MEM_W32(R(29) + 4, y);
-        c->budget -= 2;
-        R(3) = ((0u - MEM_R16(rect + 6)) & 0xff) >> 3;
-        R(5) = 0xe2000000u | (x << 10);
-        R(4) = R(3) << 5;
-        R(2) = R(5) | (y << 15) | R(4) | R(6);
-        c->budget -= NC_LOAD_CYCLES + 9;
-        MEM_W32(R(29) + 12, R(3));
-        c->budget--;
-    } else {
-        R(2) = 0;
-        c->budget -= 2;
-    }
-    R(29) += 16;
-    c->budget -= 3;
-    return true;
+bool nc_credits_upload_gpu_image__stream1_exe_8001E7C4(CPUState *c) {
+    return sdk_gpu_upload_gpu_image__sdk_gpu__stream1_exe(c,
+                                                          &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_video_mode__stream1_exe_8001C188(CPUState *c, bool replace) {

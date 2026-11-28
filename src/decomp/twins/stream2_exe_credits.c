@@ -25,6 +25,11 @@ enum {
 
 enum { CURSOR = 4, NEW_RECORD = 5, BEST = 6, NEEDED = 7, REQUEST = 8 };
 
+void store__credits__stream2_exe(CPUState *c, u32 addr, u32 value) {
+    MEM_W32(addr, value);
+    NC_POLL(c, NC_INSN_CYCLES);
+}
+
 /* Callee-saved registers used across the resize helper's nested calls. */
 enum { BLOCK = 16, NEW_SIZE = 17, EXTENT = 18, OLD_PTR = 19, DIFFERENCE = 20 };
 

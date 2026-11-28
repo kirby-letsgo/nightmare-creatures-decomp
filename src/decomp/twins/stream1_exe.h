@@ -24,6 +24,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_gpu.h"
 #include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
@@ -76,12 +77,11 @@ bool cd_reset__cd_state__stream1_exe(CPUState *c, u32 entry, u32 init_interrupt,
                                      u32 init_volume);
 bool cd_init_interrupt__cd_state__stream1_exe(CPUState *c, u32 state, u32 entry, u32 reset_callback,
                                               u32 interrupt_callback, u32 handler);
+void store__credits__stream1_exe(CPUState *c, u32 addr, u32 value);
 void call__credits_roll__stream1_exe(CPUState *c, u32 target, u32 resume);
 void load_word__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 address);
 void set_reg__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 value);
 bool upload_clut__credits_sdk__stream1_exe(CPUState *c, u32 width, u32 entry);
-u32 draw_mode_word__credits_sdk__stream1_exe(bool alternate, bool display, bool dither, u32 page,
-                                             u32 *opcode);
 void read_spu_dma_mode__credits_sdk__stream1_exe(CPUState *c);
 bool clear_interrupt_words__interrupt_control__stream1_exe(CPUState *c);
 bool start_vsync__interrupt_control__stream1_exe(CPUState *c, const InterruptInitLayout *layout);
@@ -93,6 +93,97 @@ void report_dma_interrupt__interrupt_dispatch__stream1_exe(CPUState *c,
                                                            const DmaDispatchLayout *layout);
 bool dispatch_dma_interrupt__interrupt_dispatch__stream1_exe(CPUState *c,
                                                              const DmaDispatchLayout *layout);
+bool sdk_gpu_dump_texture_page__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void report_draw_page__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void report_fields__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 format, u32 resume,
+                                         bool rectangle);
+void report_flag__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned offset,
+                                       u32 format, u32 resume);
+void report_rectangle__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned offset,
+                                            u32 format, u32 resume);
+bool dump_environment__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool draw);
+bool sdk_gpu_dump_draw__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_dump_display__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void graphics_diagnostic__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 format,
+                                               u32 return_pc, unsigned argument_reg);
+void load_gpu_global__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned reg,
+                                           u32 address);
+void initialize_graphics_state__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_reset_graph__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_set_graph_reverse__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_draw_sync_callback__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_draw_sync__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool rectangle_out_of_bounds__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_check_rect__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool queue_image_fill__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool high_bit);
+bool sdk_gpu_clear_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_clear_image2__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool queue_image_transfer__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L,
+                                                bool store__credits__stream1_exe);
+bool sdk_gpu_load_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_store_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_draw_otag__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void build_draw_env_packet__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 resume);
+void submit_draw_env__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned debug_reg,
+                                           u32 queue_resume, u32 copy_resume);
+bool sdk_gpu_put_draw_env__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_draw_otag_env__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool display_rect_changed__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned offset);
+void set_display_resolution__sdk_gpu__stream1_exe(CPUState *c);
+void set_display_mode__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void set_display_origin__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void limit_display_scanline__sdk_gpu__stream1_exe(CPUState *c, bool end);
+void send_display_range__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool vertical);
+void set_display_ranges__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_put_display_env__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void pack_env_clear_color__sdk_gpu__stream1_exe(CPUState *c);
+void clear_rect_limit__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 address);
+void prepare_env_clear__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void append_env_clear__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_set_draw_env__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void store_gpu_global__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 address,
+                                            unsigned reg);
+void build_rect_clear_packets__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void build_vram_fill_packet__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool prepare_clear_rectangle__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_clear_gpu_rectangle__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void begin_gpu_transfer__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool readback);
+void finish_gpu_transfer__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool readback);
+bool receive_readback_prefix__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void send_upload_prefix__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool size_gpu_transfer__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool readback);
+bool wait_for_gpu_command__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool readback);
+bool transfer_gpu_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool readback);
+bool sdk_gpu_upload_gpu_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_read_gpu_image__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool gpu_queue_empty__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void read_gpu_sync_bit__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 port_slot,
+                                             u32 mask);
+bool queue_dma_idle__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool must_queue_gpu_command__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void submit_immediate_gpu_command__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void gpu_queue_offset__sdk_gpu__stream1_exe(CPUState *c, unsigned dest, unsigned index);
+void store_queue_field__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned offset_reg,
+                                             u32 field, unsigned value_reg);
+void copy_gpu_queue_payload__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void store_queue_head_field__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, u32 field,
+                                                  unsigned value_reg);
+void submit_queued_gpu_command__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_submit_gpu_command__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void load_gpu_queue_field__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, unsigned dest,
+                                                unsigned offset_reg, u32 field);
+void execute_gpu_queue_entry__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void notify_gpu_queue_completion__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_execute_gpu_queue__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void reset_gpu_buffers__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void reset_gpu_command_buffer__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_reset_gpu_driver__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool gpu_queue_ready__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L, bool blocking);
+void drain_gpu_queue__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_sync_gpu_queue__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void recover_gpu_queue__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+void report_gpu_timeout__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
+bool sdk_gpu_check_queue_alarm__sdk_gpu__stream1_exe(CPUState *c, const NcGpuLayout *L);
 bool sdk_pad_init__sdk_pad_init__stream1_exe(CPUState *c, u32 entry, u32 patch_pad, u32 clear_pad,
                                              u32 bios_stub);
 bool sdk_printf__sdk_printf__stream1_exe(CPUState *c, u32 formatter, u32 resume);
@@ -170,28 +261,46 @@ bool nc_credits_cd_volume__stream1_exe_800248B4(CPUState *c);
 bool nc_credits_change_clear_counter__stream1_exe_8001B2F0(CPUState *c);
 bool nc_credits_change_clear_pad__stream1_exe_8001AF14(CPUState *c);
 bool nc_credits_check_callback__stream1_exe_8001B454(CPUState *c);
+bool nc_credits_check_queue_alarm__stream1_exe_8001F698(CPUState *c);
+bool nc_credits_check_rect__stream1_exe_8001CFB4(CPUState *c);
+bool nc_credits_clear_gpu_rectangle__stream1_exe_8001E554(CPUState *c);
+bool nc_credits_clear_image2__stream1_exe_8001D170(CPUState *c);
+bool nc_credits_clear_image__stream1_exe_8001D0DC(CPUState *c);
 bool nc_credits_clear_irq_words__stream1_exe_8001B9E4(CPUState *c);
 bool nc_credits_clear_irq_words__stream1_exe_8001BBEC(CPUState *c);
 bool nc_credits_clear_irq_words__stream1_exe_8001BE94(CPUState *c);
 bool nc_credits_clear_ot_dma__stream1_exe_8001E46C(CPUState *c);
 bool nc_credits_copy_bytes__stream1_exe_8001A54C(CPUState *c);
 bool nc_credits_default_display__stream1_exe_8001C14C(CPUState *c);
+bool nc_credits_default_draw__stream1_exe_8001C07C(CPUState *c);
 bool nc_credits_deliver_event__stream1_exe_8002311C(CPUState *c);
 bool nc_credits_dispatch_dma_interrupt__stream1_exe_8001BC68(CPUState *c);
 bool nc_credits_dispatch_vblank__stream1_exe_8001BB48(CPUState *c);
 bool nc_credits_display_field__stream1_exe_8001DC7C(CPUState *c);
 bool nc_credits_display_x__stream1_exe_8001E398(CPUState *c);
 bool nc_credits_dma_callback__stream1_exe_8001B360(CPUState *c);
+bool nc_credits_draw_area_packet__stream1_exe_8001DCEC(CPUState *c);
 bool nc_credits_draw_corner__stream1_exe_8001E134(CPUState *c, bool bottom_right);
 bool nc_credits_draw_corner__stream1_exe_8001E200(CPUState *c, bool bottom_right);
 bool nc_credits_draw_load__stream1_exe_8001C7D8(CPUState *c);
+bool nc_credits_draw_mode_packet__stream1_exe_8001DDDC(CPUState *c);
 bool nc_credits_draw_mode_word__stream1_exe_8001E0D8(CPUState *c);
 bool nc_credits_draw_move__stream1_exe_8001C778(CPUState *c);
+bool nc_credits_draw_offset_packet__stream1_exe_8001DD70(CPUState *c);
 bool nc_credits_draw_offset_word__stream1_exe_8001E2CC(CPUState *c);
+bool nc_credits_draw_otag__stream1_exe_8001D548(CPUState *c);
+bool nc_credits_draw_otag_env__stream1_exe_8001D680(CPUState *c);
 bool nc_credits_draw_primitive__stream1_exe_8001D4E8(CPUState *c);
+bool nc_credits_draw_sync__stream1_exe_8001CF48(CPUState *c);
+bool nc_credits_draw_sync_callback__stream1_exe_8001CE50(CPUState *c);
+bool nc_credits_draw_tpage__stream1_exe_8001C6C4(CPUState *c);
+bool nc_credits_dump_display__stream1_exe_8001C9FC(CPUState *c);
+bool nc_credits_dump_draw__stream1_exe_8001C87C(CPUState *c);
 bool nc_credits_dump_palette__stream1_exe_8001C360(CPUState *c);
+bool nc_credits_dump_texture_page__stream1_exe_8001C290(CPUState *c);
 bool nc_credits_end_packet__stream1_exe_8001C474(CPUState *c);
 bool nc_credits_enter_critical_section__stream1_exe_8001B0AC(CPUState *c);
+bool nc_credits_execute_gpu_queue__stream1_exe_8001F0C4(CPUState *c);
 bool nc_credits_exit_critical_section__stream1_exe_8001BAE0(CPUState *c);
 bool nc_credits_fill_bytes__stream1_exe_8001A580(CPUState *c);
 bool nc_credits_find_byte__stream1_exe_8001ADF0(CPUState *c);
@@ -244,6 +353,7 @@ bool nc_credits_legacy_pad_init__stream1_exe_8001AF8C(CPUState *c);
 bool nc_credits_link_packets__stream1_exe_8001C450(CPUState *c);
 bool nc_credits_load_clut2__stream1_exe_8001C014(CPUState *c);
 bool nc_credits_load_clut__stream1_exe_8001BFAC(CPUState *c);
+bool nc_credits_load_image__stream1_exe_8001D20C(CPUState *c);
 bool nc_credits_load_tpage__stream1_exe_8001BEC0(CPUState *c);
 bool nc_credits_merge_primitives__stream1_exe_8001C844(CPUState *c);
 bool nc_credits_packet_flag__stream1_exe_8001C48C(CPUState *c, u8 mask);
@@ -256,17 +366,24 @@ bool nc_credits_prepend_packets__stream1_exe_8001C3D8(CPUState *c, bool range);
 bool nc_credits_prepend_packets__stream1_exe_8001C414(CPUState *c, bool range);
 bool nc_credits_printf__stream1_exe_8001A6C8(CPUState *c);
 bool nc_credits_priority_packet__stream1_exe_8001DDB4(CPUState *c);
+bool nc_credits_put_display_env__stream1_exe_8001D794(CPUState *c);
+bool nc_credits_put_draw_env__stream1_exe_8001D5BC(CPUState *c);
 bool nc_credits_put_string__stream1_exe_8001B2A0(CPUState *c);
 bool nc_credits_queue_command__stream1_exe_8001EDBC(CPUState *c);
 bool nc_credits_read_environment__stream1_exe_8001D75C(CPUState *c, bool display);
 bool nc_credits_read_environment__stream1_exe_8001DC44(CPUState *c, bool display);
+bool nc_credits_read_gpu_image__stream1_exe_8001EA18(CPUState *c);
 bool nc_credits_reset_callback__stream1_exe_8001B300(CPUState *c);
+bool nc_credits_reset_gpu_driver__stream1_exe_8001F3C0(CPUState *c);
+bool nc_credits_reset_graph__stream1_exe_8001CAA8(CPUState *c);
 bool nc_credits_reset_irq_entry__stream1_exe_8001BAC0(CPUState *c);
 bool nc_credits_restart_callback__stream1_exe_8001B424(CPUState *c);
 bool nc_credits_return_from_exception__stream1_exe_8001BAB0(CPUState *c);
 bool nc_credits_save_irq_context__stream1_exe_8001BA10(CPUState *c);
 bool nc_credits_set_dma_slot__stream1_exe_8001BDEC(CPUState *c);
+bool nc_credits_set_draw_env__stream1_exe_8001DE34(CPUState *c);
 bool nc_credits_set_graph_debug__stream1_exe_8001CD18(CPUState *c);
+bool nc_credits_set_graph_reverse__stream1_exe_8001CC04(CPUState *c);
 bool nc_credits_set_queue_alarm__stream1_exe_8001F664(CPUState *c);
 bool nc_credits_set_vsync_slot__stream1_exe_8001BBC0(CPUState *c);
 bool nc_credits_spu_dma_complete__stream1_exe_800229D0(CPUState *c);
@@ -286,11 +403,16 @@ bool nc_credits_start_dma__stream1_exe_8001BC18(CPUState *c);
 bool nc_credits_start_pad__stream1_exe_8001AFF4(CPUState *c);
 bool nc_credits_start_vsync__stream1_exe_8001BAF0(CPUState *c);
 bool nc_credits_stop_callback__stream1_exe_8001B3F4(CPUState *c);
+bool nc_credits_store_image__stream1_exe_8001D270(CPUState *c);
 bool nc_credits_strcmp__stream1_exe_80025A74(CPUState *c);
 bool nc_credits_string_length__stream1_exe_8001A698(CPUState *c);
 bool nc_credits_strncmp__stream1_exe_80025AD8(CPUState *c);
+bool nc_credits_submit_gpu_command__stream1_exe_8001EDE0(CPUState *c);
+bool nc_credits_sync_gpu_queue__stream1_exe_8001F51C(CPUState *c);
+bool nc_credits_texture_page__stream1_exe_8001C1B0(CPUState *c);
 bool nc_credits_texture_window_packet__stream1_exe_8001DCB0(CPUState *c);
 bool nc_credits_texture_window_word__stream1_exe_8001E314(CPUState *c);
+bool nc_credits_upload_gpu_image__stream1_exe_8001E7C4(CPUState *c);
 bool nc_credits_video_mode__stream1_exe_8001C188(CPUState *c, bool replace);
 bool nc_credits_video_mode__stream1_exe_8001C1A0(CPUState *c, bool replace);
 bool nc_credits_video_mode__stream1_exe_80023330(CPUState *c, bool replace);

@@ -24,6 +24,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_gpu.h"
 #include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
@@ -64,10 +65,7 @@ void call__credits_roll__psx_exe(CPUState *c, u32 target, u32 resume);
 void load_word__credits_roll__psx_exe(CPUState *c, unsigned reg, u32 address);
 void set_reg__credits_roll__psx_exe(CPUState *c, unsigned reg, u32 value);
 bool upload_clut__credits_sdk__psx_exe(CPUState *c, u32 width, u32 entry);
-void graphics_debug_prologue__credits_sdk__psx_exe(CPUState *c);
 void ordering_table_prologue__credits_sdk__psx_exe(CPUState *c);
-u32 draw_mode_word__credits_sdk__psx_exe(bool alternate, bool display, bool dither, u32 page,
-                                         u32 *opcode);
 void read_spu_dma_mode__credits_sdk__psx_exe(CPUState *c);
 bool clear_interrupt_words__interrupt_control__psx_exe(CPUState *c);
 bool start_vsync__interrupt_control__psx_exe(CPUState *c, const InterruptInitLayout *layout);
@@ -175,7 +173,6 @@ bool nc_credits_draw_mode_word__psx_exe_8001E9C8(CPUState *c);
 bool nc_credits_draw_move__psx_exe_8001D068(CPUState *c);
 bool nc_credits_draw_offset_word__psx_exe_8001EBBC(CPUState *c);
 bool nc_credits_draw_primitive__psx_exe_8001DDD8(CPUState *c);
-bool nc_credits_draw_sync_callback__psx_exe_8001D740(CPUState *c);
 bool nc_credits_dump_palette__psx_exe_8001CC50(CPUState *c);
 bool nc_credits_end_packet__psx_exe_8001CD64(CPUState *c);
 bool nc_credits_enter_critical_section__psx_exe_8001B7A4(CPUState *c);

@@ -46,6 +46,8 @@
 
 #include "decomp/sdk_formatter.h"
 
+#include "decomp/sdk_gpu.h"
+
 #include "decomp/sdk_pad_init.h"
 
 #include "decomp/sdk_printf.h"
@@ -59,18 +61,6 @@
 #include "decomp/vblank_wait.h"
 
 #include "decomp/vsync.h"
-
-/* Both GPU layouts encode the draw-mode command, but move the flag bits. */
-u32 draw_mode_word__credits_sdk__psx_exe(bool alternate, bool display, bool dither, u32 page,
-                                         u32 *opcode) {
-    *opcode = 0xe1000000u;
-    if (dither)
-        *opcode |= alternate ? 0x800 : 0x200;
-    u32 bits = page & (alternate ? 0x27ff : 0x9ff);
-    if (display)
-        bits |= alternate ? 0x1000 : 0x400;
-    return *opcode | bits;
-}
 
 /* Upload the palette as a single VRAM row and return its CLUT identifier. */
 bool upload_clut__credits_sdk__psx_exe(CPUState *c, u32 width, u32 entry) {
@@ -129,20 +119,6 @@ void ordering_table_prologue__credits_sdk__psx_exe(CPUState *c) {
     R(2) = R(2) < 2;
     c->budget -= 3;
     MEM_W32(R(29) + 24, R(31));
-    c->budget -= 2;
-}
-
-/* Save the graphics call__credits_roll__psx_exe argument and test the SDK debug level. */
-void graphics_debug_prologue__credits_sdk__psx_exe(CPUState *c) {
-    c->budget--;
-    R(2) = MEM_R8(0x80026ee2);
-    R(29) -= 24;
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = R(4);
-    R(2) = R(2) < 2;
-    c->budget -= 3;
-    MEM_W32(R(29) + 20, R(31));
     c->budget -= 2;
 }
 
@@ -1006,7 +982,7 @@ bool nc_credits_draw_mode_word__psx_exe_8001E9C8(CPUState *c) {
     u8 graph = MEM_R8(0x80026EE0);
     bool alternate = graph == 1 || graph == 2;
     bool display = R(4) != 0, dither = R(5) != 0;
-    R(2) = draw_mode_word__credits_sdk__psx_exe(alternate, display, dither, R(6), &R(3));
+    R(2) = draw_mode_word(alternate, display, dither, R(6), &R(3));
     c->budget -= NC_LOAD_CYCLES + 11 + dither + (display ? (alternate ? 2 : 1) : 0);
     return true;
 }
@@ -1104,35 +1080,6 @@ bool nc_credits_draw_primitive__psx_exe_8001DDD8(CPUState *c) {
     load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
     set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
     NC_POLL(c, 2);
-    return true;
-}
-
-bool nc_credits_draw_sync_callback__psx_exe_8001D740(CPUState *c) {
-    if (c->budget <= 10)
-        return false;
-    graphics_debug_prologue__credits_sdk__psx_exe(c);
-    if (!R(2)) {
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, R(2) + 0x6edc);
-        set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-        set_reg__credits_roll__psx_exe(c, 4, 0x80018650);
-        u32 diagnostic = R(2);
-        R(31) = 0x8001d778;
-        R(5) = R(16);
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-        nc_call(c, diagnostic);
-    }
-
-    /* Read the previous handler after the diagnostic returns. */
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, R(2) + 0x6eec);
-    set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
-    MEM_W32(R(1) + 0x6eec, R(16));
-    NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
@@ -3702,41 +3649,7 @@ bool nc_credits_texture_window_packet__psx_exe_8001E5A0(CPUState *c) {
 }
 
 bool nc_credits_texture_window_word__psx_exe_8001EC04(CPUState *c) {
-    const u32 rect = R(4);
-    if (c->budget <= (rect ? 39 : 7))
-        return false;
-
-    R(29) -= 16;
-    c->budget -= 2;
-    if (rect) {
-        /* The four five-bit fields are also spilled into the guest stack.
-         * Read each rectangle member in order in case it overlaps a spill. */
-        u32 x = MEM_R8(rect) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 2;
-        MEM_W32(R(29), x);
-        c->budget--;
-        R(6) = ((0u - MEM_R16(rect + 4)) & 0xff) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 4;
-        MEM_W32(R(29) + 8, R(6));
-        c->budget--;
-        u32 y = MEM_R8(rect + 2) >> 3;
-        c->budget -= NC_LOAD_CYCLES + 2;
-        MEM_W32(R(29) + 4, y);
-        c->budget -= 2;
-        R(3) = ((0u - MEM_R16(rect + 6)) & 0xff) >> 3;
-        R(5) = 0xe2000000u | (x << 10);
-        R(4) = R(3) << 5;
-        R(2) = R(5) | (y << 15) | R(4) | R(6);
-        c->budget -= NC_LOAD_CYCLES + 9;
-        MEM_W32(R(29) + 12, R(3));
-        c->budget--;
-    } else {
-        R(2) = 0;
-        c->budget -= 2;
-    }
-    R(29) += 16;
-    c->budget -= 3;
-    return true;
+    return sdk_gpu_texture_window_word(c);
 }
 
 bool nc_credits_video_mode__psx_exe_8001CA78(CPUState *c, bool replace) {

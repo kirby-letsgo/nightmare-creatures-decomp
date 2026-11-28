@@ -24,6 +24,7 @@
 #include "decomp/jump_context.h"
 #include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_gpu.h"
 #include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
@@ -62,8 +63,6 @@ bool cd_init_interrupt__cd_state__psx2_exe(CPUState *c, u32 state, u32 entry, u3
 void load_word__credits_roll__psx2_exe(CPUState *c, unsigned reg, u32 address);
 void set_reg__credits_roll__psx2_exe(CPUState *c, unsigned reg, u32 value);
 bool upload_clut__credits_sdk__psx2_exe(CPUState *c, u32 width, u32 entry);
-u32 draw_mode_word__credits_sdk__psx2_exe(bool alternate, bool display, bool dither, u32 page,
-                                          u32 *opcode);
 void read_spu_dma_mode__credits_sdk__psx2_exe(CPUState *c);
 bool clear_interrupt_words__interrupt_control__psx2_exe(CPUState *c);
 bool start_vsync__interrupt_control__psx2_exe(CPUState *c, const InterruptInitLayout *layout);
