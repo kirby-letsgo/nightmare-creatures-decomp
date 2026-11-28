@@ -28,6 +28,7 @@
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
+#include "decomp/spu_driver.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/vsync.h"
 #include "port/interp.h"
@@ -82,6 +83,22 @@ bool sdk_pad_init__sdk_pad_init__psx_exe(CPUState *c, u32 entry, u32 patch_pad, 
                                          u32 bios_stub);
 bool sdk_printf__sdk_printf__psx_exe(CPUState *c, u32 formatter, u32 resume);
 bool sdk_puts__sdk_puts__psx_exe(CPUState *c, u32 null_string, u32 put_char, u32 resume);
+void spu_load_global__spu_driver__psx_exe(CPUState *c, unsigned reg, u32 address);
+void spu_load_registers__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
+                                             unsigned reg);
+void initialize_spu_voices__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+void spu_store_global__spu_driver__psx_exe(CPUState *c, u32 address, unsigned reg);
+void wait_for_spu_reset__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+bool spu_init__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+void poll_spu_write_status__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
+                                                bool restoring);
+void write_spu_fifo_chunk__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+bool spu_write_by_io__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+bool wait_spu_transfer_register__spu_driver__psx_exe(CPUState *c, bool control);
+void select_spu_transfer_mode__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
+                                                   bool reading);
+void start_spu_transfer__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
+bool spu_transfer_command__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
 void compare_vblank_target__vblank_wait__psx_exe(CPUState *c, u32 frame);
 bool wait_vblank__vblank_wait__psx_exe(CPUState *c, const VBlankWaitLayout *layout);
 void wait_for_vsync_field__vsync__psx_exe(CPUState *c, u32 slots);
@@ -203,6 +220,7 @@ bool nc_credits_init_primitive__psx_exe_8001CF60(CPUState *c, NcCreditsPrimitive
 bool nc_credits_init_primitive__psx_exe_8001CF80(CPUState *c, NcCreditsPrimitive primitive);
 bool nc_credits_init_primitive__psx_exe_8001CFA0(CPUState *c, NcCreditsPrimitive primitive);
 bool nc_credits_initialize_cd_driver__psx_exe_800242FC(CPUState *c);
+bool nc_credits_initialize_spu__psx_exe_80021C9C(CPUState *c);
 bool nc_credits_interrupt_callback__psx_exe_8001BC30(CPUState *c);
 bool nc_credits_interrupt_mask__psx_exe_8001BD64(CPUState *c, bool write);
 bool nc_credits_interrupt_mask__psx_exe_8001BD7C(CPUState *c, bool write);
@@ -247,8 +265,10 @@ bool nc_credits_spu_set_address__psx_exe_80022650(CPUState *c);
 bool nc_credits_spu_set_delay__psx_exe_80022790(CPUState *c, bool reading);
 bool nc_credits_spu_set_delay__psx_exe_800227BC(CPUState *c, bool reading);
 bool nc_credits_spu_set_dma_priority__psx_exe_80022730(CPUState *c);
+bool nc_credits_spu_transfer_command__psx_exe_80022288(CPUState *c);
 bool nc_credits_spu_wait__psx_exe_800227E8(CPUState *c);
 bool nc_credits_spu_write__psx_exe_80022518(CPUState *c);
+bool nc_credits_spu_write_by_io__psx_exe_80021F30(CPUState *c);
 bool nc_credits_spu_write_register__psx_exe_80022608(CPUState *c);
 bool nc_credits_start_dma__psx_exe_8001C508(CPUState *c);
 bool nc_credits_start_pad__psx_exe_8001B904(CPUState *c);

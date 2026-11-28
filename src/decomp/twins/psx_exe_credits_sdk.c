@@ -54,6 +54,8 @@
 
 #include "decomp/sdk_puts.h"
 
+#include "decomp/spu_driver.h"
+
 #include "decomp/vblank_wait.h"
 
 #include "decomp/vsync.h"
@@ -143,6 +145,38 @@ void graphics_debug_prologue__credits_sdk__psx_exe(CPUState *c) {
     MEM_W32(R(29) + 20, R(31));
     c->budget -= 2;
 }
+
+static const SpuDriverLayout spu_driver__credits_sdk__psx_exe = {
+    .init = 0x80021c9c,
+    .write_by_io = 0x80021f30,
+    .transfer = 0x80022288,
+    .wait = 0x800227e8,
+    .delay_write = 0x80022790,
+    .delay_read = 0x800227bc,
+    .print = 0x8001a640,
+    .timeout_format = 0x800188fc,
+    .reset_label = 0x8001890c,
+    .write_label = 0x8001891c,
+    .restore_label = 0x80018930,
+    .registers = 0x80027484,
+    .dma_address = 0x80027488,
+    .dma_blocks = 0x8002748C,
+    .dma_control = 0x80027490,
+    .dma_priority = 0x80027494,
+    .transfer_address = 0x8002749C,
+    .io_mode = 0x800274A0,
+    .io_pending = 0x800274A4,
+    .settings = 0x800274a8,
+    .address_shift = 0x800274ac,
+    .initialized = 0x800274b8,
+    .callback = 0x800274bc,
+    .callback_pending = 0x800274c0,
+    .initial_sample = 0x800274c4,
+    .direction = 0x800274d4,
+    .dma_source = 0x800274d8,
+    .dma_count = 0x800274dc,
+    .voice_state = 0x8002a248,
+};
 
 /* Read the two DMA mode bits from SPUCNT. */
 void read_spu_dma_mode__credits_sdk__psx_exe(CPUState *c) {
@@ -2289,6 +2323,10 @@ bool nc_credits_initialize_cd_driver__psx_exe_800242FC(CPUState *c) {
     return initialize_cd_driver__cd_init__psx_exe(c, &layout);
 }
 
+bool nc_credits_initialize_spu__psx_exe_80021C9C(CPUState *c) {
+    return spu_init__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
+}
+
 bool nc_credits_interrupt_callback__psx_exe_8001BC30(CPUState *c) {
     return interrupt_driver_call(c, 0x80026e28, 8, 0x8001bc50, false);
 }
@@ -3316,6 +3354,11 @@ bool nc_credits_spu_set_dma_priority__psx_exe_80022730(CPUState *c) {
     return true;
 }
 
+/* _spu_t selects DMA direction, sets the SPU address, or starts the transfer. */
+bool nc_credits_spu_transfer_command__psx_exe_80022288(CPUState *c) {
+    return spu_transfer_command__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
+}
+
 /* SPU initialization and PIO use this 240-iteration delay. The two stack
  * words remain visible to the guest throughout the wait. */
 bool nc_credits_spu_wait__psx_exe_800227E8(CPUState *c) {
@@ -3410,6 +3453,10 @@ bool nc_credits_spu_write__psx_exe_80022518(CPUState *c) {
     set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
+}
+
+bool nc_credits_spu_write_by_io__psx_exe_80021F30(CPUState *c) {
+    return spu_write_by_io__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
 }
 
 /* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */

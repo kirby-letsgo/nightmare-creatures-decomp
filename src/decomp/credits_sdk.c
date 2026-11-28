@@ -22,6 +22,7 @@
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
+#include "decomp/spu_driver.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/vsync.h"
 
@@ -4512,176 +4513,40 @@ bool nc_credits_set_spu_common_attributes(CPUState *c) {
     return true;
 }
 
-static void write_spu_halfword(CPUState *c, u32 address, u32 value) {
-    MEM_W16(address, (u16)value);
-    NC_POLL(c, 1);
-}
-
-static void wait_for_spu_reset(CPUState *c) {
-    load_image_halfword(c, 2, R(2) + 0x1ae, false);
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(2) & 0x7ff);
-    bool busy = R(2) != 0;
-    R(3) = 0;
-    NC_POLL(c, 2);
-    if (busy)
-        set_reg(c, 3, R(3) + 1);
-    while (busy) {
-        set_reg(c, 2, R(3) < 0xf01);
-        bool retry = R(2) != 0;
-        NC_POLL(c, 2);
-        if (!retry) {
-            set_reg(c, 4, 0x80020000);
-            set_reg(c, 4, 0x800186ec);
-            set_reg(c, 5, 0x80020000);
-            set_reg(c, 5, 0x800186fc);
-            gpu_sync_call(c, 0x80019a60, 0x8001f1dc); /* printf */
-            R(4) = 0;
-            NC_POLL(c, 2);
-            return;
-        }
-        load_spu_register_base(c, 2);
-        NC_POLL(c, 1);
-        load_image_halfword(c, 2, R(2) + 0x1ae, false);
-        NC_POLL(c, 1);
-        set_reg(c, 2, R(2) & 0x7ff);
-        busy = R(2) != 0;
-        R(3)++;
-        NC_POLL(c, 2);
-    }
-    set_reg(c, 4, 0);
-}
-
-static void initialize_spu_voices(CPUState *c) {
-    set_reg(c, 4, 0x80020000);
-    set_reg(c, 4, 0x800246b8); /* initial 16-byte sample */
-    load_spu_register_base(c, 2);
-    set_reg(c, 3, 0x200);
-    set_reg(c, 1, 0x80020000);
-    write_spu_halfword(c, 0x80024690, R(3));
-    /* Disable pitch modulation and noise, and mute both external inputs. */
-    const unsigned offsets[] = {0x190, 0x192, 0x194, 0x196, 0x1b0, 0x1b2, 0x1b4, 0x1b6};
-    for (unsigned i = 0; i < sizeof offsets / sizeof offsets[0]; i++)
-        write_spu_halfword(c, R(2) + offsets[i], 0);
-    R(31) = 0x8001f2cc;
-    R(5) = 16;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001f3c0); /* _spu_writeByIO */
-
-    set_reg(c, 4, 0);
-    set_reg(c, 6, 0x3fff);
-    set_reg(c, 5, 0x200);
-    load_spu_register_base(c, 3);
-    bool more;
-    do {
-        NC_POLL(c, 1);
-        write_spu_halfword(c, R(3), 0);
-        write_spu_halfword(c, R(3) + 2, 0);
-        write_spu_halfword(c, R(3) + 4, R(6)); /* pitch */
-        write_spu_halfword(c, R(3) + 6, R(5)); /* sample address */
-        write_spu_halfword(c, R(3) + 8, 0);
-        write_spu_halfword(c, R(3) + 10, 0);
-        set_reg(c, 4, R(4) + 1);
-        set_reg(c, 2, (s32)R(4) < 24);
-        more = R(2) != 0;
-        R(3) += 16;
-        NC_POLL(c, 2);
-    } while (more);
-
-    /* Key on every voice, wait four times, then key them off and wait again. */
-    set_reg(c, 17, 0xffff);
-    load_spu_register_base(c, 2);
-    set_reg(c, 16, 0xff);
-    write_spu_halfword(c, R(2) + 0x188, R(17));
-    write_spu_halfword(c, R(2) + 0x18a, R(16));
-    for (unsigned i = 0; i < 4; i++)
-        gpu_sync_call(c, 0x8001fc78, 0x8001f32c + 8 * i);
-    load_spu_register_base(c, 2);
-    NC_POLL(c, 1);
-    write_spu_halfword(c, R(2) + 0x18c, R(17));
-    write_spu_halfword(c, R(2) + 0x18e, R(16));
-    for (unsigned i = 0; i < 4; i++)
-        gpu_sync_call(c, 0x8001fc78, 0x8001f360 + 8 * i);
-    set_reg(c, 2, 0);
-}
+static const SpuDriverLayout spu_driver = {
+    .init = 0x8001f12c,
+    .write_by_io = 0x8001f3c0,
+    .transfer = 0x8001f718,
+    .wait = 0x8001fc78,
+    .delay_write = 0x8001fc20,
+    .delay_read = 0x8001fc4c,
+    .print = 0x80019a60,
+    .timeout_format = 0x800186ec,
+    .reset_label = 0x800186fc,
+    .write_label = 0x8001870c,
+    .restore_label = 0x80018720,
+    .registers = 0x80024678,
+    .dma_address = 0x8002467c,
+    .dma_blocks = 0x80024680,
+    .dma_control = 0x80024684,
+    .dma_priority = 0x80024688,
+    .transfer_address = 0x80024690,
+    .io_mode = 0x80024694,
+    .io_pending = 0x80024698,
+    .settings = 0x8002469c,
+    .address_shift = 0x800246a0,
+    .initialized = 0x800246ac,
+    .callback = 0x800246b0,
+    .callback_pending = 0x800246b4,
+    .initial_sample = 0x800246b8,
+    .direction = 0x800246c8,
+    .dma_source = 0x800246cc,
+    .dma_count = 0x800246d0,
+    .voice_state = 0x800273e8,
+};
 
 bool nc_credits_initialize_spu(CPUState *c) {
-    if (c->budget <= 3)
-        return false;
-    R(29) -= 32;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = R(4);
-    c->budget -= 3;
-    load_gpu_global(c, 4, 0x80024688);
-    MEM_W32(R(29) + 24, R(31));
-    NC_POLL(c, 1);
-    MEM_W32(R(29) + 20, R(17));
-    NC_POLL(c, 1);
-    load_word(c, 2, R(4));
-    set_reg(c, 3, 0xb0000);
-    set_reg(c, 2, R(2) | R(3));
-    MEM_W32(R(4), R(2)); /* enable SPU DMA */
-    NC_POLL(c, 1);
-    load_spu_register_base(c, 2);
-    store_gpu_global(c, 0x80024694, 0);
-    store_gpu_global(c, 0x80024698, 0);
-    set_reg(c, 1, 0x80020000);
-    write_spu_halfword(c, 0x80024690, 0);
-    write_spu_halfword(c, R(2) + 0x180, 0);
-    write_spu_halfword(c, R(2) + 0x182, 0);
-    write_spu_halfword(c, R(2) + 0x1aa, 0);
-    gpu_sync_call(c, 0x8001fc78, 0x8001f18c);
-    load_spu_register_base(c, 2);
-    NC_POLL(c, 1);
-    write_spu_halfword(c, R(2) + 0x180, 0);
-    write_spu_halfword(c, R(2) + 0x182, 0);
-    wait_for_spu_reset(c);
-
-    set_reg(c, 5, 0x80020000);
-    set_reg(c, 5, 0x800273e8);
-    const unsigned settings[] = {2, 3, 8, 7};
-    for (unsigned i = 0; i < 4; i++) {
-        set_reg(c, 2, settings[i]);
-        store_gpu_global(c, 0x8002469c + 4 * i, 2);
-    }
-    load_spu_register_base(c, 2);
-    set_reg(c, 3, 4);
-    write_spu_halfword(c, R(2) + 0x1ac, R(3));
-    set_reg(c, 3, 0xffff);
-    write_spu_halfword(c, R(2) + 0x184, 0);
-    write_spu_halfword(c, R(2) + 0x186, 0);
-    write_spu_halfword(c, R(2) + 0x18c, R(3));
-    write_spu_halfword(c, R(2) + 0x18e, R(3));
-    write_spu_halfword(c, R(2) + 0x198, 0);
-    write_spu_halfword(c, R(2) + 0x19a, 0);
-    bool more;
-    do {
-        write_spu_halfword(c, R(5), 0);
-        set_reg(c, 4, R(4) + 1);
-        set_reg(c, 2, (s32)R(4) < 10);
-        more = R(2) != 0;
-        R(5) += 2;
-        NC_POLL(c, 2);
-    } while (more);
-    bool full_reset = R(16) == 0;
-    R(2) = 0;
-    NC_POLL(c, 2);
-    if (full_reset)
-        initialize_spu_voices(c);
-
-    load_spu_register_base(c, 4);
-    set_reg(c, 3, 1);
-    store_gpu_global(c, 0x800246ac, 3);
-    set_reg(c, 3, 0xc000);
-    write_spu_halfword(c, R(4) + 0x1aa, R(3));
-    store_gpu_global(c, 0x800246b0, 0);
-    store_gpu_global(c, 0x800246b4, 0);
-    load_word(c, 31, R(29) + 24);
-    load_word(c, 17, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 32);
-    NC_POLL(c, 2);
-    return true;
+    return spu_init(c, &spu_driver);
 }
 
 /* Read the two DMA mode bits from SPUCNT. */
@@ -4839,345 +4704,13 @@ bool nc_credits_spu_read_blocks(CPUState *c) {
     return true;
 }
 
-/* Both SPUSTAT waits allow 0xf00 additional reads before reporting a timeout. */
-static void poll_spu_write_status(CPUState *c, bool restoring) {
-    bool waiting;
-    do {
-        set_reg(c, 2, R(3) < 0xf01);
-        bool retry = R(2) != 0;
-        NC_POLL(c, 2);
-        if (!retry) {
-            set_reg(c, 4, 0x80020000);
-            set_reg(c, 4, 0x800186ec);
-            set_reg(c, 5, 0x80020000);
-            set_reg(c, 5, restoring ? 0x80018720 : 0x8001870c);
-            R(31) = restoring ? 0x8001f544 : 0x8001f4b0;
-            NC_POLL(c, 2);
-            nc_call(c, 0x80019a60);
-            NC_POLL(c, 2);
-            break;
-        }
-        set_reg(c, 2, 0x80020000);
-        load_word(c, 2, 0x80024678);
-        NC_POLL(c, 1);
-        R(2) = MEM_R16(R(2) + 0x1ae);
-        NC_POLL(c, NC_LOAD_CYCLES);
-        NC_POLL(c, 1);
-        set_reg(c, 2, R(2) & (restoring ? 0x7ff : 0x400));
-        waiting = R(2) != (restoring ? R(5) : 0);
-        R(3)++;
-        NC_POLL(c, 2);
-    } while (waiting);
-}
-
-static void write_spu_fifo_chunk(CPUState *c) {
-    bool fits = R(2) != 0;
-    R(16) = R(17);
-    NC_POLL(c, 2);
-    if (!fits)
-        set_reg(c, 16, 64);
-    bool more = (s32)R(16) > 0;
-    R(3) = 0;
-    NC_POLL(c, 2);
-    if (more) {
-        set_reg(c, 4, 0x80020000);
-        load_word(c, 4, 0x80024678);
-    }
-    while (more) {
-        R(2) = MEM_R16(R(18));
-        NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg(c, 18, R(18) + 2);
-        set_reg(c, 3, R(3) + 2);
-        MEM_W16(R(4) + 0x1a8, (u16)R(2)); /* odd sizes still write the full halfword */
-        NC_POLL(c, 1);
-        set_reg(c, 2, (s32)R(3) < (s32)R(16));
-        more = R(2) != 0;
-        NC_POLL(c, 2);
-    }
-
-    set_reg(c, 3, 0x80020000);
-    load_word(c, 3, 0x80024678);
-    NC_POLL(c, 1);
-    R(4) = MEM_R16(R(3) + 0x1aa);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(4) & 0xffcf);
-    set_reg(c, 4, R(2) | 0x10); /* manual transfer */
-    MEM_W16(R(3) + 0x1aa, (u16)R(4));
-    NC_POLL(c, 1);
-    R(31) = 0x8001f468;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001fc78);
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x80024678);
-    NC_POLL(c, 1);
-    R(2) = MEM_R16(R(2) + 0x1ae);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    NC_POLL(c, 1);
-    set_reg(c, 2, R(2) & 0x400);
-    bool busy = R(2) != 0;
-    R(3) = 0;
-    NC_POLL(c, 2);
-    if (busy) {
-        set_reg(c, 3, R(3) + 1);
-        poll_spu_write_status(c, false);
-    }
-    R(31) = 0x8001f4e0;
-    R(17) -= R(16);
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001fc78);
-    R(31) = 0x8001f4e8;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001fc78);
-}
-
 bool nc_credits_spu_write_by_io(CPUState *c) {
-    if (c->budget <= 1)
-        return false;
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x80024678);
-    set_reg(c, 3, 0x80020000);
-    R(3) = MEM_R16(0x80024690);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 29, R(29) - 48);
-    MEM_W32(R(29) + 28, R(17));
-    NC_POLL(c, 1);
-    set_reg(c, 17, R(5));
-    MEM_W32(R(29) + 40, R(31));
-    NC_POLL(c, 1);
-    MEM_W32(R(29) + 36, R(19));
-    NC_POLL(c, 1);
-    MEM_W32(R(29) + 32, R(18));
-    NC_POLL(c, 1);
-    MEM_W32(R(29) + 24, R(16));
-    NC_POLL(c, 1);
-    R(5) = MEM_R16(R(2) + 0x1ae);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 18, R(4));
-    MEM_W16(R(2) + 0x1a6, (u16)R(3));
-    NC_POLL(c, 1);
-    R(31) = 0x8001f400;
-    R(19) = R(5) & 0x7ff;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001fc78);
-
-    bool remaining = R(17) != 0;
-    R(2) = R(17) < 65;
-    NC_POLL(c, 2);
-    while (remaining) {
-        write_spu_fifo_chunk(c);
-        remaining = R(17) != 0;
-        R(2) = R(17) < 65;
-        NC_POLL(c, 2);
-    }
-    set_reg(c, 2, 0x80020000);
-    load_word(c, 2, 0x80024678);
-    NC_POLL(c, 1);
-    R(4) = MEM_R16(R(2) + 0x1aa);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 3, 0);
-    set_reg(c, 4, R(4) & 0xffcf);
-    MEM_W16(R(2) + 0x1aa, (u16)R(4));
-    NC_POLL(c, 1);
-    R(2) = MEM_R16(R(2) + 0x1ae);
-    NC_POLL(c, NC_LOAD_CYCLES);
-    set_reg(c, 5, R(19) & 0xffff);
-    set_reg(c, 2, R(2) & 0x7ff);
-    bool changed = R(2) != R(5);
-    R(3)++;
-    NC_POLL(c, 2);
-    if (changed)
-        poll_spu_write_status(c, true);
-    load_word(c, 31, R(29) + 40);
-    for (unsigned reg = 19; reg >= 16; reg--)
-        load_word(c, reg, R(29) + 24 + 4 * (reg - 16));
-    set_reg(c, 29, R(29) + 48);
-    NC_POLL(c, 2);
-    return true;
-}
-
-/* Send the caller's bytes to the SPU using programmed I/O or DMA. */
-/* After the initial comparison the SDK allows another 0xf00 register reads. */
-static bool wait_spu_transfer_register(CPUState *c, bool control) {
-    for (;;) {
-        set_reg(c, 2, R(3) < 0xf01);
-        bool timeout = !R(2);
-        R(2) = (u32)-2;
-        NC_POLL(c, 2);
-        if (timeout)
-            return false;
-        load_image_halfword(c, 2, R(5) + (control ? 0x1aa : 0x1a6), false);
-        NC_POLL(c, 1);
-        if (control)
-            set_reg(c, 2, R(2) & 0x30);
-        bool ready = R(2) == R(4);
-        R(3)++;
-        NC_POLL(c, 2);
-        if (ready)
-            return true;
-    }
-}
-
-static void select_spu_transfer_mode(CPUState *c, bool reading) {
-    load_spu_register_base(c, 5);
-    set_reg(c, 4, 0x80020000);
-    load_image_halfword(c, 4, 0x80024690, false);
-    load_image_halfword(c, 2, R(5) + 0x1a6, false);
-    store_gpu_global(c, 0x800246c8, reading ? 6 : 0);
-    set_reg(c, 2, R(2) & 0xffff);
-    bool ready = R(2) == R(4);
-    R(3) = 0;
-    NC_POLL(c, 2);
-    if (!ready) {
-        set_reg(c, 3, R(3) + 1);
-        if (!wait_spu_transfer_register(c, false))
-            return;
-    }
-    unsigned base = reading ? 2 : 3;
-    load_spu_register_base(c, base);
-    NC_POLL(c, 1);
-    load_image_halfword(c, 4, R(base) + 0x1aa, false);
-    NC_POLL(c, 1);
-    if (reading) {
-        set_reg(c, 4, R(4) | 0x30);
-    } else {
-        set_reg(c, 2, R(4) & 0xffcf);
-        set_reg(c, 4, R(2) | 0x20);
-    }
-    MEM_W16(R(base) + 0x1aa, (u16)R(4));
-    NC_POLL(c, 1);
-    R(2) = 0;
-    NC_POLL(c, 2);
-}
-
-static void start_spu_transfer(CPUState *c) {
-    load_gpu_global(c, 2, 0x800246c8);
-    NC_POLL(c, 1);
-    bool reading = R(2) == R(6);
-    R(4) = 0x20;
-    NC_POLL(c, 2);
-    if (reading)
-        set_reg(c, 4, 0x30);
-    load_spu_register_base(c, 5);
-    set_reg(c, 3, 0);
-    load_image_halfword(c, 2, R(5) + 0x1aa, false);
-    set_reg(c, 4, R(4) & 0xffff);
-    set_reg(c, 2, R(2) & 0x30);
-    bool ready = R(2) == R(4);
-    R(3)++;
-    NC_POLL(c, 2);
-    if (!ready && !wait_spu_transfer_register(c, true))
-        return;
-
-    load_gpu_global(c, 3, 0x800246c8);
-    set_reg(c, 2, 1);
-    reading = R(3) == R(2);
-    NC_POLL(c, 2);
-    R(31) = reading ? 0x8001f8f8 : 0x8001f908;
-    R(16) += 4;
-    NC_POLL(c, 2);
-    nc_call(c, reading ? 0x8001fc4c : 0x8001fc20);
-    R(6) = 0x01000000;
-    NC_POLL(c, reading ? 2 : 1);
-
-    /* Program the DMA address and round the byte count up to 64-byte blocks. */
-    load_word(c, 4, R(16) - 4);
-    store_gpu_global(c, 0x800246cc, 4);
-    load_word(c, 4, R(16));
-    load_gpu_global(c, 5, 0x8002467c);
-    set_reg(c, 3, R(4) >> 6);
-    set_reg(c, 2, R(4) & 63);
-    set_reg(c, 2, R(2) != 0);
-    load_gpu_global(c, 4, 0x800246cc);
-    set_reg(c, 3, R(3) + R(2));
-    store_gpu_global(c, 0x800246d0, 3);
-    MEM_W32(R(5), R(4));
-    NC_POLL(c, 1);
-    load_gpu_global(c, 2, 0x800246d0);
-    load_gpu_global(c, 3, 0x80024680);
-    set_reg(c, 2, R(2) << 16);
-    set_reg(c, 2, R(2) | 16);
-    MEM_W32(R(3), R(2));
-    NC_POLL(c, 1);
-    load_gpu_global(c, 3, 0x800246c8);
-    set_reg(c, 2, 1);
-    reading = R(3) == R(2);
-    R(6) |= 0x201;
-    NC_POLL(c, 2);
-    if (reading) {
-        set_reg(c, 6, 0x01000000);
-        set_reg(c, 6, R(6) | 0x200);
-    }
-    load_gpu_global(c, 2, 0x80024684);
-    NC_POLL(c, 1);
-    MEM_W32(R(2), R(6));
-    NC_POLL(c, 1);
-    set_reg(c, 2, 0);
+    return spu_write_by_io(c, &spu_driver);
 }
 
 /* _spu_t selects DMA direction, sets the SPU address, or starts the transfer. */
 bool nc_credits_spu_transfer_command(CPUState *c) {
-    if (c->budget <= 11)
-        return false;
-    for (unsigned i = 0; i < 4; i++) {
-        MEM_W32(R(29) + 4 * i, R(4 + i));
-        c->budget--;
-    }
-    R(29) -= 24;
-    MEM_W32(R(29) + 16, R(16));
-    R(16) = R(29) + 28;
-    R(6) = 1;
-    MEM_W32(R(29) + 20, R(31));
-    bool write_mode = R(4) == R(6);
-    MEM_W32(R(29) + 24, R(4));
-    c->budget -= 7;
-    if (write_mode) {
-        select_spu_transfer_mode(c, false);
-    } else {
-        set_reg(c, 2, (s32)R(4) < 2);
-        bool low_command = R(2) != 0;
-        NC_POLL(c, 2);
-        if (low_command) {
-            bool read_mode = !R(4);
-            R(2) = 0;
-            NC_POLL(c, 2);
-            if (read_mode)
-                select_spu_transfer_mode(c, true);
-            else
-                NC_POLL(c, 2);
-        } else {
-            set_reg(c, 2, 2);
-            bool set_address = R(4) == R(2);
-            R(2) = 3;
-            NC_POLL(c, 2);
-            if (set_address) {
-                load_word(c, 4, R(29) + 28);
-                load_gpu_global(c, 2, 0x800246a0);
-                load_spu_register_base(c, 3);
-                set_reg(c, 2, R(4) >> (R(2) & 31));
-                set_reg(c, 1, 0x80020000);
-                MEM_W16(0x80024690, (u16)R(2));
-                NC_POLL(c, 1);
-                MEM_W16(R(3) + 0x1a6, (u16)R(2));
-                NC_POLL(c, 1);
-                R(2) = 0;
-                NC_POLL(c, 2);
-            } else {
-                bool start = R(4) == R(2);
-                R(2) = 0;
-                NC_POLL(c, 2);
-                if (start)
-                    start_spu_transfer(c);
-                else
-                    NC_POLL(c, 2);
-            }
-        }
-    }
-    load_word(c, 31, R(29) + 20);
-    load_word(c, 16, R(29) + 16);
-    set_reg(c, 29, R(29) + 24);
-    NC_POLL(c, 2);
-    return true;
+    return spu_transfer_command(c, &spu_driver);
 }
 
 bool nc_credits_spu_write(CPUState *c) {

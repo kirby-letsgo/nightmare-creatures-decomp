@@ -104,4 +104,68 @@ static bool compare_set_interrupt_handler(u32 entry, bool (*routine)(CPUState *)
     return ok && !saved.error;
 }
 
+/* stopIntr and restartIntr, from both driver states and with a tight budget. */
+static bool compare_interrupt_control(bool stop, u32 entry, bool (*routine)(CPUState *), u32 state) {
+    StateIO saved = {0};
+    interrupt_start_state(&saved);
+    bios_serialize(&saved);
+    bool ok = !saved.error;
+    for (unsigned active = 0; active < 2 && ok; active++) {
+        for (unsigned tight = 0; tight < 2 && ok; tight++) {
+            StateIO native = {0}, guest = {0};
+            for (unsigned run = 0; run < 2 && ok; run++) {
+                MEM_W16(state, active ? 0x8000 : 0);
+                MEM_W16(state + 0x32, stop ? 0x11 : 0x40);
+                MEM_W32(state + 0x34, 0x08765432);
+                MEM_W16(0x1f801070, 0);
+                MEM_W16(0x1f801074, stop ? 0x40 : 0);
+                MEM_W32(0x1f8010f0, stop ? 0xfedcba98 : 0x01234567);
+                if (stop) {
+                    irq_raise(IRQ_DMA);
+                    nc_cpu = arguments(state + 0x38, 0, 0, 4096);
+                    nc_cpu.r[9] = 0x19;
+                    bios_call(&nc_cpu, 0xb0); /* install the hook that stopIntr clears */
+                }
+                nc_cpu = arguments(7, 2, 3, 11);
+                nc_cpu.cop0[12] = stop ? 0x401 : 0;
+                if (!run && routine(&nc_cpu))
+                    ok = false;
+                nc_cpu.budget = tight ? 12 : 4096;
+                if (run)
+                    interp_call(&nc_cpu, entry);
+                else
+                    ok = routine(&nc_cpu) && ok;
+                StateIO *result = run ? &guest : &native;
+                interrupt_start_state(result);
+                bios_serialize(result);
+                if (stop) {
+                    ok = ok && nc_cpu.r[2] == (active ? state : 0) &&
+                         MEM_R16(state) == 0 && MEM_R16(0x1f801074) == (active ? 0 : 0x40) &&
+                         (MEM_R16(0x1f801070) & 8) == (active ? 0 : 8) &&
+                         MEM_R32(0x1f8010f0) == (active ? 0x76543210u : 0xfedcba98u) &&
+                         MEM_R16(state + 0x32) == (active ? 0x40 : 0x11) &&
+                         MEM_R32(state + 0x34) == (active ? 0xfedcba98u : 0x08765432u) &&
+                         (nc_cpu.cop0[12] & 0x401) == (active ? 0 : 0x401);
+                } else {
+                    ok = ok && nc_cpu.r[2] == (active ? 0 : state) &&
+                         MEM_R16(state) == (active ? 0x8000 : 1) &&
+                         MEM_R16(0x1f801074) == (active ? 0 : 0x40) &&
+                         MEM_R32(0x1f8010f0) == (active ? 0x01234567u : 0x08765432u) &&
+                         (nc_cpu.cop0[12] & 0x401) == (active ? 0 : 0x401);
+                }
+                saved.loading = true;
+                saved.pos = 0;
+                interrupt_start_state(&saved);
+                bios_serialize(&saved);
+            }
+            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
+                 !memcmp(native.buf, guest.buf, guest.len);
+            free(native.buf);
+            free(guest.buf);
+        }
+    }
+    free(saved.buf);
+    return ok;
+}
+
 #endif

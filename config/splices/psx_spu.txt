@@ -1,0 +1,10 @@
+# Handwritten code from src/decomp/psx_spu.* spliced into generated functions.
+
+include decomp/psx_spu.h
+
+psx_exe  80019D2C  entry  nc_psx_reverb_on(c)
+psx_exe  80021B08  entry  nc_psx_reverb_off(c)
+psx_exe  80021B28  entry  nc_psx_spu_init(c)
+psx_exe  80021C20  entry  nc_psx_spu_start(c)
+psx_exe  80022858  entry  nc_psx_spu_data_callback(c)
+psx_exe  8002287C  entry  nc_psx_spu_quit(c)

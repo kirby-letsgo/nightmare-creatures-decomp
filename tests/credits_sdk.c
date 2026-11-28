@@ -16,6 +16,7 @@
 #include "sdk_puts.h"
 #include "cd_reset.h"
 #include "jump_context.h"
+#include "spu_driver.h"
 #include "decomp/credits.h"
 #include "port/bios.h"
 #include "port/disc.h"
@@ -38,6 +39,22 @@ static const CdFileFixture credits_file = {
     .debug = 0x80024768, .media_count = 0x80024774, .loaded_media = 0x80024a6c,
     .cached_directory = 0x80024a68, .files = 0x80024e54, .paths = 0x80025454,
     .sector = 0x80026a54,
+};
+
+static const SpuDriverFixture credits_spu = {
+    .layout = {
+        .init = 0x8001f12c, .write_by_io = 0x8001f3c0, .transfer = 0x8001f718,
+        .wait = 0x8001fc78, .print = 0x80019a60,
+        .write_label = 0x8001870c, .restore_label = 0x80018720,
+        .registers = 0x80024678, .dma_address = 0x8002467c, .dma_blocks = 0x80024680,
+        .dma_control = 0x80024684, .dma_priority = 0x80024688, .transfer_address = 0x80024690,
+        .address_shift = 0x800246a0, .initialized = 0x800246ac, .direction = 0x800246c8,
+        .dma_count = 0x800246d0, .voice_state = 0x800273e8,
+    },
+    .delay_register = 0x8002468c,
+    .init = nc_credits_initialize_spu,
+    .write_by_io = nc_credits_spu_write_by_io,
+    .transfer = nc_credits_spu_transfer_command,
 };
 
 static bool check_copy(void) {
@@ -1865,50 +1882,6 @@ static bool spu_read_delay(CPUState *c) {
     return nc_credits_spu_set_delay(c, true);
 }
 
-static bool check_spu_initialization(void) {
-    const u32 spu = 0x80062000, dpcr = 0x80062400;
-    const struct { u32 mode; u16 status; int budget; } cases[] = {
-        {0, 0, 4}, {0, 0xf800, 8192}, {1, 0, 4}, {UINT32_MAX, 1, 8192},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE); /* interpret the FIFO upload and all SPU delays */
-    MEM_W32(0x80024678, spu);
-    MEM_W32(0x80024688, dpcr);
-    MEM_W32(0x80019a60, 0x03e00008);
-    MEM_W32(0x80019a64, 0x27180001); /* count timeout diagnostics in t8 */
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        memset(nc_fast_ptr(spu), 0xcc, 0x200);
-        memset(nc_fast_ptr(0x800273e6), 0xee, 24);
-        MEM_W32(dpcr, 0x10203040);
-        MEM_W16(spu + 0x1ae, cases[i].status);
-        CPUState state = arguments(cases[i].mode, 2, 3, cases[i].budget);
-        state.r[24] = 0;
-        bool full = cases[i].mode == 0;
-        ok = compare(state, 0x8001f12c, nc_credits_initialize_spu, 3) &&
-             nc_cpu.r[2] == 0 && nc_cpu.r[24] == (u32)((cases[i].status & 0x7ff) != 0) &&
-             MEM_R32(dpcr) == 0x102b3040 && MEM_R16(spu + 0x1aa) == 0xc000 &&
-             MEM_R32(0x800246ac) == 1 && MEM_R16(0x80024690) == (full ? 0x200 : 0) &&
-             MEM_R16(0x800273e6) == 0xeeee && MEM_R16(0x800273fc) == 0xeeee;
-        for (unsigned j = 0; ok && j < 10; j++)
-            ok = MEM_R16(0x800273e8 + 2 * j) == 0;
-        for (unsigned j = 0; ok && j < 24; j++) {
-            u32 voice = spu + 16 * j;
-            ok = MEM_R16(voice) == (full ? 0 : 0xcccc) &&
-                 MEM_R16(voice + 4) == (full ? 0x3fff : 0xcccc) &&
-                 MEM_R16(voice + 6) == (full ? 0x200 : 0xcccc) &&
-                 MEM_R16(voice + 12) == 0xcccc;
-        }
-    }
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
-}
-
 static bool check_spu_common_attributes(void) {
     const u32 attr = 0x80061000, regs = 0x80063000;
     u32 old_base = MEM_R32(0x80024678);
@@ -1955,66 +1928,6 @@ static bool check_spu_common_attributes(void) {
     }
     MEM_W32(0x80024678, old_base);
     return ok;
-}
-
-static bool check_spu_fifo_write(void) {
-    const u32 buffer = 0x80061000, ports = buffer + 256, trace = ports + 512;
-    const unsigned sizes[] = {0, 1, 63, 64, 65, 130, 2, 0};
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    spu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE);
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof sizes / sizeof sizes[0]; i++) {
-        StateIO native = {0}, guest = {0};
-        bool timeout = i >= 6;
-        for (unsigned run = 0; ok && run < 2; run++) {
-            MEM_W32(0x80024678, timeout ? ports : 0x1f801c00);
-            MEM_W16(0x80024690, 0xffff); /* a long transfer wraps sound RAM */
-            for (unsigned j = 0; j < 132; j++)
-                MEM_W8(buffer + j, (u8)(j + 1));
-            spu_write(0x1aa, 0);
-            if (timeout) {
-                MEM_W16(ports + 0x1ae, i == 6 ? 0x400 : 0);
-                MEM_W32(0x8001fc78, 0x03e00008); /* set status in wait delay slot */
-                MEM_W32(0x8001fc7c, 0xa5090000); /* sh t1,0(t0) */
-                MEM_W32(0x80019a60, 0x03e00008);
-                MEM_W32(0x80019a64, 0xad450000); /* sw a1,0(t2): timeout label */
-            }
-            nc_cpu = arguments(buffer, sizes[i], 3, i & 1 ? 2 : 4096);
-            nc_cpu.r[8] = ports + 0x1ae;
-            nc_cpu.r[9] = i == 6 ? 0x400 : 1;
-            nc_cpu.r[10] = trace;
-            if (run)
-                interp_call(&nc_cpu, 0x8001f3c0);
-            else
-                ok = nc_credits_spu_write_by_io(&nc_cpu);
-            StateIO *result = run ? &guest : &native;
-            cpu_serialize(result);
-            spu_serialize(result);
-            if (timeout) {
-                ok = ok && MEM_R32(trace) == (i == 6 ? 0x8001870cu : 0x80018720u);
-            } else {
-                u8 data[132];
-                spu_write(0x1a6, 0xffff);
-                spu_dma_read(data, sizeof data);
-                unsigned bytes = (sizes[i] + 1) & ~1u;
-                ok = ok && !memcmp(data, nc_fast_ptr(buffer), bytes);
-            }
-            saved.loading = true;
-            saved.pos = 0;
-            cpu_serialize(&saved);
-            spu_serialize(&saved);
-        }
-        ok = ok && !native.error && !guest.error && native.len == guest.len &&
-             !memcmp(native.buf, guest.buf, guest.len);
-        free(native.buf);
-        free(guest.buf);
-    }
-    free(saved.buf);
-    nc_set_module(module);
-    return ok && !saved.error;
 }
 
 static bool check_spu_dma_complete(void) {
@@ -2088,69 +2001,6 @@ static bool check_spu_read_blocks(void) {
     saved.loading = true;
     cpu_serialize(&saved);
     free(saved.buf);
-    return ok && !saved.error;
-}
-
-static bool check_spu_transfer_command(void) {
-    const u32 spu = 0x80060000, dma = 0x80060400, buffer = 0x80061018;
-    const struct { s32 command; u32 direction, size; bool ready; } cases[] = {
-        {-1, 5, 0, true}, {4, 5, 0, true}, {2, 5, 0, true},
-        {0, 5, 0, true}, {0, 5, 0, false},
-        {1, 5, 0, true}, {1, 5, 0, false},
-        {3, 1, 0, true}, {3, 0, 64, true}, {3, 1, 65, true},
-        {3, 5, UINT32_MAX, true}, {3, 1, 64, false}, {3, 0, 64, false},
-    };
-    StateIO saved = {0};
-    cpu_serialize(&saved);
-    NcModule module = nc_active_module();
-    nc_set_module(NC_MOD_NONE); /* interpret the delay-register callees */
-    MEM_W32(0x80024678, spu);
-    MEM_W32(0x8002467c, dma);
-    MEM_W32(0x80024680, dma + 4);
-    MEM_W32(0x80024684, dma + 8);
-    MEM_W32(0x8002468c, dma + 12);
-    MEM_W32(0x800246a0, 35); /* variable shifts use the low five bits */
-    bool ok = !saved.error;
-    for (unsigned i = 0; ok && i < sizeof cases / sizeof cases[0]; i++) {
-        s32 cmd = cases[i].command;
-        bool ready = cases[i].ready;
-        bool reading = cases[i].direction == 1;
-        u16 control = 0x8104;
-        if (cmd == 3)
-            control |= ready ? (reading ? 0x30 : 0x20) : 0;
-        MEM_W16(spu + 0x1aa, control);
-        MEM_W16(spu + 0x1a6, ready ? 0x5432 : 0x1234);
-        MEM_W16(0x80024690, 0x5432);
-        MEM_W32(0x800246c8, cases[i].direction);
-        memset(nc_fast_ptr(dma), 0xff, 16);
-        CPUState state = arguments((u32)cmd, buffer, cases[i].size, i & 1 ? 12 : 4096);
-        ok = compare(state, 0x8001f718, nc_credits_spu_transfer_command, 11) &&
-             nc_cpu.r[2] == (ready ? 0u : (u32)-2);
-        if (cmd == 0 || cmd == 1) {
-            ok = ok && MEM_R32(0x800246c8) == (u32)(cmd == 0) &&
-                 MEM_R16(spu + 0x1aa) == (ready ? (cmd == 0 ? 0x8134 : 0x8124) : control);
-        } else if (cmd == 2) {
-            ok = ok && MEM_R16(spu + 0x1a6) == (u16)(buffer >> 3) &&
-                 MEM_R16(0x80024690) == (u16)(buffer >> 3);
-        } else if (cmd == 3 && ready) {
-            u32 blocks = cases[i].size / 64 + (cases[i].size % 64 != 0);
-            ok = ok && MEM_R32(dma) == buffer && MEM_R32(0x800246d0) == blocks &&
-                 MEM_R32(dma + 4) == (blocks << 16 | 16) &&
-                 MEM_R32(dma + 8) == (reading ? 0x01000200u : 0x01000201u);
-        }
-    }
-    /* Alias the address register to the direction word. The mode store makes
-     * the first retry succeed after the initial address comparison fails. */
-    MEM_W32(0x80024678, 0x800246c8 - 0x1a6);
-    MEM_W32(0x800246c8, 99);
-    MEM_W16(0x80024690, 1);
-    CPUState retry = arguments(0, buffer, 64, 12);
-    ok = ok && compare(retry, 0x8001f718, nc_credits_spu_transfer_command, 11) &&
-         nc_cpu.r[2] == 0 && nc_cpu.r[3] == 2;
-    saved.loading = true;
-    cpu_serialize(&saved);
-    free(saved.buf);
-    nc_set_module(module);
     return ok && !saved.error;
 }
 
@@ -2837,71 +2687,6 @@ static bool check_gpu_image_transfer(bool readback) {
         free(guest.buf);
     }
     nc_set_module(module);
-    free(saved.buf);
-    return ok;
-}
-
-static bool check_interrupt_driver_control(bool stop) {
-    u32 entry = stop ? 0x8001ac48 : 0x8001acf4;
-    bool (*routine)(CPUState *) = stop ? nc_credits_stop_interrupts : nc_credits_restart_interrupts;
-    StateIO saved = {0};
-    interrupt_start_state(&saved);
-    bios_serialize(&saved);
-    bool ok = !saved.error;
-    for (unsigned active = 0; active < 2 && ok; active++) {
-        for (unsigned tight = 0; tight < 2 && ok; tight++) {
-            StateIO native = {0}, guest = {0};
-            for (unsigned run = 0; run < 2 && ok; run++) {
-                MEM_W16(0x80023418, active ? 0x8000 : 0);
-                MEM_W16(0x8002344a, stop ? 0x11 : 0x40);
-                MEM_W32(0x8002344c, 0x08765432);
-                MEM_W16(0x1f801070, 0);
-                MEM_W16(0x1f801074, stop ? 0x40 : 0);
-                MEM_W32(0x1f8010f0, stop ? 0xfedcba98 : 0x01234567);
-                if (stop) {
-                    irq_raise(IRQ_DMA);
-                    nc_cpu = arguments(0x80023450, 0, 0, 4096);
-                    nc_cpu.r[9] = 0x19;
-                    bios_call(&nc_cpu, 0xb0); /* install the hook that stopIntr clears */
-                }
-                nc_cpu = arguments(7, 2, 3, 11);
-                nc_cpu.cop0[12] = stop ? 0x401 : 0;
-                if (!run && routine(&nc_cpu))
-                    ok = false;
-                nc_cpu.budget = tight ? 12 : 4096;
-                if (run)
-                    interp_call(&nc_cpu, entry);
-                else
-                    ok = routine(&nc_cpu) && ok;
-                StateIO *result = run ? &guest : &native;
-                interrupt_start_state(result);
-                bios_serialize(result);
-                if (stop) {
-                    ok = ok && nc_cpu.r[2] == (active ? 0x80023418u : 0) &&
-                         MEM_R16(0x80023418) == 0 && MEM_R16(0x1f801074) == (active ? 0 : 0x40) &&
-                         (MEM_R16(0x1f801070) & 8) == (active ? 0 : 8) &&
-                         MEM_R32(0x1f8010f0) == (active ? 0x76543210u : 0xfedcba98u) &&
-                         MEM_R16(0x8002344a) == (active ? 0x40 : 0x11) &&
-                         MEM_R32(0x8002344c) == (active ? 0xfedcba98u : 0x08765432u) &&
-                         (nc_cpu.cop0[12] & 0x401) == (active ? 0 : 0x401);
-                } else {
-                    ok = ok && nc_cpu.r[2] == (active ? 0 : 0x80023418u) &&
-                         MEM_R16(0x80023418) == (active ? 0x8000 : 1) &&
-                         MEM_R16(0x1f801074) == (active ? 0 : 0x40) &&
-                         MEM_R32(0x1f8010f0) == (active ? 0x01234567u : 0x08765432u) &&
-                         (nc_cpu.cop0[12] & 0x401) == (active ? 0 : 0x401);
-                }
-                saved.loading = true;
-                saved.pos = 0;
-                interrupt_start_state(&saved);
-                bios_serialize(&saved);
-            }
-            ok = ok && !saved.error && !native.error && !guest.error && native.len == guest.len &&
-                 !memcmp(native.buf, guest.buf, guest.len);
-            free(native.buf);
-            free(guest.buf);
-        }
-    }
     free(saved.buf);
     return ok;
 }
@@ -4495,12 +4280,12 @@ int main(int argc, char **argv) {
     pass = pass && check_default_display();
     pass = pass && check_default_draw();
     pass = pass && check_cd_test_parameter_count();
-    pass = pass && check_spu_initialization();
+    pass = pass && check_spu_initialization(&credits_spu);
     pass = pass && check_spu_common_attributes();
-    pass = pass && check_spu_fifo_write();
+    pass = pass && check_spu_fifo_write(&credits_spu);
     pass = pass && check_spu_dma_complete();
     pass = pass && check_spu_read_blocks();
-    pass = pass && check_spu_transfer_command();
+    pass = pass && check_spu_transfer_command(&credits_spu);
     pass = pass && check_spu_transfer(true, false);
     pass = pass && check_spu_transfer(false, false);
     pass = pass && check_spu_transfer(false, true);
@@ -4513,8 +4298,10 @@ int main(int argc, char **argv) {
     pass = pass && check_spu_delays();
     pass = pass && check_cd_default_callbacks();
     pass = pass && check_callback_controls();
-    pass = pass && check_interrupt_driver_control(false);
-    pass = pass && check_interrupt_driver_control(true);
+    pass = pass && compare_interrupt_control(false, 0x8001acf4, nc_credits_restart_interrupts,
+                                             0x80023418);
+    pass = pass && compare_interrupt_control(true, 0x8001ac48, nc_credits_stop_interrupts,
+                                             0x80023418);
     pass = pass && check_pad_patch();
     pass = pass && check_pad_setup();
     pass = pass && check_interrupt_auto_clear();

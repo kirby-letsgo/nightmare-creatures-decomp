@@ -1,0 +1,11 @@
+# Handwritten code from src/decomp/psx_intr.* spliced into generated functions.
+
+include decomp/psx_intr.h
+
+psx_exe  8001BD98  entry  nc_psx_start_interrupts(c)
+psx_exe  8001BE00  entry  nc_psx_resume_interrupt_start(c)
+psx_exe  8001BE74  entry  nc_psx_dispatch_interrupts(c)
+psx_exe  8001C05C  entry  nc_psx_set_interrupt_handler(c)
+psx_exe  8001C1B0  entry  nc_psx_stop_interrupts(c)
+psx_exe  8001C25C  entry  nc_psx_restart_interrupts(c)
+psx_exe  80023174  entry  nc_psx_get_cd_interrupt(c)

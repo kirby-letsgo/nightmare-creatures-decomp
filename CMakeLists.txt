@@ -344,6 +344,18 @@ add_test(NAME psx_libc_rules COMMAND test_psx_libc)
 add_test(NAME psx_libc_disc COMMAND test_psx_libc "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(psx_libc_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
 
+add_executable(test_psx_intr tests/psx_intr.c src/decomp/psx_intr.c src/port/no_gen.c)
+target_link_libraries(test_psx_intr PRIVATE nc_runtime)
+add_test(NAME psx_intr_rules COMMAND test_psx_intr)
+add_test(NAME psx_intr_disc COMMAND test_psx_intr "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(psx_intr_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
+add_executable(test_psx_spu tests/psx_spu.c src/port/no_gen.c)
+target_link_libraries(test_psx_spu PRIVATE nc_decomp)
+add_test(NAME psx_spu_rules COMMAND test_psx_spu)
+add_test(NAME psx_spu_disc COMMAND test_psx_spu "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(psx_spu_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+
 add_executable(test_psx2_pad tests/psx2_pad.c)
 if(TARGET nc_gen)
     target_link_libraries(test_psx2_pad PRIVATE nc_runtime nc_gen)

@@ -28,6 +28,7 @@
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
+#include "decomp/spu_driver.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/vsync.h"
 #include "port/recomp.h"

@@ -99,8 +99,8 @@ static inline bool call_cd_status_driver(CPUState *c, u32 driver, u32 return_pc,
     return true;
 }
 
-/* Register the CD data handler on DMA channel 3 and return its predecessor. */
-static inline bool cd_data_callback(CPUState *c, u32 dma_callback, u32 resume) {
+/* Register a handler on one DMA channel (DMACallback) and return its predecessor. */
+static inline bool dma_channel_callback(CPUState *c, u32 channel, u32 dma_callback, u32 resume) {
     if (c->budget <= 5)
         return false;
     R(29) -= 24;
@@ -108,7 +108,7 @@ static inline bool cd_data_callback(CPUState *c, u32 dma_callback, u32 resume) {
     MEM_W32(R(29) + 16, R(31));
     R(5) = R(4);
     R(31) = resume;
-    R(4) = 3;
+    R(4) = channel;
     c->budget -= 4;
     nc_call(c, dma_callback); /* DMACallback */
     R(31) = MEM_R32(R(29) + 16);
@@ -117,6 +117,11 @@ static inline bool cd_data_callback(CPUState *c, u32 dma_callback, u32 resume) {
     NC_POLL(c, 1);
     NC_POLL(c, 2);
     return true;
+}
+
+/* Register the CD data handler on DMA channel 3. */
+static inline bool cd_data_callback(CPUState *c, u32 dma_callback, u32 resume) {
+    return dma_channel_callback(c, 3, dma_callback, resume);
 }
 
 static inline bool cd_set_test_parameter_count(CPUState *c, u32 address) {

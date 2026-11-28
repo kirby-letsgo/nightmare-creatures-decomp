@@ -54,6 +54,8 @@
 
 #include "decomp/sdk_puts.h"
 
+#include "decomp/spu_driver.h"
+
 #include "decomp/vblank_wait.h"
 
 #include "decomp/vsync.h"
@@ -113,6 +115,38 @@ bool upload_clut__credits_sdk__stream3_exe(CPUState *c, u32 width, u32 entry) {
     NC_POLL(c, 2);
     return true;
 }
+
+static const SpuDriverLayout spu_driver__credits_sdk__stream3_exe = {
+    .init = 0x80022548,
+    .write_by_io = 0x800227dc,
+    .transfer = 0x80022b34,
+    .wait = 0x80023094,
+    .delay_write = 0x8002303c,
+    .delay_read = 0x80023068,
+    .print = 0x8001a6a0,
+    .timeout_format = 0x80018900,
+    .reset_label = 0x80018910,
+    .write_label = 0x80018920,
+    .restore_label = 0x80018934,
+    .registers = 0x8003A5CC,
+    .dma_address = 0x8003a5d0,
+    .dma_blocks = 0x8003A5D4,
+    .dma_control = 0x8003A5D8,
+    .dma_priority = 0x8003A5DC,
+    .transfer_address = 0x8003A5E4,
+    .io_mode = 0x8003A5E8,
+    .io_pending = 0x8003A5EC,
+    .settings = 0x8003a5f0,
+    .address_shift = 0x8003a5f4,
+    .initialized = 0x8003a600,
+    .callback = 0x8003a604,
+    .callback_pending = 0x8003a608,
+    .initial_sample = 0x8003a60c,
+    .direction = 0x8003a61c,
+    .dma_source = 0x8003a620,
+    .dma_count = 0x8003a624,
+    .voice_state = 0x8003d1a4,
+};
 
 /* Read the two DMA mode bits from SPUCNT. */
 void read_spu_dma_mode__credits_sdk__stream3_exe(CPUState *c) {
@@ -2094,6 +2128,10 @@ bool nc_credits_initialize_cd_driver__stream3_exe_80024B38(CPUState *c) {
     return initialize_cd_driver__cd_init__stream3_exe(c, &layout);
 }
 
+bool nc_credits_initialize_spu__stream3_exe_80022548(CPUState *c) {
+    return spu_init__spu_driver__stream3_exe(c, &spu_driver__credits_sdk__stream3_exe);
+}
+
 bool nc_credits_interrupt_callback__stream3_exe_8001B308(CPUState *c) {
     return interrupt_driver_call(c, 0x80028290, 8, 0x8001b328, false);
 }
@@ -2916,6 +2954,11 @@ bool nc_credits_spu_set_dma_priority__stream3_exe_80022FDC(CPUState *c) {
     return true;
 }
 
+/* _spu_t selects DMA direction, sets the SPU address, or starts the transfer. */
+bool nc_credits_spu_transfer_command__stream3_exe_80022B34(CPUState *c) {
+    return spu_transfer_command__spu_driver__stream3_exe(c, &spu_driver__credits_sdk__stream3_exe);
+}
+
 /* SPU initialization and PIO use this 240-iteration delay. The two stack
  * words remain visible to the guest throughout the wait. */
 bool nc_credits_spu_wait__stream3_exe_80023094(CPUState *c) {
@@ -3011,6 +3054,10 @@ bool nc_credits_spu_write__stream3_exe_80022DC4(CPUState *c) {
     set_reg__credits_roll__stream3_exe(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
+}
+
+bool nc_credits_spu_write_by_io__stream3_exe_800227DC(CPUState *c) {
+    return spu_write_by_io__spu_driver__stream3_exe(c, &spu_driver__credits_sdk__stream3_exe);
 }
 
 /* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */
