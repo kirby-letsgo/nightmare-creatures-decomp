@@ -61,8 +61,8 @@ LAUNCHER_BIOS_SERVICES = {
 }
 LAUNCHER_IRQ_WRAPPERS = {
     0x80010A50: 12,  # ResetCallback
-    0x80010A80: 8,   # InterruptCallback
-    0x80010AB0: 4,   # DMACallback
+    0x80010A80: 8,  # InterruptCallback
+    0x80010AB0: 4,  # DMACallback
     0x80010AE0: 20,  # VSyncCallback(handler)
     0x80010B14: 20,  # VSyncCallbacks(slot, handler)
     0x80010B44: 16,  # StopCallback
@@ -141,269 +141,6 @@ PSX2_PAD_BIOS_SERVICES = {
     0x80073F54: "NC_BIOS_START_PAD",
 }
 
-CREDITS_ROUTINES = {
-    0x80018C8C: "nc_credits_skip_input(c)",
-    0x80018CFC: "nc_credits_init_pad(c)",
-    0x80018D4C: "nc_credits_stop_pad(c)",
-    0x80018D6C: "nc_credits_read_sectors(c)",
-    0x80018E28: "nc_credits_load_file(c)",
-    0x80018EE4: "nc_credits_load_tim(c)",
-    0x80018F94: "nc_credits_run(c)",
-    0x80019220: "nc_credits_init_shared_record(c)",
-    0x800192E4: "nc_credits_set_cd_volume(c)",
-    0x8001932C: "nc_credits_reset_music(c)",
-    0x8001935C: "nc_credits_empty_hook(c)",
-    0x80019364: "nc_credits_play_track(c)",
-    0x800193B4: "nc_credits_heap_warning(c, NC_WARN_CALLOC)",
-    0x800193DC: "nc_credits_heap_warning(c, NC_WARN_MALLOC)",
-    0x80019404: "nc_credits_heap_warning(c, NC_WARN_REALLOC)",
-    0x8001942C: "nc_credits_heap_warning(c, NC_WARN_FREE)",
-    0x80019454: "nc_credits_init_heap(c)",
-    0x8001949C: "nc_credits_resize(c)",
-    0x80019680: "nc_credits_allocate(c)",
-    0x800197E0: "nc_credits_free(c)",
-    0x800198B0: "nc_credits_find_allocation(c)",
-    0x800198EC: "nc_credits_allocation_size(c)",
-    0x80019928: "nc_credits_copy_bytes(c)",
-    0x8001995C: "nc_credits_fill_bytes(c)",
-    0x80019988: "nc_credits_append_string(c)",
-    0x80019A30: "nc_credits_string_length(c)",
-    0x80019A60: "nc_credits_printf(c)",
-    0x80019A9C: "nc_credits_format_output(c)",
-    0x8001A128: "nc_credits_change_case(c, true)",
-    0x8001A158: "nc_credits_change_case(c, false)",
-    0x8001A188: "nc_credits_find_byte(c)",
-    0x8001A1D8: "nc_credits_put_char(c)",
-    0x8001A28C: "nc_credits_bios_stop_pad(c)",
-    0x8001A29C: "nc_credits_bios_write(c)",
-    0x8001A2AC: "nc_credits_change_clear_pad(c)",
-    0x8001A2BC: "nc_credits_legacy_pad_init(c)",
-    0x8001A324: "nc_credits_sdk_init_pad(c)",
-    0x8001A38C: "nc_credits_start_pad(c)",
-    0x8001A3B4: "nc_credits_bios_init_pad(c)",
-    0x8001A3C4: "nc_credits_bios_start_pad(c)",
-    0x8001A3D4: "nc_credits_bios_pad_init_and_start(c)",
-    0x8001A3E4: "nc_credits_patch_pad(c)",
-    0x8001A434: "nc_credits_flush_cache(c)",
-    0x8001A444: "nc_credits_enter_critical_section(c)",
-    0x8001A454: "nc_credits_vsync(c)",
-    0x8001A59C: "nc_credits_wait_vblank(c)",
-    0x8001A638: "nc_credits_put_string(c)",
-    0x8001A688: "nc_credits_change_clear_counter(c)",
-    0x8001A698: "nc_credits_reset_callback(c)",
-    0x8001A6C8: "nc_credits_interrupt_callback(c)",
-    0x8001A6F8: "nc_credits_dma_callback(c)",
-    0x8001A728: "nc_credits_vsync_callback(c)",
-    0x8001A75C: "nc_credits_vsync_callbacks(c)",
-    0x8001A78C: "nc_credits_stop_callback(c)",
-    0x8001A7BC: "nc_credits_restart_callback(c)",
-    0x8001A7EC: "nc_credits_check_callback(c)",
-    0x8001A7FC: "nc_credits_interrupt_mask(c, false)",
-    0x8001A814: "nc_credits_interrupt_mask(c, true)",
-    0x8001A830: "nc_credits_start_interrupts(c)",
-    0x8001A898: "nc_credits_resume_interrupt_start(c)",
-    0x8001A90C: "nc_credits_dispatch_interrupts(c)",
-    0x8001AAF4: "nc_credits_set_interrupt_handler(c)",
-    0x8001AC48: "nc_credits_stop_interrupts(c)",
-    0x8001ACF4: "nc_credits_restart_interrupts(c)",
-    0x8001AD7C: "nc_credits_clear_irq_words(c)",
-    0x8001ADA8: "nc_credits_save_irq_context(c)",
-    0x8001AE30: "nc_credits_bios_96_remove(c)",
-    0x8001AE48: "nc_credits_return_from_exception(c)",
-    0x8001AE58: "nc_credits_reset_irq_entry(c)",
-    0x8001AE68: "nc_credits_hook_irq_entry(c)",
-    0x8001AE78: "nc_credits_exit_critical_section(c)",
-    0x8001AE88: "nc_credits_start_vsync(c)",
-    0x8001AEE0: "nc_credits_dispatch_vblank(c)",
-    0x8001AF58: "nc_credits_set_vsync_slot(c)",
-    0x8001AF84: "nc_credits_clear_irq_words(c)",
-    0x8001AFB0: "nc_credits_start_dma(c)",
-    0x8001B000: "nc_credits_dispatch_dma_interrupt(c)",
-    0x8001B184: "nc_credits_set_dma_slot(c)",
-    0x8001B22C: "nc_credits_clear_irq_words(c)",
-    0x8001B258: "nc_credits_load_tpage(c)",
-    0x8001B344: "nc_credits_load_clut(c)",
-    0x8001B3AC: "nc_credits_load_clut2(c)",
-    0x8001B414: "nc_credits_default_draw(c)",
-    0x8001B4E4: "nc_credits_default_display(c)",
-    0x8001B520: "nc_credits_video_mode(c, true)",
-    0x8001B538: "nc_credits_video_mode(c, false)",
-    0x8001B548: "nc_credits_texture_page(c)",
-    0x8001B610: "nc_credits_palette_id(c)",
-    0x8001B628: "nc_credits_dump_texture_page(c)",
-    0x8001B6F8: "nc_credits_dump_palette(c)",
-    0x8001B738: "nc_credits_packet_link(c, false)",
-    0x8001B754: "nc_credits_packet_link(c, true)",
-    0x8001B770: "nc_credits_prepend_packets(c, false)",
-    0x8001B7AC: "nc_credits_prepend_packets(c, true)",
-    0x8001B7E8: "nc_credits_link_packets(c)",
-    0x8001B80C: "nc_credits_end_packet(c)",
-    0x8001B824: "nc_credits_packet_flag(c, 2)",
-    0x8001B84C: "nc_credits_packet_flag(c, 1)",
-    0x8001B874: "nc_credits_init_primitive(c, NC_POLY_F3)",
-    0x8001B888: "nc_credits_init_primitive(c, NC_POLY_FT3)",
-    0x8001B89C: "nc_credits_init_primitive(c, NC_POLY_G3)",
-    0x8001B8B0: "nc_credits_init_primitive(c, NC_POLY_GT3)",
-    0x8001B8C4: "nc_credits_init_primitive(c, NC_POLY_F4)",
-    0x8001B8D8: "nc_credits_init_primitive(c, NC_POLY_FT4)",
-    0x8001B8EC: "nc_credits_init_primitive(c, NC_POLY_G4)",
-    0x8001B900: "nc_credits_init_primitive(c, NC_POLY_GT4)",
-    0x8001B914: "nc_credits_init_primitive(c, NC_SPRT8)",
-    0x8001B928: "nc_credits_init_primitive(c, NC_SPRT16)",
-    0x8001B93C: "nc_credits_init_primitive(c, NC_SPRT)",
-    0x8001B950: "nc_credits_init_primitive(c, NC_TILE1)",
-    0x8001B964: "nc_credits_init_primitive(c, NC_TILE8)",
-    0x8001B978: "nc_credits_init_primitive(c, NC_TILE16)",
-    0x8001B98C: "nc_credits_init_primitive(c, NC_TILE)",
-    0x8001B9A0: "nc_credits_init_primitive(c, NC_LINE_F2)",
-    0x8001B9B4: "nc_credits_init_primitive(c, NC_LINE_G2)",
-    0x8001B9C8: "nc_credits_init_primitive(c, NC_LINE_F3)",
-    0x8001B9E8: "nc_credits_init_primitive(c, NC_LINE_G3)",
-    0x8001BA08: "nc_credits_init_primitive(c, NC_LINE_F4)",
-    0x8001BA28: "nc_credits_init_primitive(c, NC_LINE_G4)",
-    0x8001BA48: "nc_credits_init_primitive(c, NC_BLOCK_FILL)",
-    0x8001BA5C: "nc_credits_draw_tpage(c)",
-    0x8001BB10: "nc_credits_draw_move(c)",
-    0x8001BB70: "nc_credits_draw_load(c)",
-    0x8001BBDC: "nc_credits_merge_primitives(c)",
-    0x8001BC14: "nc_credits_dump_draw(c)",
-    0x8001BD94: "nc_credits_dump_display(c)",
-    0x8001BE40: "nc_credits_reset_graph(c)",
-    0x8001BF9C: "nc_credits_set_graph_reverse(c)",
-    0x8001C0B0: "nc_credits_set_graph_debug(c)",
-    0x8001C11C: "nc_credits_set_graph_queue(c)",
-    0x8001C1C8: "nc_credits_graph_status(c, false)",
-    0x8001C1D8: "nc_credits_graph_status(c, true)",
-    0x8001C1E8: "nc_credits_draw_sync_callback(c)",
-    0x8001C244: "nc_credits_set_display_mask(c)",
-    0x8001C2E0: "nc_credits_draw_sync(c)",
-    0x8001C34C: "nc_credits_check_rect(c)",
-    0x8001C474: "nc_credits_clear_image(c)",
-    0x8001C508: "nc_credits_clear_image2(c)",
-    0x8001C5A4: "nc_credits_load_image(c)",
-    0x8001C608: "nc_credits_store_image(c)",
-    0x8001C66C: "nc_credits_move_image(c)",
-    0x8001C730: "nc_credits_clear_otag(c)",
-    0x8001C7E8: "nc_credits_clear_otag_reverse(c)",
-    0x8001C880: "nc_credits_draw_primitive(c)",
-    0x8001C8E0: "nc_credits_draw_otag(c)",
-    0x8001C954: "nc_credits_put_draw_env(c)",
-    0x8001CA18: "nc_credits_draw_otag_env(c)",
-    0x8001CAF4: "nc_credits_read_environment(c, false)",
-    0x8001CB2C: "nc_credits_put_display_env(c)",
-    0x8001CFDC: "nc_credits_read_environment(c, true)",
-    0x8001D014: "nc_credits_display_field(c)",
-    0x8001D048: "nc_credits_texture_window_packet(c)",
-    0x8001D084: "nc_credits_draw_area_packet(c)",
-    0x8001D108: "nc_credits_draw_offset_packet(c)",
-    0x8001D14C: "nc_credits_priority_packet(c)",
-    0x8001D174: "nc_credits_draw_mode_packet(c)",
-    0x8001D1CC: "nc_credits_set_draw_env(c)",
-    0x8001D470: "nc_credits_draw_mode_word(c)",
-    0x8001D4CC: "nc_credits_draw_corner(c, false)",
-    0x8001D598: "nc_credits_draw_corner(c, true)",
-    0x8001D664: "nc_credits_draw_offset_word(c)",
-    0x8001D6AC: "nc_credits_texture_window_word(c)",
-    0x8001D730: "nc_credits_display_x(c)",
-    0x8001D7EC: "nc_credits_graphics_status(c)",
-    0x8001D804: "nc_credits_clear_ot_dma(c)",
-    0x8001D8EC: "nc_credits_clear_gpu_rectangle(c)",
-    0x8001DB5C: "nc_credits_upload_gpu_image(c)",
-    0x8001DDB0: "nc_credits_read_gpu_image(c)",
-    0x8001E04C: "nc_credits_gpu_control(c)",
-    0x8001E074: "nc_credits_gpu_control_byte(c)",
-    0x8001E088: "nc_credits_gpu_command_block(c)",
-    0x8001E0D8: "nc_credits_gpu_command_chain(c)",
-    0x8001E124: "nc_credits_gpu_parameter(c)",
-    0x8001E154: "nc_credits_queue_command(c)",
-    0x8001E178: "nc_credits_submit_gpu_command(c)",
-    0x8001E45C: "nc_credits_execute_gpu_queue(c)",
-    0x8001E758: "nc_credits_reset_gpu_driver(c)",
-    0x8001E8B4: "nc_credits_sync_gpu_queue(c)",
-    0x8001E9FC: "nc_credits_set_queue_alarm(c)",
-    0x8001EA30: "nc_credits_check_queue_alarm(c)",
-    0x8001EB9C: "nc_credits_gpu_version(c)",
-    0x8001EC78: "nc_credits_gpu_fill_bytes(c)",
-    0x8001ECA4: "nc_credits_bios_gpu_command(c)",
-    0x8001ECB4: "nc_credits_tim_info(c)",
-    0x8001ED98: "nc_credits_set_spu_common_attributes(c)",
-    0x8001F12C: "nc_credits_initialize_spu(c)",
-    0x8001F3C0: "nc_credits_spu_write_by_io(c)",
-    0x8001F58C: "nc_credits_spu_dma_complete(c)",
-    0x8001F65C: "nc_credits_spu_read_blocks(c)",
-    0x8001F718: "nc_credits_spu_transfer_command(c)",
-    0x8001F9A8: "nc_credits_spu_write(c)",
-    0x8001FA30: "nc_credits_spu_read(c)",
-    0x8001FA98: "nc_credits_spu_write_register(c)",
-    0x8001FAE0: "nc_credits_spu_set_address(c)",
-    0x8001FB84: "nc_credits_spu_read_address(c)",
-    0x8001FBC0: "nc_credits_spu_set_dma_priority(c)",
-    0x8001FC20: "nc_credits_spu_set_delay(c, false)",
-    0x8001FC4C: "nc_credits_spu_set_delay(c, true)",
-    0x8001FC78: "nc_credits_spu_wait(c)",
-    0x8001FCD8: "nc_credits_deliver_event(c)",
-    0x8001FCE8: "nc_credits_cd_init(c)",
-    0x8001FD78: "nc_credits_cd_default_sync(c)",
-    0x8001FDA0: "nc_credits_cd_default_ready(c)",
-    0x8001FDC8: "nc_credits_cd_default_read(c)",
-    0x8001FDF0: "nc_credits_cd_status(c)",
-    0x8001FE00: "nc_credits_cd_mode(c)",
-    0x8001FE10: "nc_credits_cd_last_command(c)",
-    0x8001FE20: "nc_credits_cd_last_position(c)",
-    0x8001FE30: "nc_credits_cd_reset(c)",
-    0x8001FE9C: "nc_credits_cd_flush(c)",
-    0x8001FEBC: "nc_credits_cd_set_debug(c)",
-    0x8001FED4: "nc_credits_cd_command_name(c)",
-    0x8001FF08: "nc_credits_cd_interrupt_name(c)",
-    0x8001FF3C: "nc_credits_cd_sync(c)",
-    0x8001FF5C: "nc_credits_cd_ready(c)",
-    0x8001FF7C: "nc_credits_cd_sync_callback(c)",
-    0x8001FF94: "nc_credits_cd_ready_callback(c)",
-    0x8001FFAC: "nc_credits_cd_control(c)",
-    0x800200E4: "nc_credits_cd_control_f(c)",
-    0x80020210: "nc_credits_cd_control_b(c)",
-    0x80020354: "nc_credits_cd_mix(c)",
-    0x80020378: "nc_credits_cd_get_sector(c)",
-    0x8002039C: "nc_credits_cd_data_callback(c)",
-    0x800203C0: "nc_credits_cd_data_sync(c)",
-    0x800203E0: "nc_credits_cd_sector_to_position(c)",
-    0x800204E4: "nc_credits_cd_position_to_sector(c)",
-    0x80020ADC: "nc_credits_sync_cd_command(c)",
-    0x80020D5C: "nc_credits_wait_cd_ready(c)",
-    0x80020564: "nc_credits_get_cd_interrupt(c)",
-    0x80021028: "nc_credits_write_cd_command(c)",
-    0x80021440: "nc_credits_cd_volume(c)",
-    0x800214C8: "nc_credits_cd_flush_controller(c)",
-    0x800215A8: "nc_credits_cd_init_volume(c)",
-    0x8002169C: "nc_credits_cd_init_interrupt(c)",
-    0x800216EC: "nc_credits_initialize_cd_driver(c)",
-    0x800218D8: "nc_credits_sync_cd_dma(c)",
-    0x80021A44: "nc_credits_cd_sector_dma(c)",
-    0x80021B44: "nc_credits_cd_set_test_parameter_count(c)",
-    0x80021B54: "nc_credits_cd_interrupt_callback(c)",
-    0x80021C34: "nc_credits_search_cd_file(c)",
-    0x80021F14: "nc_credits_cd_names_equal(c)",
-    0x80021F38: "nc_credits_load_cd_paths(c)",
-    0x80022214: "nc_credits_cd_search_directory(c)",
-    0x800222BC: "nc_credits_cache_cd_directory(c)",
-    0x80022560: "nc_credits_cd_read_sectors(c)",
-    0x800225CC: "nc_credits_cd_copy_identifier(c)",
-    0x80022600: "nc_credits_strcmp(c)",
-    0x80022664: "nc_credits_strncmp(c)",
-    0x800226E4: "nc_credits_handle_cd_read(c)",
-    0x80022908: "nc_credits_cd_read_retry(c)",
-    0x80022AE0: "nc_credits_cd_read(c)",
-    0x80022BE8: "nc_credits_cd_read_sync(c)",
-    0x80022CB4: "nc_credits_cd_read_callback(c)",
-    0x80022CCC: "nc_credits_control_cd_playback(c)",
-    0x80022EBC: "nc_credits_cd_audio_ready(c)",
-    0x80022F84: "nc_credits_cd_play_track(c)",
-    0x800230AC: "nc_credits_cd_get_toc(c)",
-    0x800230D0: "nc_credits_read_track_positions(c)",
-    0x800232F4: "nc_credits_entry(c)",
-    0x8002335C: "nc_credits_empty_hook(c)",
-    0x80023364: "nc_credits_bios_init_heap(c)",
-}
 
 GPR = [
     "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
@@ -553,10 +290,9 @@ def load_module(name: str, exe: str) -> Module:
                 if i.op == 3 and i.jump_target() == setjmp and i.addr + 8 < f.end:
                     mod.resumes[i.addr + 8] = f
     entries = pointer_targets(mod)
-    if name == "credits_exe":
-        # Splat may group standalone routines after the preceding return.
-        # Provide dispatcher entries even when no static pointer refers to them.
-        entries.update(CREDITS_ROUTINES)
+    # Splat may group standalone routines after the preceding return. Handwritten
+    # entries get dispatcher entries even when no static pointer refers to them.
+    entries.update(load_splices(name).entries)
     if name == "psx2_exe":
         # Splat groups these independent routines after preceding returns.
         entries.update(
@@ -660,6 +396,58 @@ def load_hooks(module: str) -> dict[int, str]:
     return hooks
 
 
+SPLICE_GOTO = re.compile(r"\bgoto L_([0-9A-Fa-f]{8})\b")
+
+
+@dataclass
+class Splices:
+    """Handwritten code from config/splices/*.txt for one module."""
+
+    at: dict[int, list[str]] = field(default_factory=dict)
+    entries: set[int] = field(default_factory=set)
+    includes: list[str] = field(default_factory=list)
+
+
+def load_splices(module: str) -> Splices:
+    """config/splices/<file>.txt: handwritten code spliced into generated functions.
+
+    `<module> <addr> entry <call>` replaces the whole routine starting at addr with
+    `if (<call>) return;`. Interpreter-only builds use these too (tools/gen_registry.py).
+    `<module> <addr> at <statement>` inserts a C statement before the instruction at addr;
+    each `goto L_<addr>` in it becomes a label. `include <header>` names a header the
+    statements in that file need, included in every module the file splices into.
+    """
+    splices = Splices()
+    for path in sorted((ROOT / "config" / "splices").glob("*.txt")):
+        includes: list[str] = []
+        used = False
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            text = line.split("#", 1)[0].strip()
+            if not text:
+                continue
+            fields = text.split(None, 3)
+            if fields[0] == "include" and len(fields) == 2:
+                includes.append(fields[1])
+                continue
+            if len(fields) != 4 or fields[2] not in ("entry", "at"):
+                raise ValueError(
+                    f"{path.name}, line {number}: expected '<module> <addr> entry|at <code>'"
+                )
+            if fields[0] != module:
+                continue
+            used = True
+            addr = int(fields[1], 16)
+            if fields[2] == "entry":
+                splices.entries.add(addr)
+                stmt = f"if ({fields[3]}) return;"
+            else:
+                stmt = fields[3]
+            splices.at.setdefault(addr, []).append(stmt)
+        if used:
+            splices.includes.extend(h for h in includes if h not in splices.includes)
+    return splices
+
+
 # Target routine and stack offset of its lighting argument (zero for untextured faces).
 PLACEMENT_FACE_CALLS = {
     0x80028B98: (0x8002755C, 0x2DC),
@@ -726,17 +514,32 @@ PLACEMENT_FACE_RETURNS = {
 }
 
 PLACEMENT_MODE_CALLS = {
-    0x80029950: 0, 0x80029964: 1, 0x80029978: 2,
-    0x8002998C: 3, 0x800299A0: 6, 0x800299B4: 7,
+    0x80029950: 0,
+    0x80029964: 1,
+    0x80029978: 2,
+    0x8002998C: 3,
+    0x800299A0: 6,
+    0x800299B4: 7,
 }
 PLACEMENT_MODE_RETURNS = {pc + 0xC for pc in PLACEMENT_MODE_CALLS}
 
 # Direct jumps to the selector exit after a call. Other coordinate steps
 # inspect the result or update the record before reaching that exit.
 PLACEMENT_SELECTOR_RETURNS = PLACEMENT_MODE_RETURNS | {
-    0x80029910, 0x80029948, 0x800299DC, 0x800299F8, 0x80029A34, 0x80029A50,
-    0x80029D78, 0x80029DF0, 0x80029E0C, 0x80029E28, 0x80029E44, 0x80029E7C,
-    0x8002A1E8, 0x8002A250,
+    0x80029910,
+    0x80029948,
+    0x800299DC,
+    0x800299F8,
+    0x80029A34,
+    0x80029A50,
+    0x80029D78,
+    0x80029DF0,
+    0x80029E0C,
+    0x80029E28,
+    0x80029E44,
+    0x80029E7C,
+    0x8002A1E8,
+    0x8002A250,
 }
 
 PLACEMENT_COORDINATE_STEPS = {
@@ -769,6 +572,9 @@ class Emitter:
         self.launcher = launcher
         self.patches = load_patches(mod.name)
         self.hooks = load_hooks(mod.name)
+        self.splices = load_splices(mod.name)
+        for addr in sorted(self.splices.entries - mod.func_starts - set(mod.resumes)):
+            raise ValueError(f"config/splices: {mod.name} {addr:08X} is not inside a function")
 
     def guarded(self, addr: int, stmt: str) -> str:
         """Wraps a translated instruction so it is skipped while its patch flag is set."""
@@ -1003,6 +809,9 @@ class Emitter:
         for start, (_, passed, rejected) in contact_blocks.items():
             if f.addr <= start < f.end:
                 targets.update((passed, rejected))
+        for addr, stmts in self.splices.at.items():
+            if f.addr <= addr < f.end:
+                targets.update(int(t, 16) for s in stmts for t in SPLICE_GOTO.findall(s))
         targets = {t for t in targets if f.addr <= t < f.end}
         if self.mod.name == "psx2_exe" and f.addr == 0x8002AE78:
             targets.update(
@@ -1221,9 +1030,26 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x800297FC, 0x80029810, 0x800298A8, 0x800298D0, 0x800298F8, 0x80029910, 0x80029920, 0x80029948, 0x80029BC0, 0x80029C24,
-                 0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
-                 0x8002A250, 0x8002A5B8, 0x8002A5CC)
+                (
+                    0x800297FC,
+                    0x80029810,
+                    0x800298A8,
+                    0x800298D0,
+                    0x800298F8,
+                    0x80029910,
+                    0x80029920,
+                    0x80029948,
+                    0x80029BC0,
+                    0x80029C24,
+                    0x80029E60,
+                    0x80029F24,
+                    0x80029FA8,
+                    0x8002A204,
+                    0x8002A23C,
+                    0x8002A250,
+                    0x8002A5B8,
+                    0x8002A5CC,
+                )
             )
             targets.update(PLACEMENT_MODE_RETURNS)
             targets.update(pc + 0x14 for pc in PLACEMENT_COORDINATE_STEPS)
@@ -1257,157 +1083,51 @@ class Emitter:
             i = insns[k]
             if i.addr in targets:
                 out.append(f"L_{i.addr:08X}:;")
-            if self.mod.name == LAUNCHER and i.addr in (0x80011134, 0x80011BA8, 0x80011E50):
-                out.append("    if (nc_launcher_clear_irq_words(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010CC4:
-                out.append("    if (nc_launcher_dispatch_interrupts(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010EAC:
-                out.append("    if (nc_launcher_set_interrupt_handler(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010BE8:
-                out.append("    if (nc_launcher_start_interrupts(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010C50:
-                out.append("    if (nc_launcher_resume_interrupt_start(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011000:
-                out.append("    if (nc_launcher_stop_interrupts(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800110AC:
-                out.append("    if (nc_launcher_restart_interrupts(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010BA4:
-                out.append("    if (interrupt_callback_status(c, 0x80014622)) return;")
+            out.extend(f"    {s}" for s in self.splices.at.get(i.addr, ()))
             if self.mod.name == LAUNCHER and i.addr in (0x80010BB4, 0x80010BCC):
                 write = "true" if i.addr == 0x80010BCC else "false"
                 out.append(f"    if (interrupt_mask(c, 0x800156b0, {write})) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_IRQ_WRAPPERS:
                 single = i.addr == 0x80010AE0
                 resume = i.addr + (36 if single else 32)
+                wrapper = LAUNCHER_IRQ_WRAPPERS[i.addr]
                 out.append(
-                    f"    if (interrupt_driver_call(c, 0x800156a8, {LAUNCHER_IRQ_WRAPPERS[i.addr]}, "
+                    f"    if (interrupt_driver_call(c, 0x800156a8, {wrapper}, "
                     f"0x{resume:x}, {'true' if single else 'false'})) return;"
                 )
-            if self.mod.name == LAUNCHER and i.addr == 0x80010A40:
-                out.append("    if (nc_launcher_switch_stack(c)) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x80010A30, 0x80011A6C):
                 selector = 1 if i.addr == 0x80010A30 else 2
                 out.append(f"    if (critical_section_syscall(c, {selector})) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011BD4:
-                out.append("    if (nc_launcher_start_dma(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011AAC:
-                out.append("    if (nc_launcher_start_vsync(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011B04:
-                out.append("    if (nc_launcher_dispatch_vblank(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011C24:
-                out.append("    if (nc_launcher_dispatch_dma_interrupt(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011DA8:
-                out.append("    if (set_dma_slot(c, 0x8001576c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011B7C:
-                out.append("    if (set_vsync_slot(c, 0x80015740)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012078:
-                out.append("    if (cd_lookup_name(c, 0x8001583c, 28, 0x80010364)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800120AC:
-                out.append("    if (cd_lookup_name(c, 0x800158bc, 7, 0x80010364)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_SETTERS:
                 address = LAUNCHER_CD_STATE_SETTERS[i.addr]
                 out.append(f"    if (exchange_cd_word(c, 0x{address:x})) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x80011F0C, 0x80011F34, 0x80011F5C):
                 spec = 0x20 if i.addr == 0x80011F0C else 0x40
-                out.append(f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800118D8:
-                out.append("    if (sdk_putchar(c, 0x800118d8, 0x80011a7c, 0x80015b7c, 0x800156bd)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012150:
-                out.append("    if (nc_launcher_cd_control(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012288:
-                out.append("    if (nc_launcher_cd_control_f(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800123B4:
-                out.append("    if (nc_launcher_cd_control_b(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001400C:
-                out.append("    if (nc_launcher_handle_cd_read(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80014230:
-                out.append("    if (nc_launcher_cd_read_retry(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80014408:
-                out.append("    if (nc_launcher_cd_read(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80014510:
-                out.append("    if (nc_launcher_cd_read_sync(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013E28:
-                out.append("    if (nc_launcher_vsync(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013F70:
-                out.append("    if (nc_launcher_wait_vblank(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013CF8:
-                out.append("    if (nc_launcher_cd_interrupt_callback(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013DD8:
-                out.append("    if (sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001119C:
-                out.append("    if (nc_launcher_format_output(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011160:
-                out.append("    if (sdk_printf(c, 0x8001119c, 0x8001118c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012708:
-                out.append("    if (nc_launcher_get_cd_interrupt(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800131CC:
-                out.append("    if (nc_launcher_write_cd_command(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012C80:
-                out.append("    if (nc_launcher_sync_cd_command(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012F00:
-                out.append("    if (nc_launcher_wait_cd_ready(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013890:
-                out.append("    if (nc_launcher_initialize_cd_driver(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013A7C:
-                out.append("    if (nc_launcher_sync_cd_dma(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013BE8:
-                out.append("    if (cd_sector_dma(c, 0x80015adc)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800135E4:
-                out.append("    if (cd_volume(c, 0x80015adc)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001366C:
-                out.append("    if (cd_flush_controller(c, 0x80015adc)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001374C:
-                out.append("    if (cd_init_volume(c, 0x80015adc)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013840:
-                out.append("    if (nc_launcher_cd_init_interrupt(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80013CE8:
-                out.append("    if (cd_set_test_parameter_count(c, 0x80015ac0)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012584:
-                out.append("    if (cd_sector_to_position(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012688:
-                out.append("    if (cd_position_to_sector(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80012540:
-                out.append("    if (cd_data_callback(c, 0x80010ab0, 0x80012554)) return;")
+                out.append(
+                    f"    if (cd_default_event(c, 0x{spec:x}, 0x{i.addr + 24:x}, 0x80011f84))"
+                    " return;"
+                )
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_DRIVERS:
                 driver, result = LAUNCHER_CD_DRIVERS[i.addr]
-                out.append(f"    if (call_cd_status_driver(c, 0x{driver:x}, 0x{i.addr + 16:x}, {result})) return;")
+                out.append(
+                    f"    if (call_cd_status_driver(c, 0x{driver:x}, 0x{i.addr + 16:x}, {result}))"
+                    " return;"
+                )
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_CD_STATE_BYTES:
                 address = LAUNCHER_CD_STATE_BYTES[i.addr]
                 out.append(f"    if (cd_state_byte(c, 0x{address:x})) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011E7C:
-                out.append("    if (nc_launcher_cd_init(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011FD4:
-                out.append("    if (cd_reset(c, 0x80011fd4, 0x80013840, 0x80013890, 0x8001374c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011FC4:
-                out.append("    if (cd_last_position(c, 0x80015834)) return;")
             if self.mod.name == LAUNCHER and i.addr in LAUNCHER_BIOS_SERVICES:
                 table, service = LAUNCHER_BIOS_SERVICES[i.addr]
                 out.append(f"    if (bios_service(c, 0x{table:x}, 0x{service:x})) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x800108F8, 0x80010968):
                 constructors = "true" if i.addr == 0x800108F8 else "false"
                 out.append(f"    if (nc_launcher_global_callbacks(c, {constructors})) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001078C:
-                out.append("    if (nc_launcher_init_shared_record(c)) return;")
             if self.mod.name == LAUNCHER and i.addr == 0x80010850:
                 # The runtime treats the final break as nonfatal and falls into __main.
                 out.append("    if (nc_launcher_startup(c)) { slus_005_82_800108F8(c); return; }")
-            if self.mod.name == LAUNCHER and i.addr == 0x80010618:
-                out.append("    if (nc_launcher_run_modules(c)) return;")
             if self.mod.name == LAUNCHER and i.addr in (0x80011828, 0x80011858):
                 upper = "true" if i.addr == 0x80011828 else "false"
                 out.append(f"    if (nc_launcher_convert_case(c, {upper})) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x80011888:
-                out.append("    if (sdk_find_byte(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x8001198C:
-                out.append("    if (sdk_string_length(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800119BC:
-                out.append("    if (save_irq_context(c)) return;")
-            if self.mod.name == LAUNCHER and i.addr == 0x800119F8:
-                out.append("    restore_jump_context(c); return;")
-            if self.mod.name == "credits_exe" and i.addr == 0x8001ADE4:
-                out.append("    nc_credits_restore_jump_context(c); return;")
-            if self.mod.name == "credits_exe" and i.addr in CREDITS_ROUTINES:
-                out.append(f"    if ({CREDITS_ROUTINES[i.addr]}) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800530F4:
                 out.extend(
                     [
@@ -1417,14 +1137,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80053084:
-                out.append("    if (nc_count_player_action_buttons(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004457C:
-                out.append("    if (nc_check_player_action_words(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800445AC:
-                out.append("    if (nc_record_player_button_press(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800445DC:
-                out.append("    if (nc_reset_repeat_on_l2_press(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004460C:
                 out.extend(
                     [
@@ -1446,8 +1158,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80044674, 0x800446C4, 0x800446D4):
                 record_buttons = "true" if i.addr == 0x800446C4 else "false"
                 out.append(f"    if (nc_leave_player_r2(c, {record_buttons})) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800446EC:
-                out.append("    if (nc_set_player_input_action(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044724:
                 out.extend(
                     [
@@ -1498,8 +1208,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800449D8:
-                out.append("    if (nc_call_player_button_action(c)) goto L_800449E0;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800449E0, 0x800449EC):
                 after_call = "true" if i.addr == 0x800449E0 else "false"
                 out.extend(
@@ -1573,10 +1281,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044B88:
-                out.append("    if (nc_call_player_queued_action(c)) goto L_80044B90;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044B90:
-                out.append("    if (nc_clear_player_queued_action(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044B98:
                 out.extend(
                     [
@@ -1598,10 +1302,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044C60:
-                out.append("    if (nc_call_player_face_button(c, false)) goto L_80044C6C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044C6C:
-                out.append("    if (nc_call_player_face_button(c, true)) goto L_80044C84;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80044C84, 0x80044C88):
                 read_circle = "true" if i.addr == 0x80044C84 else "false"
                 out.extend(
@@ -1650,10 +1350,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044D8C:
-                out.append("    if (nc_call_player_action_thirteen(c)) goto L_80044D94;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80044D94:
-                out.append("    if (nc_finish_player_action_thirteen(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_SINGLE_FACE_ACTIONS:
                 action = PSX2_PLAYER_SINGLE_FACE_ACTIONS[i.addr]
                 link = i.addr + 8
@@ -1801,8 +1497,6 @@ class Emitter:
                     f"    if (nc_call_player_down_action(c, {action}, 0x{link:08X}u, "
                     f"{reload_actor})) goto L_{link:08X};"
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800450A8:
-                out.append("    if (nc_call_player_r2_action(c)) goto L_800450B4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800450B4:
                 out.extend(
                     [
@@ -1838,8 +1532,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80045114:
-                out.append("    if (nc_call_player_square_actor_scan(c)) goto L_8004511C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004511C:
                 out.extend(
                     [
@@ -1849,8 +1541,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004513C:
-                out.append("    if (nc_call_player_square_scan_match(c)) goto L_80045144;")
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PLAYER_FACE_PRESSES:
                 mask, next_button = PSX2_PLAYER_FACE_PRESSES[i.addr]
                 link = i.addr + 12
@@ -1872,8 +1562,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004519C:
-                out.append("    if (nc_player_triangle_fallback(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800451D0, 0x800451D4, 0x800451DC):
                 resume = 0x800451E8 if i.addr == 0x800451DC else 0x800451DC
                 out.append(f"    if (nc_call_player_trigger(c, 0x{i.addr:X})) goto L_{resume:X};")
@@ -1894,8 +1582,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800448F4:
-                out.append("    if (nc_clear_player_buttons(c)) goto L_800451E8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042D9C:
                 out.extend(
                     [
@@ -1926,12 +1612,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80042E30, 0x80042E38):
                 check_end = "true" if i.addr == 0x80042E30 else "false"
                 out.append(f"    if (nc_pad_playback_interrupt(c, {check_end})) goto L_80042F54;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80042EF4:
-                out.append("    if (nc_call_pad_action(c, false)) goto L_80042EFC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80042F40:
-                out.append("    if (nc_call_pad_action(c, true)) goto L_80042F54;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80042F54:
-                out.append("    if (nc_leave_pad_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042EFC:
                 out.extend(
                     [
@@ -1941,8 +1621,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80042E7C:
-                out.append("    if (nc_call_live_pad(c, 0x80042E8C)) goto L_80042E8C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80042E8C:
                 out.extend(
                     [
@@ -1973,8 +1651,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80067200:
-                out.append("    if (nc_menu_apply_enabled_record(c)) goto L_80067240;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80067240:
                 out.extend(
                     [
@@ -1995,10 +1671,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800672B4:
-                out.append("    if (nc_menu_apply_sequence(c)) goto L_800672BC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800672BC:
-                out.append("    if (nc_menu_reset_sequences(c)) goto L_800672F8;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800672E0, 0x800672EC):
                 matched = "true" if i.addr == 0x800672E0 else "false"
                 out.append(f"    if (nc_menu_store_progress(c, {matched})) goto L_800672F8;")
@@ -2012,8 +1684,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80067308:
-                out.append("    if (nc_leave_menu_button_scan(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800687D8:
                 out.extend(
                     [
@@ -2051,8 +1721,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800674E0, 0x800674E4):
                 increment = "true" if i.addr == 0x800674E0 else "false"
                 out.append(f"    if (nc_menu_store_counter(c, {increment})) goto L_80068FE4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800675D0:
-                out.append("    if (nc_menu_advance_record_counter(c)) goto L_80068FE4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800675E8:
                 out.extend(
                     [
@@ -2073,8 +1741,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800677E0:
-                out.append("    if (nc_menu_record_37_action(c)) goto L_80068334;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006780C:
                 out.extend(
                     [
@@ -2094,8 +1760,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80067770:
-                out.append("    if (nc_menu_record_26_right(c)) goto L_800677BC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80067730:
                 out.extend(
                     [
@@ -2146,10 +1810,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006745C:
-                out.append("    if (nc_menu_call_selected_record(c)) goto L_80067464;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80067464:
-                out.append("    if (nc_menu_record_timeout(c)) goto L_800674A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80067400:
                 out.extend(
                     [
@@ -2159,8 +1819,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800673BC:
-                out.append("    if (nc_menu_mode_record_call(c)) goto L_800674A0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80067358:
                 out.extend(
                     [
@@ -2170,12 +1828,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068FE4:
-                out.append("    if (nc_leave_menu_input(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068F88:
-                out.append("    if (nc_menu_dispatch_face_button(c)) goto L_80068FA8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068FA8:
-                out.append("    if (nc_menu_mode_record_result(c)) goto L_80068FE4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80068F34, 0x80068F38):
                 mask_cross = "true" if i.addr == 0x80068F34 else "false"
                 out.extend(
@@ -2196,8 +1848,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068F0C:
-                out.append("    if (nc_menu_dispatch_direction(c)) goto L_80068FE4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068E84:
                 out.extend(
                     [
@@ -2208,8 +1858,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068E18:
-                out.append("    if (nc_menu_check_record_102(c)) goto L_80068E50;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068E50:
                 out.extend(
                     [
@@ -2219,10 +1867,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068DBC:
-                out.append("    if (nc_menu_dispatch_timed_record(c)) goto L_80068DD4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068DD4:
-                out.append("    if (nc_menu_record_cross(c)) goto L_80068E18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068D60:
                 out.extend(
                     [
@@ -2234,8 +1878,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068D30:
-                out.append("    if (nc_menu_reset_record_100(c)) goto L_80068D3C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068D3C:
                 out.extend(
                     [
@@ -2255,10 +1897,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068CE0:
-                out.append("    if (nc_menu_dispatch_and_save_buttons(c)) goto L_80068CF8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068CF4:
-                out.append("    if (nc_menu_clear_repeat(c)) goto L_80068CF8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068BEC:
                 out.extend(
                     [
@@ -2278,10 +1916,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068980:
-                out.append("    if (nc_menu_apply_record_select(c)) goto L_80068CF8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006893C:
-                out.append("    if (nc_menu_dispatch_record_action(c)) goto L_80068944;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068944:
                 out.extend(
                     [
@@ -2300,14 +1934,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006885C:
-                out.append("    if (nc_menu_record_button_pairs(c)) goto L_800688EC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800687CC:
-                out.append("    if (nc_menu_scan_and_save_buttons(c)) goto L_800687D8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800687B4:
-                out.append("    if (nc_menu_apply_direction(c)) goto L_800687CC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800687C8:
-                out.append("    if (nc_menu_clear_repeat(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006865C, 0x8006870C):
                 right = i.addr == 0x8006870C
                 change = 0x8006874C if right else 0x80068698
@@ -2320,8 +1946,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800685FC:
-                out.append("    if (nc_menu_dispatch_input_action(c)) goto L_800687CC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068624:
                 out.extend(
                     [
@@ -2375,14 +1999,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80068698, 0x8006874C):
                 right = "true" if i.addr == 0x8006874C else "false"
                 out.append(f"    if (nc_menu_horizontal_feedback(c, {right})) goto L_80068764;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006878C:
-                out.append("    if (nc_menu_dispatch_feedback_action(c)) goto L_800687CC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068764:
-                out.append("    if (nc_menu_format_horizontal_feedback(c)) goto L_8006878C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068424:
-                out.append("    if (nc_menu_horizontal_action(c, true)) goto L_80068438;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068480:
-                out.append("    if (nc_menu_horizontal_action(c, false)) goto L_80068488;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80068488, 0x8006848C):
                 handler = "nc_menu_up_from_buttons" if i.addr == 0x80068488 else "nc_menu_up_repeat"
                 out.extend(
@@ -2423,10 +2039,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80068344:
-                out.append("    if (nc_menu_pad_type_flags(c)) goto L_800683D0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800680EC:
-                out.append("    if (nc_menu_sample_stick_bounds(c)) goto L_80068154;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800682FC, 0x80068304):
                 after_action = "true" if i.addr == 0x800682FC else "false"
                 out.extend(
@@ -2437,12 +2049,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800682D8:
-                out.append("    if (nc_menu_calibration_action(c)) goto L_800682FC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800681EC:
-                out.append("    if (nc_menu_store_stick_calibration(c)) goto L_800682D8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006818C:
-                out.append("    if (nc_menu_expand_stick_bounds(c)) goto L_800681EC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80068154:
                 out.extend(
                     [
@@ -2452,8 +2058,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006D548:
-                out.append("    if (nc_pad_inactivity(c)) goto L_8006D5A8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80044784:
                 out.extend(
                     [
@@ -2484,35 +2088,9 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80062C28:
-                out.append("    if (nc_init_pad_sequence(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80062CB0:
-                out.append("    if (nc_stop_pad_sequence(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80062CC8:
-                out.append("    if (nc_pad_sequence_ended(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80062D2C:
-                out.append("    if (nc_read_pad_sequence(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in PSX2_PAD_BIOS_SERVICES:
                 service = PSX2_PAD_BIOS_SERVICES[i.addr]
                 out.append(f"    if (nc_pad_bios_call(c, {service})) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80073F74:
-                out.append("    if (nc_sdk_patch_pad(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80073EB4:
-                out.append("    if (nc_sdk_init_pad(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80073F1C:
-                out.append("    if (nc_sdk_start_pad(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006FEBC:
-                out.append("    if (nc_start_pad_driver(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006FF0C:
-                out.append("    if (nc_stop_pad_driver(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006FF34:
-                out.append("    if (nc_select_pad(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8007001C:
-                out.append("    if (nc_pad_packet_type(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8007002C:
-                out.append("    if (nc_read_pad_stick(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800700FC:
-                out.append("    if (nc_decode_pad(c)) goto L_800705D8;")
             if i.addr in contact_blocks:
                 check, passed, rejected = contact_blocks[i.addr]
                 out.extend(
@@ -2550,40 +2128,20 @@ class Emitter:
                 out.append("    case NC_PART_SEARCH_NEXT_PART: goto L_8001BF18;")
                 out.append("    case NC_PART_SEARCH_DONE: goto L_8001C04C;")
                 out.append("    case NC_PART_SEARCH_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001C04C:
-                out.append("    if (nc_restore_part_search_frame(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001AC28:
-                out.append("    if (nc_save_point_update_frame(c)) goto L_8001AC4C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001AC4C:
                 out.append("    if (nc_select_point_update_row(c)) {")
                 out.append("        if (R(3) >= 2 && R(3) <= 5) goto L_8001ACA0;")
                 out.append("        goto L_8001AEAC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800295F8:
-                out.append("    if (nc_set_linked_heading_offset(c)) goto L_80029620;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029620:
-                out.append("    if (nc_apply_linked_heading_offset(c)) goto L_80029638;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029638, 0x80029670):
                 first = "true" if i.addr == 0x80029638 else "false"
                 out.append(f"    if (nc_follow_heading_link(c, {first})) {{")
                 out.append("        if (R(5)) goto L_80029648;")
                 out.append("        goto L_800296D0; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029648:
-                out.append("    if (nc_copy_linked_heading_offset(c)) goto L_80029658;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029658:
-                out.append("    if (nc_copy_linked_bearing(c)) goto L_80029670;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029688:
-                out.append("    if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800296B0:
-                out.append("    if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029460, 0x80029464):
                 increment = "true" if i.addr == 0x80029460 else "false"
                 out.append(f"    if (nc_advance_placement_scan(c, {increment})) {{")
                 out.append("        if ((s32)R(20) < 320) goto L_80028F00;")
                 out.append("        goto L_80029470; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029470:
-                out.append("    if (nc_restore_placement_scan_frame(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028ECC:
-                out.append("    if (nc_begin_placement_scan(c)) goto L_80028F00;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028F00:
                 out.append("    if (nc_check_placement_slot(c)) {")
                 out.append("        if (R(16) && R(2)) goto L_80028F30;")
@@ -2610,8 +2168,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028F68:
-                out.append("    if (nc_finish_primary_placement_counter(c, true)) goto L_80029008;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028F84:
                 out.append(
                     "    if (nc_finish_primary_placement_counter(c, false)) goto L_8002902C;"
@@ -2667,8 +2223,6 @@ class Emitter:
                 out.append("    if (nc_call_placement_transform_reset(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A5F4)} }}")
                 out.append("        goto L_800290C4; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800290C4:
-                out.append("    if (nc_copy_placement_coordinates(c)) goto L_800290F4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800290F4:
                 out.append("    { u32 next;")
                 out.append("      if (nc_route_placement_selector(c, &next)) {")
@@ -2723,12 +2277,6 @@ class Emitter:
                 out.append("        if (!R(2)) goto L_800293D4;")
                 out.append(f"        {self.call(0x80029498)}")
                 out.append("        goto L_800293B0; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800293B0:
-                out.append("    if (nc_store_placement_angle_result(c)) goto L_800293D4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027A5C:
-                out.append("    if (nc_write_textured_quad(c)) goto L_80027AE8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027664:
-                out.append("    if (nc_write_textured_triangle(c)) goto L_800276BC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027C70:
                 out.append("    if (nc_write_projected_quad(c)) {")
                 out.append("        if (!R(10)) goto L_80027CEC;")
@@ -2850,8 +2398,6 @@ class Emitter:
                 out.append("    if (nc_begin_indexed_faces(c)) {")
                 out.append("        if (!R(30)) goto L_80028A3C;")
                 out.append("        goto L_80028388; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028A3C:
-                out.append("    if (nc_return_indexed_faces(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028400, 0x8002874C):
                 textured, skip = (
                     ("true", 0x800286D8) if i.addr == 0x80028400 else ("false", 0x80028A1C)
@@ -2859,8 +2405,6 @@ class Emitter:
                 out.append(f"    if (nc_select_indexed_face_poses(c, {textured})) {{")
                 out.append(f"        if (!R(3) || !R(5) || !R(4)) goto L_{skip:08X};")
                 out.append(f"        goto L_{i.addr + 0x64:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028388:
-                out.append("    if (nc_set_indexed_face_flags(c)) goto L_800283BC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800283BC, 0x800286F8):
                 textured = i.addr == 0x800283BC
                 arg = "true" if textured else "false"
@@ -2881,8 +2425,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x80028144, 0x80028150):
                 ready = "true" if i.addr == 0x80028150 else "false"
                 out.append(f"    if (nc_select_projection_pose(c, {ready})) goto L_80028160;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028160:
-                out.append("    if (nc_set_projection_pose_cursor(c)) goto L_8002816C;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002826C, 0x80028280):
                 quad = i.addr == 0x80028280
                 out.append(f"    if (nc_call_projection_textured_faces(c, {str(quad).lower()})) {{")
@@ -2899,10 +2441,6 @@ class Emitter:
                 )
                 out.append(f"        {self.call(0x80027B90 if quad else 0x80027764)}")
                 out.append(f"        goto L_{0x800282D8 if quad else 0x800282C0:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028214:
-                out.append("    if (nc_select_projection_packet_mode(c)) goto L_8002826C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002830C:
-                out.append("    if (nc_return_projection_traversal(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800281A0:
                 out.append("    { bool project;")
                 out.append("      if (nc_filter_projection_pose(c, &project)) {")
@@ -2926,21 +2464,18 @@ class Emitter:
                 out.append(f"        {self.call(0x80051568)}")
                 out.append("        goto L_800280E4; }")
             if self.mod.name == "psx2_exe" and i.addr in (
-                0x800280D0, 0x800280E4, 0x800280F8, 0x800280FC
+                0x800280D0,
+                0x800280E4,
+                0x800280F8,
+                0x800280FC,
             ):
                 out.append(f"    if (nc_call_projection_lighting(c, 0x{i.addr:08X})) {{")
                 out.append(f"        {self.call(0x80027DA4)}")
                 out.append("        goto L_80028114; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028114:
-                out.append("    if (nc_set_projection_pose_mask(c)) goto L_80028144;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002816C:
                 out.append("    if (nc_load_projection_pose_descriptor(c)) {")
                 out.append("        if (R(18) == R(2)) goto L_800282D8;")
                 out.append("        goto L_8002817C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002817C:
-                out.append("    if (nc_load_projection_pose_flags(c)) goto L_800281A0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800282D8:
-                out.append("    if (nc_push_projection_pose(c)) goto L_800282F4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800282F4:
                 out.append("    if (nc_advance_projection_pose(c)) {")
                 out.append("        if (R(18)) goto L_8002816C;")
@@ -2987,32 +2522,14 @@ class Emitter:
                 out.append("    if (nc_placement_lighting_offset(c)) {")
                 out.append(f"        if (R(3)) goto L_{adjust:08X};")
                 out.append(f"        goto L_{skip:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027DA4:
-                out.append("    if (nc_begin_placement_lighting(c)) goto L_80027E28;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002755C:
-                out.append("    if (nc_begin_textured_faces(c, false)) goto L_800275A8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027954:
-                out.append("    if (nc_begin_textured_faces(c, true)) goto L_800279A0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800275A8:
-                out.append("    if (nc_apply_textured_face_flags(c, false)) goto L_800275DC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800279A0:
-                out.append("    if (nc_apply_textured_face_flags(c, true)) goto L_800279D4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027B90:
-                out.append("    if (nc_begin_untextured_quads(c)) goto L_80027BF0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80027BF0:
                 out.append("    if (nc_select_untextured_faces(c, true)) {")
                 out.append("        if (R(4)) goto L_80027C0C;")
                 out.append("        goto L_80027D68; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027764:
-                out.append("    if (nc_begin_untextured_triangles(c)) goto L_800277C4;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800277C4:
                 out.append("    if (nc_select_untextured_faces(c, false)) {")
                 out.append("        if (R(4)) goto L_800277E0;")
                 out.append("        goto L_80027918; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800277E0:
-                out.append("    if (nc_measure_untextured_triangle(c)) goto L_80027824;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80027600:
-                out.append("    if (nc_measure_placement_triangle(c)) goto L_80027644;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80028A70, 0x80028C58):
                 small_frame = i.addr == 0x80028C58
                 project = 0x80028C8C if small_frame else 0x80028AAC
@@ -3075,24 +2592,16 @@ class Emitter:
                 out.append(f"    if (nc_call_placement_faces(c, 0x{offset:X}, 0x{resume:08X})) {{")
                 out.append(f"        {self.call(target)}")
                 out.append(f"        goto L_{resume:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028BF8:
-                out.append("    if (nc_save_linked_placement_pose(c)) goto L_80028C18;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028C18:
                 out.append("    if (nc_advance_placement_pose(c)) {")
                 out.append("        if (R(18)) goto L_80028B54;")
                 out.append("        if (R(19) != 0xffffffffu) goto L_80028B44;")
                 out.append("        goto L_80028C30; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028E5C:
-                out.append("    if (nc_save_linked_placement_pose(c)) goto L_80028E7C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80028E7C:
                 out.append("    if (nc_advance_placement_pose(c)) {")
                 out.append("        if (R(18)) goto L_80028DD4;")
                 out.append("        if (R(19) != 0xffffffffu) goto L_80028DC4;")
                 out.append("        goto L_80028E94; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028E94:
-                out.append("    if (nc_return_linked_pose_traversal(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80028C30:
-                out.append("    if (nc_return_placement_projection(c)) return;")
             if self.mod.name == "psx2_exe" and f.addr in (0x80027288, 0x800273F0):
                 start = f.addr
                 groups = start + 0x50
@@ -3136,8 +2645,6 @@ class Emitter:
                 out.append("    if (nc_check_placement_transform(c)) {")
                 out.append(f"        if (R(2)) {{ {self.call(0x8002A674)} }}")
                 out.append("        goto L_80029460; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800293E4:
-                out.append("    if (nc_select_placement_projection_args(c)) goto L_80029418;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800293D4:
                 out.append("    if (nc_call_placement_part_traversal(c)) {")
                 out.append(f"        {self.call(0x800266F4)}")
@@ -3158,19 +2665,11 @@ class Emitter:
                 out.append("    if (nc_check_record_projection_limit(c)) {")
                 out.append("        if (R(2)) goto L_80029460;")
                 out.append("        goto L_800292D4; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029498:
-                out.append("    if (nc_begin_placement_angle_update(c)) goto L_800294F0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800294F0:
                 out.append("    if (nc_set_type7_pose_angles(c)) {")
                 out.append("        if (R(3) != 7) goto L_80029544;")
                 out.append("        if (R(8)) goto L_80029524;")
                 out.append("        goto L_80029584; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029524:
-                out.append("    if (nc_set_type7_linked_heading(c)) goto L_80029584;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029544:
-                out.append("    if (nc_set_other_placement_angles(c)) goto L_80029584;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029584:
-                out.append("    if (nc_finish_placement_angle_step(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002959C:
                 out.append("    if (nc_begin_record_point_heading(c)) {")
                 out.append("        if (R(2)) goto L_800296D0;")
@@ -3179,8 +2678,6 @@ class Emitter:
                 out.append("    if (nc_begin_placement_dispatch(c)) {")
                 out.append("        if (R(2)) goto L_800297FC;")
                 out.append("        goto L_8002A560; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800297FC:
-                out.append("    if (nc_load_placement_selector_target(c)) goto L_80029810;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029818:
                 out.append("    switch (nc_begin_placement_link_scan(c)) {")
                 out.append("    case 0x8002a564: goto L_8002A564;")
@@ -3199,7 +2696,9 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x800298A8, 0x800298D0):
                 second = i.addr == 0x800298D0
                 resume = 0x800298F8 if second else 0x800298D0
-                out.append(f"    switch (nc_check_linked_placement_axis(c, {str(second).lower()})) {{")
+                out.append(
+                    f"    switch (nc_check_linked_placement_axis(c, {str(second).lower()})) {{"
+                )
                 out.append("    case 0x80029900: goto L_80029900;")
                 out.append(f"    case 0x{resume:08x}: goto L_{resume:08X}; }}")
             if self.mod.name == "psx2_exe" and i.addr in (0x800298F8, 0x80029918):
@@ -3218,8 +2717,6 @@ class Emitter:
                 out.append("    case 0x80038a0c:")
                 out.append(f"        {self.call(0x80038A0C)}")
                 out.append("        goto L_80029948; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002A5D4:
-                out.append("    if (nc_return_placement_dispatch(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029D18, 0x80029E4C):
                 jump = "true" if i.addr == 0x80029D18 else "false"
                 out.append(
@@ -3269,19 +2766,15 @@ class Emitter:
                 out.append("    case 0x80073dac:")
                 out.append(f"        {self.call(0x80073DAC)}")
                 out.append("        goto L_8002A5B8; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002A258:
-                out.append("    if (nc_advance_placement_x_index(c)) goto L_8002A560;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002A204:
                 out.append("    if (nc_call_indexed_placement_x_step(c)) {")
                 out.append(f"        {self.call(0x800296E8)}")
                 out.append("        goto L_8002A23C; }")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002A034, 0x8002A120):
                 set_flag = "true" if i.addr == 0x8002A034 else "false"
-                out.append(f"    if (nc_update_placement_step_flag_group(c, {set_flag})) goto L_8002A564;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002A42C:
-                out.append("    if (nc_set_six_placement_flags(c)) goto L_8002A560;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029E98:
-                out.append("    if (nc_clear_placement_y_step_flags(c)) goto L_8002A560;")
+                out.append(
+                    f"    if (nc_update_placement_step_flag_group(c, {set_flag})) goto L_8002A564;"
+                )
             if self.mod.name == "psx2_exe" and i.addr == 0x80029B6C:
                 out.append("    switch (nc_prepare_placement_x_step_distance(c)) {")
                 out.append("    case 0x80029be4: goto L_80029BE4;")
@@ -3296,12 +2789,12 @@ class Emitter:
                 out.append("    switch (nc_finish_placement_reference_distance(c)) {")
                 out.append("    case 0x8002a018: goto L_8002A018;")
                 out.append("    case 0x8002a560: goto L_8002A560; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029CD0:
-                out.append("    if (nc_update_placement_height_flags(c)) goto L_8002A560;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80029D3C:
-                out.append("    if (nc_decrease_placement_word(c)) goto L_8002A560;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80029A6C, 0x80029B08):
-                helper = "nc_clear_four_placement_flags" if i.addr == 0x80029A6C else "nc_clear_placement_step_flags"
+                helper = (
+                    "nc_clear_four_placement_flags"
+                    if i.addr == 0x80029A6C
+                    else "nc_clear_placement_step_flags"
+                )
                 out.append(f"    switch ({helper}(c)) {{")
                 out.append("    case 0x8002a560: goto L_8002A560;")
                 out.append("    case 0x8002a564: goto L_8002A564; }")
@@ -3352,8 +2845,6 @@ class Emitter:
                         "    }",
                     ]
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x800296D0:
-                out.append("    if (nc_return_record_point_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800295C4:
                 out.append("    if (nc_call_record_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
@@ -3362,8 +2853,6 @@ class Emitter:
                 out.append("    if (nc_expand_record_point_bearing(c)) {")
                 out.append("        if (R(5)) goto L_800295F8;")
                 out.append("        goto L_80029688; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001ACA0:
-                out.append("    if (nc_lookup_point_row_record(c)) goto L_8001ACF0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001ACF0:
                 out.append("    if (nc_prepare_point_distance_root(c)) {")
                 out.append(f"        {self.call(0x800475E4)}")
@@ -3384,8 +2873,6 @@ class Emitter:
                 out.append("    if (nc_step_point_z(c)) {")
                 out.append("        if (R(2)) goto L_8001ADFC;")
                 out.append("        goto L_8001AE0C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001ADFC:
-                out.append("    if (nc_store_point_pose_heading(c)) goto L_8001AE34;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001AE0C:
                 out.append("    if (nc_prepare_point_coordinate_query(c)) {")
                 out.append(f"        {self.call(0x80024B70)}")
@@ -3395,14 +2882,10 @@ class Emitter:
                 out.append(f"    if (nc_check_point_proximity(c, {from_query})) {{")
                 out.append("        if (R(2)) goto L_8001AE40;")
                 out.append("        goto L_8001AE94; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001AE40:
-                out.append("    if (nc_advance_point_index(c)) goto L_8001AE94;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001AE94:
                 out.append("    if (nc_finish_point_update(c)) {")
                 out.append(f"        if ((s32)R(2) >= 0) {{ {self.call(0x80053F38)} }}")
                 out.append("        goto L_8001AEAC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001AEAC:
-                out.append("    if (nc_restore_point_update_frame(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BD08:
                 out.append("    if (nc_begin_part_pose_heading(c)) {")
                 out.append("        if (R(2)) goto L_8001BE98;")
@@ -3421,8 +2904,6 @@ class Emitter:
                 out.append("    case NC_PART_FLAGS_LATER: goto L_8001BEAC;")
                 out.append("    case NC_PART_FLAGS_CLEAR: goto L_8001BE6C;")
                 out.append("    case NC_PART_FLAGS_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001BE6C:
-                out.append("    if (nc_finish_part_turn(c)) goto L_8001C04C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BE98:
                 out.append("    if (nc_reset_part_turn_counter(c)) {")
                 out.append(f"        {self.call(0x80053F38)}")
@@ -3435,8 +2916,6 @@ class Emitter:
                 )
                 out.append("        if (search) goto L_8001BF18;")
                 out.append("        goto L_8001C04C; } }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001BF18:
-                out.append("    if (nc_begin_part_heading_search(c)) goto L_8001BF54;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001BF54:
                 out.append("    if (nc_test_part_heading(c)) {")
                 out.append("        if (R(3)) goto L_8001BF98;")
@@ -3449,14 +2928,10 @@ class Emitter:
                 out.append("    if (nc_prepare_part_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_8001BFEC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001C19C:
-                out.append("    if (nc_select_bearing_point(c)) goto L_8001C234;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001C234:
                 out.append("    if (nc_prepare_selected_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_8001C27C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001C27C:
-                out.append("    if (nc_finish_selected_point_bearing(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8001A71C:
                 out.append("    if (nc_prepare_reference_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
@@ -3465,18 +2940,10 @@ class Emitter:
                 out.append("    if (nc_call_reference_facing(c)) {")
                 out.append(f"        {self.call(0x800472D8)}")
                 out.append("        goto L_8001A764; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8001A764:
-                out.append("    if (nc_finish_reference_bearing(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004CE24:
-                out.append("    if (nc_actor_distance_terms(c)) goto L_8004CE58;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800475E4:
-                out.append("    if (nc_distance_root(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047268:
                 out.append("    if (nc_prepare_reference_distance(c)) {")
                 out.append(f"        {self.call(0x8007A050)}")
                 out.append("        goto L_800472B8; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800472B8:
-                out.append("    if (nc_store_reference_distance(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004737C:
                 out.append("    if (nc_prepare_record_projection(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
@@ -3485,8 +2952,6 @@ class Emitter:
                 out.append("    if (nc_call_projected_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047220)}")
                 out.append("        goto L_800473C8; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800473C8:
-                out.append("    if (nc_store_projected_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800475A8:
                 out.append("    if (nc_prepare_saved_bearing_projection(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
@@ -3500,8 +2965,6 @@ class Emitter:
                 )
                 out.append("        if (reproject) goto L_800475A8;")
                 out.append("        goto L_800475CC; } }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800473E8:
-                out.append("    if (nc_latch_placement_tick(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047420:
                 out.append(
                     "    { bool use_point; if (nc_begin_projected_point_update(c, &use_point)) {"
@@ -3513,16 +2976,10 @@ class Emitter:
                 out.append("    if (nc_prepare_facing_offset(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_80047518; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80047518:
-                out.append("    if (nc_projected_heading_gap(c)) goto L_80047564;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047300:
                 out.append("    if (nc_prepare_relative_heading(c)) {")
                 out.append(f"        {self.call(0x80047220)}")
                 out.append("        goto L_80047328; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80047328:
-                out.append("    if (nc_finish_relative_heading(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800472D8:
-                out.append("    if (nc_actor_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80047220:
                 out.append("    if (nc_prepare_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
@@ -3531,35 +2988,15 @@ class Emitter:
                 out.append("    if (nc_prepare_local_point_heading(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_8004720C; }")
-            if self.mod.name == "psx2_exe" and i.addr in (0x8004720C, 0x80047254):
-                out.append("    if (nc_return_point_heading(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80025FE4:
-                out.append("    if (nc_sample_part_rotation(c, NC_ROTATION_PART)) goto L_8002607C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026560:
-                out.append("    if (nc_start_node_traversal(c)) goto L_800265CC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800265AC:
-                out.append("    if (nc_restore_node_branch(c)) goto L_800265CC;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800266A4:
-                out.append("    if (nc_apply_node_matrix(c)) goto L_800266B4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026828:
-                out.append("    if (nc_start_scaled_part_position(c)) goto L_80026908;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026908:
-                out.append("    if (nc_begin_scaled_part_walk(c)) goto L_800269B4;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80026AA0, 0x80026B28):
                 shared = "true" if i.addr == 0x80026AA0 else "false"
                 out.append(f"    if (nc_sample_traversal_angles(c, {shared})) goto L_80026BB8;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026CDC:
-                out.append("    if (nc_compose_traversal_rotation(c)) goto L_80026F60;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026BB8:
-                out.append("    if (nc_build_traversal_matrix(c)) goto L_80026CDC;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026A6C:
                 out.append("    switch (nc_select_part_heading_source(c)) {")
                 out.append("    case NC_HEADING_SKIP: goto L_80026CDC;")
                 out.append("    case NC_HEADING_FROM_PART: goto L_80026B28;")
                 out.append("    case NC_HEADING_FROM_SHARED: goto L_80026AA0;")
                 out.append("    case NC_HEADING_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026A28:
-                out.append("    if (nc_update_child_position(c)) goto L_80026A6C;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800269B4:
                 out.append("    if (nc_filter_scaled_part(c)) {")
                 out.append("        if (R(22) ? R(2) != 0 : R(2) == 0) goto L_80026A28;")
@@ -3570,12 +3007,6 @@ class Emitter:
                 out.append("    case NC_NODE_POP: goto L_8002695C;")
                 out.append("    case NC_NODE_RETURN: return;")
                 out.append("    case NC_NODE_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002695C:
-                out.append("    if (nc_resume_scaled_part_walk(c)) goto L_800269B4;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800266F4:
-                out.append("    if (nc_start_part_traversal(c)) goto L_80026754;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026738:
-                out.append("    if (nc_restore_part_branch(c)) goto L_80026754;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80026754:
                 out.append("    if (nc_prepare_part_translation(c)) {")
                 out.append(f"        {self.call(0x8007A530)}")
@@ -3594,8 +3025,6 @@ class Emitter:
                 out.append("    if (nc_prepare_part_composition(c)) {")
                 out.append(f"        {self.call(0x8007A0E0)}")
                 out.append("        goto L_800267DC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800267DC:
-                out.append("    if (nc_apply_part_matrix(c)) goto L_800267EC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x800266B4, 0x800267EC):
                 if i.addr == 0x800267EC:
                     part, next_node, pop = "true", "L_80026754", "L_80026738"
@@ -3614,18 +3043,10 @@ class Emitter:
                 out.append(
                     "    if (nc_sample_part_rotation(c, NC_ROTATION_PACKED)) goto L_80026414;"
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026414:
-                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_PACKED)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800261C8:
                 out.append(
                     "    if (nc_sample_part_rotation(c, NC_ROTATION_TRANSPOSED)) goto L_80026248;"
                 )
-            if self.mod.name == "psx2_exe" and i.addr == 0x80026248:
-                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_TRANSPOSED)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002607C:
-                out.append("    if (nc_finish_part_rotation(c, NC_ROTATION_PART)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8003433C:
-                out.append("    if (nc_init_part_transform(c)) goto L_800343D8;")
             if self.mod.name == "psx2_exe" and i.addr == 0x800343D8:
                 out.append("    if (nc_begin_part_chain(c)) {")
                 out.append("        if (R(2)) goto L_800343F4;")
@@ -3648,8 +3069,6 @@ class Emitter:
                 out.append("      if (nc_compose_part_matrix(c)) {")
                 out.append("          if (more_parts) goto L_80034430;")
                 out.append("          goto L_800345BC; } }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800345BC:
-                out.append("    if (nc_finish_part_translation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80034610:
                 out.append("    if (nc_prepare_heading_matrix(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
@@ -3658,10 +3077,6 @@ class Emitter:
                 out.append("    if (nc_prepare_matrix_planar_length(c)) {")
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append("        goto L_80034788; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80034788:
-                out.append("    if (nc_finish_matrix_headings(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80047684:
-                out.append("    if (nc_vector_heading(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C7C8, 0x8006C9B0):
                 actor = i.addr == 0x8006C7C8
                 resume = 0x8006C7DC if actor else 0x8006C9C4
@@ -3686,8 +3101,6 @@ class Emitter:
                 out.append(f"        {self.call(0x8006BFE8)}")
                 out.append("        goto L_8006CA34;")
                 out.append("    case NC_POINT_LEVEL_FALLBACK: break; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006C8E4:
-                out.append("    if (nc_begin_spatial_point(c)) goto L_8006C904;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006C814:
                 out.append("    switch (nc_check_actor_level_distance(c)) {")
                 out.append("    case NC_ACTOR_LEVEL_CHECK_FLAGS: goto L_8006C848;")
@@ -3711,8 +3124,6 @@ class Emitter:
                 out.append(f"    if (nc_set_actor_levels(c, {load_channel})) {{")
                 out.append(f"        {self.call(0x8006C524)}")
                 out.append("        goto L_8006C8BC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006C6F0:
-                out.append("    if (nc_begin_spatial_actor(c)) goto L_8006C714;")
             if self.mod.name == "psx2_exe" and i.addr in (
                 0x8006C894,
                 0x8006C8BC,
@@ -3722,8 +3133,6 @@ class Emitter:
                 actor = "true" if i.addr in (0x8006C894, 0x8006C8BC) else "false"
                 distant = "true" if i.addr in (0x8006C894, 0x8006CA34) else "false"
                 out.append(f"    if (nc_finish_spatial_frame(c, {actor}, {distant})) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006C63C:
-                out.append("    if (nc_spatial_attenuation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8006C714, 0x8006C904):
                 actor = i.addr == 0x8006C714
                 source = "actor" if actor else "point"
@@ -3743,20 +3152,6 @@ class Emitter:
                 out.append("    if (nc_begin_placement_defaults(c)) {")
                 out.append(f"        {self.call(0x80072910)}")
                 out.append("        goto L_8002AC94; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AC94:
-                out.append("    if (nc_finish_placement_defaults(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002ADA0:
-                out.append("    if (nc_sample_placement_axes(c)) goto L_8002AE1C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AE1C:
-                out.append("    if (nc_store_placement_axes(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AD3C:
-                out.append("    if (nc_init_placement_pose(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AFB4:
-                out.append("    if (nc_step_placement_record(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AE78:
-                out.append("    if (nc_begin_placement_vectors(c)) goto L_8002AEE0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AF68:
-                out.append("    if (nc_finish_placement_vectors(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8002AEE0, 0x8002AEFC, 0x8002AF08):
                 helper, callee, resume = {
                     0x8002AEE0: ("yaw", 0x8007A7A0, 0x8002AEFC),
@@ -3783,8 +3178,6 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_vector({args})) {{")
                 out.append(f"        {self.call(0x8007A320)}")
                 out.append(f"        goto L_{resume:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B0B0:
-                out.append("    if (nc_begin_placement_matrices(c)) goto L_8002B14C;")
             if self.mod.name == "psx2_exe" and i.addr in (
                 0x8002B14C,
                 0x8002B160,
@@ -3823,8 +3216,6 @@ class Emitter:
                 out.append(f"    if (nc_prepare_placement_call({args})) {{")
                 out.append(f"        {self.call(callee)}")
                 out.append(f"        goto L_{resume:08X}; }}")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B208:
-                out.append("    if (nc_finish_placement_matrices(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B1D0:
                 out.append("    if (nc_prepare_transposed_placement_scale(c)) {")
                 out.append(f"        {self.call(0x8007A1F0)}")
@@ -3852,8 +3243,6 @@ class Emitter:
                 out.append("      if (nc_select_placement_step(c, &step)) {")
                 out.append(f"        if (step) {{ {self.call(0x8002AFB4)} }}")
                 out.append("        goto L_8002B3BC; } }")
-            if self.mod.name == "psx2_exe" and i.addr in (0x8002B3BC, 0x8002B5E8):
-                out.append("    if (nc_restore_placement_frame(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B3D0:
                 out.append("    if (nc_begin_placement_update(c)) {")
                 out.append("        if (R(3) & 4) goto L_8002B40C;")
@@ -3873,8 +3262,6 @@ class Emitter:
                 out.append("    if (nc_call_placement_reset(c)) {")
                 out.append(f"        {self.call(0x8006070C)}")
                 out.append("        goto L_8002B5C0; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B5C0:
-                out.append("    if (nc_finish_placement_reset(c)) goto L_8002B5E0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8002B4B0:
                 out.append("    switch (nc_check_placement_counter(c)) {")
                 out.append("    case NC_PLACEMENT_COUNTER_ZERO: goto L_8002B5B8;")
@@ -3888,14 +3275,6 @@ class Emitter:
                 out.append("        if (!refresh) goto L_8002B5E0;")
                 out.append(f"        {self.call(0x8002B22C)}")
                 out.append("        goto L_8002B588; } }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B588:
-                out.append("    if (nc_finish_placement_refresh(c)) goto L_8002B5E0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B4E8:
-                out.append("    if (nc_apply_placement_preset(c)) goto L_8002B56C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002B40C:
-                out.append("    if (nc_step_record_angle_pair(c)) goto L_8002B5E0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8002AF7C:
-                out.append("    if (nc_step_record_angle(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006DFE8:
                 out.append("    if (nc_prepare_paired_point_bearing(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
@@ -3909,8 +3288,6 @@ class Emitter:
                 out.append("    if (nc_call_placement_record_update(c)) {")
                 out.append(f"        {self.call(0x8002B3D0)}")
                 out.append("        goto L_8006E06C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8006E06C:
-                out.append("    if (nc_finish_paired_point_placement(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8006E04C:
                 out.append("    if (nc_call_actor_coordinate_init(c)) {")
                 out.append(f"        {self.call(0x800470DC)}")
@@ -3923,18 +3300,10 @@ class Emitter:
                 out.append("    if (nc_prepare_target_distance(c)) {")
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append("        goto L_800587CC; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800587CC:
-                out.append("    if (nc_store_target_vertical_velocity(c)) goto L_80058830;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80058868:
                 out.append("    if (nc_prepare_planar_velocity(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_800588B0; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800588B0:
-                out.append("    if (nc_finish_planar_velocity(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8003531C:
-                out.append("    if (nc_heading_cosine(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80035338:
-                out.append("    if (nc_heading_sine(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80034828, 0x800348FC):
                 quarter = "true" if i.addr == 0x80034828 else "false"
                 out.append(f"    if (nc_transform_part_position(c, {quarter})) return;")
@@ -3942,10 +3311,6 @@ class Emitter:
                 out.append("    if (nc_prepare_heading_projection(c)) {")
                 out.append(f"        {self.call(0x80047684)}")
                 out.append("        goto L_800471B4; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800471B4:
-                out.append("    if (nc_finish_heading_projection(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004716C:
-                out.append("    if (nc_project_heading_offset(c)) goto L_800471AC;")
             if self.mod.name == "psx2_exe" and i.addr in (0x80046E18, 0x80046EDC):
                 negative_z = i.addr == 0x80046E18
                 resume = 0x80046E68 if negative_z else 0x80046F2C
@@ -3960,34 +3325,10 @@ class Emitter:
                 out.append("    if (nc_begin_actor_point_placement(c)) {")
                 out.append(f"        {self.call(0x8003531C)}")
                 out.append("        goto L_8004701C; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800470A4:
-                out.append("    if (nc_finish_actor_point_placement(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004701C:
                 out.append("    if (nc_place_actor_points(c)) {")
                 out.append(f"        {self.call(0x80047128)}")
                 out.append("        goto L_800470A4; }")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800470DC:
-                out.append("    if (nc_init_actor_coordinates(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80052B80:
-                out.append("    if (nc_refill_hit_adrenaline(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800562A0:
-                out.append("    if (nc_clear_adrenaline_hud(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80055DD4:
-                out.append("    if (nc_update_adrenaline(c)) goto L_80055F48;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004260C:
-                out.append("    if (nc_player_attack_kind(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80041540:
-                out.append("    if (nc_attack_part(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800362F8:
-                out.append("    if (nc_restore_part_links(c)) goto L_80036358;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80036368:
-                out.append("    if (nc_restore_attached_part(c)) goto L_800363F0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80034D2C:
-                out.append("    if (nc_mark_actor_noninteractive(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80042760:
-                out.append("    if (nc_finish_attack_part(c, true)) goto L_800427A0;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x800427B4:
-                out.append("    if (nc_finish_attack_part(c, false)) goto L_800427D0;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004EE40:
                 out.extend(
                     [
@@ -4002,8 +3343,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EFCC, 0x8004EFD0):
                 clear_hits = "true" if i.addr == 0x8004EFCC else "false"
                 out.append(f"    if (nc_enter_hit_state_13(c, {clear_hits})) goto L_8004F02C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x80039964:
-                out.append("    if (nc_reset_hit_animation(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr == 0x8004EDCC:
                 out.append("    { bool skip; if (nc_prepare_hit_reaction(c, &skip)) {")
                 out.append("        if (skip) goto L_8004F02C;")
@@ -4024,12 +3363,6 @@ class Emitter:
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EC8C, 0x8004ECAC):
                 player = "true" if i.addr == 0x8004EC8C else "false"
                 out.append(f"    if (nc_apply_lethal_reaction(c, {player})) goto L_8004F02C;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004D0CC:
-                out.append("    if (nc_enter_death_state(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004D1A0:
-                out.append("    if (nc_set_actor_state(c)) return;")
-            if self.mod.name == "psx2_exe" and i.addr == 0x8004E6E0:
-                out.append("    if (nc_select_base_damage(c)) return;")
             if self.mod.name == "psx2_exe" and i.addr in (0x8004EB30, 0x8004EB6C):
                 check_mode = "true" if i.addr == 0x8004EB30 else "false"
                 out.append(f"    if (nc_calculate_hit_health(c, {check_mode})) goto L_8004EB78;")
@@ -4150,6 +3483,9 @@ def write_module(mod: Module, launcher: Module | None, out: Path) -> None:
         header.append('#include "decomp/pad.h"')
         header.append('#include "decomp/contact.h"')
         header.append('#include "decomp/distance.h"')
+    for h in em.splices.includes:
+        if f'#include "{h}"' not in header:
+            header.append(f'#include "{h}"')
     for idx in range(0, len(mod.funcs), FUNCS_PER_FILE):
         chunk = mod.funcs[idx : idx + FUNCS_PER_FILE]
         lines = list(header)

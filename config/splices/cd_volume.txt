@@ -1,0 +1,6 @@
+# Handwritten code from src/decomp/cd_volume.* spliced into generated functions.
+
+include decomp/cd_volume.h
+
+slus_005_82  800135E4  entry  cd_volume(c, 0x80015adc)
+slus_005_82  8001374C  entry  cd_init_volume(c, 0x80015adc)

@@ -1,0 +1,5 @@
+# Handwritten code from src/decomp/sdk_putchar.* spliced into generated functions.
+
+include decomp/sdk_putchar.h
+
+slus_005_82  800118D8  entry  sdk_putchar(c, 0x800118d8, 0x80011a7c, 0x80015b7c, 0x800156bd)

@@ -1,0 +1,6 @@
+# Handwritten code from src/decomp/jump_context.* spliced into generated functions.
+
+include decomp/jump_context.h
+
+slus_005_82  800119BC  entry  save_irq_context(c)
+slus_005_82  800119F8  at     restore_jump_context(c); return;

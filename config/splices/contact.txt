@@ -1,0 +1,11 @@
+# Handwritten code from src/decomp/contact.* spliced into generated functions.
+
+include decomp/contact.h
+
+psx2_exe  80034D2C  entry  nc_mark_actor_noninteractive(c)
+psx2_exe  800362F8  at     if (nc_restore_part_links(c)) goto L_80036358;
+psx2_exe  80036368  at     if (nc_restore_attached_part(c)) goto L_800363F0;
+psx2_exe  80041540  entry  nc_attack_part(c)
+psx2_exe  8004260C  at     if (nc_player_attack_kind(c)) return;
+psx2_exe  80042760  at     if (nc_finish_attack_part(c, true)) goto L_800427A0;
+psx2_exe  800427B4  at     if (nc_finish_attack_part(c, false)) goto L_800427D0;

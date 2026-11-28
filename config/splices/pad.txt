@@ -1,0 +1,75 @@
+# Handwritten code from src/decomp/pad.* spliced into generated functions.
+
+include decomp/pad.h
+
+psx2_exe  80042E7C  at     if (nc_call_live_pad(c, 0x80042E8C)) goto L_80042E8C;
+psx2_exe  80042EF4  at     if (nc_call_pad_action(c, false)) goto L_80042EFC;
+psx2_exe  80042F40  at     if (nc_call_pad_action(c, true)) goto L_80042F54;
+psx2_exe  80042F54  at     if (nc_leave_pad_dispatch(c)) return;
+psx2_exe  8004457C  entry  nc_check_player_action_words(c)
+psx2_exe  800445AC  entry  nc_record_player_button_press(c)
+psx2_exe  800445DC  entry  nc_reset_repeat_on_l2_press(c)
+psx2_exe  800446EC  entry  nc_set_player_input_action(c)
+psx2_exe  800448F4  at     if (nc_clear_player_buttons(c)) goto L_800451E8;
+psx2_exe  800449D8  at     if (nc_call_player_button_action(c)) goto L_800449E0;
+psx2_exe  80044B88  at     if (nc_call_player_queued_action(c)) goto L_80044B90;
+psx2_exe  80044B90  at     if (nc_clear_player_queued_action(c)) goto L_800451E8;
+psx2_exe  80044C60  at     if (nc_call_player_face_button(c, false)) goto L_80044C6C;
+psx2_exe  80044C6C  at     if (nc_call_player_face_button(c, true)) goto L_80044C84;
+psx2_exe  80044D8C  at     if (nc_call_player_action_thirteen(c)) goto L_80044D94;
+psx2_exe  80044D94  at     if (nc_finish_player_action_thirteen(c)) goto L_800451E8;
+psx2_exe  800450A8  at     if (nc_call_player_r2_action(c)) goto L_800450B4;
+psx2_exe  80045114  at     if (nc_call_player_square_actor_scan(c)) goto L_8004511C;
+psx2_exe  8004513C  at     if (nc_call_player_square_scan_match(c)) goto L_80045144;
+psx2_exe  8004519C  at     if (nc_player_triangle_fallback(c)) goto L_800451E8;
+psx2_exe  80053084  entry  nc_count_player_action_buttons(c)
+psx2_exe  80062C28  entry  nc_init_pad_sequence(c)
+psx2_exe  80062CB0  entry  nc_stop_pad_sequence(c)
+psx2_exe  80062CC8  entry  nc_pad_sequence_ended(c)
+psx2_exe  80062D2C  entry  nc_read_pad_sequence(c)
+psx2_exe  80067200  at     if (nc_menu_apply_enabled_record(c)) goto L_80067240;
+psx2_exe  800672B4  at     if (nc_menu_apply_sequence(c)) goto L_800672BC;
+psx2_exe  800672BC  at     if (nc_menu_reset_sequences(c)) goto L_800672F8;
+psx2_exe  80067308  at     if (nc_leave_menu_button_scan(c)) return;
+psx2_exe  800673BC  at     if (nc_menu_mode_record_call(c)) goto L_800674A0;
+psx2_exe  8006745C  at     if (nc_menu_call_selected_record(c)) goto L_80067464;
+psx2_exe  80067464  at     if (nc_menu_record_timeout(c)) goto L_800674A0;
+psx2_exe  800675D0  at     if (nc_menu_advance_record_counter(c)) goto L_80068FE4;
+psx2_exe  80067770  at     if (nc_menu_record_26_right(c)) goto L_800677BC;
+psx2_exe  800677E0  at     if (nc_menu_record_37_action(c)) goto L_80068334;
+psx2_exe  800680EC  at     if (nc_menu_sample_stick_bounds(c)) goto L_80068154;
+psx2_exe  8006818C  at     if (nc_menu_expand_stick_bounds(c)) goto L_800681EC;
+psx2_exe  800681EC  at     if (nc_menu_store_stick_calibration(c)) goto L_800682D8;
+psx2_exe  800682D8  at     if (nc_menu_calibration_action(c)) goto L_800682FC;
+psx2_exe  80068344  at     if (nc_menu_pad_type_flags(c)) goto L_800683D0;
+psx2_exe  80068424  at     if (nc_menu_horizontal_action(c, true)) goto L_80068438;
+psx2_exe  80068480  at     if (nc_menu_horizontal_action(c, false)) goto L_80068488;
+psx2_exe  800685FC  at     if (nc_menu_dispatch_input_action(c)) goto L_800687CC;
+psx2_exe  80068764  at     if (nc_menu_format_horizontal_feedback(c)) goto L_8006878C;
+psx2_exe  8006878C  at     if (nc_menu_dispatch_feedback_action(c)) goto L_800687CC;
+psx2_exe  800687B4  at     if (nc_menu_apply_direction(c)) goto L_800687CC;
+psx2_exe  800687C8  at     if (nc_menu_clear_repeat(c)) goto L_800687CC;
+psx2_exe  800687CC  at     if (nc_menu_scan_and_save_buttons(c)) goto L_800687D8;
+psx2_exe  8006885C  at     if (nc_menu_record_button_pairs(c)) goto L_800688EC;
+psx2_exe  8006893C  at     if (nc_menu_dispatch_record_action(c)) goto L_80068944;
+psx2_exe  80068980  at     if (nc_menu_apply_record_select(c)) goto L_80068CF8;
+psx2_exe  80068CE0  at     if (nc_menu_dispatch_and_save_buttons(c)) goto L_80068CF8;
+psx2_exe  80068CF4  at     if (nc_menu_clear_repeat(c)) goto L_80068CF8;
+psx2_exe  80068D30  at     if (nc_menu_reset_record_100(c)) goto L_80068D3C;
+psx2_exe  80068DBC  at     if (nc_menu_dispatch_timed_record(c)) goto L_80068DD4;
+psx2_exe  80068DD4  at     if (nc_menu_record_cross(c)) goto L_80068E18;
+psx2_exe  80068E18  at     if (nc_menu_check_record_102(c)) goto L_80068E50;
+psx2_exe  80068F0C  at     if (nc_menu_dispatch_direction(c)) goto L_80068FE4;
+psx2_exe  80068F88  at     if (nc_menu_dispatch_face_button(c)) goto L_80068FA8;
+psx2_exe  80068FA8  at     if (nc_menu_mode_record_result(c)) goto L_80068FE4;
+psx2_exe  80068FE4  at     if (nc_leave_menu_input(c)) return;
+psx2_exe  8006D548  at     if (nc_pad_inactivity(c)) goto L_8006D5A8;
+psx2_exe  8006FEBC  entry  nc_start_pad_driver(c)
+psx2_exe  8006FF0C  entry  nc_stop_pad_driver(c)
+psx2_exe  8006FF34  entry  nc_select_pad(c)
+psx2_exe  8007001C  entry  nc_pad_packet_type(c)
+psx2_exe  8007002C  entry  nc_read_pad_stick(c)
+psx2_exe  800700FC  at     if (nc_decode_pad(c)) goto L_800705D8;
+psx2_exe  80073EB4  entry  nc_sdk_init_pad(c)
+psx2_exe  80073F1C  entry  nc_sdk_start_pad(c)
+psx2_exe  80073F74  entry  nc_sdk_patch_pad(c)

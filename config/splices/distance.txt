@@ -1,0 +1,120 @@
+# Handwritten code from src/decomp/distance.* spliced into generated functions.
+
+include decomp/distance.h
+
+psx2_exe  8001A764  at     if (nc_finish_reference_bearing(c)) return;
+psx2_exe  8001AC28  at     if (nc_save_point_update_frame(c)) goto L_8001AC4C;
+psx2_exe  8001ACA0  at     if (nc_lookup_point_row_record(c)) goto L_8001ACF0;
+psx2_exe  8001ADFC  at     if (nc_store_point_pose_heading(c)) goto L_8001AE34;
+psx2_exe  8001AE40  at     if (nc_advance_point_index(c)) goto L_8001AE94;
+psx2_exe  8001AEAC  at     if (nc_restore_point_update_frame(c)) return;
+psx2_exe  8001BE6C  at     if (nc_finish_part_turn(c)) goto L_8001C04C;
+psx2_exe  8001BF18  at     if (nc_begin_part_heading_search(c)) goto L_8001BF54;
+psx2_exe  8001C04C  at     if (nc_restore_part_search_frame(c)) return;
+psx2_exe  8001C19C  at     if (nc_select_bearing_point(c)) goto L_8001C234;
+psx2_exe  8001C27C  at     if (nc_finish_selected_point_bearing(c)) return;
+psx2_exe  80025FE4  at     if (nc_sample_part_rotation(c, NC_ROTATION_PART)) goto L_8002607C;
+psx2_exe  8002607C  at     if (nc_finish_part_rotation(c, NC_ROTATION_PART)) return;
+psx2_exe  80026248  at     if (nc_finish_part_rotation(c, NC_ROTATION_TRANSPOSED)) return;
+psx2_exe  80026414  at     if (nc_finish_part_rotation(c, NC_ROTATION_PACKED)) return;
+psx2_exe  80026560  at     if (nc_start_node_traversal(c)) goto L_800265CC;
+psx2_exe  800265AC  at     if (nc_restore_node_branch(c)) goto L_800265CC;
+psx2_exe  800266A4  at     if (nc_apply_node_matrix(c)) goto L_800266B4;
+psx2_exe  800266F4  at     if (nc_start_part_traversal(c)) goto L_80026754;
+psx2_exe  80026738  at     if (nc_restore_part_branch(c)) goto L_80026754;
+psx2_exe  800267DC  at     if (nc_apply_part_matrix(c)) goto L_800267EC;
+psx2_exe  80026828  at     if (nc_start_scaled_part_position(c)) goto L_80026908;
+psx2_exe  80026908  at     if (nc_begin_scaled_part_walk(c)) goto L_800269B4;
+psx2_exe  8002695C  at     if (nc_resume_scaled_part_walk(c)) goto L_800269B4;
+psx2_exe  80026A28  at     if (nc_update_child_position(c)) goto L_80026A6C;
+psx2_exe  80026BB8  at     if (nc_build_traversal_matrix(c)) goto L_80026CDC;
+psx2_exe  80026CDC  at     if (nc_compose_traversal_rotation(c)) goto L_80026F60;
+psx2_exe  8002755C  at     if (nc_begin_textured_faces(c, false)) goto L_800275A8;
+psx2_exe  800275A8  at     if (nc_apply_textured_face_flags(c, false)) goto L_800275DC;
+psx2_exe  80027600  at     if (nc_measure_placement_triangle(c)) goto L_80027644;
+psx2_exe  80027664  at     if (nc_write_textured_triangle(c)) goto L_800276BC;
+psx2_exe  80027764  at     if (nc_begin_untextured_triangles(c)) goto L_800277C4;
+psx2_exe  800277E0  at     if (nc_measure_untextured_triangle(c)) goto L_80027824;
+psx2_exe  80027954  at     if (nc_begin_textured_faces(c, true)) goto L_800279A0;
+psx2_exe  800279A0  at     if (nc_apply_textured_face_flags(c, true)) goto L_800279D4;
+psx2_exe  80027A5C  at     if (nc_write_textured_quad(c)) goto L_80027AE8;
+psx2_exe  80027B90  at     if (nc_begin_untextured_quads(c)) goto L_80027BF0;
+psx2_exe  80027DA4  at     if (nc_begin_placement_lighting(c)) goto L_80027E28;
+psx2_exe  80028114  at     if (nc_set_projection_pose_mask(c)) goto L_80028144;
+psx2_exe  80028160  at     if (nc_set_projection_pose_cursor(c)) goto L_8002816C;
+psx2_exe  8002817C  at     if (nc_load_projection_pose_flags(c)) goto L_800281A0;
+psx2_exe  80028214  at     if (nc_select_projection_packet_mode(c)) goto L_8002826C;
+psx2_exe  800282D8  at     if (nc_push_projection_pose(c)) goto L_800282F4;
+psx2_exe  8002830C  at     if (nc_return_projection_traversal(c)) return;
+psx2_exe  80028388  at     if (nc_set_indexed_face_flags(c)) goto L_800283BC;
+psx2_exe  80028A3C  at     if (nc_return_indexed_faces(c)) return;
+psx2_exe  80028BF8  at     if (nc_save_linked_placement_pose(c)) goto L_80028C18;
+psx2_exe  80028C30  at     if (nc_return_placement_projection(c)) return;
+psx2_exe  80028E5C  at     if (nc_save_linked_placement_pose(c)) goto L_80028E7C;
+psx2_exe  80028E94  at     if (nc_return_linked_pose_traversal(c)) return;
+psx2_exe  80028ECC  at     if (nc_begin_placement_scan(c)) goto L_80028F00;
+psx2_exe  80028F68  at     if (nc_finish_primary_placement_counter(c, true)) goto L_80029008;
+psx2_exe  800290C4  at     if (nc_copy_placement_coordinates(c)) goto L_800290F4;
+psx2_exe  800293B0  at     if (nc_store_placement_angle_result(c)) goto L_800293D4;
+psx2_exe  800293E4  at     if (nc_select_placement_projection_args(c)) goto L_80029418;
+psx2_exe  80029470  at     if (nc_restore_placement_scan_frame(c)) return;
+psx2_exe  80029498  at     if (nc_begin_placement_angle_update(c)) goto L_800294F0;
+psx2_exe  80029524  at     if (nc_set_type7_linked_heading(c)) goto L_80029584;
+psx2_exe  80029544  at     if (nc_set_other_placement_angles(c)) goto L_80029584;
+psx2_exe  80029584  at     if (nc_finish_placement_angle_step(c)) return;
+psx2_exe  800295F8  at     if (nc_set_linked_heading_offset(c)) goto L_80029620;
+psx2_exe  80029620  at     if (nc_apply_linked_heading_offset(c)) goto L_80029638;
+psx2_exe  80029648  at     if (nc_copy_linked_heading_offset(c)) goto L_80029658;
+psx2_exe  80029658  at     if (nc_copy_linked_bearing(c)) goto L_80029670;
+psx2_exe  80029688  at     if (nc_set_unlinked_pose_heading(c)) goto L_800296B0;
+psx2_exe  800296B0  at     if (nc_apply_unlinked_pose_bearing(c)) goto L_800296D0;
+psx2_exe  800296D0  at     if (nc_return_record_point_heading(c)) return;
+psx2_exe  800297FC  at     if (nc_load_placement_selector_target(c)) goto L_80029810;
+psx2_exe  80029CD0  at     if (nc_update_placement_height_flags(c)) goto L_8002A560;
+psx2_exe  80029D3C  at     if (nc_decrease_placement_word(c)) goto L_8002A560;
+psx2_exe  80029E98  at     if (nc_clear_placement_y_step_flags(c)) goto L_8002A560;
+psx2_exe  8002A258  at     if (nc_advance_placement_x_index(c)) goto L_8002A560;
+psx2_exe  8002A42C  at     if (nc_set_six_placement_flags(c)) goto L_8002A560;
+psx2_exe  8002A5D4  at     if (nc_return_placement_dispatch(c)) return;
+psx2_exe  8002AC94  at     if (nc_finish_placement_defaults(c)) return;
+psx2_exe  8002AD3C  entry  nc_init_placement_pose(c)
+psx2_exe  8002ADA0  at     if (nc_sample_placement_axes(c)) goto L_8002AE1C;
+psx2_exe  8002AE1C  at     if (nc_store_placement_axes(c)) return;
+psx2_exe  8002AE78  at     if (nc_begin_placement_vectors(c)) goto L_8002AEE0;
+psx2_exe  8002AF68  at     if (nc_finish_placement_vectors(c)) return;
+psx2_exe  8002AF7C  entry  nc_step_record_angle(c)
+psx2_exe  8002AFB4  entry  nc_step_placement_record(c)
+psx2_exe  8002B0B0  at     if (nc_begin_placement_matrices(c)) goto L_8002B14C;
+psx2_exe  8002B208  at     if (nc_finish_placement_matrices(c)) return;
+psx2_exe  8002B3BC  at     if (nc_restore_placement_frame(c)) return;
+psx2_exe  8002B40C  at     if (nc_step_record_angle_pair(c)) goto L_8002B5E0;
+psx2_exe  8002B4E8  at     if (nc_apply_placement_preset(c)) goto L_8002B56C;
+psx2_exe  8002B588  at     if (nc_finish_placement_refresh(c)) goto L_8002B5E0;
+psx2_exe  8002B5C0  at     if (nc_finish_placement_reset(c)) goto L_8002B5E0;
+psx2_exe  8002B5E8  at     if (nc_restore_placement_frame(c)) return;
+psx2_exe  8003433C  at     if (nc_init_part_transform(c)) goto L_800343D8;
+psx2_exe  800345BC  at     if (nc_finish_part_translation(c)) return;
+psx2_exe  80034788  at     if (nc_finish_matrix_headings(c)) return;
+psx2_exe  8003531C  entry  nc_heading_cosine(c)
+psx2_exe  80035338  entry  nc_heading_sine(c)
+psx2_exe  800470A4  at     if (nc_finish_actor_point_placement(c)) return;
+psx2_exe  800470DC  entry  nc_init_actor_coordinates(c)
+psx2_exe  8004716C  at     if (nc_project_heading_offset(c)) goto L_800471AC;
+psx2_exe  800471B4  at     if (nc_finish_heading_projection(c)) return;
+psx2_exe  8004720C  at     if (nc_return_point_heading(c)) return;
+psx2_exe  80047254  at     if (nc_return_point_heading(c)) return;
+psx2_exe  800472B8  at     if (nc_store_reference_distance(c)) return;
+psx2_exe  800472D8  entry  nc_actor_heading(c)
+psx2_exe  80047328  at     if (nc_finish_relative_heading(c)) return;
+psx2_exe  800473C8  at     if (nc_store_projected_heading(c)) return;
+psx2_exe  800473E8  entry  nc_latch_placement_tick(c)
+psx2_exe  80047518  at     if (nc_projected_heading_gap(c)) goto L_80047564;
+psx2_exe  800475E4  entry  nc_distance_root(c)
+psx2_exe  80047684  entry  nc_vector_heading(c)
+psx2_exe  8004CE24  at     if (nc_actor_distance_terms(c)) goto L_8004CE58;
+psx2_exe  800587CC  at     if (nc_store_target_vertical_velocity(c)) goto L_80058830;
+psx2_exe  800588B0  at     if (nc_finish_planar_velocity(c)) return;
+psx2_exe  8006C63C  entry  nc_spatial_attenuation(c)
+psx2_exe  8006C6F0  at     if (nc_begin_spatial_actor(c)) goto L_8006C714;
+psx2_exe  8006C8E4  at     if (nc_begin_spatial_point(c)) goto L_8006C904;
+psx2_exe  8006E06C  at     if (nc_finish_paired_point_placement(c)) return;

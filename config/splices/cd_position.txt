@@ -1,0 +1,6 @@
+# Handwritten code from src/decomp/cd_position.* spliced into generated functions.
+
+include decomp/cd_position.h
+
+slus_005_82  80012584  entry  cd_sector_to_position(c)
+slus_005_82  80012688  entry  cd_position_to_sector(c)

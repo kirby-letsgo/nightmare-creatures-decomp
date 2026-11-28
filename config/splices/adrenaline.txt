@@ -1,0 +1,7 @@
+# Handwritten code from src/decomp/adrenaline.* spliced into generated functions.
+
+include decomp/adrenaline.h
+
+psx2_exe  80052B80  entry  nc_refill_hit_adrenaline(c)
+psx2_exe  80055DD4  at     if (nc_update_adrenaline(c)) goto L_80055F48;
+psx2_exe  800562A0  entry  nc_clear_adrenaline_hud(c)

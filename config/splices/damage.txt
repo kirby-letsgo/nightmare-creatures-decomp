@@ -1,0 +1,8 @@
+# Handwritten code from src/decomp/damage.* spliced into generated functions.
+
+include decomp/damage.h
+
+psx2_exe  80039964  entry  nc_reset_hit_animation(c)
+psx2_exe  8004D0CC  entry  nc_enter_death_state(c)
+psx2_exe  8004D1A0  entry  nc_set_actor_state(c)
+psx2_exe  8004E6E0  at     if (nc_select_base_damage(c)) return;

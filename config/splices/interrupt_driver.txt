@@ -1,0 +1,7 @@
+# Handwritten code from src/decomp/interrupt_driver.* spliced into generated functions.
+
+include decomp/interrupt_driver.h
+
+slus_005_82  80010BA4  entry  interrupt_callback_status(c, 0x80014622)
+slus_005_82  80011B7C  entry  set_vsync_slot(c, 0x80015740)
+slus_005_82  80011DA8  entry  set_dma_slot(c, 0x8001576c)

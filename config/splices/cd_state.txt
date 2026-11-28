@@ -1,0 +1,10 @@
+# Handwritten code from src/decomp/cd_state.* spliced into generated functions.
+
+include decomp/cd_state.h
+
+slus_005_82  80011FC4  entry  cd_last_position(c, 0x80015834)
+slus_005_82  80011FD4  entry  cd_reset(c, 0x80011fd4, 0x80013840, 0x80013890, 0x8001374c)
+slus_005_82  80012078  entry  cd_lookup_name(c, 0x8001583c, 28, 0x80010364)
+slus_005_82  800120AC  entry  cd_lookup_name(c, 0x800158bc, 7, 0x80010364)
+slus_005_82  80012540  entry  cd_data_callback(c, 0x80010ab0, 0x80012554)
+slus_005_82  80013CE8  entry  cd_set_test_parameter_count(c, 0x80015ac0)

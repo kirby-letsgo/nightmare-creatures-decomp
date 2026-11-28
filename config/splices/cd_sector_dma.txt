@@ -1,0 +1,5 @@
+# Handwritten code from src/decomp/cd_sector_dma.* spliced into generated functions.
+
+include decomp/cd_sector_dma.h
+
+slus_005_82  80013BE8  entry  cd_sector_dma(c, 0x80015adc)

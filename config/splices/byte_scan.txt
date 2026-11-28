@@ -1,0 +1,6 @@
+# Handwritten code from src/decomp/byte_scan.* spliced into generated functions.
+
+include decomp/byte_scan.h
+
+slus_005_82  80011888  entry  sdk_find_byte(c)
+slus_005_82  8001198C  entry  sdk_string_length(c)

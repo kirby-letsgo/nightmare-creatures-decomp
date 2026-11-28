@@ -1,0 +1,5 @@
+# Handwritten code from src/decomp/sdk_puts.* spliced into generated functions.
+
+include decomp/sdk_puts.h
+
+slus_005_82  80013DD8  entry  sdk_puts(c, 0x800105bc, 0x800118d8, 0x80013e04)

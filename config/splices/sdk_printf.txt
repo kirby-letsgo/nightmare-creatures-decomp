@@ -1,0 +1,5 @@
+# Handwritten code from src/decomp/sdk_printf.* spliced into generated functions.
+
+include decomp/sdk_printf.h
+
+slus_005_82  80011160  entry  sdk_printf(c, 0x8001119c, 0x8001118c)
