@@ -25,7 +25,9 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = "credits_exe"
+# Handwritten modules routines are ported from, in order of preference: a target function is
+# ported from the first source that has a covered twin of it.
+SOURCES = ("credits_exe", "psx_exe")
 TARGETS = ("psx_exe", "psx2_exe", "stream1_exe", "stream2_exe", "stream3_exe")
 LAUNCHER_LO, OVERLAY_LO, RAM_HI = 0x80010000, 0x80018000, 0x80200000
 TWINS = ROOT / "config" / "twins"
@@ -121,37 +123,51 @@ def discover():
                 hashes[digest].append((stem, unit))
     TWINS.mkdir(parents=True, exist_ok=True)
     for target in TARGETS:
-        pairs, amap, himap = [], defaultdict(set), defaultdict(set)
         claimed = set()
-        for unit in modules[SOURCE].units:
-            if wq.status_of(unit, covered[SOURCE])[0] != "covered":
-                continue
+        for source in SOURCES:
+            if source != target:
+                discover_pairs(source, target, modules, covered, ranges_src, hashes, claimed)
+
+
+def twins_path(source, target):
+    return TWINS / (f"{target}.txt" if source == SOURCES[0] else f"{target}.from_{source}.txt")
+
+
+def discover_pairs(source, target, modules, covered, ranges_src, hashes, claimed):
+    import decomp_state as state
+    import work_queue as wq
+
+    pairs, amap, himap = [], defaultdict(set), defaultdict(set)
+    for unit in modules[source].units:
+        portable = wq.status_of(unit, covered[source])[0] == "covered" and not any(
             # Coverage credited only to the ports themselves does not count as a source.
-            if any(ranges_src.get((SOURCE, a), "").startswith("twins/") for a in unit.counted):
+            ranges_src.get((source, a), "").startswith("twins/")
+            for a in unit.counted
+        )
+        for stem, twin in hashes.get(wq.body_hash(unit), []):
+            if stem != target or len(twin.entries) != len(unit.entries):
                 continue
-            for stem, twin in hashes.get(wq.body_hash(unit), []):
-                if stem != target or twin.start in claimed:
-                    continue
-                if len(twin.entries) != len(unit.entries) or gp_differs(unit, twin):
-                    continue
-                if constants_differ(unit, twin):
-                    continue
-                if any(
-                    ranges_src.get((target, a), "twins/").split("/")[0] != "twins"
-                    for a in twin.counted
-                    if a in covered[target]
-                ):
-                    continue  # already handwritten for this module
-                claimed.add(twin.start)
-                local_map, local_hi = defaultdict(set), defaultdict(set)
-                relocations(unit, twin, local_map, local_hi)
-                for k, v in local_map.items():
-                    amap[k] |= v
-                for k, v in local_hi.items():
-                    himap[k] |= v
-                pairs.append((unit, twin, local_map, local_hi))
+            if gp_differs(unit, twin) or constants_differ(unit, twin):
+                continue
+            if not portable or twin.start in claimed:
+                continue
+            if any(
+                ranges_src.get((target, a), "twins/").split("/")[0] != "twins"
+                for a in twin.counted
+                if a in covered[target]
+            ):
+                continue  # already handwritten for this module
+            claimed.add(twin.start)
+            local_map, local_hi = defaultdict(set), defaultdict(set)
+            relocations(unit, twin, local_map, local_hi)
+            for k, v in local_map.items():
+                amap[k] |= v
+            for k, v in local_hi.items():
+                himap[k] |= v
+            pairs.append((unit, twin, local_map, local_hi))
+    if True:
         lines = [
-            f"# Twins of handwritten {SOURCE} functions in {target}.",
+            f"# Twins of handwritten {source} functions in {target}.",
             "# Written by tools/port_twins.py --discover.",
             "# unit <source start> <source end> <target start> [counted runs in the target]",
             "# map <source address> <target address>   (only unambiguous translations)",
@@ -175,8 +191,8 @@ def discover():
         for addr in sorted(himap):
             if len(himap[addr]) == 1:
                 lines.append(f"hi {addr:08X} {next(iter(himap[addr])):08X}")
-        (TWINS / f"{target}.txt").write_text("\n".join(lines) + "\n")
-        print(f"{target}: {len(pairs)} twin functions")
+        twins_path(source, target).write_text("\n".join(lines) + "\n")
+        print(f"{source} -> {target}: {len(pairs)} twin functions")
 
 
 def ranges_sources():
@@ -309,9 +325,9 @@ def load_items():
 # --- generation -----------------------------------------------------------------------------
 
 
-def load_twins(target):
+def load_twins(source, target):
     units, amap, himap = [], {}, {}
-    path = TWINS / f"{target}.txt"
+    path = twins_path(source, target)
     if not path.exists():
         return units, amap, himap
     for line in path.read_text().splitlines():
@@ -332,14 +348,14 @@ def load_twins(target):
     return units, amap, himap
 
 
-def source_entries():
+def source_entries(source):
     rows, at_rows = {}, set()
     for path in sorted(SPLICES.glob("*.txt")):
         if path.name.startswith("twins_"):
             continue
         for line in path.read_text().splitlines():
             fields = line.split("#", 1)[0].split(None, 3)
-            if len(fields) == 4 and fields[0] == SOURCE:
+            if len(fields) == 4 and fields[0] == source:
                 addr = int(fields[1], 16)
                 if fields[2] == "entry":
                     rows[addr] = fields[3]
@@ -364,8 +380,9 @@ def target_splices():
 class Port:
     """Clones for one target module."""
 
-    def __init__(self, target, amap, himap, defs):
+    def __init__(self, target, amap, himap, defs, source=None):
         self.target, self.amap, self.himap, self.defs = target, amap, himap, defs
+        self.source = source or SOURCES[0]
         self.names = {}  # address-valued enum constants and macros
         self.cache = {}
 
@@ -530,7 +547,8 @@ class Port:
         return result
 
     def clone_name(self, item):
-        return f"{item.name}__{item.path.stem}__{self.target}"
+        suffix = "" if self.source == SOURCES[0] else f"__from_{self.source}"
+        return f"{item.name}__{item.path.stem}__{self.target}{suffix}"
 
     def closure(self, root):
         """Helpers to clone for a root routine, or None if one cannot be translated."""
@@ -588,81 +606,116 @@ def prototype(text):
     return head + ";"
 
 
+def port_source(source, target, defs, files, spliced):
+    """Ports from one source module to one target: header lines, C files, splice rows,
+    covered runs."""
+    rows, at_rows = source_entries(source)
+    units, amap, himap = load_twins(source, target)
+    port = Port(target, amap, himap, defs, source)
+    port.names = address_names(files)
+    accepted, entries = [], []
+    roots = []  # (item, local maps, clone name)
+    for src_start, src_end, dst_start, runs, unit_map, unit_hi in units:
+        unit_rows = {a: e for a, e in rows.items() if src_start <= a < src_end}
+        if src_start not in unit_rows or any(src_start <= a < src_end for a in at_rows):
+            continue
+        dst_end = dst_start + src_end - src_start
+        if any(dst_start <= a < dst_end for a in spliced[target]):
+            continue
+        calls, unit_roots = {}, []
+        local = (unit_map, unit_hi)
+        for addr, call in unit_rows.items():
+            name = re.match(r"(\w+)\(", call)[1]
+            root = defs.get(name)
+            if root is None:
+                break
+            dst = addr - src_start + dst_start
+            order = port.closure(root)
+            text = port.translate(call, local)
+            if order is None or text is None or port.translate(root.text, local) is None:
+                break
+            clone = f"{name}__{target}_{dst:08X}"
+            text = re.sub(rf"\b{name}\(", f"{clone}(", text, count=1)
+            calls[dst] = (text, order)
+            unit_roots.append((root, local, clone))
+        else:
+            accepted.append((dst_start, runs))
+            entries.extend(calls.items())
+            roots.extend(unit_roots)
+    clones = {}
+    for _, (_, order) in entries:
+        for item in order:
+            clones[item.name] = item
+    renames = {name: port.clone_name(item) for name, item in clones.items()}
+    by_file, roots_by_file = defaultdict(list), defaultdict(list)
+    for item in clones.values():
+        by_file[item.path].append(item)
+    for root in roots:
+        roots_by_file[root[0].path].append(root)
+        by_file.setdefault(root[0].path, [])
+    decls = [
+        prototype(port.render(item, renames))
+        for path in sorted(by_file)
+        for item in by_file[path]
+        if item.kind == "function"
+    ] + [
+        prototype(port.render(item, renames, local, name))
+        for path in sorted(roots_by_file)
+        for item, local, name in sorted(roots_by_file[path], key=lambda r: r[2])
+    ]
+    needed = set()
+    for path in by_file:
+        if path.suffix == ".h":
+            needed.add(f'#include "decomp/{path.name}"')
+        else:
+            needed.update(
+                it.text for it in files[path] if it.kind == "pp" and it.text.startswith("#include")
+            )
+    c_files = {}
+    suffix = "" if source == SOURCES[0] else f"__from_{source}"
+    for path, items in sorted(by_file.items()):
+        names = {it.name for it in items}
+        body = [
+            f"/* Generated by tools/port_twins.py from src/decomp/{path.name}: {source}",
+            f" * routines with every address translated for {target}. Edit the original and",
+            " * rerun. */",
+        ]
+        if path.suffix == ".h":
+            body.append(f'#include "decomp/{path.name}"')
+        body.append(f'#include "decomp/twins/{target}.h"')
+        for it in files[path]:
+            if it.kind == "pp" and path.suffix == ".c" and it.text.startswith("#include"):
+                body.append(it.text)
+            elif it.kind in ("pp", "type") and path.suffix == ".c":
+                body.append(it.text)
+            elif it.name in names:
+                body.append(port.render(it, renames))
+        for it, local, name in sorted(roots_by_file[path], key=lambda r: r[2]):
+            body.append(port.render(it, renames, local, name))
+        c_files[OUT / f"{target}_{path.stem}{suffix}.c"] = "\n\n".join(body) + "\n"
+    return decls, needed, c_files, entries, accepted
+
+
 def generate():
     defs, files = load_items()
-    rows, at_rows = source_entries()
     spliced = target_splices()
     outputs = {}
     ranges = []
     for target in TARGETS:
-        units, amap, himap = load_twins(target)
-        port = Port(target, amap, himap, defs)
-        port.names = address_names(files)
-        accepted, entries = [], []
-        roots = []  # (item, local maps, clone name)
-        for src_start, src_end, dst_start, runs, unit_map, unit_hi in units:
-            unit_rows = {a: e for a, e in rows.items() if src_start <= a < src_end}
-            if src_start not in unit_rows or any(src_start <= a < src_end for a in at_rows):
+        decls, needed, entries, accepted = [], set(), [], []
+        for source in SOURCES:
+            if source == target:
                 continue
-            dst_end = dst_start + src_end - src_start
-            if any(dst_start <= a < dst_end for a in spliced[target]):
-                continue
-            calls, unit_roots = {}, []
-            local = (unit_map, unit_hi)
-            for addr, call in unit_rows.items():
-                name = re.match(r"(\w+)\(", call)[1]
-                root = defs.get(name)
-                if root is None:
-                    break
-                dst = addr - src_start + dst_start
-                order = port.closure(root)
-                text = port.translate(call, local)
-                if order is None or text is None or port.translate(root.text, local) is None:
-                    break
-                clone = f"{name}__{target}_{dst:08X}"
-                text = re.sub(rf"\b{name}\(", f"{clone}(", text, count=1)
-                calls[dst] = (text, order)
-                unit_roots.append((root, local, clone))
-            else:
-                accepted.append((dst_start, runs))
-                entries.extend(calls.items())
-                roots.extend(unit_roots)
-        clones = {}
-        for _, (_, order) in entries:
-            for item in order:
-                clones[item.name] = item
-        renames = {name: port.clone_name(item) for name, item in clones.items()}
-        by_file, roots_by_file = defaultdict(list), defaultdict(list)
-        for item in clones.values():
-            by_file[item.path].append(item)
-        for root in roots:
-            roots_by_file[root[0].path].append(root)
-            by_file.setdefault(root[0].path, [])
-        header = OUT / f"{target}.h"
+            d, n, c_files, e, a = port_source(source, target, defs, files, spliced)
+            decls += d
+            needed |= n
+            outputs.update(c_files)
+            entries += e
+            accepted += a
         guard = f"NC_DECOMP_TWINS_{target.upper()}_H"
-        decls = [
-            prototype(port.render(item, renames))
-            for path in sorted(by_file)
-            for item in by_file[path]
-            if item.kind == "function"
-        ] + [
-            prototype(port.render(item, renames, local, name))
-            for path in sorted(roots_by_file)
-            for item, local, name in sorted(roots_by_file[path], key=lambda r: r[2])
-        ]
-        needed = set()
-        for path in by_file:
-            if path.suffix == ".h":
-                needed.add(f'#include "decomp/{path.name}"')
-            else:
-                needed.update(
-                    it.text
-                    for it in files[path]
-                    if it.kind == "pp" and it.text.startswith("#include")
-                )
-        outputs[header] = "\n".join(
+        outputs[OUT / f"{target}.h"] = "\n".join(
             [
-                f"/* Generated by tools/port_twins.py: {SOURCE} routines ported to {target}. */",
+                f"/* Generated by tools/port_twins.py: handwritten routines ported to {target}. */",
                 f"#ifndef {guard}",
                 f"#define {guard}",
                 "",
@@ -675,33 +728,8 @@ def generate():
                 "",
             ]
         )
-        for path, items in sorted(by_file.items()):
-            original = files[path]
-            names = {it.name for it in items}
-            body = [
-                f"/* Generated by tools/port_twins.py from src/decomp/{path.name}: {SOURCE}",
-                f" * routines with every address translated for {target}. Edit the original and",
-                " * rerun. */",
-            ]
-            if path.suffix == ".h":
-                body.append(f'#include "decomp/{path.name}"')
-            body.append(f'#include "decomp/twins/{target}.h"')
-            for it in original:
-                if it.kind == "pp" and path.suffix == ".c" and it.text.startswith("#include"):
-                    body.append(it.text)
-                elif (
-                    it.kind in ("pp", "type")
-                    and path.suffix == ".c"
-                    and not it.text.startswith("#include")
-                ):
-                    body.append(it.text)
-                elif it.name in names:
-                    body.append(port.render(it, renames))
-            for it, local, name in sorted(roots_by_file[path], key=lambda r: r[2]):
-                body.append(port.render(it, renames, local, name))
-            outputs[OUT / f"{target}_{path.stem}.c"] = "\n\n".join(body) + "\n"
         splice = [
-            f"# Generated by tools/port_twins.py: {SOURCE} routines ported to {target}.",
+            f"# Generated by tools/port_twins.py: handwritten routines ported to {target}.",
             "",
             f"include decomp/twins/{target}.h",
             "",

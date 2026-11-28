@@ -1144,28 +1144,11 @@ bool nc_credits_gpu_command_chain__stream3_exe_8001ED18(CPUState *c) {
 }
 
 bool nc_credits_gpu_control__stream3_exe_8001EC8C(CPUState *c) {
-    if (c->budget <= 12)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x8002841c);
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(2), R(4));
-    R(2) = R(4) >> 24; /* GP1 opcode */
-    R(1) = 0x80040000 + R(2);
-    c->budget -= 4;
-    MEM_W8(R(1) - 0x5404, (u8)R(4));
-    c->budget -= 3;
-    return true;
+    return sdk_gpu_control(c, 0x8002841c, 0x8003abfc);
 }
 
 bool nc_credits_gpu_control_byte__stream3_exe_8001ECB4(CPUState *c) {
-    if (c->budget <= 7)
-        return false;
-    R(1) = 0x80040000 + R(4);
-    c->budget -= 2;
-    R(2) = MEM_R8(R(1) - 0x5404);
-    c->budget -= NC_LOAD_CYCLES + 2;
-    return true;
+    return sdk_gpu_control_byte(c, 0x8003abfc);
 }
 
 /* The graphics reset path uses this counted byte fill to clear its buffers. */

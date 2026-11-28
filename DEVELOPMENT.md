@@ -367,12 +367,14 @@ including the cycle budget. Readable names come later.
 ### Ported twins
 
 Much of the Psy-Q library code appears instruction for instruction in several executables,
-differing only in addresses. `tools/port_twins.py` turns each handwritten CREDITS.EXE routine
-into routines for its twins in PSX.EXE, PSX2.EXE and STREAM1–3.EXE by translating every address
-it uses:
+differing only in addresses. `tools/port_twins.py` turns each handwritten routine of a source
+executable (`SOURCES`: CREDITS.EXE, then PSX.EXE) into routines for its twins in the other
+executables by translating every address it uses. A target function is ported from the first
+source with a covered twin; routines that are themselves ports are never used as sources:
 
 - `--discover` (needs `build/splat`) pairs functions and records, per pair, every address the two
-  instruction streams relate in `config/twins/<module>.txt`. Pairs that differ in anything but
+  instruction streams relate in `config/twins/<module>.txt` (CREDITS.EXE) and
+  `config/twins/<module>.from_<source>.txt` (other sources). Pairs that differ in anything but
   addresses are rejected.
 - Without flags it regenerates `src/decomp/twins/`, `config/splices/twins_<module>.txt` and the
   generated tail of `config/decomp_ranges.txt` from those files. `--check` (run by CI and
