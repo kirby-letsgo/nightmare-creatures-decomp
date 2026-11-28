@@ -6,10 +6,10 @@
 #include "decomp/byte_scan.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_file.h"
-#include "decomp/cd_flush.h"
 #include "decomp/cd_init.h"
 #include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_irq.h"
+#include "decomp/cd_load_file.h"
 #include "decomp/cd_position.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_retry.h"
@@ -18,7 +18,7 @@
 #include "decomp/cd_state.h"
 #include "decomp/cd_volume.h"
 #include "decomp/credits.h"
-#include "decomp/interrupt_control.h"
+#include "decomp/heap.h"
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
@@ -29,80 +29,17 @@
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
+#include "decomp/sdk_start.h"
+#include "decomp/shared_record.h"
 #include "decomp/spu_driver.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/vsync.h"
-#include "port/interp.h"
 #include "port/recomp.h"
 
-void issue_cd_control__cd_control__psx_exe(CPUState *c, u32 writer, u32 parameters,
-                                           unsigned result_reg, bool async, u32 resume);
-void set_cd_control_callback__cd_control__psx_exe(CPUState *c, u32 slot, u32 callback);
-bool cd_control__cd_control__psx_exe(CPUState *c, const CdControlLayout *layout, u32 entry,
-                                     enum CdControlMode mode);
-void cd_flush_port__cd_flush__psx_exe(CPUState *c, u32 slot);
-bool cd_flush_pending__cd_flush__psx_exe(CPUState *c, u32 ports, bool first);
-bool cd_flush_controller__cd_flush__psx_exe(CPUState *c, u32 ports);
-void cd_call_with_pointer__cd_init__psx_exe(CPUState *c, u32 argument, u32 target, u32 resume);
-bool cd_init__cd_init__psx_exe(CPUState *c, const CdInitLayout *layout);
-void cd_init_command__cd_init__psx_exe(CPUState *c, u32 command, u32 resume);
-bool cd_irq_pending__cd_init__psx_exe(CPUState *c, u32 ports, bool first_read);
-void write_cd_init_port__cd_init__psx_exe(CPUState *c, u32 slot, unsigned source);
-bool initialize_cd_driver__cd_init__psx_exe(CPUState *c, const CdDriverInitLayout *layout);
-bool cd_interrupt_callback__cd_interrupt_callback__psx_exe(CPUState *c,
-                                                           const CdCallbackLayout *layout);
-bool cd_read__cd_read__psx_exe(CPUState *c, const CdReadLayout *layout);
-bool cd_read_deadline__cd_read_sync__psx_exe(CPUState *c, u32 vsync, u32 resume, u32 offset,
-                                             u32 frames);
-bool cd_read_sync__cd_read_sync__psx_exe(CPUState *c, const CdReadSyncLayout *layout);
-void load_cd_port__cd_sector_dma__psx_exe(CPUState *c, unsigned reg, u32 slot);
-bool cd_sector_dma__cd_sector_dma__psx_exe(CPUState *c, u32 ports);
-bool cd_reset__cd_state__psx_exe(CPUState *c, u32 entry, u32 init_interrupt, u32 init_drive,
-                                 u32 init_volume);
-bool cd_init_interrupt__cd_state__psx_exe(CPUState *c, u32 state, u32 entry, u32 reset_callback,
-                                          u32 interrupt_callback, u32 handler);
 void call__credits_roll__psx_exe(CPUState *c, u32 target, u32 resume);
-void load_word__credits_roll__psx_exe(CPUState *c, unsigned reg, u32 address);
-void set_reg__credits_roll__psx_exe(CPUState *c, unsigned reg, u32 value);
 bool upload_clut__credits_sdk__psx_exe(CPUState *c, u32 width, u32 entry);
 void ordering_table_prologue__credits_sdk__psx_exe(CPUState *c);
 void read_spu_dma_mode__credits_sdk__psx_exe(CPUState *c);
-bool clear_interrupt_words__interrupt_control__psx_exe(CPUState *c);
-bool start_vsync__interrupt_control__psx_exe(CPUState *c, const InterruptInitLayout *layout);
-bool dispatch_vblank__interrupt_control__psx_exe(CPUState *c, u32 slots, u32 resume);
-bool start_dma__interrupt_control__psx_exe(CPUState *c, const InterruptInitLayout *layout);
-void dispatch_pending_dma_channels__interrupt_dispatch__psx_exe(CPUState *c,
-                                                                const DmaDispatchLayout *layout);
-void report_dma_interrupt__interrupt_dispatch__psx_exe(CPUState *c,
-                                                       const DmaDispatchLayout *layout);
-bool dispatch_dma_interrupt__interrupt_dispatch__psx_exe(CPUState *c,
-                                                         const DmaDispatchLayout *layout);
-bool sdk_pad_init__sdk_pad_init__psx_exe(CPUState *c, u32 entry, u32 patch_pad, u32 clear_pad,
-                                         u32 bios_stub);
-bool sdk_printf__sdk_printf__psx_exe(CPUState *c, u32 formatter, u32 resume);
-bool sdk_puts__sdk_puts__psx_exe(CPUState *c, u32 null_string, u32 put_char, u32 resume);
-void spu_load_global__spu_driver__psx_exe(CPUState *c, unsigned reg, u32 address);
-void spu_load_registers__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
-                                             unsigned reg);
-void initialize_spu_voices__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-void spu_store_global__spu_driver__psx_exe(CPUState *c, u32 address, unsigned reg);
-void wait_for_spu_reset__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_init__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-void poll_spu_write_status__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
-                                                bool restoring);
-void write_spu_fifo_chunk__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_write_by_io__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-bool wait_spu_transfer_register__spu_driver__psx_exe(CPUState *c, bool control);
-void select_spu_transfer_mode__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout,
-                                                   bool reading);
-void start_spu_transfer__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_transfer_command__spu_driver__psx_exe(CPUState *c, const SpuDriverLayout *layout);
-void compare_vblank_target__vblank_wait__psx_exe(CPUState *c, u32 frame);
-bool wait_vblank__vblank_wait__psx_exe(CPUState *c, const VBlankWaitLayout *layout);
-void wait_for_vsync_field__vsync__psx_exe(CPUState *c, u32 slots);
-void wait_for_vsync_frames__vsync__psx_exe(CPUState *c, u32 slots, u32 frame, u32 entry,
-                                           u32 wait_entry);
-bool sdk_vsync__vsync__psx_exe(CPUState *c, u32 slots, u32 frame, u32 entry, u32 wait_entry);
 bool nc_credits_skip_input__psx_exe_80019938(CPUState *c);
 bool nc_credits_empty_hook__psx_exe_80025CD8(CPUState *c);
 bool nc_credits_init_pad__psx_exe_800199A8(CPUState *c);

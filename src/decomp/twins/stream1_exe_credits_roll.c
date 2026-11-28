@@ -6,7 +6,11 @@
 
 #include "decomp/twins/stream1_exe.h"
 
+#include "decomp/cd_load_file.h"
+
 #include "decomp/credits.h"
+
+#include "decomp/sdk_start.h"
 
 enum {
     V_SYNC = 0x8001a454,
@@ -21,16 +25,6 @@ void call__credits_roll__stream1_exe(CPUState *c, u32 target, u32 resume) {
     R(31) = resume;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, target);
-}
-
-void set_reg__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 value) {
-    R(reg) = value;
-    NC_POLL(c, NC_INSN_CYCLES);
-}
-
-void load_word__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 address) {
-    R(reg) = MEM_R32(address);
-    NC_POLL(c, NC_LOAD_CYCLES);
 }
 
 /* Both the display startup and the music player call__credits_roll__stream1_exe an empty hook. */
@@ -59,75 +53,23 @@ bool nc_credits_init_pad__stream1_exe_80018E84(CPUState *c) {
     R(4) = 0;
     call__credits_roll__stream1_exe(c, 0x8001b0bc, 0x80018ebc);
     call__credits_roll__stream1_exe(c, 0x80018e14, 0x80018ec4);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
-/* Build the ISO path, find its directory entry, and read the file into a
- * sector-aligned allocation. The result is the allocation even if the
- * lower-level read fails. */
 bool nc_credits_load_file__stream1_exe_8001913C(CPUState *c) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 0x68;
-    R(5) = R(4);
-    MEM_W32(R(29) + 0x60, R(16));
-    R(16) = R(29) + 0x38;
-    R(2) = MEM_R16(R(28)); /* root-directory prefix and terminator */
-    R(4) = R(16);
-    MEM_W32(R(29) + 0x64, R(31));
-    R(31) = 0x80019160;
-    MEM_W16(R(29) + 0x38, (u16)R(2));
-    c->budget -= 11;
-    nc_call(c, 0x8001A5AC); /* strcat(filename) */
-    set_reg__credits_roll__stream1_exe(c, 5, 0x80040000);
-    set_reg__credits_roll__stream1_exe(c, 5, R(5) - 0x54e8); /* ";1" */
-    R(4) = R(16);
-    call__credits_roll__stream1_exe(c, 0x8001A5AC, 0x80019170);
-
-    set_reg__credits_roll__stream1_exe(c, 4, R(29) + 0x20);
-    bool retry;
-    do {
-        R(5) = R(29) + 0x38;
-        call__credits_roll__stream1_exe(c, 0x800250a8, 0x8001917c); /* CdSearchFile */
-        retry = R(2) == 0;
-        R(4) = R(29) + 0x20;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    } while (retry);
-
-    load_word__credits_roll__stream1_exe(c, 2, R(29) + 0x24); /* byte length in CdlFILE */
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 4, R(2) + 2047);
-    const bool negative = (s32)R(4) < 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    if (negative)
-        set_reg__credits_roll__stream1_exe(c, 4, R(2) + 4094);
-    set_reg__credits_roll__stream1_exe(c, 4, (u32)((s32)R(4) >> 11));
-    R(4) <<= 11;
-    call__credits_roll__stream1_exe(c, 0x8001A14C, 0x800191a8);
-
-    /* CdlFILE is passed by value: position and length in a2/a3, the
-     * directory name in four stack words. Load all four before storing. */
-    for (unsigned i = 0; i < 4; i++)
-        load_word__credits_roll__stream1_exe(c, 3 + i, R(29) + 0x28 + 4 * i);
-    for (unsigned i = 0; i < 4; i++) {
-        MEM_W32(R(29) + 0x10 + 4 * i, R(3 + i));
-        NC_POLL(c, NC_INSN_CYCLES);
-    }
-    set_reg__credits_roll__stream1_exe(c, 4, R(29) + 0x38);
-    set_reg__credits_roll__stream1_exe(c, 16, R(2));
-    load_word__credits_roll__stream1_exe(c, 6, R(29) + 0x20);
-    load_word__credits_roll__stream1_exe(c, 7, R(29) + 0x24);
-    R(5) = R(16);
-    call__credits_roll__stream1_exe(c, 0x80019080, 0x800191e0);
-    set_reg__credits_roll__stream1_exe(c, 2, R(16));
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x64);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 0x60);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x68);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
+    static const FileLoadLayout layout = {
+        .entry = 0x8001913c,
+        .prefix = 0,
+        .suffix = 0x8003ab18,
+        .strcat = 0x8001A5AC,
+        .search_file = 0x800250a8,
+        .allocate = 0x8001A14C,
+        .read_sectors = 0x80019080,
+    };
+    return cd_load_file(c, &layout);
 }
 
 /* The credits reader sets the CD location, retries a rejected read up to
@@ -161,15 +103,15 @@ bool nc_credits_read_sectors__stream1_exe_80019080(CPUState *c) {
         R(18) = (u32)((s32)R(4) >> 11);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (negative) {
-            set_reg__credits_roll__stream1_exe(c, 4, R(17) + 4094);
-            set_reg__credits_roll__stream1_exe(c, 18, (u32)((s32)R(4) >> 11));
+            set_reg(c, 4, R(17) + 4094);
+            set_reg(c, 18, (u32)((s32)R(4) >> 11));
         }
-        set_reg__credits_roll__stream1_exe(c, 20, 0x80);
-        set_reg__credits_roll__stream1_exe(c, 16, 10);
+        set_reg(c, 20, 0x80);
+        set_reg(c, 16, 10);
         bool retry;
         do {
-            set_reg__credits_roll__stream1_exe(c, 4, R(18));
-            set_reg__credits_roll__stream1_exe(c, 5, R(19));
+            set_reg(c, 4, R(18));
+            set_reg(c, 5, R(19));
             R(6) = R(20);
             call__credits_roll__stream1_exe(c, 0x80025f54, 0x800190f4); /* CdRead */
             bool accepted = R(2) != 0;
@@ -189,16 +131,16 @@ bool nc_credits_read_sectors__stream1_exe_80019080(CPUState *c) {
             R(4) = 1;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
         } while (busy);
-        set_reg__credits_roll__stream1_exe(c, 2, R(17));
+        set_reg(c, 2, R(17));
     } else {
         R(2) = 0;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     }
 
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x24);
+    load_word(c, 31, R(29) + 0x24);
     for (int reg = 20; reg >= 16; reg--)
-        load_word__credits_roll__stream1_exe(c, reg, R(29) + 0x10 + 4 * (reg - 16));
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x28);
+        load_word(c, reg, R(29) + 0x10 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 0x28);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -213,8 +155,8 @@ bool nc_credits_stop_pad__stream1_exe_80018ED4(CPUState *c) {
     R(31) = 0x80018ee4;
     c->budget -= 4;
     nc_call(c, 0x8001aef4);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -229,8 +171,8 @@ bool nc_credits_stop_pad__stream1_exe_800212A0(CPUState *c) {
     R(31) = 0x800212b0;
     c->budget -= 4;
     nc_call(c, 0x80021510);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -245,8 +187,8 @@ bool nc_credits_stop_pad__stream1_exe_80023310(CPUState *c) {
     R(31) = 0x80023320;
     c->budget -= 4;
     nc_call(c, 0x8002493c);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -261,8 +203,8 @@ bool nc_credits_stop_pad__stream1_exe_800233B0(CPUState *c) {
     R(31) = 0x800233c0;
     c->budget -= 4;
     nc_call(c, 0x80023f50);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -277,8 +219,8 @@ bool nc_credits_stop_pad__stream1_exe_800233D0(CPUState *c) {
     R(31) = 0x800233e0;
     c->budget -= 4;
     nc_call(c, 0x800241d0);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -293,8 +235,8 @@ bool nc_credits_stop_pad__stream1_exe_80023834(CPUState *c) {
     R(31) = 0x80023844;
     c->budget -= 4;
     nc_call(c, 0x80024d4c);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -309,8 +251,8 @@ bool nc_credits_stop_pad__stream1_exe_800261D4(CPUState *c) {
     R(31) = 0x800261e4;
     c->budget -= 4;
     nc_call(c, 0x800265ac);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }

@@ -106,16 +106,16 @@ bool upload_clut__credits_sdk__stream1_exe(CPUState *c, u32 width, u32 entry) {
     c->budget -= 2;
     nc_call(c, 0x8001d20c); /* LoadImage */
 
-    set_reg__credits_roll__stream1_exe(c, 4, R(16));
+    set_reg(c, 4, R(16));
     R(31) = entry + 0x4c;
     R(5) = R(17);
     NC_POLL(c, 2);
     nc_call(c, 0x8001c278); /* GetClut */
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) & 0xffff);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 32);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 40);
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2);
     return true;
 }
@@ -157,7 +157,7 @@ void read_spu_dma_mode__credits_sdk__stream1_exe(CPUState *c) {
     R(2) = MEM_R16(R(4) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) & 0x30);
+    set_reg(c, 2, R(2) & 0x30);
 }
 
 static const CdControlLayout credits_cd_control_layout__credits_sdk__stream1_exe = {
@@ -222,18 +222,18 @@ bool nc_credits_cd_command_name__stream1_exe_80023348(CPUState *c) {
 }
 
 bool nc_credits_cd_control__stream1_exe_80023420(CPUState *c) {
-    return cd_control__cd_control__stream1_exe(
-        c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023420, CD_CONTROL);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023420,
+                      CD_CONTROL);
 }
 
 bool nc_credits_cd_control_b__stream1_exe_80023684(CPUState *c) {
-    return cd_control__cd_control__stream1_exe(
-        c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023684, CD_CONTROL_BLOCKING);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023684,
+                      CD_CONTROL_BLOCKING);
 }
 
 bool nc_credits_cd_control_f__stream1_exe_80023558(CPUState *c) {
-    return cd_control__cd_control__stream1_exe(
-        c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023558, CD_CONTROL_FAST);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__stream1_exe, 0x80023558,
+                      CD_CONTROL_FAST);
 }
 
 /* The CD directory readers copy exactly the identifier length from the record. */
@@ -245,12 +245,12 @@ bool nc_credits_cd_copy_identifier__stream1_exe_80025A40(CPUState *c) {
     R(3) = R(6) - 1;
     c->budget -= 3;
     if (copying) {
-        set_reg__credits_roll__stream1_exe(c, 6, UINT32_MAX);
+        set_reg(c, 6, UINT32_MAX);
         do {
             R(2) = MEM_R8(R(5));
             NC_POLL(c, NC_LOAD_CYCLES);
-            set_reg__credits_roll__stream1_exe(c, 5, R(5) + 1);
-            set_reg__credits_roll__stream1_exe(c, 3, R(3) - 1);
+            set_reg(c, 5, R(5) + 1);
+            set_reg(c, 3, R(3) - 1);
             MEM_W8(R(4), (u8)R(2));
             NC_POLL(c, 1);
             copying = R(3) != R(6);
@@ -258,7 +258,7 @@ bool nc_credits_cd_copy_identifier__stream1_exe_80025A40(CPUState *c) {
             NC_POLL(c, 2);
         } while (copying);
     }
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2);
     return true;
 }
@@ -280,7 +280,7 @@ bool nc_credits_cd_default_sync__stream1_exe_800231EC(CPUState *c) {
 }
 
 bool nc_credits_cd_flush_controller__stream1_exe_8002493C(CPUState *c) {
-    return cd_flush_controller__cd_flush__stream1_exe(c, 0x8003a9ac);
+    return cd_flush_controller(c, 0x8003a9ac);
 }
 
 /* Read the requested number of words and convert the driver's zero result to success. */
@@ -301,12 +301,11 @@ bool nc_credits_cd_init__stream1_exe_8002315C(CPUState *c) {
         .message = 0x8001895C,
         .print = 0x8001a6c8,
     };
-    return cd_init__cd_init__stream1_exe(c, &layout);
+    return cd_init(c, &layout);
 }
 
 bool nc_credits_cd_init_interrupt__stream1_exe_80024B10(CPUState *c) {
-    return cd_init_interrupt__cd_state__stream1_exe(c, 0x8003a6e8, 0x80024b10, 0x8001b300,
-                                                    0x8001b330, 0x80024fc8);
+    return cd_init_interrupt(c, 0x8003a6e8, 0x80024b10, 0x8001b300, 0x8001b330, 0x80024fc8);
 }
 
 bool nc_credits_cd_init_volume__stream1_exe_80024A1C(CPUState *c) {
@@ -321,7 +320,7 @@ bool nc_credits_cd_interrupt_callback__stream1_exe_80024FC8(CPUState *c) {
         .callbacks = 0x8003a6e8,
         .results = 0x8003ad38,
     };
-    return cd_interrupt_callback__cd_interrupt_callback__stream1_exe(c, &layout);
+    return cd_interrupt_callback(c, &layout);
 }
 
 bool nc_credits_cd_interrupt_name__stream1_exe_8002337C(CPUState *c) {
@@ -347,9 +346,9 @@ bool nc_credits_cd_names_equal__stream1_exe_80025388(CPUState *c) {
     R(6) = 12;
     c->budget -= 3;
     nc_call(c, 0x80025AD8); /* strncmp */
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) == 0);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -369,11 +368,11 @@ bool nc_credits_cd_read__stream1_exe_80025F54(CPUState *c) {
         .control = 0x80023684,
         .retry = 0x80025D7C,
     };
-    return cd_read__cd_read__stream1_exe(c, &layout);
+    return cd_read(c, &layout);
 }
 
 bool nc_credits_cd_read_retry__stream1_exe_80025D7C(CPUState *c) {
-    return cd_read_retry__cd_read_retry__stream1_exe(c, &read_retry__credits_sdk__stream1_exe);
+    return cd_read_retry(c, &read_retry__credits_sdk__stream1_exe);
 }
 
 /* Seek to a sector, request a read, then wait for it to finish. */
@@ -395,30 +394,30 @@ bool nc_credits_cd_read_sectors__stream1_exe_800259D4(CPUState *c) {
     c->budget -= 3;
     nc_call(c, 0x80023854); /* CdIntToPos */
 
-    set_reg__credits_roll__stream1_exe(c, 4, 2); /* CdlSetloc */
-    set_reg__credits_roll__stream1_exe(c, 5, R(29) + 16);
+    set_reg(c, 4, 2); /* CdlSetloc */
+    set_reg(c, 5, R(29) + 16);
     R(31) = 0x80025A08;
     R(6) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80023420); /* CdControl */
 
-    set_reg__credits_roll__stream1_exe(c, 4, R(17));
-    set_reg__credits_roll__stream1_exe(c, 5, R(16));
+    set_reg(c, 4, R(17));
+    set_reg(c, 5, R(16));
     R(31) = 0x80025a18;
     R(6) = 0x80; /* double speed */
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80025f54); /* CdRead */
 
-    set_reg__credits_roll__stream1_exe(c, 4, 0);
+    set_reg(c, 4, 0);
     R(31) = 0x80025a24;
     R(5) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x8002605c); /* CdReadSync */
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) == 0);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 32);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 40);
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -431,15 +430,15 @@ bool nc_credits_cd_read_sync__stream1_exe_8002605C(CPUState *c) {
         .retry = 0x80025D7C,
         .ready = 0x800233d0,
     };
-    return cd_read_sync__cd_read_sync__stream1_exe(c, &layout);
+    return cd_read_sync(c, &layout);
 }
 
 bool nc_credits_cd_reset__stream1_exe_800232A4(CPUState *c) {
-    return cd_reset__cd_state__stream1_exe(c, 0x800232a4, 0x80024b10, 0x80024b60, 0x80024a1c);
+    return cd_reset(c, 0x800232a4, 0x80024b10, 0x80024b60, 0x80024a1c);
 }
 
 bool nc_credits_cd_sector_dma__stream1_exe_80024EB8(CPUState *c) {
-    return cd_sector_dma__cd_sector_dma__stream1_exe(c, 0x8003a9ac);
+    return cd_sector_dma(c, 0x8003a9ac);
 }
 
 bool nc_credits_cd_sector_to_position__stream1_exe_80023854(CPUState *c) {
@@ -467,37 +466,35 @@ bool nc_credits_check_callback__stream1_exe_8001B454(CPUState *c) {
 }
 
 bool nc_credits_check_queue_alarm__stream1_exe_8001F698(CPUState *c) {
-    return sdk_gpu_check_queue_alarm__sdk_gpu__stream1_exe(c,
-                                                           &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_check_queue_alarm(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_check_rect__stream1_exe_8001CFB4(CPUState *c) {
-    return sdk_gpu_check_rect__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_check_rect(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_clear_gpu_rectangle__stream1_exe_8001E554(CPUState *c) {
-    return sdk_gpu_clear_gpu_rectangle__sdk_gpu__stream1_exe(
-        c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_clear_gpu_rectangle(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_clear_image2__stream1_exe_8001D170(CPUState *c) {
-    return sdk_gpu_clear_image2__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_clear_image2(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_clear_image__stream1_exe_8001D0DC(CPUState *c) {
-    return sdk_gpu_clear_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_clear_image(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_clear_irq_words__stream1_exe_8001B9E4(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__stream1_exe(c);
+    return clear_interrupt_words(c);
 }
 
 bool nc_credits_clear_irq_words__stream1_exe_8001BBEC(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__stream1_exe(c);
+    return clear_interrupt_words(c);
 }
 
 bool nc_credits_clear_irq_words__stream1_exe_8001BE94(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__stream1_exe(c);
+    return clear_interrupt_words(c);
 }
 
 /* Clear an ordering table backwards with DMA channel 6. */
@@ -521,43 +518,43 @@ bool nc_credits_clear_ot_dma__stream1_exe_8001E46C(CPUState *c) {
     c->budget -= NC_LOAD_CYCLES + 2;
     MEM_W32(R(5), R(2));
     c->budget--;
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8002845C);
+    set_reg(c, 2, 0x80030000);
+    load_word(c, 2, 0x8002845C);
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(2), 0);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, R(16) << 2);
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) - 4);
-    set_reg__credits_roll__stream1_exe(c, 3, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 3, 0x80028454);
-    set_reg__credits_roll__stream1_exe(c, 4, R(4) + R(2));
+    set_reg(c, 2, R(16) << 2);
+    set_reg(c, 2, R(2) - 4);
+    set_reg(c, 3, 0x80030000);
+    load_word(c, 3, 0x80028454);
+    set_reg(c, 4, R(4) + R(2));
     MEM_W32(R(3), R(4)); /* last tag in the table */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x80028458);
-    set_reg__credits_roll__stream1_exe(c, 3, 0x11000000);
+    set_reg(c, 2, 0x80030000);
+    load_word(c, 2, 0x80028458);
+    set_reg(c, 3, 0x11000000);
     MEM_W32(R(2), R(16));
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8002845C);
-    set_reg__credits_roll__stream1_exe(c, 3, R(3) | 2);
+    set_reg(c, 2, 0x80030000);
+    load_word(c, 2, 0x8002845C);
+    set_reg(c, 3, R(3) | 2);
     MEM_W32(R(2), R(3)); /* start a descending, manually triggered transfer */
     NC_POLL(c, NC_INSN_CYCLES);
     R(31) = 0x8001e4e8;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x8001f664); /* set_alarm */
 
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8002845C);
+    set_reg(c, 2, 0x80030000);
+    load_word(c, 2, 0x8002845C);
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__stream1_exe(c, 2, R(2));
-    set_reg__credits_roll__stream1_exe(c, 3, 1u << 24);
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) & R(3));
+    load_word(c, 2, R(2));
+    set_reg(c, 3, 1u << 24);
+    set_reg(c, 2, R(2) & R(3));
     bool busy = R(2) != 0;
     R(2) = R(16);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (busy)
-        set_reg__credits_roll__stream1_exe(c, 17, 1u << 24);
+        set_reg(c, 17, 1u << 24);
     while (busy) {
         R(31) = 0x8001e514;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -567,20 +564,20 @@ bool nc_credits_clear_ot_dma__stream1_exe_8001E46C(CPUState *c) {
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (timed_out)
             break;
-        set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-        load_word__credits_roll__stream1_exe(c, 2, 0x8002845C);
+        set_reg(c, 2, 0x80030000);
+        load_word(c, 2, 0x8002845C);
         NC_POLL(c, NC_INSN_CYCLES);
-        load_word__credits_roll__stream1_exe(c, 2, R(2));
+        load_word(c, 2, R(2));
         NC_POLL(c, NC_INSN_CYCLES);
-        set_reg__credits_roll__stream1_exe(c, 2, R(2) & R(17));
+        set_reg(c, 2, R(2) & R(17));
         busy = R(2) != 0;
         R(2) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     }
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -627,8 +624,7 @@ bool nc_credits_default_display__stream1_exe_8001C14C(CPUState *c) {
         MEM_W16(R(2) + i * 2, (u16)R(5 + i));
         c->budget--;
     }
-    /* Clear the screen rectangle and mode flags, in their guest store__credits__stream1_exe order.
-     */
+    /* Clear the screen rectangle and mode flags, in their guest store order. */
     for (unsigned off = 8; off <= 14; off += 2) {
         MEM_W16(R(2) + off, 0);
         c->budget--;
@@ -659,11 +655,11 @@ bool nc_credits_dispatch_dma_interrupt__stream1_exe_8001BC68(CPUState *c) {
         .status_message = 0x800183a4,
         .channel_message = 0x800183C0,
     };
-    return dispatch_dma_interrupt__interrupt_dispatch__stream1_exe(c, &layout);
+    return dispatch_dma_interrupt(c, &layout);
 }
 
 bool nc_credits_dispatch_vblank__stream1_exe_8001BB48(CPUState *c) {
-    return dispatch_vblank__interrupt_control__stream1_exe(c, 0x800282cc, 0x8001bb98);
+    return dispatch_vblank(c, 0x800282cc, 0x8001bb98);
 }
 
 bool nc_credits_display_field__stream1_exe_8001DC7C(CPUState *c) {
@@ -679,9 +675,9 @@ bool nc_credits_display_field__stream1_exe_8001DC7C(CPUState *c) {
     R(31) = 0x8001dc9c;
     c->budget -= NC_LOAD_CYCLES + 3;
     nc_call(c, R(2));
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) >> 31);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    set_reg(c, 2, R(2) >> 31);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -927,11 +923,11 @@ bool nc_credits_draw_offset_word__stream1_exe_8001E2CC(CPUState *c) {
 }
 
 bool nc_credits_draw_otag__stream1_exe_8001D548(CPUState *c) {
-    return sdk_gpu_draw_otag__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_draw_otag(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_draw_otag_env__stream1_exe_8001D680(CPUState *c) {
-    return sdk_gpu_draw_otag_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_draw_otag_env(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 /* DrawPrim saves the packet length before synchronizing, then submits its payload. */
@@ -959,31 +955,30 @@ bool nc_credits_draw_primitive__stream1_exe_8001D4E8(CPUState *c) {
     c->budget -= NC_LOAD_CYCLES + 2;
     nc_call(c, sync);
 
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x80028368);
-    set_reg__credits_roll__stream1_exe(c, 4, R(16) + 4);
-    load_word__credits_roll__stream1_exe(c, 2, R(2) + 0x14);
+    set_reg(c, 2, 0x80030000);
+    load_word(c, 2, 0x80028368);
+    set_reg(c, 4, R(16) + 4);
+    load_word(c, 2, R(2) + 0x14);
     NC_POLL(c, 1);
     u32 write_commands = R(2);
     R(31) = 0x8001d530;
     R(5) = R(17);
     NC_POLL(c, 2);
     nc_call(c, write_commands);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
 
 bool nc_credits_draw_sync__stream1_exe_8001CF48(CPUState *c) {
-    return sdk_gpu_draw_sync__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_draw_sync(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_draw_sync_callback__stream1_exe_8001CE50(CPUState *c) {
-    return sdk_gpu_draw_sync_callback__sdk_gpu__stream1_exe(c,
-                                                            &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_draw_sync_callback(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_draw_tpage__stream1_exe_8001C6C4(CPUState *c) {
@@ -991,11 +986,11 @@ bool nc_credits_draw_tpage__stream1_exe_8001C6C4(CPUState *c) {
 }
 
 bool nc_credits_dump_display__stream1_exe_8001C9FC(CPUState *c) {
-    return sdk_gpu_dump_display__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_dump_display(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_dump_draw__stream1_exe_8001C87C(CPUState *c) {
-    return sdk_gpu_dump_draw__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_dump_draw(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_dump_palette__stream1_exe_8001C360(CPUState *c) {
@@ -1013,15 +1008,14 @@ bool nc_credits_dump_palette__stream1_exe_8001C360(CPUState *c) {
     R(6) = palette >> 6;
     c->budget -= 3;
     nc_call(c, R(2));
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
 bool nc_credits_dump_texture_page__stream1_exe_8001C290(CPUState *c) {
-    return sdk_gpu_dump_texture_page__sdk_gpu__stream1_exe(c,
-                                                           &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_dump_texture_page(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_end_packet__stream1_exe_8001C474(CPUState *c) {
@@ -1042,8 +1036,7 @@ bool nc_credits_enter_critical_section__stream1_exe_8001B0AC(CPUState *c) {
 }
 
 bool nc_credits_execute_gpu_queue__stream1_exe_8001F0C4(CPUState *c) {
-    return sdk_gpu_execute_gpu_queue__sdk_gpu__stream1_exe(c,
-                                                           &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_execute_gpu_queue(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_exit_critical_section__stream1_exe_8001BAE0(CPUState *c) {
@@ -1102,14 +1095,14 @@ bool nc_credits_gpu_command_block__stream1_exe_8001ECF0(CPUState *c) {
     c->budget -= 3;
 
     if (has_words) {
-        set_reg__credits_roll__stream1_exe(c, 5, 0xffffffff);
+        set_reg(c, 5, 0xffffffff);
         bool more;
         do {
-            load_word__credits_roll__stream1_exe(c, 3, R(4));
-            set_reg__credits_roll__stream1_exe(c, 4, R(4) + 4);
-            set_reg__credits_roll__stream1_exe(c, 2, 0x80030000);
-            load_word__credits_roll__stream1_exe(c, 2, R(2) - 0x7bc0);
-            set_reg__credits_roll__stream1_exe(c, 6, R(6) - 1);
+            load_word(c, 3, R(4));
+            set_reg(c, 4, R(4) + 4);
+            set_reg(c, 2, 0x80030000);
+            load_word(c, 2, R(2) - 0x7bc0);
+            set_reg(c, 6, R(6) - 1);
             MEM_W32(R(2), R(3));
             NC_POLL(c, NC_INSN_CYCLES);
             more = R(6) != R(5);
@@ -1117,7 +1110,7 @@ bool nc_credits_gpu_command_block__stream1_exe_8001ECF0(CPUState *c) {
             NC_POLL(c, 2 * NC_INSN_CYCLES);
         } while (more);
     }
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -1184,17 +1177,17 @@ bool nc_credits_gpu_fill_bytes__stream1_exe_8001F8E0(CPUState *c) {
     R(2) = R(6) - 1;
     c->budget -= 3;
     if (filling) {
-        set_reg__credits_roll__stream1_exe(c, 3, UINT32_MAX);
+        set_reg(c, 3, UINT32_MAX);
         do {
             MEM_W8(R(4), (u8)R(5));
             NC_POLL(c, NC_INSN_CYCLES);
-            set_reg__credits_roll__stream1_exe(c, 2, R(2) - 1);
+            set_reg(c, 2, R(2) - 1);
             filling = R(2) != R(3);
             R(4)++;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
         } while (filling);
     }
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -1349,7 +1342,7 @@ bool nc_credits_graphics_status__stream1_exe_800216D0(CPUState *c) {
 }
 
 bool nc_credits_handle_cd_read__stream1_exe_80025B58(CPUState *c) {
-    return handle_cd_read__cd_read_retry__stream1_exe(c, &read_retry__credits_sdk__stream1_exe);
+    return handle_cd_read(c, &read_retry__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_hook_irq_entry__stream1_exe_8001BAD0(CPUState *c) {
@@ -2207,11 +2200,11 @@ bool nc_credits_initialize_cd_driver__stream1_exe_80024B60(CPUState *c) {
         .command = 0x8002449C,
         .sync = 0x80023f50,
     };
-    return initialize_cd_driver__cd_init__stream1_exe(c, &layout);
+    return initialize_cd_driver(c, &layout);
 }
 
 bool nc_credits_initialize_spu__stream1_exe_80022570(CPUState *c) {
-    return spu_init__spu_driver__stream1_exe(c, &spu_driver__credits_sdk__stream1_exe);
+    return spu_init(c, &spu_driver__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_interrupt_callback__stream1_exe_8001B330(CPUState *c) {
@@ -2227,13 +2220,13 @@ bool nc_credits_interrupt_mask__stream1_exe_8001B47C(CPUState *c, bool write) {
 }
 
 bool nc_credits_legacy_pad_init__stream1_exe_8001AF24(CPUState *c) {
-    return sdk_pad_init__sdk_pad_init__stream1_exe(c, 0x8001af24, 0x8001b04c, 0x8001af14,
-                                                   0x8001b03c); /* OutdatedPadInitAndStart */
+    return sdk_pad_init(c, 0x8001af24, 0x8001b04c, 0x8001af14,
+                        0x8001b03c); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_legacy_pad_init__stream1_exe_8001AF8C(CPUState *c) {
-    return sdk_pad_init__sdk_pad_init__stream1_exe(c, 0x8001af8c, 0x8001b04c, 0x8001af14,
-                                                   0x8001b01c); /* OutdatedPadInitAndStart */
+    return sdk_pad_init(c, 0x8001af8c, 0x8001b04c, 0x8001af14,
+                        0x8001b01c); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_link_packets__stream1_exe_8001C450(CPUState *c) {
@@ -2260,7 +2253,7 @@ bool nc_credits_load_clut__stream1_exe_8001BFAC(CPUState *c) {
 }
 
 bool nc_credits_load_image__stream1_exe_8001D20C(CPUState *c) {
-    return sdk_gpu_load_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_load_image(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 /* Build the VRAM rectangle in 16-bit words, upload it, then encode the texture page. */
@@ -2328,20 +2321,20 @@ bool nc_credits_load_tpage__stream1_exe_8001BEC0(CPUState *c) {
     c->budget -= 2;
     nc_call(c, 0x8001d20c); /* LoadImage */
 
-    set_reg__credits_roll__stream1_exe(c, 4, R(16));
-    set_reg__credits_roll__stream1_exe(c, 5, R(18));
-    set_reg__credits_roll__stream1_exe(c, 6, R(17));
+    set_reg(c, 4, R(16));
+    set_reg(c, 5, R(18));
+    set_reg(c, 6, R(17));
     R(31) = 0x8001bf88;
     R(7) = R(19);
     NC_POLL(c, 2);
     nc_call(c, 0x8001c1b0); /* GetTPage */
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) & 0xffff);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 40);
-    load_word__credits_roll__stream1_exe(c, 19, R(29) + 36);
-    load_word__credits_roll__stream1_exe(c, 18, R(29) + 32);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 48);
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 40);
+    load_word(c, 19, R(29) + 36);
+    load_word(c, 18, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 48);
     NC_POLL(c, 2);
     return true;
 }
@@ -2521,7 +2514,7 @@ bool nc_credits_prepend_packets__stream1_exe_8001C414(CPUState *c, bool range) {
 }
 
 bool nc_credits_printf__stream1_exe_8001A6C8(CPUState *c) {
-    return sdk_printf__sdk_printf__stream1_exe(c, 0x8001a704, 0x8001a6f4);
+    return sdk_printf(c, 0x8001a704, 0x8001a6f4);
 }
 
 bool nc_credits_priority_packet__stream1_exe_8001DDB4(CPUState *c) {
@@ -2544,15 +2537,15 @@ bool nc_credits_priority_packet__stream1_exe_8001DDB4(CPUState *c) {
 }
 
 bool nc_credits_put_display_env__stream1_exe_8001D794(CPUState *c) {
-    return sdk_gpu_put_display_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_put_display_env(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_put_draw_env__stream1_exe_8001D5BC(CPUState *c) {
-    return sdk_gpu_put_draw_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_put_draw_env(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_put_string__stream1_exe_8001B2A0(CPUState *c) {
-    return sdk_puts__sdk_puts__stream1_exe(c, 0x80018330, 0x8001ae40, 0x8001b2cc);
+    return sdk_puts(c, 0x80018330, 0x8001ae40, 0x8001b2cc);
 }
 
 bool nc_credits_queue_command__stream1_exe_8001EDBC(CPUState *c) {
@@ -2568,8 +2561,8 @@ bool nc_credits_queue_command__stream1_exe_8001EDBC(CPUState *c) {
     R(6) = 0;
     c->budget -= 4;
     nc_call(c, 0x8001ede0);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2633,7 +2626,7 @@ bool nc_credits_read_environment__stream1_exe_8001DC44(CPUState *c, bool display
 }
 
 bool nc_credits_read_gpu_image__stream1_exe_8001EA18(CPUState *c) {
-    return sdk_gpu_read_gpu_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_read_gpu_image(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_reset_callback__stream1_exe_8001B300(CPUState *c) {
@@ -2641,12 +2634,11 @@ bool nc_credits_reset_callback__stream1_exe_8001B300(CPUState *c) {
 }
 
 bool nc_credits_reset_gpu_driver__stream1_exe_8001F3C0(CPUState *c) {
-    return sdk_gpu_reset_gpu_driver__sdk_gpu__stream1_exe(c,
-                                                          &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_reset_gpu_driver(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_reset_graph__stream1_exe_8001CAA8(CPUState *c) {
-    return sdk_gpu_reset_graph__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_reset_graph(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_reset_irq_entry__stream1_exe_8001BAC0(CPUState *c) {
@@ -2670,7 +2662,7 @@ bool nc_credits_set_dma_slot__stream1_exe_8001BDEC(CPUState *c) {
 }
 
 bool nc_credits_set_draw_env__stream1_exe_8001DE34(CPUState *c) {
-    return sdk_gpu_set_draw_env__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_set_draw_env(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_set_graph_debug__stream1_exe_8001CD18(CPUState *c) {
@@ -2703,18 +2695,17 @@ bool nc_credits_set_graph_debug__stream1_exe_8001CD18(CPUState *c) {
         R(31) = 0x8001cd6c;
         c->budget -= NC_LOAD_CYCLES + 4;
         nc_call(c, R(2));
-        set_reg__credits_roll__stream1_exe(c, 2, R(16));
+        set_reg(c, 2, R(16));
     }
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
 bool nc_credits_set_graph_reverse__stream1_exe_8001CC04(CPUState *c) {
-    return sdk_gpu_set_graph_reverse__sdk_gpu__stream1_exe(c,
-                                                           &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_set_graph_reverse(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_set_queue_alarm__stream1_exe_8001F664(CPUState *c) {
@@ -2728,15 +2719,15 @@ bool nc_credits_set_queue_alarm__stream1_exe_8001F664(CPUState *c) {
     c->budget -= 3;
     nc_call(c, 0x8001b0bc);
 
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) + 240);
-    set_reg__credits_roll__stream1_exe(c, 1, 0x80030000);
+    set_reg(c, 2, R(2) + 240);
+    set_reg(c, 1, 0x80030000);
     MEM_W32(R(1) - 0x7b78, R(2)); /* queue deadline */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 1, 0x80030000);
+    set_reg(c, 1, 0x80030000);
     MEM_W32(R(1) - 0x7b74, 0); /* polls since the alarm was set */
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2762,13 +2753,13 @@ bool nc_credits_spu_dma_complete__stream1_exe_800229D0(CPUState *c) {
             nc_call(c, 0x800230bc);
         }
     }
-    set_reg__credits_roll__stream1_exe(c, 4, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 4, 0x8003A5F4);
+    set_reg(c, 4, 0x80040000);
+    load_word(c, 4, 0x8003A5F4);
     NC_POLL(c, NC_INSN_CYCLES);
     R(2) = MEM_R16(R(4) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) & 0xffcf);
+    set_reg(c, 2, R(2) & 0xffcf);
     MEM_W16(R(4) + 0x1aa, (u16)R(2));
     NC_POLL(c, NC_INSN_CYCLES);
     read_spu_dma_mode__credits_sdk__stream1_exe(c);
@@ -2776,9 +2767,9 @@ bool nc_credits_spu_dma_complete__stream1_exe_800229D0(CPUState *c) {
     R(3) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (busy) {
-        set_reg__credits_roll__stream1_exe(c, 3, R(3) + 1);
+        set_reg(c, 3, R(3) + 1);
         do {
-            set_reg__credits_roll__stream1_exe(c, 2, R(3) < 0xf01);
+            set_reg(c, 2, R(3) < 0xf01);
             const bool exhausted = !R(2);
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             if (exhausted)
@@ -2788,19 +2779,19 @@ bool nc_credits_spu_dma_complete__stream1_exe_800229D0(CPUState *c) {
             R(3)++;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             if (!busy)
-                set_reg__credits_roll__stream1_exe(c, 3, R(3) - 1);
+                set_reg(c, 3, R(3) - 1);
         } while (busy);
     }
 
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8003a62c);
+    set_reg(c, 2, 0x80040000);
+    load_word(c, 2, 0x8003a62c);
     NC_POLL(c, NC_INSN_CYCLES);
     const bool has_callback = R(2) != 0;
     R(4) = 0xf0000000;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (has_callback) {
-        set_reg__credits_roll__stream1_exe(c, 2, 0x80040000);
-        load_word__credits_roll__stream1_exe(c, 2, 0x8003a62c);
+        set_reg(c, 2, 0x80040000);
+        load_word(c, 2, 0x8003a62c);
         NC_POLL(c, NC_INSN_CYCLES);
         u32 callback = R(2);
         R(31) = 0x80022a7c;
@@ -2808,14 +2799,14 @@ bool nc_credits_spu_dma_complete__stream1_exe_800229D0(CPUState *c) {
         nc_call(c, callback);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     } else {
-        set_reg__credits_roll__stream1_exe(c, 4, R(4) | 9);
+        set_reg(c, 4, R(4) | 9);
         R(31) = 0x80022a90;
         R(5) = 0x20;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x8002311c); /* DeliverEvent */
     }
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2848,18 +2839,18 @@ bool nc_credits_spu_read__stream1_exe_80022E74(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80022b5c);
 
-    set_reg__credits_roll__stream1_exe(c, 4, 3); /* start DMA */
-    set_reg__credits_roll__stream1_exe(c, 5, R(17));
+    set_reg(c, 4, 3); /* start DMA */
+    set_reg(c, 5, R(17));
     R(31) = 0x80022ec0;
     R(6) = R(16);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80022b5c);
 
-    set_reg__credits_roll__stream1_exe(c, 2, R(16));
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 32);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2912,13 +2903,13 @@ bool nc_credits_spu_read_blocks__stream1_exe_80022AA0(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x800230bc);
 
-    set_reg__credits_roll__stream1_exe(c, 3, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 3, 0x8003A5F4);
+    set_reg(c, 3, 0x80040000);
+    load_word(c, 3, 0x8003A5F4);
     NC_POLL(c, NC_INSN_CYCLES);
     R(2) = MEM_R16(R(3) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, R(2) | 0x30); /* SPU DMA read mode */
+    set_reg(c, 2, R(2) | 0x30); /* SPU DMA read mode */
     MEM_W16(R(3) + 0x1aa, (u16)R(2));
     NC_POLL(c, NC_INSN_CYCLES);
     R(31) = 0x80022af4;
@@ -2932,36 +2923,35 @@ bool nc_credits_spu_read_blocks__stream1_exe_80022AA0(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80023090); /* _spu_FsetDelayR */
 
-    set_reg__credits_roll__stream1_exe(c, 4, 0x01000000);
-    set_reg__credits_roll__stream1_exe(c, 4, 0x01000200);
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8003a5f8);
+    set_reg(c, 4, 0x01000000);
+    set_reg(c, 4, 0x01000200);
+    set_reg(c, 2, 0x80040000);
+    load_word(c, 2, 0x8003a5f8);
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(2), R(17)); /* DMA base address */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 2, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 2, 0x8003A5FC);
-    set_reg__credits_roll__stream1_exe(c, 16, R(16) | 16);
+    set_reg(c, 2, 0x80040000);
+    load_word(c, 2, 0x8003A5FC);
+    set_reg(c, 16, R(16) | 16);
     MEM_W32(R(2), R(16)); /* block count and words per block */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__stream1_exe(c, 3, 0x80040000);
-    load_word__credits_roll__stream1_exe(c, 3, 0x8003A600);
-    set_reg__credits_roll__stream1_exe(c, 2, 1);
-    set_reg__credits_roll__stream1_exe(c, 1, 0x80040000);
+    set_reg(c, 3, 0x80040000);
+    load_word(c, 3, 0x8003A600);
+    set_reg(c, 2, 1);
+    set_reg(c, 1, 0x80040000);
     MEM_W32(0x8003a644, R(2)); /* record read direction */
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(3), R(4)); /* start DMA */
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
-/* _spu_FsetRXXa can also return either address representation without a
- * store__credits__stream1_exe. */
+/* _spu_FsetRXXa can also return either address representation without a store. */
 bool nc_credits_spu_set_address__stream1_exe_80022F24(CPUState *c) {
     if (c->budget <= 47)
         return false;
@@ -3059,7 +3049,7 @@ bool nc_credits_spu_set_dma_priority__stream1_exe_80023004(CPUState *c) {
     MEM_W32(R(5), R(2));
 
     bool priority_three = R(4) != 0;
-    c->budget -= 4; /* store__credits__stream1_exe, branch with delay slot, then lui */
+    c->budget -= 4; /* store, branch with delay slot, then lui */
     R(2) = MEM_R32(0x8003A604);
     c->budget -= NC_LOAD_CYCLES + 1;
     R(3) = MEM_R32(R(2));
@@ -3073,7 +3063,7 @@ bool nc_credits_spu_set_dma_priority__stream1_exe_80023004(CPUState *c) {
 
 /* _spu_t selects DMA direction, sets the SPU address, or starts the transfer. */
 bool nc_credits_spu_transfer_command__stream1_exe_80022B5C(CPUState *c) {
-    return spu_transfer_command__spu_driver__stream1_exe(c, &spu_driver__credits_sdk__stream1_exe);
+    return spu_transfer_command(c, &spu_driver__credits_sdk__stream1_exe);
 }
 
 /* SPU initialization and PIO use this 240-iteration delay. The two stack
@@ -3090,29 +3080,28 @@ bool nc_credits_spu_wait__stream1_exe_800230BC(CPUState *c) {
     c->budget -= 3;
 
     for (;;) {
-        load_word__credits_roll__stream1_exe(c, 2, R(29));
+        load_word(c, 2, R(29));
         NC_POLL(c, 1);
-        set_reg__credits_roll__stream1_exe(c, 2, (s32)R(2) < 240);
+        set_reg(c, 2, (s32)R(2) < 240);
         bool again = R(2) != 0;
         NC_POLL(c, 2);
         if (!again)
             break;
 
-        load_word__credits_roll__stream1_exe(c, 3, R(29) + 4);
+        load_word(c, 3, R(29) + 4);
         NC_POLL(c, 1);
-        set_reg__credits_roll__stream1_exe(c, 2, R(3) * 2);
-        set_reg__credits_roll__stream1_exe(c, 2, R(2) + R(3));
+        set_reg(c, 2, R(3) * 2);
+        set_reg(c, 2, R(2) + R(3));
         MEM_W32(R(29) + 4, R(2));
         NC_POLL(c, 1);
-        load_word__credits_roll__stream1_exe(c, 2, R(29));
+        load_word(c, 2, R(29));
         NC_POLL(c, 1);
-        set_reg__credits_roll__stream1_exe(c, 2, R(2) + 1);
+        set_reg(c, 2, R(2) + 1);
         MEM_W32(R(29), R(2));
         NC_POLL(c, 1);
-        load_word__credits_roll__stream1_exe(c, 2,
-                                             R(29)); /* the loop test performs a second load */
+        load_word(c, 2, R(29)); /* the loop test performs a second load */
     }
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2);
     return true;
 }
@@ -3133,19 +3122,19 @@ bool nc_credits_spu_write__stream1_exe_80022DEC(CPUState *c) {
     MEM_W32(R(29) + 24, R(31));
     c->budget -= 2;
     if (R(2)) {
-        set_reg__credits_roll__stream1_exe(c, 4, R(17));
+        set_reg(c, 4, R(17));
         R(31) = 0x80022e58;
         R(5) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x80022804); /* _spu_writeByIO */
-        set_reg__credits_roll__stream1_exe(c, 2, R(16));
+        set_reg(c, 2, R(16));
     } else {
-        set_reg__credits_roll__stream1_exe(c, 2, 0x80040000);
+        set_reg(c, 2, 0x80040000);
         R(2) = MEM_R16(0x8003A60C);
         NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg__credits_roll__stream1_exe(c, 5, 0x80040000);
-        load_word__credits_roll__stream1_exe(c, 5, 0x8003a61c);
-        set_reg__credits_roll__stream1_exe(c, 4, 2); /* set transfer address */
+        set_reg(c, 5, 0x80040000);
+        load_word(c, 5, 0x8003a61c);
+        set_reg(c, 4, 2); /* set transfer address */
         R(31) = 0x80022e2c;
         R(5) = R(2) << (R(5) & 31);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -3156,8 +3145,8 @@ bool nc_credits_spu_write__stream1_exe_80022DEC(CPUState *c) {
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x80022b5c);
 
-        set_reg__credits_roll__stream1_exe(c, 4, 3); /* start DMA */
-        set_reg__credits_roll__stream1_exe(c, 5, R(17));
+        set_reg(c, 4, 3); /* start DMA */
+        set_reg(c, 5, R(17));
         R(31) = 0x80022e44;
         R(6) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -3165,16 +3154,16 @@ bool nc_credits_spu_write__stream1_exe_80022DEC(CPUState *c) {
         R(2) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     }
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__stream1_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__stream1_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
 bool nc_credits_spu_write_by_io__stream1_exe_80022804(CPUState *c) {
-    return spu_write_by_io__spu_driver__stream1_exe(c, &spu_driver__credits_sdk__stream1_exe);
+    return spu_write_by_io(c, &spu_driver__credits_sdk__stream1_exe);
 }
 
 /* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */
@@ -3189,7 +3178,7 @@ bool nc_credits_spu_write_register__stream1_exe_80022EDC(CPUState *c) {
         R(2) += base;
         c->budget -= NC_LOAD_CYCLES + 2;
         MEM_W16(R(2), (u16)R(5));
-        c->budget -= 3; /* store__credits__stream1_exe and jump to the return */
+        c->budget -= 3; /* store and jump to the return */
     } else {
         R(4) = base;
         c->budget -= NC_LOAD_CYCLES + 1;
@@ -3213,7 +3202,7 @@ bool nc_credits_start_dma__stream1_exe_8001BC18(CPUState *c) {
         .handler = 0x8001bc68,
         .setter = 0x8001bdec,
     };
-    return start_dma__interrupt_control__stream1_exe(c, &layout);
+    return start_dma(c, &layout);
 }
 
 /* Start the BIOS pad driver, then turn off automatic pad interrupt clearing. */
@@ -3230,8 +3219,8 @@ bool nc_credits_start_pad__stream1_exe_8001AFF4(CPUState *c) {
     R(4) = 0;
     NC_POLL(c, 2);
     nc_call(c, 0x8001af14); /* ChangeClearPad */
-    load_word__credits_roll__stream1_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__stream1_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2);
     return true;
 }
@@ -3245,7 +3234,7 @@ bool nc_credits_start_vsync__stream1_exe_8001BAF0(CPUState *c) {
         .handler = 0x8001bb48,
         .setter = 0x8001bbc0,
     };
-    return start_vsync__interrupt_control__stream1_exe(c, &layout);
+    return start_vsync(c, &layout);
 }
 
 bool nc_credits_stop_callback__stream1_exe_8001B3F4(CPUState *c) {
@@ -3253,7 +3242,7 @@ bool nc_credits_stop_callback__stream1_exe_8001B3F4(CPUState *c) {
 }
 
 bool nc_credits_store_image__stream1_exe_8001D270(CPUState *c) {
-    return sdk_gpu_store_image__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_store_image(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_strcmp__stream1_exe_80025A74(CPUState *c) {
@@ -3304,7 +3293,7 @@ bool nc_credits_strcmp__stream1_exe_80025A74(CPUState *c) {
     R(2) = MEM_R8(R(5) - 1);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, 1);
-    set_reg__credits_roll__stream1_exe(c, 2, R(3) - R(2));
+    set_reg(c, 2, R(3) - R(2));
     goto done;
 equal_strings:
     R(2) = 0;
@@ -3344,7 +3333,7 @@ bool nc_credits_strncmp__stream1_exe_80025AD8(CPUState *c) {
         goto done;
     }
 
-    set_reg__credits_roll__stream1_exe(c, 6, R(6) - 1);
+    set_reg(c, 6, R(6) - 1);
     bool exhausted = (s32)R(6) < 0;
     R(2) = 0;
     NC_POLL(c, 2);
@@ -3367,7 +3356,7 @@ bool nc_credits_strncmp__stream1_exe_80025AD8(CPUState *c) {
         NC_POLL(c, 2);
         if (terminator)
             goto equal_strings;
-        set_reg__credits_roll__stream1_exe(c, 6, R(6) - 1);
+        set_reg(c, 6, R(6) - 1);
         exhausted = (s32)R(6) < 0;
         NC_POLL(c, 2);
         if (exhausted)
@@ -3387,19 +3376,18 @@ bool nc_credits_strncmp__stream1_exe_80025AD8(CPUState *c) {
         goto done;
     }
 equal_strings:
-    set_reg__credits_roll__stream1_exe(c, 2, 0);
+    set_reg(c, 2, 0);
 done:
     NC_POLL(c, 2);
     return true;
 }
 
 bool nc_credits_submit_gpu_command__stream1_exe_8001EDE0(CPUState *c) {
-    return sdk_gpu_submit_gpu_command__sdk_gpu__stream1_exe(c,
-                                                            &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_submit_gpu_command(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_sync_gpu_queue__stream1_exe_8001F51C(CPUState *c) {
-    return sdk_gpu_sync_gpu_queue__sdk_gpu__stream1_exe(c, &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_sync_gpu_queue(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_texture_page__stream1_exe_8001C1B0(CPUState *c) {
@@ -3441,8 +3429,7 @@ bool nc_credits_texture_window_word__stream1_exe_8001E314(CPUState *c) {
 }
 
 bool nc_credits_upload_gpu_image__stream1_exe_8001E7C4(CPUState *c) {
-    return sdk_gpu_upload_gpu_image__sdk_gpu__stream1_exe(c,
-                                                          &credits_gpu__credits_sdk__stream1_exe);
+    return sdk_gpu_upload_gpu_image(c, &credits_gpu__credits_sdk__stream1_exe);
 }
 
 bool nc_credits_video_mode__stream1_exe_8001C188(CPUState *c, bool replace) {
@@ -3518,7 +3505,7 @@ bool nc_credits_video_mode__stream1_exe_80026128(CPUState *c, bool replace) {
 }
 
 bool nc_credits_vsync__stream1_exe_8001B0BC(CPUState *c) {
-    return sdk_vsync__vsync__stream1_exe(c, 0x80027218, 0x800282ec, 0x8001b0bc, 0x8001b204);
+    return sdk_vsync(c, 0x80027218, 0x800282ec, 0x8001b0bc, 0x8001b204);
 }
 
 /* VSyncCallback(handler) installs it in slot zero. VSyncCallbacks takes a slot. */
@@ -3539,5 +3526,5 @@ bool nc_credits_wait_vblank__stream1_exe_8001B204(CPUState *c) {
         .clear_pad = 0x8001af14,
         .clear_rcnt = 0x8001b2f0,
     };
-    return wait_vblank__vblank_wait__stream1_exe(c, &layout);
+    return wait_vblank(c, &layout);
 }

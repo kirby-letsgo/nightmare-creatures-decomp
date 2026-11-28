@@ -6,7 +6,11 @@
 
 #include "decomp/twins/psx2_exe.h"
 
+#include "decomp/cd_load_file.h"
+
 #include "decomp/credits.h"
+
+#include "decomp/sdk_start.h"
 
 enum {
     V_SYNC = 0x8001a454,
@@ -14,16 +18,6 @@ enum {
     SET_DISP_MASK = 0x8001c244,
     CD_VOLUME = 0x800192e4,
 };
-
-void set_reg__credits_roll__psx2_exe(CPUState *c, unsigned reg, u32 value) {
-    R(reg) = value;
-    NC_POLL(c, NC_INSN_CYCLES);
-}
-
-void load_word__credits_roll__psx2_exe(CPUState *c, unsigned reg, u32 address) {
-    R(reg) = MEM_R32(address);
-    NC_POLL(c, NC_LOAD_CYCLES);
-}
 
 /* Both the display startup and the music player call an empty hook. */
 bool nc_credits_empty_hook__psx2_exe_8006A914(CPUState *c) {
@@ -47,8 +41,8 @@ bool nc_credits_stop_pad__psx2_exe_80062490(CPUState *c) {
     R(31) = 0x800624a0;
     c->budget -= 4;
     nc_call(c, 0x8006efe4);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -63,8 +57,8 @@ bool nc_credits_stop_pad__psx2_exe_800624B0(CPUState *c) {
     R(31) = 0x800624c0;
     c->budget -= 4;
     nc_call(c, 0x8006f328);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -79,8 +73,8 @@ bool nc_credits_stop_pad__psx2_exe_8006BA24(CPUState *c) {
     R(31) = 0x8006ba34;
     c->budget -= 4;
     nc_call(c, 0x8007df14);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -95,8 +89,8 @@ bool nc_credits_stop_pad__psx2_exe_8007E0C8(CPUState *c) {
     R(31) = 0x8007e0d8;
     c->budget -= 4;
     nc_call(c, 0x8007f6f4);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -111,8 +105,8 @@ bool nc_credits_stop_pad__psx2_exe_8007E168(CPUState *c) {
     R(31) = 0x8007e178;
     c->budget -= 4;
     nc_call(c, 0x8007ed08);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -127,8 +121,8 @@ bool nc_credits_stop_pad__psx2_exe_8007E188(CPUState *c) {
     R(31) = 0x8007e198;
     c->budget -= 4;
     nc_call(c, 0x8007ef88);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -143,8 +137,8 @@ bool nc_credits_stop_pad__psx2_exe_8007E5EC(CPUState *c) {
     R(31) = 0x8007e5fc;
     c->budget -= 4;
     nc_call(c, 0x8007fb04);
-    load_word__credits_roll__psx2_exe(c, 31, R(29) + 0x10);
-    set_reg__credits_roll__psx2_exe(c, 29, R(29) + 0x18);
+    load_word(c, 31, R(29) + 0x10);
+    set_reg(c, 29, R(29) + 0x18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }

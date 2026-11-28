@@ -360,6 +360,12 @@ target_link_libraries(test_psx_gpu PRIVATE nc_runtime)
 add_test(NAME psx_gpu_rules COMMAND test_psx_gpu)
 add_test(NAME psx_gpu_disc COMMAND test_psx_gpu "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
 set_tests_properties(psx_gpu_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
+add_executable(test_psx_front tests/psx_front.c src/decomp/psx_front.c src/decomp/psx_tmd.c
+    src/port/no_gen.c)
+target_link_libraries(test_psx_front PRIVATE nc_runtime)
+add_test(NAME psx_front_rules COMMAND test_psx_front)
+add_test(NAME psx_front_disc COMMAND test_psx_front "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd")
+set_tests_properties(psx_front_disc PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc" TIMEOUT 300)
 
 add_executable(test_psx2_pad tests/psx2_pad.c)
 if(TARGET nc_gen)

@@ -1,4 +1,6 @@
+#include "decomp/cd_load_file.h"
 #include "decomp/credits.h"
+#include "decomp/sdk_start.h"
 
 /* The TIM occupies three 320 x 512 strips laid out side by side in VRAM.
  * Scroll each strip up, carrying the next strip's first row into its last
@@ -50,16 +52,6 @@ static void call(CPUState *c, u32 target, u32 resume) {
     R(31) = resume;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, target);
-}
-
-static void set_reg(CPUState *c, unsigned reg, u32 value) {
-    R(reg) = value;
-    NC_POLL(c, NC_INSN_CYCLES);
-}
-
-static void load_word(CPUState *c, unsigned reg, u32 address) {
-    R(reg) = MEM_R32(address);
-    NC_POLL(c, NC_LOAD_CYCLES);
 }
 
 static void init_display(CPUState *c) {
@@ -270,69 +262,17 @@ bool nc_credits_load_tim(CPUState *c) {
     return true;
 }
 
-/* Build the ISO path, find its directory entry, and read the file into a
- * sector-aligned allocation. The result is the allocation even if the
- * lower-level read fails. */
 bool nc_credits_load_file(CPUState *c) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 0x68;
-    R(5) = R(4);
-    MEM_W32(R(29) + 0x60, R(16));
-    R(16) = R(29) + 0x38;
-    R(2) = MEM_R16(R(28)); /* root-directory prefix and terminator */
-    R(4) = R(16);
-    MEM_W32(R(29) + 0x64, R(31));
-    R(31) = 0x80018e4c;
-    MEM_W16(R(29) + 0x38, (u16)R(2));
-    c->budget -= 11;
-    nc_call(c, 0x80019988); /* strcat(filename) */
-    set_reg(c, 5, 0x80020000);
-    set_reg(c, 5, R(5) + 0x4c6c); /* ";1" */
-    R(4) = R(16);
-    call(c, 0x80019988, 0x80018e5c);
-
-    set_reg(c, 4, R(29) + 0x20);
-    bool retry;
-    do {
-        R(5) = R(29) + 0x38;
-        call(c, 0x80021c34, 0x80018e68); /* CdSearchFile */
-        retry = R(2) == 0;
-        R(4) = R(29) + 0x20;
-        NC_POLL(c, 2 * NC_INSN_CYCLES);
-    } while (retry);
-
-    load_word(c, 2, R(29) + 0x24); /* byte length in CdlFILE */
-    NC_POLL(c, NC_INSN_CYCLES);
-    set_reg(c, 4, R(2) + 2047);
-    const bool negative = (s32)R(4) < 0;
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    if (negative)
-        set_reg(c, 4, R(2) + 4094);
-    set_reg(c, 4, (u32)((s32)R(4) >> 11));
-    R(4) <<= 11;
-    call(c, 0x80019680, 0x80018e94);
-
-    /* CdlFILE is passed by value: position and length in a2/a3, the
-     * directory name in four stack words. Load all four before storing. */
-    for (unsigned i = 0; i < 4; i++)
-        load_word(c, 3 + i, R(29) + 0x28 + 4 * i);
-    for (unsigned i = 0; i < 4; i++) {
-        MEM_W32(R(29) + 0x10 + 4 * i, R(3 + i));
-        NC_POLL(c, NC_INSN_CYCLES);
-    }
-    set_reg(c, 4, R(29) + 0x38);
-    set_reg(c, 16, R(2));
-    load_word(c, 6, R(29) + 0x20);
-    load_word(c, 7, R(29) + 0x24);
-    R(5) = R(16);
-    call(c, 0x80018d6c, 0x80018ecc);
-    set_reg(c, 2, R(16));
-    load_word(c, 31, R(29) + 0x64);
-    load_word(c, 16, R(29) + 0x60);
-    set_reg(c, 29, R(29) + 0x68);
-    NC_POLL(c, 2 * NC_INSN_CYCLES);
-    return true;
+    static const FileLoadLayout layout = {
+        .entry = 0x80018e28,
+        .prefix = 0,
+        .suffix = 0x80024c6c,
+        .strcat = 0x80019988,
+        .search_file = 0x80021c34,
+        .allocate = 0x80019680,
+        .read_sectors = 0x80018d6c,
+    };
+    return cd_load_file(c, &layout);
 }
 
 /* The credits reader sets the CD location, retries a rejected read up to
@@ -507,28 +447,16 @@ bool nc_credits_reset_music(CPUState *c) {
 
 /* The executable header enters here. Publish the heap bounds before entering the roll. */
 bool nc_credits_entry(CPUState *c) {
-    const u32 heap_start = 0x80028c94; /* first byte after BSS */
-    const int cycles = 24 * NC_INSN_CYCLES + 2 * NC_LOAD_CYCLES;
-    if (c->budget <= cycles)
-        return false;
-
-    c->budget -= 5;             /* address setup before the first load */
-    R(8) = MEM_R32(0x80024c44); /* configured memory size */
-    R(10) = heap_start & 0x1fffffffu;
-    c->budget -= NC_LOAD_CYCLES + 6;
-    R(9) = MEM_R32(0x80024c40); /* reserved stack size */
-    R(12) = 0x80000000;
-    R(11) = R(8) - R(9) - R(10);
-    R(1) = 0x80020000;
-    c->budget -= NC_LOAD_CYCLES + 5;
-    MEM_W32(0x80024c4c, R(11));
-    R(10) |= R(12);
-    c->budget -= 3;
-    MEM_W32(0x80024c48, R(10));
-    R(28) = 0x80024c68;
-    c->budget -= 5; /* store, gp setup, jump and delay slot */
-    nc_jump(c, 0x80018f94);
-    return true;
+    static const StartLayout layout = {
+        .memory_size = 0x80024c44,
+        .stack_size = 0x80024c40,
+        .heap_start = 0x80028c94,
+        .heap_size = 0x80024c4c,
+        .heap_base = 0x80024c48,
+        .gp = 0x80024c68,
+        .main = 0x80018f94,
+    };
+    return sdk_start(c, &layout);
 }
 
 /* Both the display startup and the music player call an empty hook. */

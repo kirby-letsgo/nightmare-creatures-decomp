@@ -92,16 +92,16 @@ bool upload_clut__credits_sdk__psx_exe(CPUState *c, u32 width, u32 entry) {
     c->budget -= 2;
     nc_call(c, 0x8001dafc); /* LoadImage */
 
-    set_reg__credits_roll__psx_exe(c, 4, R(16));
+    set_reg(c, 4, R(16));
     R(31) = entry + 0x4c;
     R(5) = R(17);
     NC_POLL(c, 2);
     nc_call(c, 0x8001cb68); /* GetClut */
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & 0xffff);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 32);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 40);
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2);
     return true;
 }
@@ -159,7 +159,7 @@ void read_spu_dma_mode__credits_sdk__psx_exe(CPUState *c) {
     R(2) = MEM_R16(R(4) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & 0x30);
+    set_reg(c, 2, R(2) & 0x30);
 }
 
 static const CdControlLayout credits_cd_control_layout__credits_sdk__psx_exe = {
@@ -183,7 +183,7 @@ bool nc_credits_append_string__psx_exe_8001A568(CPUState *c) {
     MEM_W32(R(29) + 0x10, R(16));
     c->budget -= 8;
     if (!R(17)) {
-        set_reg__credits_roll__psx_exe(c, 2, 0);
+        set_reg(c, 2, 0);
     } else {
         bool has_source = R(18) != 0;
         R(2) = 0;
@@ -193,17 +193,17 @@ bool nc_credits_append_string__psx_exe_8001A568(CPUState *c) {
             R(4) = R(17);
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             nc_call(c, 0x8001a610);
-            set_reg__credits_roll__psx_exe(c, 4, R(18));
+            set_reg(c, 4, R(18));
             R(31) = 0x8001a5a4;
             R(16) = R(17) + R(2);
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             nc_call(c, 0x8001a610);
-            set_reg__credits_roll__psx_exe(c, 2, R(18) + R(2));
+            set_reg(c, 2, R(18) + R(2));
             bool same_end = R(16) == R(2);
             R(3) = R(17);
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             if (same_end) {
-                set_reg__credits_roll__psx_exe(c, 2, 0);
+                set_reg(c, 2, 0);
             } else {
                 bool more;
                 do {
@@ -214,11 +214,11 @@ bool nc_credits_append_string__psx_exe_8001A568(CPUState *c) {
                     R(17)++;
                     NC_POLL(c, 2 * NC_INSN_CYCLES);
                 } while (more);
-                set_reg__credits_roll__psx_exe(c, 17, R(17) - 1);
+                set_reg(c, 17, R(17) - 1);
                 do {
                     R(2) = MEM_R8(R(18));
                     NC_POLL(c, NC_LOAD_CYCLES);
-                    set_reg__credits_roll__psx_exe(c, 18, R(18) + 1);
+                    set_reg(c, 18, R(18) + 1);
                     MEM_W8(R(17), (u8)R(2));
                     NC_POLL(c, NC_INSN_CYCLES);
                     more = R(2) != 0;
@@ -230,10 +230,10 @@ bool nc_credits_append_string__psx_exe_8001A568(CPUState *c) {
             }
         }
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 0x1c);
+    load_word(c, 31, R(29) + 0x1c);
     for (int reg = 18; reg >= 16; reg--)
-        load_word__credits_roll__psx_exe(c, reg, R(29) + 0x10 + 4 * (reg - 16));
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 0x20);
+        load_word(c, reg, R(29) + 0x10 + 4 * (reg - 16));
+    set_reg(c, 29, R(29) + 0x20);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -276,18 +276,17 @@ bool nc_credits_cd_command_name__psx_exe_80022AE4(CPUState *c) {
 }
 
 bool nc_credits_cd_control__psx_exe_80022BBC(CPUState *c) {
-    return cd_control__cd_control__psx_exe(c, &credits_cd_control_layout__credits_sdk__psx_exe,
-                                           0x80022bbc, CD_CONTROL);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__psx_exe, 0x80022bbc, CD_CONTROL);
 }
 
 bool nc_credits_cd_control_b__psx_exe_80022E20(CPUState *c) {
-    return cd_control__cd_control__psx_exe(c, &credits_cd_control_layout__credits_sdk__psx_exe,
-                                           0x80022E20, CD_CONTROL_BLOCKING);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__psx_exe, 0x80022E20,
+                      CD_CONTROL_BLOCKING);
 }
 
 bool nc_credits_cd_control_f__psx_exe_80022CF4(CPUState *c) {
-    return cd_control__cd_control__psx_exe(c, &credits_cd_control_layout__credits_sdk__psx_exe,
-                                           0x80022cf4, CD_CONTROL_FAST);
+    return cd_control(c, &credits_cd_control_layout__credits_sdk__psx_exe, 0x80022cf4,
+                      CD_CONTROL_FAST);
 }
 
 /* The CD directory readers copy exactly the identifier length from the record. */
@@ -299,12 +298,12 @@ bool nc_credits_cd_copy_identifier__psx_exe_800251DC(CPUState *c) {
     R(3) = R(6) - 1;
     c->budget -= 3;
     if (copying) {
-        set_reg__credits_roll__psx_exe(c, 6, UINT32_MAX);
+        set_reg(c, 6, UINT32_MAX);
         do {
             R(2) = MEM_R8(R(5));
             NC_POLL(c, NC_LOAD_CYCLES);
-            set_reg__credits_roll__psx_exe(c, 5, R(5) + 1);
-            set_reg__credits_roll__psx_exe(c, 3, R(3) - 1);
+            set_reg(c, 5, R(5) + 1);
+            set_reg(c, 3, R(3) - 1);
             MEM_W8(R(4), (u8)R(2));
             NC_POLL(c, 1);
             copying = R(3) != R(6);
@@ -312,7 +311,7 @@ bool nc_credits_cd_copy_identifier__psx_exe_800251DC(CPUState *c) {
             NC_POLL(c, 2);
         } while (copying);
     }
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2);
     return true;
 }
@@ -334,7 +333,7 @@ bool nc_credits_cd_default_sync__psx_exe_80022988(CPUState *c) {
 }
 
 bool nc_credits_cd_flush_controller__psx_exe_800240D8(CPUState *c) {
-    return cd_flush_controller__cd_flush__psx_exe(c, 0x80027b30);
+    return cd_flush_controller(c, 0x80027b30);
 }
 
 /* Read the requested number of words and convert the driver's zero result to success. */
@@ -355,12 +354,11 @@ bool nc_credits_cd_init__psx_exe_800228F8(CPUState *c) {
         .message = 0x80018944,
         .print = 0x8001a640,
     };
-    return cd_init__cd_init__psx_exe(c, &layout);
+    return cd_init(c, &layout);
 }
 
 bool nc_credits_cd_init_interrupt__psx_exe_800242AC(CPUState *c) {
-    return cd_init_interrupt__cd_state__psx_exe(c, 0x8002786c, 0x800242ac, 0x8001bc00, 0x8001bc30,
-                                                0x80024764);
+    return cd_init_interrupt(c, 0x8002786c, 0x800242ac, 0x8001bc00, 0x8001bc30, 0x80024764);
 }
 
 bool nc_credits_cd_init_volume__psx_exe_800241B8(CPUState *c) {
@@ -375,7 +373,7 @@ bool nc_credits_cd_interrupt_callback__psx_exe_80024764(CPUState *c) {
         .callbacks = 0x8002786c,
         .results = 0x80027e24,
     };
-    return cd_interrupt_callback__cd_interrupt_callback__psx_exe(c, &layout);
+    return cd_interrupt_callback(c, &layout);
 }
 
 bool nc_credits_cd_interrupt_name__psx_exe_80022B18(CPUState *c) {
@@ -401,9 +399,9 @@ bool nc_credits_cd_names_equal__psx_exe_80024B24(CPUState *c) {
     R(6) = 12;
     c->budget -= 3;
     nc_call(c, 0x80025274); /* strncmp */
-    set_reg__credits_roll__psx_exe(c, 2, R(2) == 0);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -423,7 +421,7 @@ bool nc_credits_cd_read__psx_exe_800256F0(CPUState *c) {
         .control = 0x80022E20,
         .retry = 0x80025518,
     };
-    return cd_read__cd_read__psx_exe(c, &layout);
+    return cd_read(c, &layout);
 }
 
 /* Seek to a sector, request a read, then wait for it to finish. */
@@ -445,30 +443,30 @@ bool nc_credits_cd_read_sectors__psx_exe_80025170(CPUState *c) {
     c->budget -= 3;
     nc_call(c, 0x80022ff0); /* CdIntToPos */
 
-    set_reg__credits_roll__psx_exe(c, 4, 2); /* CdlSetloc */
-    set_reg__credits_roll__psx_exe(c, 5, R(29) + 16);
+    set_reg(c, 4, 2); /* CdlSetloc */
+    set_reg(c, 5, R(29) + 16);
     R(31) = 0x800251A4;
     R(6) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80022bbc); /* CdControl */
 
-    set_reg__credits_roll__psx_exe(c, 4, R(17));
-    set_reg__credits_roll__psx_exe(c, 5, R(16));
+    set_reg(c, 4, R(17));
+    set_reg(c, 5, R(16));
     R(31) = 0x800251b4;
     R(6) = 0x80; /* double speed */
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x800256f0); /* CdRead */
 
-    set_reg__credits_roll__psx_exe(c, 4, 0);
+    set_reg(c, 4, 0);
     R(31) = 0x800251c0;
     R(5) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x800257f8); /* CdReadSync */
-    set_reg__credits_roll__psx_exe(c, 2, R(2) == 0);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 32);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 40);
+    set_reg(c, 2, R(2) == 0);
+    load_word(c, 31, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 40);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -481,15 +479,15 @@ bool nc_credits_cd_read_sync__psx_exe_800257F8(CPUState *c) {
         .retry = 0x80025518,
         .ready = 0x80022b6c,
     };
-    return cd_read_sync__cd_read_sync__psx_exe(c, &layout);
+    return cd_read_sync(c, &layout);
 }
 
 bool nc_credits_cd_reset__psx_exe_80022A40(CPUState *c) {
-    return cd_reset__cd_state__psx_exe(c, 0x80022a40, 0x800242ac, 0x800242fc, 0x800241b8);
+    return cd_reset(c, 0x80022a40, 0x800242ac, 0x800242fc, 0x800241b8);
 }
 
 bool nc_credits_cd_sector_dma__psx_exe_80024654(CPUState *c) {
-    return cd_sector_dma__cd_sector_dma__psx_exe(c, 0x80027b30);
+    return cd_sector_dma(c, 0x80027b30);
 }
 
 bool nc_credits_cd_sector_to_position__psx_exe_80022FF0(CPUState *c) {
@@ -517,15 +515,15 @@ bool nc_credits_check_callback__psx_exe_8001BD54(CPUState *c) {
 }
 
 bool nc_credits_clear_irq_words__psx_exe_8001C2E4(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__psx_exe(c);
+    return clear_interrupt_words(c);
 }
 
 bool nc_credits_clear_irq_words__psx_exe_8001C4DC(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__psx_exe(c);
+    return clear_interrupt_words(c);
 }
 
 bool nc_credits_clear_irq_words__psx_exe_8001C784(CPUState *c) {
-    return clear_interrupt_words__interrupt_control__psx_exe(c);
+    return clear_interrupt_words(c);
 }
 
 /* Clear an ordering table backwards with DMA channel 6. */
@@ -549,43 +547,43 @@ bool nc_credits_clear_ot_dma__psx_exe_8001ED5C(CPUState *c) {
     c->budget -= NC_LOAD_CYCLES + 2;
     MEM_W32(R(5), R(2));
     c->budget--;
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026FCC);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026FCC);
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(2), 0);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, R(16) << 2);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) - 4);
-    set_reg__credits_roll__psx_exe(c, 3, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 3, 0x80026fc4);
-    set_reg__credits_roll__psx_exe(c, 4, R(4) + R(2));
+    set_reg(c, 2, R(16) << 2);
+    set_reg(c, 2, R(2) - 4);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80026fc4);
+    set_reg(c, 4, R(4) + R(2));
     MEM_W32(R(3), R(4)); /* last tag in the table */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026FC8);
-    set_reg__credits_roll__psx_exe(c, 3, 0x11000000);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026FC8);
+    set_reg(c, 3, 0x11000000);
     MEM_W32(R(2), R(16));
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026FCC);
-    set_reg__credits_roll__psx_exe(c, 3, R(3) | 2);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026FCC);
+    set_reg(c, 3, R(3) | 2);
     MEM_W32(R(2), R(3)); /* start a descending, manually triggered transfer */
     NC_POLL(c, NC_INSN_CYCLES);
     R(31) = 0x8001edd8;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x8001ff54); /* set_alarm */
 
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026FCC);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026FCC);
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__psx_exe(c, 2, R(2));
-    set_reg__credits_roll__psx_exe(c, 3, 1u << 24);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & R(3));
+    load_word(c, 2, R(2));
+    set_reg(c, 3, 1u << 24);
+    set_reg(c, 2, R(2) & R(3));
     bool busy = R(2) != 0;
     R(2) = R(16);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (busy)
-        set_reg__credits_roll__psx_exe(c, 17, 1u << 24);
+        set_reg(c, 17, 1u << 24);
     while (busy) {
         R(31) = 0x8001ee04;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -595,20 +593,20 @@ bool nc_credits_clear_ot_dma__psx_exe_8001ED5C(CPUState *c) {
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (timed_out)
             break;
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026FCC);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026FCC);
         NC_POLL(c, NC_INSN_CYCLES);
-        load_word__credits_roll__psx_exe(c, 2, R(2));
+        load_word(c, 2, R(2));
         NC_POLL(c, NC_INSN_CYCLES);
-        set_reg__credits_roll__psx_exe(c, 2, R(2) & R(17));
+        set_reg(c, 2, R(2) & R(17));
         busy = R(2) != 0;
         R(2) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -619,11 +617,11 @@ bool nc_credits_clear_otag__psx_exe_8001DC88(CPUState *c) {
         return false;
     ordering_table_prologue__credits_sdk__psx_exe(c);
     if (!R(2)) {
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026EDC);
-        set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-        set_reg__credits_roll__psx_exe(c, 4, 0x800186e8);
-        set_reg__credits_roll__psx_exe(c, 5, R(16));
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026EDC);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x800186e8);
+        set_reg(c, 5, R(16));
         u32 diagnostic = R(2);
         R(31) = 0x8001dccc;
         R(6) = R(17);
@@ -631,40 +629,40 @@ bool nc_credits_clear_otag__psx_exe_8001DC88(CPUState *c) {
         nc_call(c, diagnostic);
     }
 
-    set_reg__credits_roll__psx_exe(c, 17, R(17) - 1);
+    set_reg(c, 17, R(17) - 1);
     R(3) = 0xff0000;
     NC_POLL(c, 2);
     if (R(17)) {
-        set_reg__credits_roll__psx_exe(c, 5, 0xff0000);
-        set_reg__credits_roll__psx_exe(c, 5, 0xffffff);
-        set_reg__credits_roll__psx_exe(c, 6, 0xff000000);
+        set_reg(c, 5, 0xff0000);
+        set_reg(c, 5, 0xffffff);
+        set_reg(c, 6, 0xff000000);
         do {
-            set_reg__credits_roll__psx_exe(c, 17, R(17) - 1);
-            set_reg__credits_roll__psx_exe(c, 4, R(16) + 4);
+            set_reg(c, 17, R(17) - 1);
+            set_reg(c, 4, R(16) + 4);
             MEM_W8(R(16) + 3, 0); /* zero packet length before updating its link */
             NC_POLL(c, 1);
-            load_word__credits_roll__psx_exe(c, 2, R(16));
-            set_reg__credits_roll__psx_exe(c, 3, R(4) & R(5));
-            set_reg__credits_roll__psx_exe(c, 2, R(2) & R(6));
-            set_reg__credits_roll__psx_exe(c, 2, R(2) | R(3));
+            load_word(c, 2, R(16));
+            set_reg(c, 3, R(4) & R(5));
+            set_reg(c, 2, R(2) & R(6));
+            set_reg(c, 2, R(2) | R(3));
             MEM_W32(R(16), R(2));
             NC_POLL(c, 1);
             R(16) = R(4);
             NC_POLL(c, 2);
         } while (R(17));
-        set_reg__credits_roll__psx_exe(c, 3, 0xff0000);
+        set_reg(c, 3, 0xff0000);
     }
-    set_reg__credits_roll__psx_exe(c, 3, R(3) | 0xffff);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80026F9C);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & R(3));
+    set_reg(c, 3, R(3) | 0xffff);
+    set_reg(c, 2, 0x80020000);
+    set_reg(c, 2, 0x80026F9C);
+    set_reg(c, 2, R(2) & R(3));
     MEM_W32(R(16), R(2));
     NC_POLL(c, 1);
-    set_reg__credits_roll__psx_exe(c, 2, R(16));
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
@@ -677,11 +675,11 @@ bool nc_credits_clear_otag_reverse__psx_exe_8001DD40(CPUState *c) {
     ordering_table_prologue__credits_sdk__psx_exe(c);
 
     if (!R(2)) {
-        set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-        set_reg__credits_roll__psx_exe(c, 4, 0x80018700);
-        set_reg__credits_roll__psx_exe(c, 5, R(16));
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026EDC);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x80018700);
+        set_reg(c, 5, R(16));
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026EDC);
         NC_POLL(c, 1);
         u32 diagnostic = R(2);
         R(31) = 0x8001dd88;
@@ -689,10 +687,10 @@ bool nc_credits_clear_otag_reverse__psx_exe_8001DD40(CPUState *c) {
         NC_POLL(c, 2);
         nc_call(c, diagnostic);
     }
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026ED8);
-    set_reg__credits_roll__psx_exe(c, 4, R(16));
-    load_word__credits_roll__psx_exe(c, 2, R(2) + 0x2c);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026ED8);
+    set_reg(c, 4, R(16));
+    load_word(c, 2, R(2) + 0x2c);
     NC_POLL(c, 1);
     u32 clear_table = R(2);
     R(31) = 0x8001dda4;
@@ -700,18 +698,18 @@ bool nc_credits_clear_otag_reverse__psx_exe_8001DD40(CPUState *c) {
     NC_POLL(c, 2);
     nc_call(c, clear_table);
 
-    set_reg__credits_roll__psx_exe(c, 4, 0xff0000);
-    set_reg__credits_roll__psx_exe(c, 4, 0xffffff);
-    set_reg__credits_roll__psx_exe(c, 2, R(16));
-    set_reg__credits_roll__psx_exe(c, 3, 0x80020000);
-    set_reg__credits_roll__psx_exe(c, 3, 0x80026F9C);
-    set_reg__credits_roll__psx_exe(c, 3, R(3) & R(4));
+    set_reg(c, 4, 0xff0000);
+    set_reg(c, 4, 0xffffff);
+    set_reg(c, 2, R(16));
+    set_reg(c, 3, 0x80020000);
+    set_reg(c, 3, 0x80026F9C);
+    set_reg(c, 3, R(3) & R(4));
     MEM_W32(R(2), R(3));
     NC_POLL(c, 1);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
@@ -785,11 +783,11 @@ bool nc_credits_dispatch_dma_interrupt__psx_exe_8001C558(CPUState *c) {
         .status_message = 0x80018494,
         .channel_message = 0x800184B0,
     };
-    return dispatch_dma_interrupt__interrupt_dispatch__psx_exe(c, &layout);
+    return dispatch_dma_interrupt(c, &layout);
 }
 
 bool nc_credits_dispatch_vblank__psx_exe_8001C438(CPUState *c) {
-    return dispatch_vblank__interrupt_control__psx_exe(c, 0x80026e3c, 0x8001c488);
+    return dispatch_vblank(c, 0x80026e3c, 0x8001c488);
 }
 
 bool nc_credits_display_field__psx_exe_8001E56C(CPUState *c) {
@@ -805,9 +803,9 @@ bool nc_credits_display_field__psx_exe_8001E56C(CPUState *c) {
     R(31) = 0x8001e58c;
     c->budget -= NC_LOAD_CYCLES + 3;
     nc_call(c, R(2));
-    set_reg__credits_roll__psx_exe(c, 2, R(2) >> 31);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    set_reg(c, 2, R(2) >> 31);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -1065,20 +1063,20 @@ bool nc_credits_draw_primitive__psx_exe_8001DDD8(CPUState *c) {
     c->budget -= NC_LOAD_CYCLES + 2;
     nc_call(c, sync);
 
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026ED8);
-    set_reg__credits_roll__psx_exe(c, 4, R(16) + 4);
-    load_word__credits_roll__psx_exe(c, 2, R(2) + 0x14);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026ED8);
+    set_reg(c, 4, R(16) + 4);
+    load_word(c, 2, R(2) + 0x14);
     NC_POLL(c, 1);
     u32 write_commands = R(2);
     R(31) = 0x8001de20;
     R(5) = R(17);
     NC_POLL(c, 2);
     nc_call(c, write_commands);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
@@ -1098,8 +1096,8 @@ bool nc_credits_dump_palette__psx_exe_8001CC50(CPUState *c) {
     R(6) = palette >> 6;
     c->budget -= 3;
     nc_call(c, R(2));
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -1177,14 +1175,14 @@ bool nc_credits_gpu_command_block__psx_exe_8001F5E0(CPUState *c) {
     c->budget -= 3;
 
     if (has_words) {
-        set_reg__credits_roll__psx_exe(c, 5, 0xffffffff);
+        set_reg(c, 5, 0xffffffff);
         bool more;
         do {
-            load_word__credits_roll__psx_exe(c, 3, R(4));
-            set_reg__credits_roll__psx_exe(c, 4, R(4) + 4);
-            set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-            load_word__credits_roll__psx_exe(c, 2, R(2) + 0x6fb0);
-            set_reg__credits_roll__psx_exe(c, 6, R(6) - 1);
+            load_word(c, 3, R(4));
+            set_reg(c, 4, R(4) + 4);
+            set_reg(c, 2, 0x80020000);
+            load_word(c, 2, R(2) + 0x6fb0);
+            set_reg(c, 6, R(6) - 1);
             MEM_W32(R(2), R(3));
             NC_POLL(c, NC_INSN_CYCLES);
             more = R(6) != R(5);
@@ -1192,7 +1190,7 @@ bool nc_credits_gpu_command_block__psx_exe_8001F5E0(CPUState *c) {
             NC_POLL(c, 2 * NC_INSN_CYCLES);
         } while (more);
     }
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -1259,17 +1257,17 @@ bool nc_credits_gpu_fill_bytes__psx_exe_800201D0(CPUState *c) {
     R(2) = R(6) - 1;
     c->budget -= 3;
     if (filling) {
-        set_reg__credits_roll__psx_exe(c, 3, UINT32_MAX);
+        set_reg(c, 3, UINT32_MAX);
         do {
             MEM_W8(R(4), (u8)R(5));
             NC_POLL(c, NC_INSN_CYCLES);
-            set_reg__credits_roll__psx_exe(c, 2, R(2) - 1);
+            set_reg(c, 2, R(2) - 1);
             filling = R(2) != R(3);
             R(4)++;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
         } while (filling);
     }
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2267,11 +2265,11 @@ bool nc_credits_initialize_cd_driver__psx_exe_800242FC(CPUState *c) {
         .command = 0x80023C38,
         .sync = 0x800236ec,
     };
-    return initialize_cd_driver__cd_init__psx_exe(c, &layout);
+    return initialize_cd_driver(c, &layout);
 }
 
 bool nc_credits_initialize_spu__psx_exe_80021C9C(CPUState *c) {
-    return spu_init__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
+    return spu_init(c, &spu_driver__credits_sdk__psx_exe);
 }
 
 bool nc_credits_interrupt_callback__psx_exe_8001BC30(CPUState *c) {
@@ -2287,13 +2285,13 @@ bool nc_credits_interrupt_mask__psx_exe_8001BD7C(CPUState *c, bool write) {
 }
 
 bool nc_credits_legacy_pad_init__psx_exe_8001B834(CPUState *c) {
-    return sdk_pad_init__sdk_pad_init__psx_exe(c, 0x8001b834, 0x8001b95c, 0x8001b824,
-                                               0x8001b94c); /* OutdatedPadInitAndStart */
+    return sdk_pad_init(c, 0x8001b834, 0x8001b95c, 0x8001b824,
+                        0x8001b94c); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_legacy_pad_init__psx_exe_8001B89C(CPUState *c) {
-    return sdk_pad_init__sdk_pad_init__psx_exe(c, 0x8001b89c, 0x8001b95c, 0x8001b824,
-                                               0x8001b92c); /* OutdatedPadInitAndStart */
+    return sdk_pad_init(c, 0x8001b89c, 0x8001b95c, 0x8001b824,
+                        0x8001b92c); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_link_packets__psx_exe_8001CD40(CPUState *c) {
@@ -2384,20 +2382,20 @@ bool nc_credits_load_tpage__psx_exe_8001C7B0(CPUState *c) {
     c->budget -= 2;
     nc_call(c, 0x8001dafc); /* LoadImage */
 
-    set_reg__credits_roll__psx_exe(c, 4, R(16));
-    set_reg__credits_roll__psx_exe(c, 5, R(18));
-    set_reg__credits_roll__psx_exe(c, 6, R(17));
+    set_reg(c, 4, R(16));
+    set_reg(c, 5, R(18));
+    set_reg(c, 6, R(17));
     R(31) = 0x8001c878;
     R(7) = R(19);
     NC_POLL(c, 2);
     nc_call(c, 0x8001caa0); /* GetTPage */
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & 0xffff);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 40);
-    load_word__credits_roll__psx_exe(c, 19, R(29) + 36);
-    load_word__credits_roll__psx_exe(c, 18, R(29) + 32);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 28);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 24);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 48);
+    set_reg(c, 2, R(2) & 0xffff);
+    load_word(c, 31, R(29) + 40);
+    load_word(c, 19, R(29) + 36);
+    load_word(c, 18, R(29) + 32);
+    load_word(c, 17, R(29) + 28);
+    load_word(c, 16, R(29) + 24);
+    set_reg(c, 29, R(29) + 48);
     NC_POLL(c, 2);
     return true;
 }
@@ -2462,26 +2460,26 @@ bool nc_credits_move_image__psx_exe_8001DBC4(CPUState *c) {
         R(2) = R(17) << 16;
         NC_POLL(c, 2);
         if (has_height) {
-            set_reg__credits_roll__psx_exe(c, 3, R(18) & 0xffff);
-            set_reg__credits_roll__psx_exe(c, 2, R(2) | R(3));
-            set_reg__credits_roll__psx_exe(c, 5, 0x80020000);
-            set_reg__credits_roll__psx_exe(c, 5, 0x80026F90);
-            load_word__credits_roll__psx_exe(c, 4, R(16)); /* source XY */
-            set_reg__credits_roll__psx_exe(c, 3, 0x80020000);
-            load_word__credits_roll__psx_exe(c, 3, 0x80026ED8);
-            set_reg__credits_roll__psx_exe(c, 6, 20); /* packet size */
-            set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
+            set_reg(c, 3, R(18) & 0xffff);
+            set_reg(c, 2, R(2) | R(3));
+            set_reg(c, 5, 0x80020000);
+            set_reg(c, 5, 0x80026F90);
+            load_word(c, 4, R(16)); /* source XY */
+            set_reg(c, 3, 0x80020000);
+            load_word(c, 3, 0x80026ED8);
+            set_reg(c, 6, 20); /* packet size */
+            set_reg(c, 1, 0x80020000);
             MEM_W32(0x80026f94, R(2)); /* destination XY */
             NC_POLL(c, 1);
             MEM_W32(R(5), R(4));
             NC_POLL(c, 1);
-            load_word__credits_roll__psx_exe(c, 2, R(16) + 4);
-            set_reg__credits_roll__psx_exe(c, 7, 0);
-            set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
+            load_word(c, 2, R(16) + 4);
+            set_reg(c, 7, 0);
+            set_reg(c, 1, 0x80020000);
             MEM_W32(0x80026F98, R(2)); /* width and height */
             NC_POLL(c, 1);
-            load_word__credits_roll__psx_exe(c, 4, R(3) + 0x18);
-            load_word__credits_roll__psx_exe(c, 2, R(3) + 8);
+            load_word(c, 4, R(3) + 0x18);
+            load_word(c, 2, R(3) + 8);
             NC_POLL(c, 1);
             u32 enqueue = R(2);
             R(31) = 0x8001dc6c;
@@ -2493,11 +2491,11 @@ bool nc_credits_move_image__psx_exe_8001DBC4(CPUState *c) {
             NC_POLL(c, 2);
         }
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 28);
-    load_word__credits_roll__psx_exe(c, 18, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
@@ -2653,7 +2651,7 @@ bool nc_credits_prepend_packets__psx_exe_8001CD04(CPUState *c, bool range) {
 }
 
 bool nc_credits_printf__psx_exe_8001A640(CPUState *c) {
-    return sdk_printf__sdk_printf__psx_exe(c, 0x8001a67c, 0x8001a66c);
+    return sdk_printf(c, 0x8001a67c, 0x8001a66c);
 }
 
 bool nc_credits_priority_packet__psx_exe_8001E6A4(CPUState *c) {
@@ -2676,7 +2674,7 @@ bool nc_credits_priority_packet__psx_exe_8001E6A4(CPUState *c) {
 }
 
 bool nc_credits_put_string__psx_exe_8001BBA0(CPUState *c) {
-    return sdk_puts__sdk_puts__psx_exe(c, 0x80018420, 0x8001adb8, 0x8001bbcc);
+    return sdk_puts(c, 0x80018420, 0x8001adb8, 0x8001bbcc);
 }
 
 bool nc_credits_queue_command__psx_exe_8001F6AC(CPUState *c) {
@@ -2692,8 +2690,8 @@ bool nc_credits_queue_command__psx_exe_8001F6AC(CPUState *c) {
     R(6) = 0;
     c->budget -= 4;
     nc_call(c, 0x8001f6d0);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2793,10 +2791,10 @@ bool nc_credits_set_display_mask__psx_exe_8001D79C(CPUState *c) {
     R(16) = R(4);
     c->budget -= NC_LOAD_CYCLES + 4;
     if (!R(2)) {
-        set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-        set_reg__credits_roll__psx_exe(c, 4, 0x8001866C);
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026EDC);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x8001866C);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026EDC);
         NC_POLL(c, 1);
         u32 diagnostic = R(2);
         R(31) = 0x8001d7e4;
@@ -2808,30 +2806,30 @@ bool nc_credits_set_display_mask__psx_exe_8001D79C(CPUState *c) {
     R(4) = R(17) + 0x6a;
     NC_POLL(c, 2);
     if (blank) {
-        set_reg__credits_roll__psx_exe(c, 5, UINT32_MAX);
+        set_reg(c, 5, UINT32_MAX);
         R(31) = 0x8001d7f8;
         R(6) = 20;
         NC_POLL(c, 2);
         nc_call(c, 0x800201d0); /* fill the display environment with 0xff */
     }
-    set_reg__credits_roll__psx_exe(c, 4, 0x03000000);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80026ED8);
+    set_reg(c, 4, 0x03000000);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80026ED8);
     blank = R(16) == 0;
     R(4) |= 1;
     NC_POLL(c, 2);
     if (!blank)
-        set_reg__credits_roll__psx_exe(c, 4, 0x03000000);
-    load_word__credits_roll__psx_exe(c, 2, R(2) + 16);
+        set_reg(c, 4, 0x03000000);
+    load_word(c, 2, R(2) + 16);
     NC_POLL(c, 1);
     u32 control = R(2);
     R(31) = 0x8001d820;
     NC_POLL(c, 2);
     nc_call(c, control); /* GP1 display enable */
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2);
     return true;
 }
@@ -2870,11 +2868,11 @@ bool nc_credits_set_graph_debug__psx_exe_8001D608(CPUState *c) {
         R(31) = 0x8001d65c;
         c->budget -= NC_LOAD_CYCLES + 4;
         nc_call(c, R(2));
-        set_reg__credits_roll__psx_exe(c, 2, R(16));
+        set_reg(c, 2, R(16));
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2902,10 +2900,10 @@ bool nc_credits_set_graph_queue__psx_exe_8001D674(CPUState *c) {
     R(16) = R(4);
     c->budget -= NC_LOAD_CYCLES + 3;
     if (!R(2)) {
-        set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-        set_reg__credits_roll__psx_exe(c, 4, 0x8001863C);
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026EDC);
+        set_reg(c, 4, 0x80020000);
+        set_reg(c, 4, 0x8001863C);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026EDC);
         NC_POLL(c, NC_INSN_CYCLES);
         R(31) = 0x8001d6c4;
         R(5) = R(16);
@@ -2921,29 +2919,29 @@ bool nc_credits_set_graph_queue__psx_exe_8001D674(CPUState *c) {
     R(2) = R(18);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (changed) {
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x80026ED8);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x80026ED8);
         NC_POLL(c, NC_INSN_CYCLES);
-        load_word__credits_roll__psx_exe(c, 2, R(2) + 0x34);
+        load_word(c, 2, R(2) + 0x34);
         NC_POLL(c, NC_INSN_CYCLES);
         R(31) = 0x8001d6f0;
         R(4) = 1;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, R(2));
 
-        set_reg__credits_roll__psx_exe(c, 4, 2);
-        set_reg__credits_roll__psx_exe(c, 5, 0);
+        set_reg(c, 4, 2);
+        set_reg(c, 5, 0);
         R(31) = 0x8001d700;
         MEM_W8(R(17), (u8)R(16));
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x8001bc60); /* DMACallback(2, NULL) */
-        set_reg__credits_roll__psx_exe(c, 2, R(18));
+        set_reg(c, 2, R(18));
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 28);
-    load_word__credits_roll__psx_exe(c, 18, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 28);
+    load_word(c, 18, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2959,15 +2957,15 @@ bool nc_credits_set_queue_alarm__psx_exe_8001FF54(CPUState *c) {
     c->budget -= 3;
     nc_call(c, 0x8001b9bc);
 
-    set_reg__credits_roll__psx_exe(c, 2, R(2) + 240);
-    set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
+    set_reg(c, 2, R(2) + 240);
+    set_reg(c, 1, 0x80020000);
     MEM_W32(R(1) + 0x6ff8, R(2)); /* queue deadline */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
+    set_reg(c, 1, 0x80020000);
     MEM_W32(R(1) + 0x6ffc, 0); /* polls since the alarm was set */
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -2993,13 +2991,13 @@ bool nc_credits_spu_dma_complete__psx_exe_800220FC(CPUState *c) {
             nc_call(c, 0x800227e8);
         }
     }
-    set_reg__credits_roll__psx_exe(c, 4, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 4, 0x80027484);
+    set_reg(c, 4, 0x80020000);
+    load_word(c, 4, 0x80027484);
     NC_POLL(c, NC_INSN_CYCLES);
     R(2) = MEM_R16(R(4) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) & 0xffcf);
+    set_reg(c, 2, R(2) & 0xffcf);
     MEM_W16(R(4) + 0x1aa, (u16)R(2));
     NC_POLL(c, NC_INSN_CYCLES);
     read_spu_dma_mode__credits_sdk__psx_exe(c);
@@ -3007,9 +3005,9 @@ bool nc_credits_spu_dma_complete__psx_exe_800220FC(CPUState *c) {
     R(3) = 0;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (busy) {
-        set_reg__credits_roll__psx_exe(c, 3, R(3) + 1);
+        set_reg(c, 3, R(3) + 1);
         do {
-            set_reg__credits_roll__psx_exe(c, 2, R(3) < 0xf01);
+            set_reg(c, 2, R(3) < 0xf01);
             const bool exhausted = !R(2);
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             if (exhausted)
@@ -3019,19 +3017,19 @@ bool nc_credits_spu_dma_complete__psx_exe_800220FC(CPUState *c) {
             R(3)++;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             if (!busy)
-                set_reg__credits_roll__psx_exe(c, 3, R(3) - 1);
+                set_reg(c, 3, R(3) - 1);
         } while (busy);
     }
 
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x800274bc);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x800274bc);
     NC_POLL(c, NC_INSN_CYCLES);
     const bool has_callback = R(2) != 0;
     R(4) = 0xf0000000;
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     if (has_callback) {
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 2, 0x800274bc);
+        set_reg(c, 2, 0x80020000);
+        load_word(c, 2, 0x800274bc);
         NC_POLL(c, NC_INSN_CYCLES);
         u32 callback = R(2);
         R(31) = 0x800221a8;
@@ -3039,14 +3037,14 @@ bool nc_credits_spu_dma_complete__psx_exe_800220FC(CPUState *c) {
         nc_call(c, callback);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     } else {
-        set_reg__credits_roll__psx_exe(c, 4, R(4) | 9);
+        set_reg(c, 4, R(4) | 9);
         R(31) = 0x800221bc;
         R(5) = 0x20;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x80022848); /* DeliverEvent */
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -3079,18 +3077,18 @@ bool nc_credits_spu_read__psx_exe_800225A0(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80022288);
 
-    set_reg__credits_roll__psx_exe(c, 4, 3); /* start DMA */
-    set_reg__credits_roll__psx_exe(c, 5, R(17));
+    set_reg(c, 4, 3); /* start DMA */
+    set_reg(c, 5, R(17));
     R(31) = 0x800225ec;
     R(6) = R(16);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x80022288);
 
-    set_reg__credits_roll__psx_exe(c, 2, R(16));
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    set_reg(c, 2, R(16));
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -3143,13 +3141,13 @@ bool nc_credits_spu_read_blocks__psx_exe_800221CC(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x800227e8);
 
-    set_reg__credits_roll__psx_exe(c, 3, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 3, 0x80027484);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80027484);
     NC_POLL(c, NC_INSN_CYCLES);
     R(2) = MEM_R16(R(3) + 0x1aa);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, R(2) | 0x30); /* SPU DMA read mode */
+    set_reg(c, 2, R(2) | 0x30); /* SPU DMA read mode */
     MEM_W16(R(3) + 0x1aa, (u16)R(2));
     NC_POLL(c, NC_INSN_CYCLES);
     R(31) = 0x80022220;
@@ -3163,30 +3161,30 @@ bool nc_credits_spu_read_blocks__psx_exe_800221CC(CPUState *c) {
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     nc_call(c, 0x800227bc); /* _spu_FsetDelayR */
 
-    set_reg__credits_roll__psx_exe(c, 4, 0x01000000);
-    set_reg__credits_roll__psx_exe(c, 4, 0x01000200);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x80027488);
+    set_reg(c, 4, 0x01000000);
+    set_reg(c, 4, 0x01000200);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x80027488);
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(2), R(17)); /* DMA base address */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 2, 0x8002748C);
-    set_reg__credits_roll__psx_exe(c, 16, R(16) | 16);
+    set_reg(c, 2, 0x80020000);
+    load_word(c, 2, 0x8002748C);
+    set_reg(c, 16, R(16) | 16);
     MEM_W32(R(2), R(16)); /* block count and words per block */
     NC_POLL(c, NC_INSN_CYCLES);
-    set_reg__credits_roll__psx_exe(c, 3, 0x80020000);
-    load_word__credits_roll__psx_exe(c, 3, 0x80027490);
-    set_reg__credits_roll__psx_exe(c, 2, 1);
-    set_reg__credits_roll__psx_exe(c, 1, 0x80020000);
+    set_reg(c, 3, 0x80020000);
+    load_word(c, 3, 0x80027490);
+    set_reg(c, 2, 1);
+    set_reg(c, 1, 0x80020000);
     MEM_W32(0x800274d4, R(2)); /* record read direction */
     NC_POLL(c, NC_INSN_CYCLES);
     MEM_W32(R(3), R(4)); /* start DMA */
     NC_POLL(c, NC_INSN_CYCLES);
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
@@ -3303,7 +3301,7 @@ bool nc_credits_spu_set_dma_priority__psx_exe_80022730(CPUState *c) {
 
 /* _spu_t selects DMA direction, sets the SPU address, or starts the transfer. */
 bool nc_credits_spu_transfer_command__psx_exe_80022288(CPUState *c) {
-    return spu_transfer_command__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
+    return spu_transfer_command(c, &spu_driver__credits_sdk__psx_exe);
 }
 
 /* SPU initialization and PIO use this 240-iteration delay. The two stack
@@ -3320,28 +3318,28 @@ bool nc_credits_spu_wait__psx_exe_800227E8(CPUState *c) {
     c->budget -= 3;
 
     for (;;) {
-        load_word__credits_roll__psx_exe(c, 2, R(29));
+        load_word(c, 2, R(29));
         NC_POLL(c, 1);
-        set_reg__credits_roll__psx_exe(c, 2, (s32)R(2) < 240);
+        set_reg(c, 2, (s32)R(2) < 240);
         bool again = R(2) != 0;
         NC_POLL(c, 2);
         if (!again)
             break;
 
-        load_word__credits_roll__psx_exe(c, 3, R(29) + 4);
+        load_word(c, 3, R(29) + 4);
         NC_POLL(c, 1);
-        set_reg__credits_roll__psx_exe(c, 2, R(3) * 2);
-        set_reg__credits_roll__psx_exe(c, 2, R(2) + R(3));
+        set_reg(c, 2, R(3) * 2);
+        set_reg(c, 2, R(2) + R(3));
         MEM_W32(R(29) + 4, R(2));
         NC_POLL(c, 1);
-        load_word__credits_roll__psx_exe(c, 2, R(29));
+        load_word(c, 2, R(29));
         NC_POLL(c, 1);
-        set_reg__credits_roll__psx_exe(c, 2, R(2) + 1);
+        set_reg(c, 2, R(2) + 1);
         MEM_W32(R(29), R(2));
         NC_POLL(c, 1);
-        load_word__credits_roll__psx_exe(c, 2, R(29)); /* the loop test performs a second load */
+        load_word(c, 2, R(29)); /* the loop test performs a second load */
     }
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 8);
+    set_reg(c, 29, R(29) + 8);
     NC_POLL(c, 2);
     return true;
 }
@@ -3362,19 +3360,19 @@ bool nc_credits_spu_write__psx_exe_80022518(CPUState *c) {
     MEM_W32(R(29) + 24, R(31));
     c->budget -= 2;
     if (R(2)) {
-        set_reg__credits_roll__psx_exe(c, 4, R(17));
+        set_reg(c, 4, R(17));
         R(31) = 0x80022584;
         R(5) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x80021f30); /* _spu_writeByIO */
-        set_reg__credits_roll__psx_exe(c, 2, R(16));
+        set_reg(c, 2, R(16));
     } else {
-        set_reg__credits_roll__psx_exe(c, 2, 0x80020000);
+        set_reg(c, 2, 0x80020000);
         R(2) = MEM_R16(0x8002749C);
         NC_POLL(c, NC_LOAD_CYCLES);
-        set_reg__credits_roll__psx_exe(c, 5, 0x80020000);
-        load_word__credits_roll__psx_exe(c, 5, 0x800274ac);
-        set_reg__credits_roll__psx_exe(c, 4, 2); /* set transfer address */
+        set_reg(c, 5, 0x80020000);
+        load_word(c, 5, 0x800274ac);
+        set_reg(c, 4, 2); /* set transfer address */
         R(31) = 0x80022558;
         R(5) = R(2) << (R(5) & 31);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -3385,8 +3383,8 @@ bool nc_credits_spu_write__psx_exe_80022518(CPUState *c) {
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         nc_call(c, 0x80022288);
 
-        set_reg__credits_roll__psx_exe(c, 4, 3); /* start DMA */
-        set_reg__credits_roll__psx_exe(c, 5, R(17));
+        set_reg(c, 4, 3); /* start DMA */
+        set_reg(c, 5, R(17));
         R(31) = 0x80022570;
         R(6) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
@@ -3394,16 +3392,16 @@ bool nc_credits_spu_write__psx_exe_80022518(CPUState *c) {
         R(2) = R(16);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
     }
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 24);
-    load_word__credits_roll__psx_exe(c, 17, R(29) + 20);
-    load_word__credits_roll__psx_exe(c, 16, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 32);
+    load_word(c, 31, R(29) + 24);
+    load_word(c, 17, R(29) + 20);
+    load_word(c, 16, R(29) + 16);
+    set_reg(c, 29, R(29) + 32);
     NC_POLL(c, 2 * NC_INSN_CYCLES);
     return true;
 }
 
 bool nc_credits_spu_write_by_io__psx_exe_80021F30(CPUState *c) {
-    return spu_write_by_io__spu_driver__psx_exe(c, &spu_driver__credits_sdk__psx_exe);
+    return spu_write_by_io(c, &spu_driver__credits_sdk__psx_exe);
 }
 
 /* _spu_FsetRXX writes an indexed halfword, optionally in SPU address units. */
@@ -3442,7 +3440,7 @@ bool nc_credits_start_dma__psx_exe_8001C508(CPUState *c) {
         .handler = 0x8001c558,
         .setter = 0x8001c6dc,
     };
-    return start_dma__interrupt_control__psx_exe(c, &layout);
+    return start_dma(c, &layout);
 }
 
 /* Start the BIOS pad driver, then turn off automatic pad interrupt clearing. */
@@ -3459,8 +3457,8 @@ bool nc_credits_start_pad__psx_exe_8001B904(CPUState *c) {
     R(4) = 0;
     NC_POLL(c, 2);
     nc_call(c, 0x8001b824); /* ChangeClearPad */
-    load_word__credits_roll__psx_exe(c, 31, R(29) + 16);
-    set_reg__credits_roll__psx_exe(c, 29, R(29) + 24);
+    load_word(c, 31, R(29) + 16);
+    set_reg(c, 29, R(29) + 24);
     NC_POLL(c, 2);
     return true;
 }
@@ -3474,7 +3472,7 @@ bool nc_credits_start_vsync__psx_exe_8001C3E0(CPUState *c) {
         .handler = 0x8001c438,
         .setter = 0x8001c4b0,
     };
-    return start_vsync__interrupt_control__psx_exe(c, &layout);
+    return start_vsync(c, &layout);
 }
 
 bool nc_credits_stop_callback__psx_exe_8001BCF4(CPUState *c) {
@@ -3529,7 +3527,7 @@ bool nc_credits_strcmp__psx_exe_80025210(CPUState *c) {
     R(2) = MEM_R8(R(5) - 1);
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, 1);
-    set_reg__credits_roll__psx_exe(c, 2, R(3) - R(2));
+    set_reg(c, 2, R(3) - R(2));
     goto done;
 equal_strings:
     R(2) = 0;
@@ -3569,7 +3567,7 @@ bool nc_credits_strncmp__psx_exe_80025274(CPUState *c) {
         goto done;
     }
 
-    set_reg__credits_roll__psx_exe(c, 6, R(6) - 1);
+    set_reg(c, 6, R(6) - 1);
     bool exhausted = (s32)R(6) < 0;
     R(2) = 0;
     NC_POLL(c, 2);
@@ -3592,7 +3590,7 @@ bool nc_credits_strncmp__psx_exe_80025274(CPUState *c) {
         NC_POLL(c, 2);
         if (terminator)
             goto equal_strings;
-        set_reg__credits_roll__psx_exe(c, 6, R(6) - 1);
+        set_reg(c, 6, R(6) - 1);
         exhausted = (s32)R(6) < 0;
         NC_POLL(c, 2);
         if (exhausted)
@@ -3612,7 +3610,7 @@ bool nc_credits_strncmp__psx_exe_80025274(CPUState *c) {
         goto done;
     }
 equal_strings:
-    set_reg__credits_roll__psx_exe(c, 2, 0);
+    set_reg(c, 2, 0);
 done:
     NC_POLL(c, 2);
     return true;
@@ -3725,7 +3723,7 @@ bool nc_credits_video_mode__psx_exe_800258C4(CPUState *c, bool replace) {
 }
 
 bool nc_credits_vsync__psx_exe_8001B9BC(CPUState *c) {
-    return sdk_vsync__vsync__psx_exe(c, 0x80025D88, 0x80026e5c, 0x8001b9bc, 0x8001bb04);
+    return sdk_vsync(c, 0x80025D88, 0x80026e5c, 0x8001b9bc, 0x8001bb04);
 }
 
 /* VSyncCallback(handler) installs it in slot zero. VSyncCallbacks takes a slot. */
@@ -3746,5 +3744,5 @@ bool nc_credits_wait_vblank__psx_exe_8001BB04(CPUState *c) {
         .clear_pad = 0x8001b824,
         .clear_rcnt = 0x8001bbf0,
     };
-    return wait_vblank__vblank_wait__psx_exe(c, &layout);
+    return wait_vblank(c, &layout);
 }

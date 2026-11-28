@@ -6,10 +6,10 @@
 #include "decomp/byte_scan.h"
 #include "decomp/cd_control.h"
 #include "decomp/cd_file.h"
-#include "decomp/cd_flush.h"
 #include "decomp/cd_init.h"
 #include "decomp/cd_interrupt_callback.h"
 #include "decomp/cd_irq.h"
+#include "decomp/cd_load_file.h"
 #include "decomp/cd_position.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_retry.h"
@@ -18,7 +18,7 @@
 #include "decomp/cd_state.h"
 #include "decomp/cd_volume.h"
 #include "decomp/credits.h"
-#include "decomp/interrupt_control.h"
+#include "decomp/heap.h"
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
@@ -29,187 +29,16 @@
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
+#include "decomp/sdk_start.h"
+#include "decomp/shared_record.h"
 #include "decomp/spu_driver.h"
 #include "decomp/vblank_wait.h"
 #include "decomp/vsync.h"
-#include "port/interp.h"
 #include "port/recomp.h"
 
-void issue_cd_control__cd_control__stream3_exe(CPUState *c, u32 writer, u32 parameters,
-                                               unsigned result_reg, bool async, u32 resume);
-void set_cd_control_callback__cd_control__stream3_exe(CPUState *c, u32 slot, u32 callback);
-bool cd_control__cd_control__stream3_exe(CPUState *c, const CdControlLayout *layout, u32 entry,
-                                         enum CdControlMode mode);
-void cd_flush_port__cd_flush__stream3_exe(CPUState *c, u32 slot);
-bool cd_flush_pending__cd_flush__stream3_exe(CPUState *c, u32 ports, bool first);
-bool cd_flush_controller__cd_flush__stream3_exe(CPUState *c, u32 ports);
-void cd_call_with_pointer__cd_init__stream3_exe(CPUState *c, u32 argument, u32 target, u32 resume);
-bool cd_init__cd_init__stream3_exe(CPUState *c, const CdInitLayout *layout);
-void cd_init_command__cd_init__stream3_exe(CPUState *c, u32 command, u32 resume);
-bool cd_irq_pending__cd_init__stream3_exe(CPUState *c, u32 ports, bool first_read);
-void write_cd_init_port__cd_init__stream3_exe(CPUState *c, u32 slot, unsigned source);
-bool initialize_cd_driver__cd_init__stream3_exe(CPUState *c, const CdDriverInitLayout *layout);
-bool cd_interrupt_callback__cd_interrupt_callback__stream3_exe(CPUState *c,
-                                                               const CdCallbackLayout *layout);
-bool cd_read__cd_read__stream3_exe(CPUState *c, const CdReadLayout *layout);
-void load_cd_read_word__cd_read_retry__stream3_exe(CPUState *c, unsigned reg, u32 address);
-bool cd_callback_deadline_passed__cd_read_retry__stream3_exe(CPUState *c,
-                                                             const CdReadRetryLayout *layout,
-                                                             u32 resume);
-void advance_cd_read_word__cd_read_retry__stream3_exe(CPUState *c, u32 address, u32 increment);
-void collect_cd_read_sector__cd_read_retry__stream3_exe(CPUState *c,
-                                                        const CdReadRetryLayout *layout);
-void finish_cd_read_callback__cd_read_retry__stream3_exe(CPUState *c,
-                                                         const CdReadRetryLayout *layout);
-bool handle_cd_read__cd_read_retry__stream3_exe(CPUState *c, const CdReadRetryLayout *layout);
-void handle_open_cd_lid__cd_read_retry__stream3_exe(CPUState *c, const CdReadRetryLayout *layout);
-bool restore_cd_read_position__cd_read_retry__stream3_exe(CPUState *c,
-                                                          const CdReadRetryLayout *layout);
-void start_cd_read_attempt__cd_read_retry__stream3_exe(CPUState *c,
-                                                       const CdReadRetryLayout *layout);
-bool cd_read_retry__cd_read_retry__stream3_exe(CPUState *c, const CdReadRetryLayout *layout);
-bool cd_read_deadline__cd_read_sync__stream3_exe(CPUState *c, u32 vsync, u32 resume, u32 offset,
-                                                 u32 frames);
-bool cd_read_sync__cd_read_sync__stream3_exe(CPUState *c, const CdReadSyncLayout *layout);
-void load_cd_port__cd_sector_dma__stream3_exe(CPUState *c, unsigned reg, u32 slot);
-bool cd_sector_dma__cd_sector_dma__stream3_exe(CPUState *c, u32 ports);
-bool cd_reset__cd_state__stream3_exe(CPUState *c, u32 entry, u32 init_interrupt, u32 init_drive,
-                                     u32 init_volume);
-bool cd_init_interrupt__cd_state__stream3_exe(CPUState *c, u32 state, u32 entry, u32 reset_callback,
-                                              u32 interrupt_callback, u32 handler);
-void store__credits__stream3_exe(CPUState *c, u32 addr, u32 value);
 void call__credits_roll__stream3_exe(CPUState *c, u32 target, u32 resume);
-void load_word__credits_roll__stream3_exe(CPUState *c, unsigned reg, u32 address);
-void set_reg__credits_roll__stream3_exe(CPUState *c, unsigned reg, u32 value);
 bool upload_clut__credits_sdk__stream3_exe(CPUState *c, u32 width, u32 entry);
 void read_spu_dma_mode__credits_sdk__stream3_exe(CPUState *c);
-bool clear_interrupt_words__interrupt_control__stream3_exe(CPUState *c);
-bool start_vsync__interrupt_control__stream3_exe(CPUState *c, const InterruptInitLayout *layout);
-bool dispatch_vblank__interrupt_control__stream3_exe(CPUState *c, u32 slots, u32 resume);
-bool start_dma__interrupt_control__stream3_exe(CPUState *c, const InterruptInitLayout *layout);
-void dispatch_pending_dma_channels__interrupt_dispatch__stream3_exe(
-    CPUState *c, const DmaDispatchLayout *layout);
-void report_dma_interrupt__interrupt_dispatch__stream3_exe(CPUState *c,
-                                                           const DmaDispatchLayout *layout);
-bool dispatch_dma_interrupt__interrupt_dispatch__stream3_exe(CPUState *c,
-                                                             const DmaDispatchLayout *layout);
-bool sdk_gpu_dump_texture_page__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void report_draw_page__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void report_fields__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 format, u32 resume,
-                                         bool rectangle);
-void report_flag__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned offset,
-                                       u32 format, u32 resume);
-void report_rectangle__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned offset,
-                                            u32 format, u32 resume);
-bool dump_environment__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool draw);
-bool sdk_gpu_dump_draw__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_dump_display__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void graphics_diagnostic__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 format,
-                                               u32 return_pc, unsigned argument_reg);
-void load_gpu_global__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned reg,
-                                           u32 address);
-void initialize_graphics_state__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_reset_graph__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_set_graph_reverse__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_draw_sync_callback__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_draw_sync__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool rectangle_out_of_bounds__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_check_rect__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool queue_image_fill__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool high_bit);
-bool sdk_gpu_clear_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_clear_image2__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool queue_image_transfer__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L,
-                                                bool store__credits__stream3_exe);
-bool sdk_gpu_load_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_store_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_draw_otag__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void build_draw_env_packet__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 resume);
-void submit_draw_env__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned debug_reg,
-                                           u32 queue_resume, u32 copy_resume);
-bool sdk_gpu_put_draw_env__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_draw_otag_env__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool display_rect_changed__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned offset);
-void set_display_resolution__sdk_gpu__stream3_exe(CPUState *c);
-void set_display_mode__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void set_display_origin__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void limit_display_scanline__sdk_gpu__stream3_exe(CPUState *c, bool end);
-void send_display_range__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool vertical);
-void set_display_ranges__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_put_display_env__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void pack_env_clear_color__sdk_gpu__stream3_exe(CPUState *c);
-void clear_rect_limit__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 address);
-void prepare_env_clear__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void append_env_clear__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_set_draw_env__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void store_gpu_global__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 address,
-                                            unsigned reg);
-void build_rect_clear_packets__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void build_vram_fill_packet__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool prepare_clear_rectangle__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_clear_gpu_rectangle__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void begin_gpu_transfer__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool readback);
-void finish_gpu_transfer__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool readback);
-bool receive_readback_prefix__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void send_upload_prefix__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool size_gpu_transfer__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool readback);
-bool wait_for_gpu_command__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool readback);
-bool transfer_gpu_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool readback);
-bool sdk_gpu_upload_gpu_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_read_gpu_image__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool gpu_queue_empty__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void read_gpu_sync_bit__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 port_slot,
-                                             u32 mask);
-bool queue_dma_idle__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool must_queue_gpu_command__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void submit_immediate_gpu_command__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void gpu_queue_offset__sdk_gpu__stream3_exe(CPUState *c, unsigned dest, unsigned index);
-void store_queue_field__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned offset_reg,
-                                             u32 field, unsigned value_reg);
-void copy_gpu_queue_payload__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void store_queue_head_field__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, u32 field,
-                                                  unsigned value_reg);
-void submit_queued_gpu_command__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_submit_gpu_command__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void load_gpu_queue_field__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, unsigned dest,
-                                                unsigned offset_reg, u32 field);
-void execute_gpu_queue_entry__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void notify_gpu_queue_completion__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_execute_gpu_queue__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void reset_gpu_buffers__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void reset_gpu_command_buffer__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_reset_gpu_driver__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool gpu_queue_ready__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L, bool blocking);
-void drain_gpu_queue__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_sync_gpu_queue__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void recover_gpu_queue__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-void report_gpu_timeout__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_gpu_check_queue_alarm__sdk_gpu__stream3_exe(CPUState *c, const NcGpuLayout *L);
-bool sdk_pad_init__sdk_pad_init__stream3_exe(CPUState *c, u32 entry, u32 patch_pad, u32 clear_pad,
-                                             u32 bios_stub);
-bool sdk_printf__sdk_printf__stream3_exe(CPUState *c, u32 formatter, u32 resume);
-bool sdk_puts__sdk_puts__stream3_exe(CPUState *c, u32 null_string, u32 put_char, u32 resume);
-void spu_load_global__spu_driver__stream3_exe(CPUState *c, unsigned reg, u32 address);
-void spu_load_registers__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout,
-                                                 unsigned reg);
-void initialize_spu_voices__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-void spu_store_global__spu_driver__stream3_exe(CPUState *c, u32 address, unsigned reg);
-void wait_for_spu_reset__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_init__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-void poll_spu_write_status__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout,
-                                                    bool restoring);
-void write_spu_fifo_chunk__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_write_by_io__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-bool wait_spu_transfer_register__spu_driver__stream3_exe(CPUState *c, bool control);
-void select_spu_transfer_mode__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout,
-                                                       bool reading);
-void start_spu_transfer__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-bool spu_transfer_command__spu_driver__stream3_exe(CPUState *c, const SpuDriverLayout *layout);
-void compare_vblank_target__vblank_wait__stream3_exe(CPUState *c, u32 frame);
-bool wait_vblank__vblank_wait__stream3_exe(CPUState *c, const VBlankWaitLayout *layout);
-void wait_for_vsync_field__vsync__stream3_exe(CPUState *c, u32 slots);
-void wait_for_vsync_frames__vsync__stream3_exe(CPUState *c, u32 slots, u32 frame, u32 entry,
-                                               u32 wait_entry);
-bool sdk_vsync__vsync__stream3_exe(CPUState *c, u32 slots, u32 frame, u32 entry, u32 wait_entry);
 bool nc_credits_skip_input__stream3_exe_80018E00(CPUState *c);
 bool nc_credits_empty_hook__stream3_exe_8002714C(CPUState *c);
 bool nc_credits_init_pad__stream3_exe_80018E70(CPUState *c);

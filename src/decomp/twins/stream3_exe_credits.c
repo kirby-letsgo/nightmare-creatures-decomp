@@ -8,30 +8,9 @@
 
 #include "decomp/credits.h"
 
-#include "port/interp.h"
+#include "decomp/heap.h"
 
-/* Allocation record layout. Each live record owns the free span immediately
- * following its payload. The sentinel participates in best-fit selection. */
-enum {
-    SPAN = 0,
-    PAYLOAD = 4,
-    REQUESTED = 8,
-    FREE_START = 12,
-    FREE_SIZE = 16,
-    PREV = 20,
-    NEXT = 24,
-    HEADER_SIZE = 28
-};
-
-enum { CURSOR = 4, NEW_RECORD = 5, BEST = 6, NEEDED = 7, REQUEST = 8 };
-
-void store__credits__stream3_exe(CPUState *c, u32 addr, u32 value) {
-    MEM_W32(addr, value);
-    NC_POLL(c, NC_INSN_CYCLES);
-}
-
-/* Callee-saved registers used across the resize helper's nested calls. */
-enum { BLOCK = 16, NEW_SIZE = 17, EXTENT = 18, OLD_PTR = 19, DIFFERENCE = 20 };
+#include "decomp/shared_record.h"
 
 /* CREDITS.EXE 80018C8C. The display loop polls the first InitPAD buffer
  * after VSync. With an event due, let the generated code poll at each
