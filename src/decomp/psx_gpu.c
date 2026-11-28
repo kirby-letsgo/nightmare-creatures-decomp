@@ -141,6 +141,15 @@ bool nc_psx_draw_sync_callback(CPUState *c) {
 }
 
 /* SetGeomOffset(ofx, ofy): the GTE screen offset, in 16.16 fixed point. */
+/* _ctl and _getctl: the GPU port pointer and the per-opcode GP1 shadow bytes. */
+bool nc_psx_gpu_control(CPUState *c) {
+    return sdk_gpu_control(c, 0x80026fb4, 0x80027d10);
+}
+
+bool nc_psx_gpu_control_byte(CPUState *c) {
+    return sdk_gpu_control_byte(c, 0x80027d10);
+}
+
 bool nc_psx_set_geom_offset(CPUState *c) {
     if (c->budget <= 6)
         return false;

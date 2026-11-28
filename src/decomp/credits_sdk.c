@@ -789,28 +789,11 @@ bool nc_credits_gpu_command_block(CPUState *c) {
 }
 
 bool nc_credits_gpu_control(CPUState *c) {
-    if (c->budget <= 12)
-        return false;
-    c->budget--;
-    R(2) = MEM_R32(0x8002462c);
-    c->budget -= NC_LOAD_CYCLES + 1;
-    MEM_W32(R(2), R(4));
-    R(2) = R(4) >> 24; /* GP1 opcode */
-    R(1) = 0x80020000 + R(2);
-    c->budget -= 4;
-    MEM_W8(R(1) + 0x4d30, (u8)R(4));
-    c->budget -= 3;
-    return true;
+    return sdk_gpu_control(c, 0x8002462c, 0x80024d30);
 }
 
 bool nc_credits_gpu_control_byte(CPUState *c) {
-    if (c->budget <= 7)
-        return false;
-    R(1) = 0x80020000 + R(4);
-    c->budget -= 2;
-    R(2) = MEM_R8(R(1) + 0x4d30);
-    c->budget -= NC_LOAD_CYCLES + 2;
-    return true;
+    return sdk_gpu_control_byte(c, 0x80024d30);
 }
 
 /* Clear an ordering table backwards with DMA channel 6. */

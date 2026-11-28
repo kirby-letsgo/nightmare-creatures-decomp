@@ -37,6 +37,8 @@ bool nc_psx_sync_gpu_queue(CPUState *c);
 bool nc_psx_check_queue_alarm(CPUState *c);
 
 bool nc_psx_set_geom_offset(CPUState *c);
+bool nc_psx_gpu_control(CPUState *c);
+bool nc_psx_gpu_control_byte(CPUState *c);
 bool nc_psx_patch_gte(CPUState *c);
 
 #endif

@@ -1,3 +1,4 @@
+#include "decomp/cd_state.h"
 #include "decomp/psx_gpu.h"
 #include "port/disc.h"
 #include "port/exe.h"
@@ -59,6 +60,7 @@ static bool (*const routines[])(CPUState *) = {
     nc_psx_upload_gpu_image,  nc_psx_read_gpu_image,    nc_psx_submit_gpu_command,
     nc_psx_execute_gpu_queue, nc_psx_reset_gpu_driver,  nc_psx_sync_gpu_queue,
     nc_psx_check_queue_alarm, nc_psx_set_geom_offset,   nc_psx_patch_gte,
+    nc_psx_gpu_control,       nc_psx_gpu_control_byte,
 };
 
 static bool check_declines(void) {
@@ -118,6 +120,40 @@ static bool check_patch_gte(void) {
     return ok;
 }
 
+/* _ctl stores a GP1 command and its low byte per opcode; _getctl reads the byte back. */
+static bool check_gpu_control(void) {
+    const u32 commands[] = {0x00000000, 0x03000001, 0x05012345, 0x08000037, 0xff0000ab};
+    for (unsigned i = 0; i < sizeof commands / sizeof commands[0]; i++)
+        for (int budget = 13; budget <= 64; budget += 17) {
+            if (!compare(arguments(commands[i], 0, 0, budget), 0x8001f5a4, nc_psx_gpu_control,
+                         12))
+                return false;
+            if (!compare(arguments(commands[i] >> 24, 0, 0, budget - 5), 0x8001f5cc,
+                         nc_psx_gpu_control_byte, 7))
+                return false;
+        }
+    return true;
+}
+
+/* CdComstr and CdIntstr index their name tables, with a shared fallback name. */
+static bool command_name(CPUState *c) {
+    return cd_lookup_name(c, 0x80027890, 28, 0x8001895c);
+}
+
+static bool interrupt_name(CPUState *c) {
+    return cd_lookup_name(c, 0x80027910, 7, 0x8001895c);
+}
+
+static bool check_cd_names(void) {
+    const u32 codes[] = {0, 1, 6, 7, 27, 28, 0xff, 0x1234501};
+    for (unsigned i = 0; i < sizeof codes / sizeof codes[0]; i++)
+        for (int budget = 14; budget <= 65; budget += 17)
+            if (!compare(arguments(codes[i], 0, 0, budget), 0x80022ae4, command_name, 13) ||
+                !compare(arguments(codes[i], 0, 0, budget), 0x80022b18, interrupt_name, 13))
+                return false;
+    return true;
+}
+
 #define CHECK(call) (call || (fprintf(stderr, "failed: %s\n", #call), false))
 
 int main(int argc, char **argv) {
@@ -135,6 +171,8 @@ int main(int argc, char **argv) {
     bool pass = CHECK(check_declines());
     pass = pass && CHECK(check_geom_offset());
     pass = pass && CHECK(check_patch_gte());
+    pass = pass && CHECK(check_gpu_control());
+    pass = pass && CHECK(check_cd_names());
     pass = pass && CHECK(check_draw_mode_packet());
     pass = pass && CHECK(check_set_draw_env());
     pass = pass && CHECK(check_draw_offset());

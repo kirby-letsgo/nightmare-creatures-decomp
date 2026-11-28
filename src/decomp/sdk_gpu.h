@@ -26,6 +26,33 @@ static inline u32 gpu_lo(u32 address) {
     return (u32)(s32)(s16)address;
 }
 
+/* _ctl writes a GP1 command through the GPU port pointer at `port_slot` and remembers the
+ * command's low byte per opcode in `shadow`; _getctl reads that byte back. */
+static inline bool sdk_gpu_control(CPUState *c, u32 port_slot, u32 shadow) {
+    if (c->budget <= 12)
+        return false;
+    c->budget--;
+    R(2) = MEM_R32(port_slot);
+    c->budget -= NC_LOAD_CYCLES + 1;
+    MEM_W32(R(2), R(4));
+    R(2) = R(4) >> 24; /* GP1 opcode */
+    R(1) = gpu_hi(shadow) + R(2);
+    c->budget -= 4;
+    MEM_W8(R(1) + gpu_lo(shadow), (u8)R(4));
+    c->budget -= 3;
+    return true;
+}
+
+static inline bool sdk_gpu_control_byte(CPUState *c, u32 shadow) {
+    if (c->budget <= 7)
+        return false;
+    R(1) = gpu_hi(shadow) + R(4);
+    c->budget -= 2;
+    R(2) = MEM_R8(R(1) + gpu_lo(shadow));
+    c->budget -= NC_LOAD_CYCLES + 2;
+    return true;
+}
+
 /* Both GPU layouts encode the draw-mode command, but move the flag bits. */
 static u32 draw_mode_word(bool alternate, bool display, bool dither, u32 page, u32 *opcode) {
     *opcode = 0xe1000000u;

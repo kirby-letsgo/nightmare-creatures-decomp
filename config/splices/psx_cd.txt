@@ -1,7 +1,10 @@
 # Handwritten Psy-Q libcd routines in PSX.EXE (src/decomp/psx_cd.*).
 
 include decomp/psx_cd.h
+include decomp/cd_state.h
 
+psx_exe  80022AE4  entry  cd_lookup_name(c, 0x80027890, 28, 0x8001895c)
+psx_exe  80022B18  entry  cd_lookup_name(c, 0x80027910, 7, 0x8001895c)
 psx_exe  800236EC  entry  nc_psx_cd_sync(c)
 psx_exe  8002396C  entry  nc_psx_cd_ready(c)
 psx_exe  80023C38  entry  nc_psx_cd_write_command(c)
