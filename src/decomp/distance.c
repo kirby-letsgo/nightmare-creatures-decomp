@@ -5590,8 +5590,8 @@ bool nc_decrease_placement_word(CPUState *c) {
     return true;
 }
 
-static void update_placement_flag_words(CPUState *c, u32 keep, u32 set, u32 first_offset, u32 second_offset,
-                                        u32 third_offset, u32 fourth_offset) {
+static void update_placement_flag_words(CPUState *c, u32 keep, u32 set, u32 first_offset,
+                                        u32 second_offset, u32 third_offset, u32 fourth_offset) {
     const u32 base = R(3);
     const u32 first = MEM_R32(base + first_offset);
     const u32 second = MEM_R32(base + second_offset);
@@ -5696,7 +5696,8 @@ bool nc_return_placement_dispatch(CPUState *c) {
     return true;
 }
 
-bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc) {
+bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target,
+                                       u32 return_pc) {
     if (c->budget <= 5)
         return false;
     R(4) = R(16);

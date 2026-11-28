@@ -60,7 +60,7 @@ static bool restore_cd_read_position(CPUState *c, const CdReadRetryLayout *layou
     set_reg(c, 5, 0);
     retry_cd_control(c, layout->control, layout->entry + 0xb8);
     cd_read_call(c, layout->last_pos, layout->entry + 0xc0); /* CdLastPos */
-    set_reg(c, 4, 2); /* CdlSetloc */
+    set_reg(c, 4, 2);                                        /* CdlSetloc */
     set_reg(c, 5, R(2));
     retry_cd_control(c, layout->control, layout->entry + 0xd0);
     bool success = R(2) != 0;
@@ -223,7 +223,8 @@ static void collect_cd_read_sector(CPUState *c, const CdReadRetryLayout *layout)
         bool mismatch = R(2) != R(3);
         NC_POLL(c, 2);
         if (mismatch) {
-            cd_call_with_pointer(c, layout->mismatch_message, layout->puts, layout->callback + 0x80);
+            cd_call_with_pointer(c, layout->mismatch_message, layout->puts,
+                                 layout->callback + 0x80);
             set_reg(c, 2, UINT32_MAX);
             MEM_W32(R(16), R(2));
             NC_POLL(c, 1);

@@ -155,7 +155,8 @@ bool nc_clear_placement_y_step_flags(CPUState *c);
 u32 nc_clear_four_placement_flags(CPUState *c);
 u32 nc_clear_placement_step_flags(CPUState *c);
 bool nc_return_placement_dispatch(CPUState *c);
-bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target, u32 return_pc);
+bool nc_call_placement_coordinate_step(CPUState *c, u32 offset, s32 step, s32 target,
+                                       u32 return_pc);
 bool nc_prepare_shared_placement_y_step(CPUState *c, bool jump);
 bool nc_call_shared_placement_y_step(CPUState *c);
 bool nc_begin_indexed_placement_x_step(CPUState *c);

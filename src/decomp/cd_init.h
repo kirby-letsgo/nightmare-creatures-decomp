@@ -42,9 +42,12 @@ static inline bool cd_init(CPUState *c, const CdInitLayout *layout) {
         R(16)--;
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (ready) {
-            cd_call_with_pointer(c, layout->sync_handler, layout->set_sync, layout->entry + 0x34); /* sync */
-            cd_call_with_pointer(c, layout->ready_handler, layout->set_ready, layout->entry + 0x44); /* ready */
-            cd_call_with_pointer(c, layout->read_handler, layout->set_read, layout->entry + 0x54); /* read */
+            cd_call_with_pointer(c, layout->sync_handler, layout->set_sync,
+                                 layout->entry + 0x34); /* sync */
+            cd_call_with_pointer(c, layout->ready_handler, layout->set_ready,
+                                 layout->entry + 0x44); /* ready */
+            cd_call_with_pointer(c, layout->read_handler, layout->set_read,
+                                 layout->entry + 0x54); /* read */
             R(2) = 1;
             NC_POLL(c, 2 * NC_INSN_CYCLES);
             break;
@@ -53,7 +56,8 @@ static inline bool cd_init(CPUState *c, const CdInitLayout *layout) {
         const bool exhausted = R(16) == R(2);
         NC_POLL(c, 2 * NC_INSN_CYCLES);
         if (exhausted) {
-            cd_call_with_pointer(c, layout->message, layout->print, layout->entry + 0x78); /* printf */
+            cd_call_with_pointer(c, layout->message, layout->print,
+                                 layout->entry + 0x78); /* printf */
             set_reg(c, 2, 0);
             break;
         }
@@ -128,7 +132,8 @@ static inline bool initialize_cd_driver(CPUState *c, const CdDriverInitLayout *l
     nc_call(c, layout->print); /* printf */
 
     const u32 status_bytes[] = {layout->callbacks + 0x21, layout->callbacks + 0x20};
-    const u32 callback_and_status_words[] = {layout->callbacks + 4, layout->callbacks, layout->callbacks + 20, layout->callbacks + 16};
+    const u32 callback_and_status_words[] = {layout->callbacks + 4, layout->callbacks,
+                                             layout->callbacks + 20, layout->callbacks + 16};
     for (unsigned i = 0; i < 2; i++) {
         set_reg(c, 1, (status_bytes[i] + 0x8000u) & 0xffff0000u);
         MEM_W8(status_bytes[i], 0);
@@ -156,9 +161,9 @@ static inline bool initialize_cd_driver(CPUState *c, const CdDriverInitLayout *l
     if (cd_irq_pending(c, layout->ports, true)) {
         set_reg(c, 3, 7);
         do {
-            write_cd_init_port(c, layout->ports, 4); /* bank one */
+            write_cd_init_port(c, layout->ports, 4);      /* bank one */
             write_cd_init_port(c, layout->ports + 12, 3); /* acknowledge */
-            write_cd_init_port(c, layout->ports + 8, 3); /* enable interrupts */
+            write_cd_init_port(c, layout->ports + 8, 3);  /* enable interrupts */
         } while (cd_irq_pending(c, layout->ports, false));
     }
 

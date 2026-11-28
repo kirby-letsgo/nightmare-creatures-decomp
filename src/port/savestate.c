@@ -2,8 +2,8 @@
 #include "port/replay.h"
 
 #include "port/controls.h"
-#include "port/settings.h"
 #include "port/runtime.h"
+#include "port/settings.h"
 
 #include <SDL3/SDL.h>
 #include <miniz.h>

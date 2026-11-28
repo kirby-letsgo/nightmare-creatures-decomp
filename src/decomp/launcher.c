@@ -1,16 +1,16 @@
-#include "decomp/sdk_formatter.h"
-#include "decomp/cd_irq.h"
+#include "decomp/launcher.h"
 #include "decomp/cd_control.h"
-#include "decomp/cd_interrupt_callback.h"
-#include "decomp/cd_read_retry.h"
-#include "decomp/cd_read.h"
-#include "decomp/cd_read_sync.h"
-#include "decomp/vsync.h"
-#include "decomp/vblank_wait.h"
 #include "decomp/cd_init.h"
+#include "decomp/cd_interrupt_callback.h"
+#include "decomp/cd_irq.h"
+#include "decomp/cd_read.h"
+#include "decomp/cd_read_retry.h"
+#include "decomp/cd_read_sync.h"
 #include "decomp/cd_state.h"
 #include "decomp/interrupt_dispatch.h"
-#include "decomp/launcher.h"
+#include "decomp/sdk_formatter.h"
+#include "decomp/vblank_wait.h"
+#include "decomp/vsync.h"
 
 static const CdWaitLayout launcher_cd_wait = {
     .deadline = 0x80015b98,
@@ -45,10 +45,18 @@ static const CdWaitLayout launcher_cd_wait = {
 
 bool nc_launcher_initialize_cd_driver(CPUState *c) {
     static const CdDriverInitLayout layout = {
-        .entry = 0x80013890, .message = 0x80010598, .format = 0x800105a4,
-        .ports = 0x80015adc, .callbacks = 0x80015818, .puts = 0x80013dd8,
-        .print = 0x80011160, .reset = 0x80010a50, .install = 0x80010a80,
-        .handler = 0x80013cf8, .command = 0x800131cc, .sync = 0x80012c80,
+        .entry = 0x80013890,
+        .message = 0x80010598,
+        .format = 0x800105a4,
+        .ports = 0x80015adc,
+        .callbacks = 0x80015818,
+        .puts = 0x80013dd8,
+        .print = 0x80011160,
+        .reset = 0x80010a50,
+        .install = 0x80010a80,
+        .handler = 0x80013cf8,
+        .command = 0x800131cc,
+        .sync = 0x80012c80,
     };
     return initialize_cd_driver(c, &layout);
 }
@@ -171,7 +179,7 @@ static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
         R(31) = 0x80010750;
         R(6) = 0;
         NC_POLL(c, 2);
-        nc_call(c, 0x800109f0); /* Exec(exec_header, 0, 0) */
+        nc_call(c, 0x800109f0);                           /* Exec(exec_header, 0, 0) */
         call_launcher_service(c, 0x80010a50, 0x80010758); /* ResetCallback */
         call_launcher_service(c, 0x80010b44, 0x80010760); /* StopCallback */
     }
@@ -180,9 +188,15 @@ static void load_launcher_module(CPUState *c, u32 arm, u32 path) {
 
 bool nc_launcher_format_output(CPUState *c) {
     static const PrintLayout layout = {
-        .entry = 0x8001119c, .lower_digits = 0x8001010c, .null_string = 0x80010120,
-        .upper_digits = 0x80010128, .conversions = 0x8001013c, .char_class = 0x800156bd,
-        .put_char = 0x800118d8, .find_byte = 0x80011888, .string_length = 0x8001198c,
+        .entry = 0x8001119c,
+        .lower_digits = 0x8001010c,
+        .null_string = 0x80010120,
+        .upper_digits = 0x80010128,
+        .conversions = 0x8001013c,
+        .char_class = 0x800156bd,
+        .put_char = 0x800118d8,
+        .find_byte = 0x80011888,
+        .string_length = 0x8001198c,
     };
     return sdk_format_output(c, &layout);
 }
@@ -266,12 +280,24 @@ bool nc_launcher_run_modules(CPUState *c) {
         NC_POLL(c, 2);
         u32 path;
         switch (arm) {
-        case 0x80010688: path = 0x00; break; /* PSX */
-        case 0x800106b0: path = 0x14; break; /* STREAM1 */
-        case 0x800106c8: path = 0x2c; break; /* PSX2 */
-        case 0x800106e0: path = 0x40; break; /* STREAM2 */
-        case 0x800106f8: path = 0x58; break; /* STREAM3 */
-        case 0x80010710: path = 0x70; break; /* CREDITS */
+        case 0x80010688:
+            path = 0x00;
+            break; /* PSX */
+        case 0x800106b0:
+            path = 0x14;
+            break; /* STREAM1 */
+        case 0x800106c8:
+            path = 0x2c;
+            break; /* PSX2 */
+        case 0x800106e0:
+            path = 0x40;
+            break; /* STREAM2 */
+        case 0x800106f8:
+            path = 0x58;
+            break; /* STREAM3 */
+        case 0x80010710:
+            path = 0x70;
+            break;       /* CREDITS */
         case 0x80010778: /* epilogue after the retry loop */
             R(31) = MEM_R32(R(29) + 0x14);
             NC_POLL(c, NC_LOAD_CYCLES);
@@ -446,24 +472,35 @@ bool nc_launcher_restart_interrupts(CPUState *c) {
 
 bool nc_launcher_dispatch_dma_interrupt(CPUState *c) {
     static const DmaDispatchLayout layout = {
-        .entry = 0x80011c24, .slots = 0x8001576c, .print = 0x80011160,
-        .status_message = 0x80010320, .channel_message = 0x8001033c,
+        .entry = 0x80011c24,
+        .slots = 0x8001576c,
+        .print = 0x80011160,
+        .status_message = 0x80010320,
+        .channel_message = 0x8001033c,
     };
     return dispatch_dma_interrupt(c, &layout);
 }
 
 bool nc_launcher_start_dma(CPUState *c) {
     static const InterruptInitLayout layout = {
-        .slots = 0x8001576c, .entry = 0x80011bd4, .clear = 0x80011e50,
-        .register_irq = 0x80010a80, .handler = 0x80011c24, .setter = 0x80011da8,
+        .slots = 0x8001576c,
+        .entry = 0x80011bd4,
+        .clear = 0x80011e50,
+        .register_irq = 0x80010a80,
+        .handler = 0x80011c24,
+        .setter = 0x80011da8,
     };
     return start_dma(c, &layout);
 }
 
 bool nc_launcher_start_vsync(CPUState *c) {
     static const InterruptInitLayout layout = {
-        .slots = 0x80015740, .entry = 0x80011aac, .clear = 0x80011ba8,
-        .register_irq = 0x80010a80, .handler = 0x80011b04, .setter = 0x80011b7c,
+        .slots = 0x80015740,
+        .entry = 0x80011aac,
+        .clear = 0x80011ba8,
+        .register_irq = 0x80010a80,
+        .handler = 0x80011b04,
+        .setter = 0x80011b7c,
     };
     return start_vsync(c, &layout);
 }
@@ -482,19 +519,28 @@ bool nc_launcher_cd_init_interrupt(CPUState *c) {
 
 bool nc_launcher_cd_init(CPUState *c) {
     static const CdInitLayout layout = {
-        .entry = 0x80011e7c, .reset = 0x80011fd4,
-        .sync_handler = 0x80011f0c, .set_sync = 0x80012120,
-        .ready_handler = 0x80011f34, .set_ready = 0x80012138,
-        .read_handler = 0x80011f5c, .set_read = 0x800145dc,
-        .message = 0x8001034c, .print = 0x80011160,
+        .entry = 0x80011e7c,
+        .reset = 0x80011fd4,
+        .sync_handler = 0x80011f0c,
+        .set_sync = 0x80012120,
+        .ready_handler = 0x80011f34,
+        .set_ready = 0x80012138,
+        .read_handler = 0x80011f5c,
+        .set_read = 0x800145dc,
+        .message = 0x8001034c,
+        .print = 0x80011160,
     };
     return cd_init(c, &layout);
 }
 
 bool nc_launcher_wait_vblank(CPUState *c) {
     static const VBlankWaitLayout layout = {
-        .entry = 0x80013f70, .frame = 0x80015760, .message = 0x800105c4,
-        .puts_entry = 0x80013dd8, .clear_pad = 0x80011a8c, .clear_rcnt = 0x80011a9c,
+        .entry = 0x80013f70,
+        .frame = 0x80015760,
+        .message = 0x800105c4,
+        .puts_entry = 0x80013dd8,
+        .clear_pad = 0x80011a8c,
+        .clear_rcnt = 0x80011a9c,
     };
     return wait_vblank(c, &layout);
 }
@@ -505,19 +551,34 @@ bool nc_launcher_vsync(CPUState *c) {
 
 bool nc_launcher_cd_read_sync(CPUState *c) {
     static const CdReadSyncLayout layout = {
-        .entry = 0x80014510, .start_frame = 0x80015b64,
-        .vsync = 0x80013e28, .retry = 0x80014230, .ready = 0x80012100,
+        .entry = 0x80014510,
+        .start_frame = 0x80015b64,
+        .vsync = 0x80013e28,
+        .retry = 0x80014230,
+        .ready = 0x80012100,
     };
     return cd_read_sync(c, &layout);
 }
 
 static const CdReadRetryLayout read_retry = {
-    .entry = 0x80014230, .state = 0x80015b48, .set_sync = 0x80012120,
-    .set_ready = 0x80012138, .status = 0x80011f94, .vsync = 0x80013e28,
-    .lid_message = 0x800105ec, .puts = 0x80013dd8, .fast = 0x80012288,
-    .retry_message = 0x80010604, .control = 0x80012150, .last_pos = 0x80011fc4,
-    .flush = 0x80012040, .mode = 0x80011fa4, .pos_to_int = 0x80012688,
-    .callback = 0x8001400c, .get_sector = 0x8001251c, .mismatch_message = 0x800105d4,
+    .entry = 0x80014230,
+    .state = 0x80015b48,
+    .set_sync = 0x80012120,
+    .set_ready = 0x80012138,
+    .status = 0x80011f94,
+    .vsync = 0x80013e28,
+    .lid_message = 0x800105ec,
+    .puts = 0x80013dd8,
+    .fast = 0x80012288,
+    .retry_message = 0x80010604,
+    .control = 0x80012150,
+    .last_pos = 0x80011fc4,
+    .flush = 0x80012040,
+    .mode = 0x80011fa4,
+    .pos_to_int = 0x80012688,
+    .callback = 0x8001400c,
+    .get_sector = 0x8001251c,
+    .mismatch_message = 0x800105d4,
 };
 
 bool nc_launcher_cd_read_retry(CPUState *c) {
@@ -530,25 +591,34 @@ bool nc_launcher_handle_cd_read(CPUState *c) {
 
 bool nc_launcher_cd_read(CPUState *c) {
     static const CdReadLayout layout = {
-        .entry = 0x80014408, .state = 0x80015b48,
-        .set_sync = 0x80012120, .set_ready = 0x80012138,
-        .vsync = 0x80013e28, .status = 0x80011f94,
-        .control = 0x800123b4, .retry = 0x80014230,
+        .entry = 0x80014408,
+        .state = 0x80015b48,
+        .set_sync = 0x80012120,
+        .set_ready = 0x80012138,
+        .vsync = 0x80013e28,
+        .status = 0x80011f94,
+        .control = 0x800123b4,
+        .retry = 0x80014230,
     };
     return cd_read(c, &layout);
 }
 
 bool nc_launcher_cd_interrupt_callback(CPUState *c) {
     static const CdCallbackLayout layout = {
-        .entry = 0x80013cf8, .getintr = 0x80012708, .ports = 0x80015adc,
-        .callbacks = 0x80015818, .results = 0x80015b80,
+        .entry = 0x80013cf8,
+        .getintr = 0x80012708,
+        .ports = 0x80015adc,
+        .callbacks = 0x80015818,
+        .results = 0x80015b80,
     };
     return cd_interrupt_callback(c, &layout);
 }
 
 static const CdControlLayout launcher_cd_control_layout = {
-    .location_table = 0x80015790, .callback = 0x80015818,
-    .writer = 0x800131cc, .sync = 0x80012c80,
+    .location_table = 0x80015790,
+    .callback = 0x80015818,
+    .writer = 0x800131cc,
+    .sync = 0x80012c80,
 };
 
 bool nc_launcher_cd_control(CPUState *c) {

@@ -8,7 +8,8 @@ typedef struct {
 } CdControlLayout;
 
 /* CD_cw(command, parameters, result, async). The async flag is in the delay slot. */
-static inline void issue_cd_control(CPUState *c, u32 writer, u32 parameters, unsigned result_reg, bool async, u32 resume) {
+static inline void issue_cd_control(CPUState *c, u32 writer, u32 parameters, unsigned result_reg,
+                                    bool async, u32 resume) {
     set_reg(c, 5, parameters);
     set_reg(c, 6, result_reg ? R(result_reg) : 0);
     R(31) = resume;

@@ -16,8 +16,15 @@ static inline u32 print_hi(u32 address) {
  * registers across calls to putchar, memchr and strlen. s4 holds precision
  * during parsing and the unpadded length during output. */
 enum {
-    PRINT_INDEX = 16, PRINT_ARGS, PRINT_DATA, PRINT_FLAGS, PRINT_PRECISION,
-    PRINT_FIELD_SIZE, PRINT_LENGTH, PRINT_FORMAT, PRINT_SIGN = 30
+    PRINT_INDEX = 16,
+    PRINT_ARGS,
+    PRINT_DATA,
+    PRINT_FLAGS,
+    PRINT_PRECISION,
+    PRINT_FIELD_SIZE,
+    PRINT_LENGTH,
+    PRINT_FORMAT,
+    PRINT_SIGN = 30
 };
 
 static void parse_print_width(CPUState *c, const PrintLayout *layout) {
@@ -328,7 +335,8 @@ static void store_print_count(CPUState *c) {
 
 /* Emit left/right padding or precision zeros. The limit is reloaded after
  * each putchar, just as it is in the formatter's four padding loops. */
-static void emit_print_padding(CPUState *c, const PrintLayout *layout, u32 ch, u32 limit_offset, u32 resume) {
+static void emit_print_padding(CPUState *c, const PrintLayout *layout, u32 ch, u32 limit_offset,
+                               u32 resume) {
     bool more;
     do {
         R(31) = resume;
@@ -699,8 +707,7 @@ static inline bool sdk_format_output(CPUState *c, const PrintLayout *layout) {
             emit_print_field(c, layout);
             break;
         }
-next_character:
-        ;
+    next_character:;
     }
 done:
     load_word(c, 2, R(29) + 0x38);

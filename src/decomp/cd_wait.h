@@ -25,7 +25,8 @@ typedef struct {
     bool dma;
 } CdWaitSite;
 
-static void report_cd_wait_timeout(CPUState *c, const CdWaitLayout *layout, const CdWaitSite *site) {
+static void report_cd_wait_timeout(CPUState *c, const CdWaitLayout *layout,
+                                   const CdWaitSite *site) {
     set_reg(c, 4, cd_wait_hi(layout->timeout_message));
     set_reg(c, 4, layout->timeout_message);
     R(31) = site->puts_return;
@@ -171,7 +172,8 @@ static inline bool sync_cd_dma(CPUState *c, const CdWaitLayout *layout, const Cd
 
 /* CheckCallback requests synchronous draining when the IRQ dispatcher is
  * already active. Preserve the selected bank across all user callbacks. */
-static void drain_cd_sync_events(CPUState *c, const CdWaitLayout *layout, u32 interrupt_return, unsigned ready_reg) {
+static void drain_cd_sync_events(CPUState *c, const CdWaitLayout *layout, u32 interrupt_return,
+                                 unsigned ready_reg) {
     cd_flush_port(c, layout->ports);
     R(2) = MEM_R8(R(2));
     NC_POLL(c, NC_LOAD_CYCLES);
@@ -265,7 +267,8 @@ static void finish_cd_sync(CPUState *c, const CdWaitLayout *layout) {
 }
 
 static inline bool sync_cd_command(CPUState *c, const CdWaitLayout *layout, u32 entry) {
-    const CdWaitSite site = {entry + 0x74, entry + 0xc4, entry + 0x118, entry + 0x120, 18, 19, false};
+    const CdWaitSite site = {entry + 0x74, entry + 0xc4, entry + 0x118, entry + 0x120,
+                             18,           19,           false};
     if (c->budget <= 11)
         return false;
     R(29) -= 56;
@@ -369,7 +372,8 @@ static bool take_cd_ready_event(CPUState *c, const CdWaitLayout *layout, bool bu
 }
 
 static inline bool wait_cd_ready(CPUState *c, const CdWaitLayout *layout, u32 entry) {
-    const CdWaitSite site = {entry + 0x7c, entry + 0xcc, entry + 0x120, entry + 0x128, 18, 21, false};
+    const CdWaitSite site = {entry + 0x7c, entry + 0xcc, entry + 0x120, entry + 0x128,
+                             18,           21,           false};
     if (c->budget <= 12)
         return false;
     R(29) -= 64;

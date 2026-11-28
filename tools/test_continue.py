@@ -61,7 +61,9 @@ def main(binary, disc):
             if want[:5] != got[:5] or any(
                 int(want[i]) - int(expected[0][i]) != int(got[i]) for i in (5, 6)
             ):
-                raise ValueError(f"Continue diverged on level update {frame}: {got}, expected {want}")
+                raise ValueError(
+                    f"Continue diverged on level update {frame}: {got}, expected {want}"
+                )
         print(f"Continue matched {len(expected)} gameplay updates after a cold start.")
     return 0
 

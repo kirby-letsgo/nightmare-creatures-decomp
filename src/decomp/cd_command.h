@@ -15,7 +15,8 @@ static void load_cd_command_table(CPUState *c, unsigned reg, unsigned offset_reg
     load_word(c, reg, R(1) + (s16)table);
 }
 
-static void print_cd_command(CPUState *c, const CdWaitLayout *layout, unsigned index_reg, u32 format, u32 resume) {
+static void print_cd_command(CPUState *c, const CdWaitLayout *layout, unsigned index_reg,
+                             u32 format, u32 resume) {
     load_cd_command_table(c, 5, index_reg, layout->command_names);
     set_reg(c, 4, cd_wait_hi(format));
     set_reg(c, 4, format);
@@ -115,7 +116,8 @@ static void write_cd_command_ports(CPUState *c, const CdWaitLayout *layout) {
 
 static void wait_cd_command_ack(CPUState *c, const CdWaitLayout *layout) {
     const u32 entry = layout->writer;
-    const CdWaitSite site = {entry + 0x21c, entry + 0x26c, entry + 0x2c0, entry + 0x2c8, 18, 19, false};
+    const CdWaitSite site = {entry + 0x21c, entry + 0x26c, entry + 0x2c0, entry + 0x2c8, 18, 19,
+                             false};
     R(31) = layout->writer + 0x1cc;
     R(4) = UINT32_MAX;
     NC_POLL(c, 2);

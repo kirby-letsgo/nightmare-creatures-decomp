@@ -512,7 +512,7 @@ bool nc_credits_entry(CPUState *c) {
     if (c->budget <= cycles)
         return false;
 
-    c->budget -= 5; /* address setup before the first load */
+    c->budget -= 5;             /* address setup before the first load */
     R(8) = MEM_R32(0x80024c44); /* configured memory size */
     R(10) = heap_start & 0x1fffffffu;
     c->budget -= NC_LOAD_CYCLES + 6;

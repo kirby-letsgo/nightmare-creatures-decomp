@@ -1,26 +1,26 @@
-#include "decomp/sdk_formatter.h"
+#include "decomp/bios_service.h"
+#include "decomp/byte_scan.h"
 #include "decomp/cd_control.h"
+#include "decomp/cd_init.h"
 #include "decomp/cd_interrupt_callback.h"
-#include "decomp/cd_sector_dma.h"
+#include "decomp/cd_irq.h"
+#include "decomp/cd_position.h"
 #include "decomp/cd_read.h"
 #include "decomp/cd_read_retry.h"
 #include "decomp/cd_read_sync.h"
-#include "decomp/vsync.h"
-#include "decomp/vblank_wait.h"
-#include "decomp/cd_init.h"
-#include "decomp/sdk_putchar.h"
-#include "decomp/sdk_puts.h"
-#include "decomp/sdk_printf.h"
-#include "decomp/cd_irq.h"
-#include "decomp/cd_position.h"
-#include "decomp/byte_scan.h"
+#include "decomp/cd_sector_dma.h"
 #include "decomp/cd_state.h"
 #include "decomp/cd_volume.h"
-#include "decomp/interrupt_dispatch.h"
-#include "decomp/bios_service.h"
 #include "decomp/credits.h"
+#include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
+#include "decomp/sdk_formatter.h"
+#include "decomp/sdk_printf.h"
+#include "decomp/sdk_putchar.h"
+#include "decomp/sdk_puts.h"
+#include "decomp/vblank_wait.h"
+#include "decomp/vsync.h"
 
 /* The credits copy routine advances one byte at a time, even when the two
  * ranges overlap. A null destination or a nonpositive count skips the loop. */
@@ -158,9 +158,15 @@ bool nc_credits_append_string(CPUState *c) {
 
 bool nc_credits_format_output(CPUState *c) {
     static const PrintLayout layout = {
-        .entry = 0x80019a9c, .lower_digits = 0x800180e4, .null_string = 0x800180f8,
-        .upper_digits = 0x80018100, .conversions = 0x80018114, .char_class = 0x80023375,
-        .put_char = 0x8001a1d8, .find_byte = 0x8001a188, .string_length = 0x80019a30,
+        .entry = 0x80019a9c,
+        .lower_digits = 0x800180e4,
+        .null_string = 0x800180f8,
+        .upper_digits = 0x80018100,
+        .conversions = 0x80018114,
+        .char_class = 0x80023375,
+        .put_char = 0x8001a1d8,
+        .find_byte = 0x8001a188,
+        .string_length = 0x80019a30,
     };
     return sdk_format_output(c, &layout);
 }
@@ -195,8 +201,12 @@ bool nc_credits_vsync(CPUState *c) {
 
 bool nc_credits_wait_vblank(CPUState *c) {
     static const VBlankWaitLayout layout = {
-        .entry = 0x8001a59c, .frame = 0x800244d4, .message = 0x800182f8,
-        .puts_entry = 0x8001a638, .clear_pad = 0x8001a2ac, .clear_rcnt = 0x8001a688,
+        .entry = 0x8001a59c,
+        .frame = 0x800244d4,
+        .message = 0x800182f8,
+        .puts_entry = 0x8001a638,
+        .clear_pad = 0x8001a2ac,
+        .clear_rcnt = 0x8001a688,
     };
     return wait_vblank(c, &layout);
 }
@@ -2770,8 +2780,8 @@ static bool dump_environment(CPUState *c, bool draw) {
         }
         report_fields(c, 0x800183e8, 0x8001bc6c, false); /* drawing offset */
         report_rectangle(c, 12, 0x800183f8, 0x8001bc94); /* texture window */
-        report_flag(c, 22, 0x80018410, 0x8001bcb0); /* dithering */
-        report_flag(c, 23, 0x8001841c, 0x8001bccc); /* draw to display */
+        report_flag(c, 22, 0x80018410, 0x8001bcb0);      /* dithering */
+        report_flag(c, 23, 0x8001841c, 0x8001bccc);      /* draw to display */
         report_draw_page(c);
     } else {
         report_rectangle(c, 0, 0x80018428, 0x8001bdcc);
@@ -3905,7 +3915,7 @@ bool nc_credits_draw_otag_env(CPUState *c) {
     set_reg(c, 3, 0xff000000);
     load_word(c, 2, R(17) + 28);
     set_reg(c, 4, R(18) & R(4)); /* 24-bit ordering table address */
-    set_reg(c, 2, R(2) & R(3)); /* retain the packet length */
+    set_reg(c, 2, R(2) & R(3));  /* retain the packet length */
     submit_draw_env(c, 19, 0x8001cac4, 0x8001cad4);
     load_word(c, 31, R(29) + 32);
     load_word(c, 19, R(29) + 28);
@@ -5735,8 +5745,11 @@ void nc_credits_restore_jump_context(CPUState *c) {
 
 bool nc_credits_dispatch_dma_interrupt(CPUState *c) {
     static const DmaDispatchLayout layout = {
-        .entry = 0x8001b000, .slots = 0x800244e0, .print = 0x80019a60,
-        .status_message = 0x8001837c, .channel_message = 0x80018398,
+        .entry = 0x8001b000,
+        .slots = 0x800244e0,
+        .print = 0x80019a60,
+        .status_message = 0x8001837c,
+        .channel_message = 0x80018398,
     };
     return dispatch_dma_interrupt(c, &layout);
 }
@@ -5747,16 +5760,24 @@ bool nc_credits_set_dma_slot(CPUState *c) {
 
 bool nc_credits_start_dma(CPUState *c) {
     static const InterruptInitLayout layout = {
-        .slots = 0x800244e0, .entry = 0x8001afb0, .clear = 0x8001b22c,
-        .register_irq = 0x8001a6c8, .handler = 0x8001b000, .setter = 0x8001b184,
+        .slots = 0x800244e0,
+        .entry = 0x8001afb0,
+        .clear = 0x8001b22c,
+        .register_irq = 0x8001a6c8,
+        .handler = 0x8001b000,
+        .setter = 0x8001b184,
     };
     return start_dma(c, &layout);
 }
 
 bool nc_credits_start_vsync(CPUState *c) {
     static const InterruptInitLayout layout = {
-        .slots = 0x800244b4, .entry = 0x8001ae88, .clear = 0x8001af84,
-        .register_irq = 0x8001a6c8, .handler = 0x8001aee0, .setter = 0x8001af58,
+        .slots = 0x800244b4,
+        .entry = 0x8001ae88,
+        .clear = 0x8001af84,
+        .register_irq = 0x8001a6c8,
+        .handler = 0x8001aee0,
+        .setter = 0x8001af58,
     };
     return start_vsync(c, &layout);
 }
@@ -5795,10 +5816,18 @@ bool nc_credits_cd_mix(CPUState *c) {
 
 bool nc_credits_initialize_cd_driver(CPUState *c) {
     static const CdDriverInitLayout layout = {
-        .entry = 0x800216ec, .message = 0x80018980, .format = 0x8001898c,
-        .ports = 0x80024a20, .callbacks = 0x8002475c, .puts = 0x8001a638,
-        .print = 0x80019a60, .reset = 0x8001a698, .install = 0x8001a6c8,
-        .handler = 0x80021b54, .command = 0x80021028, .sync = 0x80020adc,
+        .entry = 0x800216ec,
+        .message = 0x80018980,
+        .format = 0x8001898c,
+        .ports = 0x80024a20,
+        .callbacks = 0x8002475c,
+        .puts = 0x8001a638,
+        .print = 0x80019a60,
+        .reset = 0x8001a698,
+        .install = 0x8001a6c8,
+        .handler = 0x80021b54,
+        .command = 0x80021028,
+        .sync = 0x80020adc,
     };
     return initialize_cd_driver(c, &layout);
 }
@@ -5861,7 +5890,8 @@ static const CdWaitLayout credits_cd_wait = {
     .dma_name = 0x80018998,
 };
 
-static const CdWaitSite cd_dma_wait = {0x80021940, 0x80021990, 0x800219e0, 0x800219e8, 17, 16, true};
+static const CdWaitSite cd_dma_wait = {0x80021940, 0x80021990, 0x800219e0, 0x800219e8,
+                                       17,         16,         true};
 
 bool nc_credits_get_cd_interrupt(CPUState *c) {
     return get_cd_interrupt(c, &credits_cd_wait);
@@ -6062,7 +6092,7 @@ bool nc_credits_control_cd_playback(CPUState *c) {
             R(4) = 0;
             NC_POLL(c, 2);
             nc_call(c, 0x8001ff94); /* clear ready callback */
-            set_reg(c, 4, 9); /* CdlPause */
+            set_reg(c, 4, 9);       /* CdlPause */
             set_reg(c, 5, 0);
             R(31) = 0x80022d8c;
             R(6) = 0;
@@ -6429,7 +6459,7 @@ bool nc_credits_read_track_positions(CPUState *c) {
     MEM_W8(R(29) + 16, (u8)R(2));
     NC_POLL(c, 2);
     nc_call(c, 0x8001ff7c); /* disable sync callback during blocking commands */
-    set_reg(c, 4, 0x13); /* CdlGetTN */
+    set_reg(c, 4, 0x13);    /* CdlGetTN */
     set_reg(c, 5, 0);
     set_reg(c, 17, R(29) + 24);
     set_reg(c, 6, R(17));
@@ -6487,11 +6517,16 @@ bool nc_credits_cd_get_toc(CPUState *c) {
 
 bool nc_credits_cd_init(CPUState *c) {
     static const CdInitLayout layout = {
-        .entry = 0x8001fce8, .reset = 0x8001fe30,
-        .sync_handler = 0x8001fd78, .set_sync = 0x8001ff7c,
-        .ready_handler = 0x8001fda0, .set_ready = 0x8001ff94,
-        .read_handler = 0x8001fdc8, .set_read = 0x80022cb4,
-        .message = 0x80018734, .print = 0x80019a60,
+        .entry = 0x8001fce8,
+        .reset = 0x8001fe30,
+        .sync_handler = 0x8001fd78,
+        .set_sync = 0x8001ff7c,
+        .ready_handler = 0x8001fda0,
+        .set_ready = 0x8001ff94,
+        .read_handler = 0x8001fdc8,
+        .set_read = 0x80022cb4,
+        .message = 0x80018734,
+        .print = 0x80019a60,
     };
     return cd_init(c, &layout);
 }
@@ -6533,8 +6568,10 @@ bool nc_credits_cd_read_callback(CPUState *c) {
 }
 
 static const CdControlLayout credits_cd_control_layout = {
-    .location_table = 0x800246d4, .callback = 0x8002475c,
-    .writer = 0x80021028, .sync = 0x80020adc,
+    .location_table = 0x800246d4,
+    .callback = 0x8002475c,
+    .writer = 0x80021028,
+    .sync = 0x80020adc,
 };
 
 bool nc_credits_cd_control(CPUState *c) {
@@ -6563,19 +6600,34 @@ bool nc_credits_cd_sector_to_position(CPUState *c) {
 
 bool nc_credits_cd_interrupt_callback(CPUState *c) {
     static const CdCallbackLayout layout = {
-        .entry = 0x80021b54, .getintr = 0x80020564, .ports = 0x80024a20,
-        .callbacks = 0x8002475c, .results = 0x80024e30,
+        .entry = 0x80021b54,
+        .getintr = 0x80020564,
+        .ports = 0x80024a20,
+        .callbacks = 0x8002475c,
+        .results = 0x80024e30,
     };
     return cd_interrupt_callback(c, &layout);
 }
 
 static const CdReadRetryLayout read_retry = {
-    .entry = 0x80022908, .state = 0x80024a74, .set_sync = 0x8001ff7c,
-    .set_ready = 0x8001ff94, .status = 0x8001fdf0, .vsync = 0x8001a454,
-    .lid_message = 0x80018ba8, .puts = 0x8001a638, .fast = 0x800200e4,
-    .retry_message = 0x80018bc0, .control = 0x8001ffac, .last_pos = 0x8001fe20,
-    .flush = 0x8001fe9c, .mode = 0x8001fe00, .pos_to_int = 0x800204e4,
-    .callback = 0x800226e4, .get_sector = 0x80020378, .mismatch_message = 0x80018b90,
+    .entry = 0x80022908,
+    .state = 0x80024a74,
+    .set_sync = 0x8001ff7c,
+    .set_ready = 0x8001ff94,
+    .status = 0x8001fdf0,
+    .vsync = 0x8001a454,
+    .lid_message = 0x80018ba8,
+    .puts = 0x8001a638,
+    .fast = 0x800200e4,
+    .retry_message = 0x80018bc0,
+    .control = 0x8001ffac,
+    .last_pos = 0x8001fe20,
+    .flush = 0x8001fe9c,
+    .mode = 0x8001fe00,
+    .pos_to_int = 0x800204e4,
+    .callback = 0x800226e4,
+    .get_sector = 0x80020378,
+    .mismatch_message = 0x80018b90,
 };
 
 bool nc_credits_cd_read_retry(CPUState *c) {
@@ -6588,18 +6640,25 @@ bool nc_credits_handle_cd_read(CPUState *c) {
 
 bool nc_credits_cd_read(CPUState *c) {
     static const CdReadLayout layout = {
-        .entry = 0x80022ae0, .state = 0x80024a74,
-        .set_sync = 0x8001ff7c, .set_ready = 0x8001ff94,
-        .vsync = 0x8001a454, .status = 0x8001fdf0,
-        .control = 0x80020210, .retry = 0x80022908,
+        .entry = 0x80022ae0,
+        .state = 0x80024a74,
+        .set_sync = 0x8001ff7c,
+        .set_ready = 0x8001ff94,
+        .vsync = 0x8001a454,
+        .status = 0x8001fdf0,
+        .control = 0x80020210,
+        .retry = 0x80022908,
     };
     return cd_read(c, &layout);
 }
 
 bool nc_credits_cd_read_sync(CPUState *c) {
     static const CdReadSyncLayout layout = {
-        .entry = 0x80022be8, .start_frame = 0x80024a90,
-        .vsync = 0x8001a454, .retry = 0x80022908, .ready = 0x8001ff5c,
+        .entry = 0x80022be8,
+        .start_frame = 0x80024a90,
+        .vsync = 0x8001a454,
+        .retry = 0x80022908,
+        .ready = 0x8001ff5c,
     };
     return cd_read_sync(c, &layout);
 }

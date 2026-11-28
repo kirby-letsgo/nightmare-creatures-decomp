@@ -5,8 +5,8 @@
 
 /* The SDK looks up the current driver on each call. VSyncCallback(handler)
  * inserts slot zero before the handler argument in the jalr delay slot. */
-static inline bool interrupt_driver_call(CPUState *c, u32 driver_slot, u32 offset,
-                                         u32 resume, bool vsync_slot_zero) {
+static inline bool interrupt_driver_call(CPUState *c, u32 driver_slot, u32 offset, u32 resume,
+                                         bool vsync_slot_zero) {
     const int call_cycles = vsync_slot_zero ? 13 : 12;
     if (c->budget <= call_cycles)
         return false;

@@ -31,7 +31,8 @@ static inline void wait_for_vsync_field(CPUState *c, u32 slots) {
     }
 }
 
-static inline void wait_for_vsync_frames(CPUState *c, u32 slots, u32 frame, u32 entry, u32 wait_entry) {
+static inline void wait_for_vsync_frames(CPUState *c, u32 slots, u32 frame, u32 entry,
+                                         u32 wait_entry) {
     const u32 slots_hi = (slots + 0x8000u) & 0xffff0000u;
     const u32 frame_hi = (frame + 0x8000u) & 0xffff0000u;
     bool positive = (s32)R(4) > 0;

@@ -531,9 +531,9 @@ int main(int argc, char **argv) {
         if (!savestate_load_resume(&pc, &stack)) {
             NC_LOG("Cannot Continue: %s", savestate_message());
             if (!headless) {
-                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Continue",
-                                         "The saved session could not be opened. Choose Start Game to play.",
-                                         window);
+                SDL_ShowSimpleMessageBox(
+                    SDL_MESSAGEBOX_ERROR, "Continue",
+                    "The saved session could not be opened. Choose Start Game to play.", window);
             }
             return 1;
         }
