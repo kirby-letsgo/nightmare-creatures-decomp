@@ -15,7 +15,12 @@ def main(binary, disc):
         folder = Path(tmp)
         (folder / "settings.ini").write_text("controls=tank\nadrenaline=on\nmouse_camera=off\n")
         level = folder / "level.input"
-        env = {k: v for k, v in os.environ.items() if not k.startswith("NC_")}
+        # Keep shadow-mode settings (tools/test_shadow.py); drop every other NC_ variable.
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith("NC_") or k.startswith("NC_SHADOW")
+        }
         env.update(
             NC_HEADLESS="1",
             NC_DATA_DIR=tmp + os.sep,

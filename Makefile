@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 CLANG_FORMAT := .venv/bin/clang-format
 
-.PHONY: setup extract sigs configs split recomp state build build-native build-watch build-interp lint format verify clean
+.PHONY: setup extract sigs configs split recomp state build build-native build-watch build-interp lint format verify shadow clean
 
 setup:
 	python3 -m venv .venv
@@ -68,6 +68,11 @@ verify: lint
 	$(MAKE) build build-native
 	ctest --test-dir build/cmake -j8 --output-on-failure
 	ctest --test-dir build/cmake-native -j8 --output-on-failure
+
+# Shadow mode: run every replay on the release build with each call to a handwritten routine
+# checked against the original instructions; lists the registry entries no replay reached.
+shadow: build-native
+	$(PYTHON) tools/test_shadow.py --build build/cmake-native
 
 clean:
 	rm -rf build/cmake

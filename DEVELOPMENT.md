@@ -361,7 +361,29 @@ including the cycle budget. Readable names come later.
    Do not add per-address code to `recomp.py`.
 4. Add equivalence cases to `tests/<file>.c` (a `*_rules` test without the disc where possible,
    and a `*_disc` test) and register them in `CMakeLists.txt`.
-5. Add the covered range to `config/decomp_ranges.txt`, then run `make verify`.
+5. Add the covered range to `config/decomp_ranges.txt`, then run `make verify` and `make shadow`.
+
+### Shadow mode
+
+`make shadow` builds `build/cmake-native` and runs every replay (first level, combat, no
+adrenaline, Continue, the three credits scenarios) with `NC_SHADOW=1`. Each call to an `entry`
+routine is then checked on the replay's real state. The run snapshots the machine, runs the
+handwritten routine, restores the snapshot, and interprets the original instructions with every
+nested call interpreted too. It then compares the two runs and keeps the interpreter's result.
+The snapshot covers CPU, RAM, scratchpad, cycle counters, BIOS (including the interrupt
+context), IRQ, timers, DMA, GPU, SPU, CD-ROM and MDEC. A routine that declines must leave all of
+it unchanged. Calls made inside a native run are shadowed as well, up to 8 deep. Mismatches print
+the routine, the call, the first differing register or address with both values, and the number
+of differing words. The target fails on any mismatch and lists the entries no replay reached.
+
+A native run is abandoned before any effect the snapshot cannot undo: a VBlank (frame output,
+input), a hook, `Exec` or a memory-card write. Those calls run normally and are not checked, so
+routines that always span a frame (CD loads, VSync waits, the module loop) are listed as never
+checkable. Each process checks `NC_SHADOW_LIMIT` calls per routine (default 50; about 0.6 ms
+each). `NC_SHADOW_FATAL=1` stops at the first mismatch, and `NC_SHADOW_REPORT=file` appends
+per-routine counts for `tools/test_shadow.py`. Shadow mode needs the native registry
+(`make build-native`). It assumes widescreen is off and no audio device is open, as in the
+headless replays.
 
 ### Adding a patch or hook
 
