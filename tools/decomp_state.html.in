@@ -27,7 +27,8 @@ thead th{font-size:.86rem} tbody th{font-weight:500} footer{margin-top:2rem;font
 <th>Decompiled</th><th>Remaining</th><th>Complete</th></tr></thead><tbody>$rows</tbody></table></div>
 <p class="note">Each line represents one decoded instruction in the $modules executables.
 Each address counts once per executable. The project coverage register credits $sources handwritten C files
-toward completion. Generated C, data directives and port infrastructure are excluded.</p>
+toward completion. Generated C, data directives and port infrastructure are excluded, as are
+$padding alignment-padding <code>nop</code>s that follow a function's final jump and its delay slot.</p>
 <p class="note">Project files include existing tracked and non-ignored untracked files in this checkout.
 A dash indicates that Git inventory is unavailable.</p>
 <footer>Updated $updated · Refresh with <code>make state</code> after updating
