@@ -4733,6 +4733,49 @@ static bool placement_x_step_distances(bool disc) {
     return true;
 }
 
+static bool placement_reference_distances(bool disc) {
+    const s16 coords[][4] = {{3, -4, 0, 0}, {-8, 7, -8, -7},
+                             {INT16_MIN, INT16_MAX, INT16_MAX, INT16_MAX}};
+    const u16 saved_x = MEM_R16(0x800d7630), saved_z = MEM_R16(0x800d7634);
+    CPUState input = initial(), native;
+    input.r[16] = SCRATCH_BASE;
+    input.r[31] = 0x800475e4;
+    for (unsigned i = 0; i < sizeof coords / sizeof coords[0]; ++i) {
+        MEM_W16(SCRATCH_BASE + 0x18, (u16)coords[i][0]);
+        MEM_W16(SCRATCH_BASE + 0x1c, (u16)coords[i][1]);
+        MEM_W16(0x800d7630, (u16)coords[i][2]);
+        MEM_W16(0x800d7634, (u16)coords[i][3]);
+        const u32 dx = coords[i][0] - coords[i][2], dz = coords[i][1] + coords[i][3];
+        if (!compare(input, 0x80029be4, nc_prepare_placement_reference_distance, disc, &native) ||
+            native.r[4] != dx * dx + dz * dz || native.r[31] != 0x80029c24)
+            return false;
+    }
+    MEM_W16(0x800d7630, saved_x);
+    MEM_W16(0x800d7634, saved_z);
+    const s32 distances[] = {-1, 0, 99, 100, 101};
+    for (unsigned i = 0; i < sizeof distances / sizeof distances[0]; ++i) {
+        const bool near = distances[i] < 100;
+        input.r[2] = (u32)distances[i];
+        input.r[31] = near ? 0x8002a018 : 0x8002a560;
+        input.budget = near ? 8 : 3;
+        MEM_W32(SCRATCH_BASE + 0x2c, 0x80000007);
+        native = input;
+        if (nc_finish_placement_reference_distance(&native) || memcmp(&input, &native, sizeof input))
+            return false;
+        native.budget = ++input.budget;
+        if (nc_finish_placement_reference_distance(&native) != input.r[31] || native.budget != 1 ||
+            native.r[2] != (near ? 0x80000003u : 0) || native.r[3] != ~4u)
+            return false;
+        if (disc) {
+            CPUState guest = input;
+            interp_call(&guest, 0x80029c24);
+            if (memcmp(&guest, &native, sizeof guest))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool placement_height_flags(bool disc) {
     const s16 heights[] = {INT16_MIN, -517, -516, -515, INT16_MAX};
     const u32 base = 0x80120000;
@@ -9713,7 +9756,7 @@ int main(int argc, char **argv) {
         linked_placement_axes(disc) && linked_placement_calls(disc) && placement_followup_calls(disc) &&
         placement_step_returns(disc) &&
         placement_mode_calls(disc) && placement_coordinate_step_calls(disc) && placement_coordinate_returns(disc) &&
-        placement_x_step_distances(disc) && placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
+        placement_reference_distances(disc) && placement_x_step_distances(disc) && placement_height_flags(disc) && placement_word_decreases(disc) && four_placement_flags(disc, false) &&
         four_placement_flags(disc, true) && placement_step_flag_groups(disc) && six_placement_flags(disc) && placement_step_flag_pairs(disc) &&
         shared_placement_y_steps(disc) &&
         flagged_placement_y_steps(disc) && indexed_placement_x_steps(disc) &&

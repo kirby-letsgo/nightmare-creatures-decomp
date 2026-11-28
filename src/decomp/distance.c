@@ -5520,6 +5520,38 @@ u32 nc_prepare_placement_x_step_distance(CPUState *c) {
     return 0x800475e4;
 }
 
+bool nc_prepare_placement_reference_distance(CPUState *c) {
+    if (c->budget <= 24)
+        return false;
+    const s16 x = (s16)MEM_R16(R(16) + 0x18);
+    const u32 dx = x - (s16)MEM_R16(0x800d7630);
+    const s16 z = (s16)MEM_R16(R(16) + 0x1c);
+    const s16 reference_z = (s16)MEM_R16(0x800d7634);
+    const u32 dz = z + reference_z;
+    nc_mult(c, dz, dz);
+    R(2) = (u32)(s32)reference_z;
+    R(3) = c->lo;
+    R(4) = dx * dx + c->lo;
+    R(31) = 0x80029c24;
+    c->budget -= 24;
+    return true;
+}
+
+u32 nc_finish_placement_reference_distance(CPUState *c) {
+    const bool near = (s32)R(2) < 100;
+    const int cycles = near ? 8 : 3;
+    if (c->budget <= cycles)
+        return 0;
+    c->budget -= cycles;
+    R(3) = ~4u;
+    if (near) {
+        R(2) = MEM_R32(R(16) + 0x2c) & R(3);
+        return 0x8002a018;
+    }
+    R(2) = 0;
+    return 0x8002a560;
+}
+
 bool nc_update_placement_height_flags(CPUState *c) {
     if (c->budget <= 28)
         return false;

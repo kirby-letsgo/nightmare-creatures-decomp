@@ -1221,7 +1221,7 @@ class Emitter:
             targets.update((0x800343D8, 0x80034480, 0x8003475C, 0x80034788))
         if self.mod.name == "psx2_exe" and f.addr == 0x800297C8:
             targets.update(
-                (0x800297FC, 0x80029810, 0x800298A8, 0x800298D0, 0x800298F8, 0x80029910, 0x80029920, 0x80029948, 0x80029BC0,
+                (0x800297FC, 0x80029810, 0x800298A8, 0x800298D0, 0x800298F8, 0x80029910, 0x80029920, 0x80029948, 0x80029BC0, 0x80029C24,
                  0x80029E60, 0x80029F24, 0x80029FA8, 0x8002A204, 0x8002A23C,
                  0x8002A250, 0x8002A5B8, 0x8002A5CC)
             )
@@ -3288,6 +3288,14 @@ class Emitter:
                 out.append("    case 0x800475e4:")
                 out.append(f"        {self.call(0x800475E4)}")
                 out.append("        goto L_80029BC0; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029BE4:
+                out.append("    if (nc_prepare_placement_reference_distance(c)) {")
+                out.append(f"        {self.call(0x800475E4)}")
+                out.append("        goto L_80029C24; }")
+            if self.mod.name == "psx2_exe" and i.addr == 0x80029C24:
+                out.append("    switch (nc_finish_placement_reference_distance(c)) {")
+                out.append("    case 0x8002a018: goto L_8002A018;")
+                out.append("    case 0x8002a560: goto L_8002A560; }")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029CD0:
                 out.append("    if (nc_update_placement_height_flags(c)) goto L_8002A560;")
             if self.mod.name == "psx2_exe" and i.addr == 0x80029D3C:

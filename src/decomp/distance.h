@@ -145,6 +145,8 @@ bool nc_prepare_placement_timestamp_call(CPUState *c, u32 resume);
 u32 nc_route_placement_followup(CPUState *c);
 bool nc_call_placement_mode(CPUState *c, u32 mode, u32 resume);
 u32 nc_prepare_placement_x_step_distance(CPUState *c);
+bool nc_prepare_placement_reference_distance(CPUState *c);
+u32 nc_finish_placement_reference_distance(CPUState *c);
 bool nc_update_placement_height_flags(CPUState *c);
 bool nc_decrease_placement_word(CPUState *c);
 bool nc_update_placement_step_flag_group(CPUState *c, bool set);
