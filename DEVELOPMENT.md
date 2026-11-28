@@ -9,9 +9,12 @@ game, see the [README](README.md).
 - **Never commit game data or anything derived from it**: no disc images, extracted files,
   `gen/` (recompiled code) or RAM dumps. `.gitignore` covers `roms/`, `build/` and `gen/`.
   Addresses, sizes and symbol names (`config/`) are fine.
-- Release builds must stay **interpreter-only** (`NC_INTERPRETER_ONLY`), so the published
-  binaries contain only this project's code.
-- Run `make lint` before committing (clang-format for C/C++, ruff for Python).
+- Release builds never link recompiled code (`NC_INTERPRETER_ONLY`), so the published binaries
+  contain only this project's code: the handwritten routines in `src/decomp`, with everything
+  else interpreted from the player's disc.
+- Run `make verify` before pushing. It lints, runs the disc equivalence tests and replays
+  against both the recompiled and the release build, and checks the committed inventory. CI has
+  no disc, so this is the only place those run.
 
 ## Requirements
 
@@ -50,10 +53,11 @@ again before `make build`.
 | Command | Output | Game code |
 |---|---|---|
 | `make build` | `build/cmake/nightmare` | Recompiled C from `gen/` (fast; the development build) |
-| `make build-interp` | `build/cmake-interp/nightmare` | Interpreted from the disc at runtime (what releases ship) |
+| `make build-native` | `build/cmake-native/nightmare` | Handwritten routines native, the rest interpreted (what releases ship) |
+| `make build-interp` | `build/cmake-interp/nightmare` | Everything interpreted, handwritten routines unused (reference) |
 | `make build-watch` | `build/cmake-watch/nightmare` | Recompiled, plus memory watchpoints and function coverage (slower) |
 
-Without a `gen/` folder, `make build` also produces an interpreter-only executable.
+Without a `gen/` folder, `make build` produces the same executable as `make build-native`.
 
 ## How it works
 
@@ -337,6 +341,28 @@ build/cmake-interp/test_disc_formats 'roms/Nightmare Creatures.chd' 'path/to/spl
 Recompiled functions are named `<module>_<address>` (e.g. `psx2_exe_8001A304`), so native
 backtraces (crash logs, `NC_TRACE_STACK`, profilers) read as the guest call stack.
 
+### Decompiling a routine
+
+The goal is a release build that needs no interpreter: every original routine replaced by
+handwritten C that leaves the CPU in exactly the state the original instructions would,
+including the cycle budget. Readable names come later.
+
+1. Pick work from `tools/work_queue.py` (uncovered functions, leaf-first, with Psy-Q names and
+   duplicate twins in other executables). Prefer whole routines over fragments.
+2. Write `bool nc_<name>(CPUState *c)` in `src/decomp/<file>.c` and declare it in the header.
+   Return false without side effects when `c->budget` is too small, as the existing routines do.
+3. Add a row to `config/splices/<file>.txt`:
+   - `<module> <addr> entry nc_<name>(c)` replaces the whole routine at `addr`. Release builds
+     call it through the dispatcher (`tools/gen_registry.py`) and the recompiler emits
+     `if (nc_<name>(c)) return;` at the routine's start.
+   - `<module> <addr> at <C statement>` splices a statement before the instruction at `addr`
+     in recompiled code only; every `goto L_<addr>` in it becomes a label. Use it for fragments.
+   - `include decomp/<file>.h` once per file, for the declarations.
+   Do not add per-address code to `recomp.py`.
+4. Add equivalence cases to `tests/<file>.c` (a `*_rules` test without the disc where possible,
+   and a `*_disc` test) and register them in `CMakeLists.txt`.
+5. Add the covered range to `config/decomp_ranges.txt`, then run `make verify`.
+
 ### Adding a patch or hook
 
 - **Patch:** add `psx2_exe <address> <flag>` to `config/patches.txt`, define `bool nc_flag_<flag>`
@@ -349,9 +375,11 @@ Then `make recomp && make build` (the interpreter build picks both up automatica
 
 ## Continuous integration and releases
 
-`.github/workflows/build.yml` builds the interpreter-only executable on macOS (universal), Windows
-(MSVC, static runtime) and Linux (Ubuntu 22.04) with a statically linked SDL3, runs the smoke test
-(`ctest`: `nightmare --version`), and packages a `.dmg`, an `.exe` and an AppImage
+`.github/workflows/build.yml` lints, validates `config/splices`, and publishes the progress table
+(from the committed `config/inventory`) as the job summary and a `state.html` artifact. It builds
+the release executable on macOS (universal), Windows (MSVC, static runtime) and Linux
+(Ubuntu 22.04) with a statically linked SDL3, runs the tests that need no disc (`ctest`), and
+packages a `.dmg`, an `.exe` and an AppImage
 (`packaging/`). The Android job builds an arm64 APK with the SDK and NDK (see below). Every push to `main`
 refreshes the `latest` pre-release when all platform jobs succeed.
 
@@ -390,7 +418,8 @@ Configure a stable release key for updates that preserve installed saves across 
 
 ## Roadmap
 
-- Readable decompilation of the core systems (player, camera, adrenaline), replacing recompiled
-  functions one at a time (hand-written functions override generated ones by address).
+- Replace every original routine with handwritten C (see "Decompiling a routine"), then drop
+  the interpreter from release builds.
+- Readable names and structure for the core systems (player, camera, adrenaline).
 - A GPU-based renderer, so upscaling above 3× runs at full speed.
 - Code signing and notarization for the release builds.

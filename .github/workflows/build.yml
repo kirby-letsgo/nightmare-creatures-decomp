@@ -1,9 +1,10 @@
 name: Build
 
-# Builds interpreter-only packages for macOS, Windows, Linux and Android. CI has no disc
-# image, so no recompiled code is involved: the packages contain only this project's code and
-# need the player's own Nightmare Creatures (USA) disc image to run. Pushes to main also refresh the
-# rolling "latest" pre-release.
+# Builds release packages for macOS, Windows, Linux and Android. CI has no disc image, so no
+# recompiled code is involved: the packages contain only this project's code (the handwritten
+# routines in src/decomp, with everything else interpreted) and need the player's own Nightmare
+# Creatures (USA) disc image to run. Disc equivalence tests and replays run locally through
+# `make verify`. Pushes to main also refresh the rolling "latest" pre-release.
 
 on:
   push:
@@ -16,6 +17,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  checks:
+    name: Lint and progress
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint tools
+        run: pip install $(grep -E '^(ruff|clang-format)==' requirements.txt)
+
+      - name: Lint
+        run: make lint PYTHON=python CLANG_FORMAT=clang-format
+
+      - name: Validate splices
+        run: python tools/gen_registry.py "$RUNNER_TEMP/native_registry.c"
+
+      - name: Progress
+        run: |
+          python tools/decomp_state.py --source inventory --summary >> "$GITHUB_STEP_SUMMARY"
+          python tools/decomp_state.py --source inventory
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: state.html
+          path: state.html
+          if-no-files-found: error
+
   build:
     strategy:
       fail-fast: false
@@ -122,7 +153,7 @@ jobs:
 
   release:
     name: Rolling release
-    needs: [build, android]
+    needs: [checks, build, android]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
