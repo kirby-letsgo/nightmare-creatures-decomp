@@ -167,7 +167,8 @@ endif()
 target_link_libraries(nightmare PRIVATE nc_runtime)
 # Handwritten C for original routines (src/decomp), verified against the interpreter by tests/.
 # It contains no code derived from the game, so every build links it.
-file(GLOB NC_DECOMP_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/decomp/*.c)
+file(GLOB NC_DECOMP_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/decomp/*.c
+    ${CMAKE_SOURCE_DIR}/src/decomp/twins/*.c)
 add_library(nc_decomp STATIC ${NC_DECOMP_SOURCES})
 target_link_libraries(nc_decomp PUBLIC nc_runtime)
 if(NC_GEN_SOURCES AND NOT NC_INTERPRETER_ONLY)
