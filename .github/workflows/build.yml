@@ -33,8 +33,10 @@ jobs:
       - name: Lint
         run: make lint PYTHON=python CLANG_FORMAT=clang-format
 
-      - name: Validate splices
-        run: python tools/gen_registry.py "$RUNNER_TEMP/native_registry.c"
+      - name: Validate splices and ported twins
+        run: |
+          python tools/gen_registry.py "$RUNNER_TEMP/native_registry.c"
+          python tools/port_twins.py --check
 
       - name: Progress
         run: |

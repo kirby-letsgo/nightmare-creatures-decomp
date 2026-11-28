@@ -361,7 +361,28 @@ including the cycle budget. Readable names come later.
    Do not add per-address code to `recomp.py`.
 4. Add equivalence cases to `tests/<file>.c` (a `*_rules` test without the disc where possible,
    and a `*_disc` test) and register them in `CMakeLists.txt`.
-5. Add the covered range to `config/decomp_ranges.txt`, then run `make verify` and `make shadow`.
+5. Add the covered range to `config/decomp_ranges.txt`, then run `make verify` (it includes the
+   shadow run).
+
+### Ported twins
+
+Much of the Psy-Q library code appears instruction for instruction in several executables,
+differing only in addresses. `tools/port_twins.py` turns each handwritten CREDITS.EXE routine
+into routines for its twins in PSX.EXE, PSX2.EXE and STREAM1–3.EXE by translating every address
+it uses:
+
+- `--discover` (needs `build/splat`) pairs functions and records, per pair, every address the two
+  instruction streams relate in `config/twins/<module>.txt`. Pairs that differ in anything but
+  addresses are rejected.
+- Without flags it regenerates `src/decomp/twins/`, `config/splices/twins_<module>.txt` and the
+  generated tail of `config/decomp_ranges.txt` from those files. `--check` (run by CI and
+  `make verify`) fails if they are stale. Never edit the generated files; fix the original
+  routine or the tool and rerun.
+- A routine is ported only when every address literal it uses, including `%hi` values paired
+  with short offsets and address-valued enum constants, has an unambiguous translation.
+  Anything else is left for handwriting.
+
+After changing a CREDITS.EXE routine, run `tools/port_twins.py` and `make verify`.
 
 ### Shadow mode
 

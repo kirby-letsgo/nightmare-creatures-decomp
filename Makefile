@@ -59,15 +59,18 @@ format:
 	$(CLANG_FORMAT) -i $$(find src -name '*.c' -o -name '*.h' -o -name '*.cpp')
 
 # Everything a change must pass before it is pushed. CI has no disc, so the equivalence
-# tests and replays only run here: against the recompiled build and the release build.
+# tests and replays only run here: against the recompiled build and the release build, then
+# every replay again in shadow mode (each native routine checked against the interpreter).
 verify: lint
 	@test -f "roms/Nightmare Creatures.chd" || { echo "verify needs roms/Nightmare Creatures.chd"; exit 1; }
 	$(PYTHON) tools/recomp/recomp.py
 	$(PYTHON) tools/decomp_state.py --check-inventory
+	$(PYTHON) tools/port_twins.py --check
 	$(PYTHON) tools/decomp_state.py
 	$(MAKE) build build-native
 	ctest --test-dir build/cmake -j8 --output-on-failure
 	ctest --test-dir build/cmake-native -j8 --output-on-failure
+	$(PYTHON) tools/test_shadow.py --build build/cmake-native
 
 # Shadow mode: run every replay on the release build with each call to a handwritten routine
 # checked against the original instructions; lists the registry entries no replay reached.
