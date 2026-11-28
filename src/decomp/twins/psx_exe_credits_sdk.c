@@ -42,7 +42,11 @@
 
 #include "decomp/jump_context.h"
 
+#include "decomp/sdk_ctype.h"
+
 #include "decomp/sdk_formatter.h"
+
+#include "decomp/sdk_pad_init.h"
 
 #include "decomp/sdk_printf.h"
 
@@ -2295,6 +2299,16 @@ bool nc_credits_interrupt_mask__psx_exe_8001BD64(CPUState *c, bool write) {
 
 bool nc_credits_interrupt_mask__psx_exe_8001BD7C(CPUState *c, bool write) {
     return interrupt_mask(c, 0x80026e30, write);
+}
+
+bool nc_credits_legacy_pad_init__psx_exe_8001B834(CPUState *c) {
+    return sdk_pad_init__sdk_pad_init__psx_exe(c, 0x8001b834, 0x8001b95c, 0x8001b824,
+                                               0x8001b94c); /* OutdatedPadInitAndStart */
+}
+
+bool nc_credits_legacy_pad_init__psx_exe_8001B89C(CPUState *c) {
+    return sdk_pad_init__sdk_pad_init__psx_exe(c, 0x8001b89c, 0x8001b95c, 0x8001b824,
+                                               0x8001b92c); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_link_packets__psx_exe_8001CD40(CPUState *c) {

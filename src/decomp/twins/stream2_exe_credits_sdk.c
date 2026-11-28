@@ -42,7 +42,11 @@
 
 #include "decomp/jump_context.h"
 
+#include "decomp/sdk_ctype.h"
+
 #include "decomp/sdk_formatter.h"
+
+#include "decomp/sdk_pad_init.h"
 
 #include "decomp/sdk_printf.h"
 
@@ -116,42 +120,6 @@ void read_spu_dma_mode__credits_sdk__stream2_exe(CPUState *c) {
     NC_POLL(c, NC_LOAD_CYCLES);
     NC_POLL(c, NC_INSN_CYCLES);
     set_reg__credits_roll__stream2_exe(c, 2, R(2) & 0x30);
-}
-
-/* Preserve both buffer/size pairs across the SDK patch and ChangeClearPad. */
-bool sdk_pad_init__credits_sdk__stream2_exe(CPUState *c, u32 entry, u32 bios_stub) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 40;
-    c->budget--;
-    for (unsigned i = 0; i < 3; i++) {
-        MEM_W32(R(29) + 16 + 4 * i, R(16 + i));
-        R(16 + i) = R(4 + i);
-        c->budget -= 2;
-    }
-    MEM_W32(R(29) + 28, R(19));
-    c->budget--;
-    MEM_W32(R(29) + 32, R(31));
-    R(31) = entry + 0x2c;
-    R(19) = R(7);
-    c->budget -= 3;
-    nc_call(c, 0x8001b024); /* _patch_pad */
-    R(31) = entry + 0x34;
-    R(4) = 0;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001aeec); /* ChangeClearPad */
-    for (unsigned i = 0; i < 3; i++)
-        set_reg__credits_roll__stream2_exe(c, 4 + i, R(16 + i));
-    R(31) = entry + 0x48;
-    R(7) = R(19);
-    NC_POLL(c, 2);
-    nc_call(c, bios_stub);
-    load_word__credits_roll__stream2_exe(c, 31, R(29) + 32);
-    for (int i = 3; i >= 0; i--)
-        load_word__credits_roll__stream2_exe(c, 16 + i, R(29) + 16 + 4 * i);
-    set_reg__credits_roll__stream2_exe(c, 29, R(29) + 40);
-    NC_POLL(c, 2);
-    return true;
 }
 
 static const CdControlLayout credits_cd_control_layout__credits_sdk__stream2_exe = {
@@ -2139,13 +2107,13 @@ bool nc_credits_interrupt_mask__stream2_exe_8001B454(CPUState *c, bool write) {
 }
 
 bool nc_credits_legacy_pad_init__stream2_exe_8001AEFC(CPUState *c) {
-    return sdk_pad_init__credits_sdk__stream2_exe(c, 0x8001aefc,
-                                                  0x8001b014); /* OutdatedPadInitAndStart */
+    return sdk_pad_init__sdk_pad_init__stream2_exe(c, 0x8001aefc, 0x8001b024, 0x8001aeec,
+                                                   0x8001b014); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_legacy_pad_init__stream2_exe_8001AF64(CPUState *c) {
-    return sdk_pad_init__credits_sdk__stream2_exe(c, 0x8001af64,
-                                                  0x8001aff4); /* OutdatedPadInitAndStart */
+    return sdk_pad_init__sdk_pad_init__stream2_exe(c, 0x8001af64, 0x8001b024, 0x8001aeec,
+                                                   0x8001aff4); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_link_packets__stream2_exe_8001C428(CPUState *c) {

@@ -16,7 +16,9 @@
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
+#include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
@@ -176,20 +178,8 @@ bool nc_credits_printf(CPUState *c) {
     return sdk_printf(c, 0x80019a9c, 0x80019a8c);
 }
 
-/* The SDK indexes its writable character-class table with the low byte.
- * v1 retains the full input (possibly adjusted); v0 returns only its low byte. */
 bool nc_credits_change_case(CPUState *c, bool uppercase) {
-    if (c->budget <= 14)
-        return false;
-    R(3) = R(4);
-    R(1) = 0x80020000 + (R(4) & 0xff);
-    const u8 flags = MEM_R8(R(1) + 0x3375);
-    const bool change = (flags & (uppercase ? 2 : 1)) != 0;
-    if (change)
-        R(3) += uppercase ? (u32)-32 : 32;
-    R(2) = (u8)R(3);
-    c->budget -= change ? 14 : 13;
-    return true;
+    return sdk_change_case(c, uppercase, 0x80023375);
 }
 
 bool nc_credits_put_char(CPUState *c) {
@@ -5522,48 +5512,13 @@ bool nc_credits_bios_init_pad(CPUState *c) {
     return bios_service(c, 0xb0, 0x12);
 }
 
-/* Preserve both buffer/size pairs across the SDK patch and ChangeClearPad. */
-static bool sdk_pad_init(CPUState *c, u32 entry, u32 bios_stub) {
-    if (c->budget <= 11)
-        return false;
-    R(29) -= 40;
-    c->budget--;
-    for (unsigned i = 0; i < 3; i++) {
-        MEM_W32(R(29) + 16 + 4 * i, R(16 + i));
-        R(16 + i) = R(4 + i);
-        c->budget -= 2;
-    }
-    MEM_W32(R(29) + 28, R(19));
-    c->budget--;
-    MEM_W32(R(29) + 32, R(31));
-    R(31) = entry + 0x2c;
-    R(19) = R(7);
-    c->budget -= 3;
-    nc_call(c, 0x8001a3e4); /* _patch_pad */
-    R(31) = entry + 0x34;
-    R(4) = 0;
-    NC_POLL(c, 2);
-    nc_call(c, 0x8001a2ac); /* ChangeClearPad */
-    for (unsigned i = 0; i < 3; i++)
-        set_reg(c, 4 + i, R(16 + i));
-    R(31) = entry + 0x48;
-    R(7) = R(19);
-    NC_POLL(c, 2);
-    nc_call(c, bios_stub);
-    load_word(c, 31, R(29) + 32);
-    for (int i = 3; i >= 0; i--)
-        load_word(c, 16 + i, R(29) + 16 + 4 * i);
-    set_reg(c, 29, R(29) + 40);
-    NC_POLL(c, 2);
-    return true;
-}
-
 bool nc_credits_sdk_init_pad(CPUState *c) {
-    return sdk_pad_init(c, 0x8001a324, 0x8001a3b4); /* BIOS InitPAD */
+    return sdk_pad_init(c, 0x8001a324, 0x8001a3e4, 0x8001a2ac, 0x8001a3b4); /* BIOS InitPAD */
 }
 
 bool nc_credits_legacy_pad_init(CPUState *c) {
-    return sdk_pad_init(c, 0x8001a2bc, 0x8001a3d4); /* OutdatedPadInitAndStart */
+    return sdk_pad_init(c, 0x8001a2bc, 0x8001a3e4, 0x8001a2ac,
+                        0x8001a3d4); /* OutdatedPadInitAndStart */
 }
 
 bool nc_credits_bios_pad_init_and_start(CPUState *c) {

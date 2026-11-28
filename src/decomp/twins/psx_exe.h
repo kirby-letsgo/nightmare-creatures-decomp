@@ -22,7 +22,9 @@
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
+#include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
@@ -76,6 +78,8 @@ void report_dma_interrupt__interrupt_dispatch__psx_exe(CPUState *c,
                                                        const DmaDispatchLayout *layout);
 bool dispatch_dma_interrupt__interrupt_dispatch__psx_exe(CPUState *c,
                                                          const DmaDispatchLayout *layout);
+bool sdk_pad_init__sdk_pad_init__psx_exe(CPUState *c, u32 entry, u32 patch_pad, u32 clear_pad,
+                                         u32 bios_stub);
 bool sdk_printf__sdk_printf__psx_exe(CPUState *c, u32 formatter, u32 resume);
 bool sdk_puts__sdk_puts__psx_exe(CPUState *c, u32 null_string, u32 put_char, u32 resume);
 void compare_vblank_target__vblank_wait__psx_exe(CPUState *c, u32 frame);
@@ -202,6 +206,8 @@ bool nc_credits_initialize_cd_driver__psx_exe_800242FC(CPUState *c);
 bool nc_credits_interrupt_callback__psx_exe_8001BC30(CPUState *c);
 bool nc_credits_interrupt_mask__psx_exe_8001BD64(CPUState *c, bool write);
 bool nc_credits_interrupt_mask__psx_exe_8001BD7C(CPUState *c, bool write);
+bool nc_credits_legacy_pad_init__psx_exe_8001B834(CPUState *c);
+bool nc_credits_legacy_pad_init__psx_exe_8001B89C(CPUState *c);
 bool nc_credits_link_packets__psx_exe_8001CD40(CPUState *c);
 bool nc_credits_load_clut2__psx_exe_8001C904(CPUState *c);
 bool nc_credits_load_clut__psx_exe_8001C89C(CPUState *c);

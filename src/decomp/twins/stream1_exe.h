@@ -22,7 +22,9 @@
 #include "decomp/interrupt_dispatch.h"
 #include "decomp/interrupt_driver.h"
 #include "decomp/jump_context.h"
+#include "decomp/sdk_ctype.h"
 #include "decomp/sdk_formatter.h"
+#include "decomp/sdk_pad_init.h"
 #include "decomp/sdk_printf.h"
 #include "decomp/sdk_putchar.h"
 #include "decomp/sdk_puts.h"
@@ -76,7 +78,6 @@ bool cd_init_interrupt__cd_state__stream1_exe(CPUState *c, u32 state, u32 entry,
 void call__credits_roll__stream1_exe(CPUState *c, u32 target, u32 resume);
 void load_word__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 address);
 void set_reg__credits_roll__stream1_exe(CPUState *c, unsigned reg, u32 value);
-bool sdk_pad_init__credits_sdk__stream1_exe(CPUState *c, u32 entry, u32 bios_stub);
 bool upload_clut__credits_sdk__stream1_exe(CPUState *c, u32 width, u32 entry);
 u32 draw_mode_word__credits_sdk__stream1_exe(bool alternate, bool display, bool dither, u32 page,
                                              u32 *opcode);
@@ -91,6 +92,8 @@ void report_dma_interrupt__interrupt_dispatch__stream1_exe(CPUState *c,
                                                            const DmaDispatchLayout *layout);
 bool dispatch_dma_interrupt__interrupt_dispatch__stream1_exe(CPUState *c,
                                                              const DmaDispatchLayout *layout);
+bool sdk_pad_init__sdk_pad_init__stream1_exe(CPUState *c, u32 entry, u32 patch_pad, u32 clear_pad,
+                                             u32 bios_stub);
 bool sdk_printf__sdk_printf__stream1_exe(CPUState *c, u32 formatter, u32 resume);
 bool sdk_puts__sdk_puts__stream1_exe(CPUState *c, u32 null_string, u32 put_char, u32 resume);
 void compare_vblank_target__vblank_wait__stream1_exe(CPUState *c, u32 frame);
