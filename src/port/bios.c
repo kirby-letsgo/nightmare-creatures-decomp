@@ -73,6 +73,8 @@ typedef struct BiosState {
 static BiosState bios;
 
 static jmp_buf exc_env;
+static jmp_buf *exc_return =
+    &exc_env; /* where ReturnFromException resumes (shadow.c can move it) */
 static CPUState exc_saved;
 static bool in_exception;
 
@@ -327,17 +329,18 @@ static u32 file_read(u32 fd, u32 dst, u32 len) {
 }
 
 /* Psy-Q's printf writes one character at a time; collect output into lines. */
+static char tty_line[256];
+static size_t tty_used;
+
 static u32 tty_write(u32 src, u32 len) {
-    static char line[256];
-    static size_t used;
     for (u32 i = 0; i < len; i++) {
         char ch = (char)MEM_R8(src + i);
-        if (ch == '\n' || used == sizeof line - 1) {
-            line[used] = '\0';
-            NC_LOG("[tty] %s", line);
-            used = 0;
+        if (ch == '\n' || tty_used == sizeof tty_line - 1) {
+            tty_line[tty_used] = '\0';
+            NC_LOG("[tty] %s", tty_line);
+            tty_used = 0;
         } else if (ch != '\r') {
-            line[used++] = ch;
+            tty_line[tty_used++] = ch;
         }
     }
     return len;
@@ -376,6 +379,7 @@ void bios_exception(CPUState *c) {
 
     bios_irq_chain(c);
 
+    exc_return = &exc_env;
     if (bios.hook != 0 && setjmp(exc_env) == 0) {
         /* Resume the hook's setjmp() as if it returned 1 (Psy-Q: "if (setjmp(b)) trapIntr();").
          * Interrupts stay disabled while the handler runs. */
@@ -400,7 +404,13 @@ void bios_exception(CPUState *c) {
 }
 
 static _Noreturn void return_from_exception(void) {
-    longjmp(exc_env, 1);
+    longjmp(*exc_return, 1);
+}
+
+jmp_buf *bios_set_exception_return(jmp_buf *target) {
+    jmp_buf *old = exc_return;
+    exc_return = target;
+    return old;
 }
 
 bool bios_in_exception(void) {
@@ -669,4 +679,13 @@ void bios_serialize(StateIO *io) {
         NC_FATAL("save state requested during an interrupt");
     }
     STATE_VAR(io, bios);
+}
+
+/* Shadow mode (shadow.c) snapshots in the middle of guest code, also inside an interrupt. */
+void bios_shadow_serialize(StateIO *io) {
+    STATE_VAR(io, bios);
+    STATE_VAR(io, in_exception);
+    STATE_VAR(io, exc_saved);
+    STATE_VAR(io, tty_line);
+    STATE_VAR(io, tty_used);
 }

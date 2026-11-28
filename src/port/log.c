@@ -1,4 +1,5 @@
 #include "port/runtime.h"
+#include "port/shadow.h"
 
 #include <signal.h>
 #include <stdarg.h>
@@ -31,6 +32,9 @@ static void log_line(const char *prefix, const char *fmt, va_list ap) {
 }
 
 void nc_log(const char *fmt, ...) {
+    if (nc_shadow_guard) {
+        return; /* a shadow run that is about to be discarded: its output repeats */
+    }
     va_list ap;
     va_start(ap, fmt);
     log_line("", fmt, ap);

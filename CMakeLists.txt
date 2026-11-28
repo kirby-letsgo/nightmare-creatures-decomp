@@ -98,6 +98,7 @@ add_library(nc_runtime STATIC
     src/port/replay.c
     src/port/savestate.c
     src/port/settings.c
+    src/port/shadow.c
     src/port/ui/menu.cpp
 )
 # Embed the menu typeface from the pinned ImGui checkout so single-file packages can use it.
@@ -297,6 +298,12 @@ if(TARGET nc_gen)
             $<TARGET_FILE:test_credits_roll_original> "${CMAKE_SOURCE_DIR}/roms/Nightmare Creatures.chd" ${scenario})
         set_tests_properties(credits_roll_${scenario} PROPERTIES SKIP_RETURN_CODE 77 LABELS "disc")
     endforeach()
+elseif(NC_REGISTRY)
+    # The same driver through the native registry, for shadow mode (make shadow).
+    add_executable(test_credits_roll_registry tests/credits_roll.c ${NC_REGISTRY})
+    target_link_libraries(test_credits_roll_registry PRIVATE nc_decomp)
+    add_executable(test_credits_roll_original tests/credits_roll.c src/port/no_gen.c)
+    target_link_libraries(test_credits_roll_original PRIVATE nc_runtime)
 endif()
 
 add_executable(test_credits_tim tests/credits_tim.c src/decomp/credits_roll.c)

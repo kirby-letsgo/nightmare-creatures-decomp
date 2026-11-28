@@ -3,6 +3,7 @@
 #include "port/disc.h"
 #include "port/interp.h"
 #include "port/runtime.h"
+#include "port/shadow.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -123,6 +124,7 @@ void exe_resume(CPUState *c, u32 pc, const ExecStack *stack) {
 u32 exe_exec(CPUState *c, const ExecInfo *info, u32 arg0, u32 arg1) {
     /* Clear BSS, then run the program's entry point with its own stack. When it returns,
      * restore the caller's callee-saved state, as the BIOS Exec() does. */
+    NC_SHADOW_HOST_EFFECT("Exec");
     if (info->b_size != 0) {
         for (u32 i = 0; i < info->b_size; i += 4) {
             MEM_W32(info->b_addr + i, 0);

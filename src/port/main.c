@@ -13,6 +13,7 @@
 #include "port/runtime.h"
 #include "port/savestate.h"
 #include "port/settings.h"
+#include "port/shadow.h"
 #include "port/ui/menu.h"
 
 #include <SDL3/SDL.h>
@@ -443,6 +444,7 @@ int main(int argc, char **argv) {
         SDL_snprintf(log_path, sizeof log_path, "%snightmare.log", dir);
     }
     nc_log_init(log_path);
+    nc_shadow_init();
     headless = SDL_getenv("NC_HEADLESS") != NULL;
     if (headless) {
         /* Hidden window and no sound card: nothing to steal focus or to pace against. */

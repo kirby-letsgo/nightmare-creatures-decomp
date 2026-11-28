@@ -1,6 +1,7 @@
 #include "port/interp.h"
 #include "port/runtime.h"
 #include "port/savestate.h"
+#include "port/shadow.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -78,6 +79,9 @@ static NcFunc search(const NcFuncEntry *table, unsigned len, u32 addr) {
 }
 
 NcFunc nc_lookup(u32 addr) {
+    if (nc_shadow_reference) {
+        return NULL; /* shadow mode: interpret the original instructions throughout */
+    }
     addr = (addr & 0x1FFFFFFFu) | 0x80000000u;
     if (addr >= NC_LAUNCHER_LO && addr < NC_OVERLAY_LO) {
         return search(slus_005_82_table, slus_005_82_table_len, addr);
@@ -86,6 +90,15 @@ NcFunc nc_lookup(u32 addr) {
         return search(modules[active].table, *modules[active].len, addr);
     }
     return NULL;
+}
+
+const NcFuncEntry *nc_dispatch_table(int mod, unsigned *len) {
+    if (mod == NC_MOD_COUNT) {
+        *len = slus_005_82_table_len;
+        return slus_005_82_table;
+    }
+    *len = *modules[mod].len;
+    return modules[mod].table;
 }
 
 void nc_call(CPUState *c, u32 addr) {

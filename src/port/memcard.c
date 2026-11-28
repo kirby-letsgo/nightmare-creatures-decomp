@@ -4,6 +4,7 @@
 #include "port/memcard.h"
 
 #include "port/runtime.h"
+#include "port/shadow.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -63,6 +64,7 @@ static void format(Card *c) {
 }
 
 static void save(Card *c) {
+    NC_SHADOW_HOST_EFFECT("memory-card");
     FILE *f = fopen(c->path, "wb");
     if (f == NULL) {
         NC_LOG("memcard: cannot write %s", c->path);
@@ -109,6 +111,7 @@ bool memcard_write_frame(int port, u32 frame, const u8 in[128]) {
     if (!memcard_present(port) || frame >= CARD_SIZE / FRAME) {
         return false;
     }
+    NC_SHADOW_HOST_EFFECT("memory-card");
     memcpy(frame_ptr(&cards[port], frame), in, FRAME);
     save(&cards[port]);
     return true;
@@ -190,6 +193,7 @@ bool memcard_create(int port, const char *name, u32 blocks) {
     if ((u32)nfree < blocks) {
         return false;
     }
+    NC_SHADOW_HOST_EFFECT("memory-card");
     for (u32 i = 0; i < blocks; i++) {
         u8 *d = frame_ptr(c, (u32)free_blocks[i]);
         memset(d, 0, FRAME);
@@ -221,6 +225,7 @@ bool memcard_erase(int port, const char *name) {
     if (b < 0) {
         return false;
     }
+    NC_SHADOW_HOST_EFFECT("memory-card");
     while (b >= 0) {
         u8 *d = frame_ptr(c, (u32)b);
         int next = next_block(c, b);
@@ -261,6 +266,7 @@ int memcard_rw(int port, const char *name, u32 pos, u8 *buf, u32 len, bool write
         u32 n = BLOCK - (pos + done) % BLOCK;
         n = n < len - done ? n : len - done;
         if (write) {
+            NC_SHADOW_HOST_EFFECT("memory-card");
             memcpy(c->data + off, buf + done, n);
         } else {
             memcpy(buf + done, c->data + off, n);
@@ -308,6 +314,7 @@ int memcard_free_blocks(int port) {
 
 void memcard_format(int port) {
     if (memcard_present(port)) {
+        NC_SHADOW_HOST_EFFECT("memory-card");
         format(&cards[port]);
         save(&cards[port]);
     }

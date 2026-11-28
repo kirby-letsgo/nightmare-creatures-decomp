@@ -37,6 +37,8 @@ void nc_set_module(NcModule mod);
 NcModule nc_active_module(void);
 NcModule nc_module_from_name(const char *exe_name);
 NcFunc nc_lookup(u32 addr);
+/* The function table of a module, or of the launcher for NC_MOD_COUNT. */
+const NcFuncEntry *nc_dispatch_table(int mod, unsigned *len);
 
 /* cpu.c: total emulated cycles, and a hook run once per emulated frame (VBlank). */
 extern u64 nc_cycles;

@@ -2,6 +2,7 @@
 #include "port/hw/widescreen.h"
 #include "port/runtime.h"
 #include "port/savestate.h"
+#include "port/shadow.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -128,6 +129,7 @@ void nc_poll(CPUState *c) {
     nc_cycles += (u64)(budget_start - c->budget);
 
     if (nc_cycles >= next_vblank) {
+        NC_SHADOW_HOST_EFFECT("VBlank");
         next_vblank += PSX_CYCLES_PER_FRAME;
         gpu_vblank();
         ws_vblank();

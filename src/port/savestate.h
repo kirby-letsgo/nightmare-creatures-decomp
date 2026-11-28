@@ -26,6 +26,7 @@ void state_io(StateIO *io, void *data, size_t size);
 /* Module serializers. */
 void cpu_serialize(StateIO *io);
 void bios_serialize(StateIO *io);
+void bios_shadow_serialize(StateIO *io); /* also valid inside an interrupt */
 void dispatch_serialize(StateIO *io);
 void irq_serialize(StateIO *io);
 void timers_serialize(StateIO *io);

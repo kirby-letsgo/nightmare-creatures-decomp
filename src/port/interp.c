@@ -8,6 +8,7 @@
 #include "port/interp.h"
 
 #include "port/runtime.h"
+#include "port/shadow.h"
 
 #include <string.h>
 
@@ -46,6 +47,7 @@ static bool apply_marks(CPUState *c, u32 pc) {
             continue;
         }
         if (p->hook != NULL) {
+            NC_SHADOW_HOST_EFFECT("hook");
             p->hook(c);
         }
         if (p->flag != NULL && *p->flag) {
