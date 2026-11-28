@@ -774,6 +774,46 @@ static bool player_state_action_calls(void) {
     return true;
 }
 
+static bool player_action_entry_checks(void) {
+    const struct {
+        u8 state;
+        u32 actor_flags, config_flags, mode, destination;
+    } cases[] = {
+        {3, 0, 0, 0, 0x80053478},          {9, 0, 0, 0, 0x80053478},
+        {0x22, 0, 0, 0, 0x80053478},       {10, 0, 0, 0, 0x80053478},
+        {1, 0x800, 0, 0, 0x80053478},      {1, 0x400, 0x10000, 0, 0x80053184},
+        {1, 0, 0x20000, 0, 0x80053478},    {1, 0, 0x20000, 0x10, 0x80053184},
+        {1, 0, 0x20000, 0x20, 0x80053184},
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        CPUState cpu = initial();
+        cpu.r[4] = 0x80160000;
+        cpu.r[5] = 0x8040;
+        cpu.budget = 47;
+        MEM_W8(cpu.r[4] + 0x38a, cases[i].state);
+        MEM_W32(cpu.r[4] + 0x330, cases[i].actor_flags);
+        MEM_W32(gp + 0x244, config);
+        MEM_W32(config + 4, cases[i].config_flags);
+        MEM_W32(config, cases[i].mode);
+        memcpy(before, nc_ram, RAM_SIZE);
+        CPUState low = cpu;
+        low.budget = 46;
+        CPUState native = low;
+        if (nc_enter_player_button_action(&native) != 0x800530f4 ||
+            memcmp(&native, &low, sizeof low) || memcmp(nc_ram, before, RAM_SIZE))
+            return false;
+        native = cpu;
+        if (nc_enter_player_button_action(&native) != cases[i].destination)
+            return false;
+        memcpy(after, nc_ram, RAM_SIZE);
+        memcpy(nc_ram, before, RAM_SIZE);
+        interp_continue_call(&cpu, 0x800530f4, cases[i].destination, cpu.r[29] - 0x28);
+        if (memcmp(&native, &cpu, sizeof cpu) || memcmp(nc_ram, after, RAM_SIZE))
+            return false;
+    }
+    return true;
+}
+
 static bool player_action_button_counts(void) {
     const u32 masks[] = {0x1000, 0x4000, 0x8000, 0x2000, 0x10, 0x40, 0x80, 0x20};
     for (unsigned combination = 0; combination < 256; ++combination) {
@@ -4517,6 +4557,7 @@ int main(int argc, char **argv) {
         player_input_action_changes() && player_triangle_action_one_checks() &&
         player_triangle_action_calls() && player_direction_action_checks() &&
         player_up_stick_bounds() && player_up_actions() && player_down_shoulder_actions() &&
+        player_action_entry_checks() &&
         player_action_setup_calls() && player_action_button_counts() &&
         player_button_action_call() && player_state_action_calls() && player_down_paths() &&
         player_square_actor_scans() && player_square_scans() && player_square_headings() &&
